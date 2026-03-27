@@ -1,0 +1,11 @@
+{
+  "name": "@hrms/auth-middleware",
+  "version": "1.0.0",
+  "description": "JWT RS256 verification + RBAC middleware for EzyHRM services",
+  "main": "index.js",
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "jsonwebtoken": "^9.0.2"
+  }
+}

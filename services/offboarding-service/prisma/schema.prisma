@@ -1,0 +1,56 @@
+// Prisma schema for offboarding-service
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model OffboardingCase {
+  id                  String     @id @default(uuid())
+  employeeId          String     @unique
+  reason              OffboardReason
+  lastWorkingDate     DateTime
+  noticeGivenDate     DateTime
+  noticePeriodDays    Int
+  resignationDoc      String?
+  isForeignEmployee   Boolean    @default(false)
+  ir21Status          Ir21Status?
+  ir21FiledAt         DateTime?
+  ir21ClearedAt       DateTime?
+  moniesToRelease     Boolean    @default(false)
+  exitInterviewDate   DateTime?
+  exitSatisfaction    Int?       // 1-5
+  exitFeedback        String?
+  status              CaseStatus @default(INITIATED)
+  initiatedBy         String
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  clearanceItems ClearanceItem[]
+
+  @@map("offboarding_cases")
+}
+
+model ClearanceItem {
+  id          String   @id @default(uuid())
+  caseId      String
+  itemName    String
+  description String?
+  assignedTo  String?  // userId
+  isDone      Boolean  @default(false)
+  completedAt DateTime?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  case OffboardingCase @relation(fields: [caseId], references: [id])
+
+  @@map("clearance_items")
+}
+
+enum OffboardReason { RESIGNATION TERMINATION RETIREMENT REDUNDANCY CONTRACT_END }
+enum CaseStatus { INITIATED IN_PROGRESS CLEARANCE_DONE PAYROLL_COMPUTED COMPLETED }
+enum Ir21Status { NOT_REQUIRED PENDING SUBMITTED CLEARANCE_ISSUED PAYMENT_RELEASED }

@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+build/
+.next/
+
+# Environment - DO NOT COMMIT .env WITH REAL CREDENTIALS AFTER DEV
+.env
+
+# JWT Keys (NEVER commit private key)
+certs/private.pem
+certs/*.pem
+
+# Uploads / Generated files
+**/uploads/
+**/generated/
+*.pdf
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Docker
+.dockerignore
+
+# Prisma generated
+**/node_modules/.prisma/

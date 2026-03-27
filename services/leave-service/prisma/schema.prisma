@@ -1,0 +1,86 @@
+// Prisma schema for leave-service
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model LeaveType {
+  id                  String    @id @default(uuid())
+  code                String    @unique
+  name                String
+  isStatutory         Boolean   @default(false)
+  isPaid              Boolean   @default(true)
+  annualEntitlement   Float     @default(0)  // days per year
+  maxCarryForward     Float     @default(0)
+  isGovtPaid          Boolean   @default(false) // GPML, GPPL etc
+  requiresDocument    Boolean   @default(false)
+  minNoticeDays       Int       @default(0)
+  isActive            Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+
+  applications        LeaveApplication[]
+  entitlements        LeaveEntitlement[]
+
+  @@map("leave_types")
+}
+
+model LeaveEntitlement {
+  id              String   @id @default(uuid())
+  employeeId      String
+  leaveTypeId     String
+  year            Int
+  entitledDays    Float
+  usedDays        Float    @default(0)
+  pendingDays     Float    @default(0)
+  carryForward    Float    @default(0)
+  expiredDays     Float    @default(0)
+  updatedAt       DateTime @updatedAt
+
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+
+  @@unique([employeeId, leaveTypeId, year])
+  @@map("leave_entitlements")
+}
+
+model LeaveApplication {
+  id              String        @id @default(uuid())
+  employeeId      String
+  leaveTypeId     String
+  startDate       DateTime
+  endDate         DateTime
+  totalDays       Float
+  reason          String?
+  documentPath    String?
+  status          AppStatus     @default(PENDING)
+  approvedById    String?
+  approvedAt      DateTime?
+  rejectedReason  String?
+  isHalfDay       Boolean       @default(false)
+  halfDaySlot     String?       // AM | PM
+  govtClaimRef    String?       // for govt-paid leave claims
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+
+  @@index([employeeId])
+  @@index([status])
+  @@map("leave_applications")
+}
+
+model PublicHoliday {
+  id        String   @id @default(uuid())
+  date      DateTime
+  name      String
+  year      Int
+
+  @@unique([date])
+  @@map("public_holidays")
+}
+
+enum AppStatus { PENDING APPROVED REJECTED CANCELLED WITHDRAWN }

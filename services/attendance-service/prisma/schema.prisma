@@ -1,0 +1,54 @@
+// Prisma schema for attendance-service
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AttendanceRecord {
+  id          String    @id @default(uuid())
+  employeeId  String
+  date        DateTime
+  clockIn     DateTime?
+  clockOut    DateTime?
+  hoursWorked Float?
+  otHours     Float     @default(0)
+  status      AttStatus @default(PRESENT)
+  notes       String?
+  createdAt   DateTime  @default(now())
+
+  @@unique([employeeId, date])
+  @@index([employeeId])
+  @@map("attendance_records")
+}
+
+model ShiftTemplate {
+  id            String   @id @default(uuid())
+  name          String
+  startTime     String   // HH:MM
+  endTime       String   // HH:MM
+  breakMinutes  Int      @default(60)
+  hoursPerDay   Float    @default(8)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  @@map("shift_templates")
+}
+
+model Schedule {
+  id              String   @id @default(uuid())
+  employeeId      String
+  shiftTemplateId String
+  startDate       DateTime
+  endDate         DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([employeeId])
+  @@map("schedules")
+}
+
+enum AttStatus { PRESENT ABSENT LATE HALF_DAY ON_LEAVE PUBLIC_HOLIDAY }

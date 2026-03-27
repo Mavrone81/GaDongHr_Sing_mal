@@ -1,0 +1,265 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hrms-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hrms}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hrms_secret_2025}
+      POSTGRES_DB: ${POSTGRES_ROOT_DB:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-dbs.sql:/docker-entrypoint-initdb.d/init-dbs.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hrms}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api-gateway:
+    build: ./services/api-gateway
+    container_name: hrms-gateway
+    restart: unless-stopped
+    ports:
+      - "${API_GATEWAY_PORT:-4000}:4000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+      - AUTH_SERVICE_URL=http://auth-service:4001
+      - EMPLOYEE_SERVICE_URL=http://employee-service:4002
+      - PAYROLL_SERVICE_URL=http://payroll-service:4003
+      - LEAVE_SERVICE_URL=http://leave-service:4004
+      - CLAIMS_SERVICE_URL=http://claims-service:4005
+      - RECRUITMENT_SERVICE_URL=http://recruitment-service:4006
+      - ATTENDANCE_SERVICE_URL=http://attendance-service:4007
+      - OFFBOARDING_SERVICE_URL=http://offboarding-service:4008
+      - NOTIFICATION_SERVICE_URL=http://notification-service:4009
+      - REPORTING_SERVICE_URL=http://reporting-service:4010
+    volumes:
+      - ./certs:/app/certs:ro
+    depends_on:
+      - auth-service
+
+  auth-service:
+    build: ./services/auth-service
+    container_name: hrms-auth
+    restart: unless-stopped
+    ports:
+      - "${AUTH_SERVICE_PORT:-4001}:4001"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4001
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${AUTH_DB:-hrms_auth}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_PRIVATE_KEY_PATH=/app/certs/private.pem
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+      - JWT_ACCESS_EXPIRES=${JWT_ACCESS_EXPIRES:-15m}
+      - JWT_REFRESH_EXPIRES=${JWT_REFRESH_EXPIRES:-7d}
+    volumes:
+      - ./certs:/app/certs
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  employee-service:
+    build: ./services/employee-service
+    container_name: hrms-employee
+    restart: unless-stopped
+    ports:
+      - "${EMPLOYEE_SERVICE_PORT:-4002}:4002"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4002
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${EMPLOYEE_DB:-hrms_employee}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+    volumes:
+      - ./certs:/app/certs:ro
+      - employee_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  payroll-service:
+    build: ./services/payroll-service
+    container_name: hrms-payroll
+    restart: unless-stopped
+    ports:
+      - "${PAYROLL_SERVICE_PORT:-4003}:4003"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4003
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${PAYROLL_DB:-hrms_payroll}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+      - EMPLOYEE_SERVICE_URL=http://employee-service:4002
+      - LEAVE_SERVICE_URL=http://leave-service:4004
+      - NOTIFICATION_SERVICE_URL=http://notification-service:4009
+    volumes:
+      - ./certs:/app/certs:ro
+      - payroll_files:/app/generated
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  leave-service:
+    build: ./services/leave-service
+    container_name: hrms-leave
+    restart: unless-stopped
+    ports:
+      - "${LEAVE_SERVICE_PORT:-4004}:4004"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4004
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${LEAVE_DB:-hrms_leave}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+      - NOTIFICATION_SERVICE_URL=http://notification-service:4009
+    volumes:
+      - ./certs:/app/certs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  claims-service:
+    build: ./services/claims-service
+    container_name: hrms-claims
+    restart: unless-stopped
+    ports:
+      - "${CLAIMS_SERVICE_PORT:-4005}:4005"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4005
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${CLAIMS_DB:-hrms_claims}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+      - NOTIFICATION_SERVICE_URL=http://notification-service:4009
+    volumes:
+      - ./certs:/app/certs:ro
+      - claims_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  recruitment-service:
+    build: ./services/recruitment-service
+    container_name: hrms-recruitment
+    restart: unless-stopped
+    ports:
+      - "${RECRUITMENT_SERVICE_PORT:-4006}:4006"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4006
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${RECRUITMENT_DB:-hrms_recruitment}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+      - EMPLOYEE_SERVICE_URL=http://employee-service:4002
+    volumes:
+      - ./certs:/app/certs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  attendance-service:
+    build: ./services/attendance-service
+    container_name: hrms-attendance
+    restart: unless-stopped
+    ports:
+      - "${ATTENDANCE_SERVICE_PORT:-4007}:4007"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4007
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${ATTENDANCE_DB:-hrms_attendance}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+    volumes:
+      - ./certs:/app/certs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  offboarding-service:
+    build: ./services/offboarding-service
+    container_name: hrms-offboarding
+    restart: unless-stopped
+    ports:
+      - "${OFFBOARDING_SERVICE_PORT:-4008}:4008"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4008
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${OFFBOARDING_DB:-hrms_offboarding}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+      - PAYROLL_SERVICE_URL=http://payroll-service:4003
+      - EMPLOYEE_SERVICE_URL=http://employee-service:4002
+    volumes:
+      - ./certs:/app/certs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  notification-service:
+    build: ./services/notification-service
+    container_name: hrms-notification
+    restart: unless-stopped
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT:-4009}:4009"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4009
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${NOTIFICATION_DB:-hrms_notification}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_FROM=${SMTP_FROM:-noreply@ezyhRM.sg}
+    volumes:
+      - ./certs:/app/certs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  reporting-service:
+    build: ./services/reporting-service
+    container_name: hrms-reporting
+    restart: unless-stopped
+    ports:
+      - "${REPORTING_SERVICE_PORT:-4010}:4010"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4010
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${REPORTING_DB:-hrms_reporting}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+      - PAYROLL_SERVICE_URL=http://payroll-service:4003
+      - EMPLOYEE_SERVICE_URL=http://employee-service:4002
+      - LEAVE_SERVICE_URL=http://leave-service:4004
+    volumes:
+      - ./certs:/app/certs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    container_name: hrms-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - NEXT_PUBLIC_API_URL=http://localhost:4000/api
+    depends_on:
+      - api-gateway
+
+volumes:
+  postgres_data:
+  employee_uploads:
+  payroll_files:
+  claims_uploads:

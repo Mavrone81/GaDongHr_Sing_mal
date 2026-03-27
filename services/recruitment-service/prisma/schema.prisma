@@ -1,0 +1,108 @@
+// Prisma schema for recruitment-service
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model JobPosting {
+  id              String     @id @default(uuid())
+  title           String
+  department      String
+  headcount       Int        @default(1)
+  jobDescription  String
+  requirements    String?
+  salaryMin       Float?
+  salaryMax       Float?
+  jobType         String     @default("FULL_TIME") // FULL_TIME, PART_TIME, CONTRACT
+  location        String?
+  mcfJobId        String?    // MyCareersFuture reference
+  mcfPostedAt     DateTime?  // when posted on MCF
+  mcfExpiredAt    DateTime?  // must be 14 days before shortlisting
+  fcfCompliant    Boolean    @default(false)
+  status          JobStatus  @default(DRAFT)
+  postedById      String
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  candidates      Candidate[]
+
+  @@map("job_postings")
+}
+
+model Candidate {
+  id              String     @id @default(uuid())
+  jobId           String
+  firstName       String
+  lastName        String
+  email           String
+  phone           String?
+  currentEmployer String?
+  currentTitle    String?
+  noticePeriod    Int?       // days
+  expectedSalary  Float?
+  resumePath      String?
+  stage           PipelineStage @default(APPLIED)
+  isOfferMade     Boolean    @default(false)
+  isHired         Boolean    @default(false)
+  employeeId      String?    // set when converted to employee
+  notes           String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  job              JobPosting     @relation(fields: [jobId], references: [id])
+  interviewRounds  InterviewRound[]
+
+  @@map("candidates")
+}
+
+model InterviewRound {
+  id            String   @id @default(uuid())
+  candidateId   String
+  roundName     String
+  scheduledAt   DateTime
+  interviewerIds String[]
+  notes         String?
+  result        String?  // PASS | FAIL | PENDING
+  createdAt     DateTime @default(now())
+
+  candidate Candidate @relation(fields: [candidateId], references: [id])
+
+  @@map("interview_rounds")
+}
+
+model OnboardingTask {
+  id          String   @id @default(uuid())
+  employeeId  String
+  taskName    String
+  description String?
+  assignedTo  String?  // userId
+  dueDate     DateTime?
+  isDone      Boolean  @default(false)
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([employeeId])
+  @@map("onboarding_tasks")
+}
+
+model WorkPass {
+  id           String   @id @default(uuid())
+  employeeId   String   @unique
+  passType     String
+  passNumber   String
+  expiryDate   DateTime
+  issuedDate   DateTime?
+  status       String   @default("ACTIVE") // ACTIVE | EXPIRED | CANCELLED
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("work_passes")
+}
+
+enum JobStatus { DRAFT OPEN FILLED CANCELLED }
+enum PipelineStage { APPLIED SCREENING INTERVIEW_1 INTERVIEW_2 ASSESSMENT OFFER HIRED REJECTED WITHDRAWN }

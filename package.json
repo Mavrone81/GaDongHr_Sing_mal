@@ -1,0 +1,20 @@
+{
+  "name": "ezy-hrms",
+  "version": "1.0.0",
+  "description": "EzyHRM - Singapore-compliant HRMS Microservice System",
+  "private": true,
+  "workspaces": [
+    "shared/*",
+    "services/*",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "docker-compose up --build",
+    "down": "docker-compose down",
+    "logs": "docker-compose logs -f",
+    "seed": "node scripts/seed.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

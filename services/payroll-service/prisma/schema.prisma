@@ -1,0 +1,156 @@
+// Prisma schema for payroll-service
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model PayrollRun {
+  id              String        @id @default(uuid())
+  period          String        // e.g. "2025-01"
+  runType         RunType       @default(MONTHLY)
+  status          RunStatus     @default(DRAFT)
+  employeeGroup   String?
+  initiatedBy     String        // userId
+  approvedBy      String?       // userId (checker — must be different from initiatedBy)
+  approvedAt      DateTime?
+  finalisedAt     DateTime?
+  totalGross      String?       // encrypted
+  totalNet        String?       // encrypted
+  totalCpf        String?       // encrypted
+  totalEmployerCpf String?      // encrypted
+  totalSdl        String?
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  lineItems       PayrollLineItem[]
+  payslips        Payslip[]
+
+  @@unique([period, runType, status])
+  @@index([period])
+  @@map("payroll_runs")
+}
+
+model PayrollLineItem {
+  id              String    @id @default(uuid())
+  runId           String
+  employeeId      String
+  componentId     String
+  description     String
+  amountEncrypted String    // AES-256-GCM
+  wageType        WageType  @default(OW)
+  isCpfApplicable Boolean   @default(true)
+  isIrasTaxable   Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+
+  run PayrollRun @relation(fields: [runId], references: [id])
+
+  @@index([runId])
+  @@index([employeeId])
+  @@map("payroll_line_items")
+}
+
+model Payslip {
+  id                  String   @id @default(uuid())
+  runId               String
+  employeeId          String
+  period              String
+  // All money fields encrypted
+  basicSalaryEnc      String
+  grossPayEnc         String
+  netPayEnc           String
+  employeeCpfEnc      String
+  employerCpfEnc      String
+  sdlAmountEnc        String?
+  fwlAmountEnc        String?
+  ytdGrossEnc         String?
+  ytdEmployeeCpfEnc   String?
+  ytdEmployerCpfEnc   String?
+  pdfPath             String?
+  isPublished         Boolean  @default(false)
+  createdAt           DateTime @default(now())
+
+  run PayrollRun @relation(fields: [runId], references: [id])
+
+  @@unique([runId, employeeId])
+  @@index([employeeId, period])
+  @@map("payslips")
+}
+
+model PayComponent {
+  id              String   @id @default(uuid())
+  code            String   @unique  // e.g. "BASIC", "OT_PAY", "AWS"
+  name            String
+  category        String   // ORDINARY_WAGES | ALLOWANCE | OT | ADDITIONAL_WAGES | DEDUCTION | REIMBURSEMENT
+  isCpfApplicable Boolean  @default(true)
+  isIrasTaxable   Boolean  @default(true)
+  wageType        WageType @default(OW)
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("pay_components")
+}
+
+model CpfRate {
+  id               String      @id @default(uuid())
+  citizenStatus    String      // SC_PR | PR_YEAR1 | PR_YEAR2 | FOREIGNER
+  ageMin           Int
+  ageMax           Int?        // null = no upper bound
+  employeeRate     Float       // e.g. 0.20
+  employerRate     Float       // e.g. 0.17
+  effectiveDate    DateTime
+  owCeiling        Float       @default(6800)
+  awCeiling        Float       @default(102000)
+  isActive         Boolean     @default(true)
+  createdAt        DateTime    @default(now())
+
+  @@map("cpf_rates")
+}
+
+model SdlConfig {
+  id            String   @id @default(uuid())
+  rate          Float    @default(0.0025) // 0.25%
+  minAmount     Float    @default(2.00)
+  maxAmount     Float    @default(11.25)
+  salaryCap     Float    @default(4500)
+  effectiveDate DateTime
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  @@map("sdl_config")
+}
+
+model FwlRate {
+  id           String   @id @default(uuid())
+  passType     String   // WP | S_PASS
+  sector       String   // SERVICES | CONSTRUCTION | MARINE | PROCESS | MANUFACTURING
+  tier         String   // BASIC_SKILLED | HIGHER_SKILLED | TIER1 | TIER2
+  dailyRate    Float
+  effectiveDate DateTime
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  @@map("fwl_rates")
+}
+
+model PublicHoliday {
+  id        String   @id @default(uuid())
+  date      DateTime
+  name      String
+  year      Int
+  createdAt DateTime @default(now())
+
+  @@unique([date])
+  @@map("public_holidays")
+}
+
+enum RunType   { MONTHLY BI_MONTHLY AD_HOC FINAL_PAY }
+enum RunStatus { DRAFT PENDING_APPROVAL APPROVED FINALISED CANCELLED }
+enum WageType  { OW AW DEDUCTION REIMBURSEMENT }

@@ -1,0 +1,8 @@
+{
+  "name": "@hrms/crypto",
+  "version": "1.0.0",
+  "description": "AES-256-GCM encryption/decryption helpers for EzyHRM",
+  "main": "index.js",
+  "license": "UNLICENSED",
+  "private": true
+}

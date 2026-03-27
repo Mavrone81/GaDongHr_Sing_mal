@@ -1,0 +1,131 @@
+// Prisma schema for employee-service
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Employee {
+  id                  String    @id @default(uuid())
+  employeeCode        String    @unique // e.g. EMP-0001
+  fullName            String
+  preferredName       String?
+  nricEncrypted       String    // AES-256-GCM encrypted NRIC/FIN
+  nricType            NricType  @default(NRIC)  // NRIC | FIN
+  nationality         String
+  citizenshipStatus   CitizenStatus @default(SC)
+  dateOfBirth         DateTime
+  gender              Gender
+  race                String?
+  religion            String?
+  maritalStatus       MaritalStatus @default(SINGLE)
+
+  // Contact
+  personalEmail       String?
+  workEmail           String
+  personalPhone       String?
+  workPhone           String?
+  homeAddressEncrypted String?   // encrypted
+
+  // Employment
+  department          String
+  designation         String
+  costCentre          String?
+  employmentType      EmploymentType @default(FULL_TIME)
+  startDate           DateTime
+  confirmationDate    DateTime?
+  endDate             DateTime?
+  reportingManagerId  String?
+  probationEndDate    DateTime?
+  noticePeriodDays    Int       @default(30)
+  weeklyHours         Float     @default(44)  // SG standard
+  isActive            Boolean   @default(true)
+
+  // Salary (encrypted)
+  basicSalaryEncrypted String?  // AES-256-GCM
+  salaryBasis         SalaryBasis @default(MONTHLY)
+
+  // Bank (encrypted)
+  bankName            String?
+  bankCode            String?
+  bankAccountEncrypted String?  // AES-256-GCM
+  bankBranchCode      String?
+
+  // Work Pass
+  passType            PassType?
+  passNumber          String?
+  passExpiryDate      DateTime?
+  passIssuedDate      DateTime?
+  workPassSector      String?  // for FWL computation
+
+  // CPF
+  cpfPrYear           Int?     // 1, 2, 3+ for Graduated PR
+  cpfVoluntaryRate    Boolean  @default(false)
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  documents           Document[]
+  salaryHistory       SalaryHistory[]
+  emergencyContacts   EmergencyContact[]
+
+  @@index([department])
+  @@index([isActive])
+  @@map("employees")
+}
+
+model SalaryHistory {
+  id              String   @id @default(uuid())
+  employeeId      String
+  effectiveDate   DateTime
+  basicSalaryEnc  String   // encrypted
+  changeReason    String?
+  changedByUserId String?
+  createdAt       DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@map("salary_history")
+}
+
+model Document {
+  id          String   @id @default(uuid())
+  employeeId  String
+  docType     String   // NRIC_COPY | EMPLOYMENT_PASS | CONTRACT | CERT | OTHER
+  fileName    String
+  filePath    String
+  fileSize    Int?
+  mimeType    String?
+  uploadedBy  String
+  expiryDate  DateTime?
+  createdAt   DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@map("documents")
+}
+
+model EmergencyContact {
+  id           String  @id @default(uuid())
+  employeeId   String
+  name         String
+  relationship String
+  phone        String
+  email        String?
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@map("emergency_contacts")
+}
+
+enum NricType { NRIC FIN }
+enum CitizenStatus { SC PR_YEAR1 PR_YEAR2 PR_YR3_PLUS FOREIGNER }
+enum Gender { MALE FEMALE PREFER_NOT_TO_SAY }
+enum MaritalStatus { SINGLE MARRIED DIVORCED WIDOWED }
+enum EmploymentType { FULL_TIME PART_TIME CONTRACT INTERN TEMP }
+enum SalaryBasis { MONTHLY DAILY HOURLY PIECE_RATE }
+enum PassType { EP SP WP S_PASS LTVP DEPENDANT_PASS }
