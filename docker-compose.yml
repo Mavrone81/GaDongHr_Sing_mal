@@ -20,7 +20,9 @@ services:
       retries: 5
 
   api-gateway:
-    build: ./services/api-gateway
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
     container_name: hrms-gateway
     restart: unless-stopped
     ports:
@@ -44,7 +46,9 @@ services:
       - auth-service
 
   auth-service:
-    build: ./services/auth-service
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
     container_name: hrms-auth
     restart: unless-stopped
     ports:
@@ -65,7 +69,9 @@ services:
         condition: service_healthy
 
   employee-service:
-    build: ./services/employee-service
+    build:
+      context: .
+      dockerfile: services/employee-service/Dockerfile
     container_name: hrms-employee
     restart: unless-stopped
     ports:
@@ -84,7 +90,9 @@ services:
         condition: service_healthy
 
   payroll-service:
-    build: ./services/payroll-service
+    build:
+      context: .
+      dockerfile: services/payroll-service/Dockerfile
     container_name: hrms-payroll
     restart: unless-stopped
     ports:
@@ -106,7 +114,9 @@ services:
         condition: service_healthy
 
   leave-service:
-    build: ./services/leave-service
+    build:
+      context: .
+      dockerfile: services/leave-service/Dockerfile
     container_name: hrms-leave
     restart: unless-stopped
     ports:
@@ -125,7 +135,9 @@ services:
         condition: service_healthy
 
   claims-service:
-    build: ./services/claims-service
+    build:
+      context: .
+      dockerfile: services/claims-service/Dockerfile
     container_name: hrms-claims
     restart: unless-stopped
     ports:
@@ -145,7 +157,9 @@ services:
         condition: service_healthy
 
   recruitment-service:
-    build: ./services/recruitment-service
+    build:
+      context: .
+      dockerfile: services/recruitment-service/Dockerfile
     container_name: hrms-recruitment
     restart: unless-stopped
     ports:
@@ -164,7 +178,9 @@ services:
         condition: service_healthy
 
   attendance-service:
-    build: ./services/attendance-service
+    build:
+      context: .
+      dockerfile: services/attendance-service/Dockerfile
     container_name: hrms-attendance
     restart: unless-stopped
     ports:
@@ -182,7 +198,9 @@ services:
         condition: service_healthy
 
   offboarding-service:
-    build: ./services/offboarding-service
+    build:
+      context: .
+      dockerfile: services/offboarding-service/Dockerfile
     container_name: hrms-offboarding
     restart: unless-stopped
     ports:
@@ -202,7 +220,9 @@ services:
         condition: service_healthy
 
   notification-service:
-    build: ./services/notification-service
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
     container_name: hrms-notification
     restart: unless-stopped
     ports:
@@ -225,7 +245,9 @@ services:
         condition: service_healthy
 
   reporting-service:
-    build: ./services/reporting-service
+    build:
+      context: .
+      dockerfile: services/reporting-service/Dockerfile
     container_name: hrms-reporting
     restart: unless-stopped
     ports:
