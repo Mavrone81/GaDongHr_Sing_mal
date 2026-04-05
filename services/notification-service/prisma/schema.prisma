@@ -25,4 +25,8 @@ model Notification {
   @@map("notifications")
 }
 
-enum NotifType { IN_APP EMAIL SMS }
+enum NotifType {
+  IN_APP
+  EMAIL
+  SMS
+}

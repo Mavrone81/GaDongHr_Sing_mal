@@ -6,7 +6,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
-const { authenticate, authorize, ROLES } = require('../../../../shared/auth-middleware');
+const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
 
 const prisma = new PrismaClient();
 const app = express();

@@ -1,0 +1,15 @@
+{
+  "name": "@hrms/scripts",
+  "version": "1.0.0",
+  "description": "EzyHRM database seed & utility scripts",
+  "private": true,
+  "scripts": {
+    "seed": "node seed.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "pg": "^8.13.1",
+    "uuid": "^10.0.0",
+    "dotenv": "^16.4.5"
+  }
+}

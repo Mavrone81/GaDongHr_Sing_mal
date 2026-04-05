@@ -1,11 +1,14 @@
 FROM node:20-alpine
+RUN apk add --no-cache openssl libc6-compat
 WORKDIR /app
-COPY shared/crypto /app/shared/crypto
-COPY shared/auth-middleware /app/shared/auth-middleware
+COPY shared /app/shared
 RUN cd /app/shared/auth-middleware && npm install
+RUN cd /app/shared/crypto && npm install
+
+WORKDIR /app/services/notification-service
 COPY services/notification-service/package*.json ./
 RUN npm install --omit=dev
 COPY services/notification-service/ ./
-RUN npx prisma generate 2>/dev/null || true
+RUN npx prisma generate
 EXPOSE 4009
-CMD ["sh", "-c", "npx prisma migrate deploy 2>/dev/null || true && node src/index.js"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss &&  node src/index.js"]

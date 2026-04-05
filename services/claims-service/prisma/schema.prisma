@@ -66,4 +66,11 @@ model ClaimItem {
   @@map("claim_items")
 }
 
-enum ClaimStatus { DRAFT SUBMITTED APPROVED REJECTED PAID CANCELLED }
+enum ClaimStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PAID
+  CANCELLED
+}

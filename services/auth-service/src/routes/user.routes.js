@@ -4,7 +4,7 @@ const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const prisma = require('../utils/prisma');
-const { authenticate, authorize, ROLES } = require('../../../../shared/auth-middleware');
+const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
 
 // GET /users  (admin: list all users)
 router.get('/', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.IT_ADMIN), async (req, res, next) => {

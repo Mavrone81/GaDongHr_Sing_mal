@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EzyHRM - Modern Workforce Management</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #4F46E5;
+      --primary-hover: #4338CA;
+      --bg-color: #0F172A;
+      --surface: #1E293B;
+      --text: #F8FAFC;
+      --text-muted: #94A3B8;
+      --success: #10B981;
+      --danger: #EF4444;
+      --border: #334155;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+    
+    body {
+      background: var(--bg-color);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background-image: radial-gradient(circle at top left, #1E1B4B, #0F172A), radial-gradient(circle at bottom right, #312E81, #0F172A);
+      background-attachment: fixed;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1000px;
+      padding: 2rem;
+    }
+
+    /* Glassmorphism Panel */
+    .panel {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 2.5rem;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      animation: fadeIn 0.6s ease-out;
+      display: none;
+    }
+
+    .panel.active { display: block; }
+
+    h1 { font-size: 2.5rem; font-weight: 700; margin-bottom: 0.5rem; background: linear-gradient(to right, #818CF8, #C084FC); -webkit-background-clip: text; color: transparent; }
+    p.subtitle { color: var(--text-muted); margin-bottom: 2rem; font-size: 1.1rem; }
+
+    /* Inputs */
+    .input-group { margin-bottom: 1.5rem; }
+    .input-group label { display: block; font-size: 0.9rem; font-weight: 500; margin-bottom: 0.5rem; color: var(--text-muted); }
+    .input-group input {
+      width: 100%;
+      padding: 0.8rem 1rem;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 1rem;
+      transition: all 0.3s ease;
+    }
+    .input-group input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.3); }
+
+    /* Buttons */
+    button {
+      width: 100%;
+      padding: 1rem;
+      background: linear-gradient(135deg, #4F46E5, #7C3AED);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    button:hover { transform: translateY(-2px); box-shadow: 0 10px 20px -10px rgba(79, 70, 229, 0.6); }
+    button:active { transform: translateY(0); }
+    button:disabled { background: #475569; pointer-events: none; }
+
+    /* Dashboard Layout */
+    .dashboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+    .dashboard-header .user-info { display: flex; align-items: center; gap: 1rem; }
+    .avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #10B981, #3B82F6); display: flex; align-items: center; justify-content: center; font-weight: bold; }
+    
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+    .stat-card {
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      transition: transform 0.3s;
+    }
+    .stat-card:hover { transform: translateY(-5px); border-color: #818CF8; }
+    .stat-value { font-size: 2rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .stat-label { color: var(--text-muted); font-size: 0.9rem; }
+
+    .action-row { display: flex; gap: 1rem; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); }
+    .btn-outline:hover { background: rgba(255, 255, 255, 0.05); }
+
+    /* Logs */
+    .log-panel {
+      margin-top: 2rem;
+      background: rgba(15, 23, 42, 0.8);
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: monospace;
+      color: #A7F3D0;
+      min-height: 150px;
+      max-height: 250px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+      border: 1px solid #064E3B;
+    }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+    .loader {
+      display: none;
+      width: 20px; height: 20px;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s ease-in-out infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <!-- Login Panel -->
+    <div class="panel active" id="loginPanel">
+      <h1>EzyHRM</h1>
+      <p class="subtitle">Secure Enterprise Authentication</p>
+      
+      <div class="input-group">
+        <label>Email Address</label>
+        <input type="email" id="emailInput" value="admin@ezyhRM.sg">
+      </div>
+      <div class="input-group">
+        <label>Master Password</label>
+        <input type="password" id="passwordInput" value="***REMOVED***">
+      </div>
+      
+      <button onclick="login()" id="loginBtn">
+        <span id="loginText">Authenticate Session</span>
+        <div class="loader" id="loginLoader"></div>
+      </button>
+
+      <div class="log-panel" id="loginLog">Waiting for user action...</div>
+    </div>
+
+    <!-- Dashboard Panel -->
+    <div class="panel" id="dashboardPanel">
+      <div class="dashboard-header">
+        <div>
+          <h1>Admin Command Center</h1>
+          <p class="subtitle">Centralized EzyHRM Microservice Hub</p>
+        </div>
+        <div class="user-info">
+          <div class="avatar">SA</div>
+          <div>
+            <div style="font-weight: 600;">Super Admin</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted)">admin@ezyhrm.sg</div>
+          </div>
+          <button class="btn-outline" style="padding: 0.5rem 1rem; width: auto; margin-left: 1rem;" onclick="logout()">Logout</button>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" style="color: #34D399" id="apiStatus">Online</div>
+          <div class="stat-label">API Gateway Status</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color: #818CF8">RSA-256</div>
+          <div class="stat-label">JWT Security Curve</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color: #F472B6">AES-GCM</div>
+          <div class="stat-label">DB Encryption Mode</div>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <button onclick="fetchEmployees()">Fetch Employees (Employee SVC)</button>
+        <button onclick="fetchPayroll()">Test Payload (Payroll SVC)</button>
+      </div>
+
+      <div class="log-panel" id="dashboardLog">System ready. Waiting for network commands...</div>
+    </div>
+
+  </div>
+
+  <script>
+    const API_URL = 'http://localhost:4000/api';
+    let jwtToken = '';
+
+    function log(elementId, message, isError = false) {
+      const el = document.getElementById(elementId);
+      const time = new Date().toLocaleTimeString();
+      const prefix = `<span style="color: #94A3B8">[${time}]</span> `;
+      const msgColor = isError ? '#EF4444' : '#A7F3D0';
+      el.innerHTML += `<div>${prefix} <span style="color: ${msgColor}">${message}</span></div>`;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    async function login() {
+      const email = document.getElementById('emailInput').value;
+      const pass = document.getElementById('passwordInput').value;
+      const btn = document.getElementById('loginBtn');
+      const text = document.getElementById('loginText');
+      const loader = document.getElementById('loginLoader');
+
+      text.style.display = 'none';
+      loader.style.display = 'block';
+      btn.disabled = true;
+
+      log('loginLog', `Initiating authentication for ${email}...`);
+
+      try {
+        const res = await fetch(`${API_URL}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password: pass })
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.error || 'Authentication failed');
+
+        jwtToken = data.accessToken;
+        log('loginLog', `Authentication Successful! Received JWT RS256 Token.`);
+        
+        setTimeout(() => {
+          document.getElementById('loginPanel').classList.remove('active');
+          document.getElementById('dashboardPanel').classList.add('active');
+          log('dashboardLog', `Logged in via Gateway. Token stored in memory.`);
+        }, 1000);
+
+      } catch (err) {
+        log('loginLog', `ERROR: ${err.message}`, true);
+      } finally {
+        text.style.display = 'block';
+        loader.style.display = 'none';
+        btn.disabled = false;
+      }
+    }
+
+    function logout() {
+      jwtToken = '';
+      document.getElementById('dashboardPanel').classList.remove('active');
+      document.getElementById('loginPanel').classList.add('active');
+      document.getElementById('loginLog').innerHTML = 'Session terminated.';
+      document.getElementById('dashboardLog').innerHTML = 'System ready.';
+    }
+
+    async function fetchEmployees() {
+      log('dashboardLog', `[GET] /api/employees ...`);
+      try {
+        const res = await fetch(`${API_URL}/employees`, {
+          headers: { 'Authorization': `Bearer ${jwtToken}` }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Request failed');
+        log('dashboardLog', `Response: ${JSON.stringify(data, null, 2)}`);
+      } catch (err) {
+        log('dashboardLog', `ERROR: ${err.message}`, true);
+      }
+    }
+
+    async function fetchPayroll() {
+      log('dashboardLog', `[GET] /api/payroll/components ...`);
+      try {
+        const res = await fetch(`${API_URL}/payroll/components`, {
+          headers: { 'Authorization': `Bearer ${jwtToken}` }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Request failed');
+        log('dashboardLog', `Response: Received ${data.length || 0} pay components (Statutory data active).`);
+      } catch (err) {
+        log('dashboardLog', `ERROR: ${err.message}`, true);
+      }
+    }
+  </script>
+</body>
+</html>

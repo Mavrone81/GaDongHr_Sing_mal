@@ -1,23 +1,14 @@
 FROM node:20-alpine
-
+RUN apk add --no-cache openssl libc6-compat
 WORKDIR /app
-
-# Copy shared libs
-COPY shared/crypto /app/shared/crypto
-COPY shared/auth-middleware /app/shared/auth-middleware
-
-# Install shared deps
+COPY shared /app/shared
 RUN cd /app/shared/auth-middleware && npm install
+RUN cd /app/shared/crypto && npm install
 
-# Copy service
+WORKDIR /app/services/auth-service
 COPY services/auth-service/package*.json ./
 RUN npm install --omit=dev
-
 COPY services/auth-service/ ./
-
-# Generate Prisma client
 RUN npx prisma generate
-
 EXPOSE 4001
-
-CMD ["sh", "-c", "npx prisma migrate deploy && node src/index.js"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss &&  node src/index.js"]

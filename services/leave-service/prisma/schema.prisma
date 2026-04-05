@@ -78,9 +78,16 @@ model PublicHoliday {
   date      DateTime
   name      String
   year      Int
+  createdAt DateTime @default(now())
 
   @@unique([date])
   @@map("public_holidays")
 }
 
-enum AppStatus { PENDING APPROVED REJECTED CANCELLED WITHDRAWN }
+enum AppStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  WITHDRAWN
+}

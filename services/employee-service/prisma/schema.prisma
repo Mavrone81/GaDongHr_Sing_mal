@@ -122,10 +122,46 @@ model EmergencyContact {
   @@map("emergency_contacts")
 }
 
-enum NricType { NRIC FIN }
-enum CitizenStatus { SC PR_YEAR1 PR_YEAR2 PR_YR3_PLUS FOREIGNER }
-enum Gender { MALE FEMALE PREFER_NOT_TO_SAY }
-enum MaritalStatus { SINGLE MARRIED DIVORCED WIDOWED }
-enum EmploymentType { FULL_TIME PART_TIME CONTRACT INTERN TEMP }
-enum SalaryBasis { MONTHLY DAILY HOURLY PIECE_RATE }
-enum PassType { EP SP WP S_PASS LTVP DEPENDANT_PASS }
+enum NricType {
+  NRIC
+  FIN
+}
+enum CitizenStatus {
+  SC
+  PR_YEAR1
+  PR_YEAR2
+  PR_YR3_PLUS
+  FOREIGNER
+}
+enum Gender {
+  MALE
+  FEMALE
+  PREFER_NOT_TO_SAY
+}
+enum MaritalStatus {
+  SINGLE
+  MARRIED
+  DIVORCED
+  WIDOWED
+}
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERN
+  TEMP
+}
+enum SalaryBasis {
+  MONTHLY
+  DAILY
+  HOURLY
+  PIECE_RATE
+}
+enum PassType {
+  EP
+  SP
+  WP
+  S_PASS
+  LTVP
+  DEPENDANT_PASS
+}

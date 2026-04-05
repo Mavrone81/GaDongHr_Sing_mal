@@ -9,8 +9,8 @@ const rateLimit = require('express-rate-limit');
 
 const prisma = require('../utils/prisma');
 const { signAccessToken, signRefreshToken, verifyToken } = require('../utils/jwt.utils');
-const { authenticate, authorize, ROLES } = require('../../../../shared/auth-middleware');
-const { encrypt, decrypt } = require('../../../../shared/crypto');
+const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
+const { encrypt, decrypt } = require('/app/shared/crypto');
 
 // Rate limit login: 10 req/15min per IP
 const loginLimiter = rateLimit({
@@ -62,9 +62,9 @@ router.post('/login', loginLimiter, async (req, res, next) => {
 
     if (!user.isActive) return res.status(403).json({ error: 'Account deactivated' });
 
-    // MFA check for admin roles
+    // MFA check for admin roles (enforce only if already set up, otherwise allow first login to configure)
     const adminRoles = ['SUPER_ADMIN', 'HR_ADMIN', 'PAYROLL_OFFICER', 'IT_ADMIN'];
-    if (user.mfaEnabled || adminRoles.includes(user.role)) {
+    if (user.mfaEnabled || (adminRoles.includes(user.role) && user.mfaSecret)) {
       if (!mfaCode) {
         return res.status(200).json({ mfaRequired: true, message: 'MFA code required' });
       }

@@ -5,7 +5,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
 const axios = require('axios');
-const { authenticate, authorize, ROLES } = require('../../../../shared/auth-middleware');
+const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
 
 const app = express();
 const PORT = process.env.PORT || 4010;

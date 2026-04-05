@@ -27,8 +27,14 @@ const SERVICES = {
   reporting:    process.env.REPORTING_SERVICE_URL    || 'http://reporting-service:4010',
 };
 
+const corsOptions = { 
+  origin: '*', 
+  methods: ['GET','POST','PUT','DELETE','PATCH','OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-user-role', 'x-employee-id']
+};
 app.use(helmet());
-app.use(cors({ origin: '*', methods: ['GET','POST','PUT','DELETE','PATCH','OPTIONS'] }));
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(morgan('combined'));
 
 // Global rate limit: 200 req/min per IP
@@ -48,7 +54,11 @@ const PUBLIC_ROUTES = [
   { method: 'GET',  path: /^\/health$/ },
 ];
 
+let cachedPublicKey = null;
+
 function jwtMiddleware(req, res, next) {
+  if (req.method === 'OPTIONS') return next();
+
   const isPublic = PUBLIC_ROUTES.some(r => r.method === req.method && r.path.test(req.path));
   if (isPublic) return next();
 
@@ -58,10 +68,12 @@ function jwtMiddleware(req, res, next) {
   }
 
   try {
-    const keyPath = process.env.JWT_PUBLIC_KEY_PATH || path.join(__dirname, '../../../certs/public.pem');
-    const publicKey = fs.readFileSync(keyPath, 'utf8');
+    if (!cachedPublicKey) {
+      const keyPath = process.env.JWT_PUBLIC_KEY_PATH || path.join(__dirname, '../../../certs/public.pem');
+      cachedPublicKey = fs.readFileSync(keyPath, 'utf8');
+    }
     const token = authHeader.slice(7);
-    const payload = jwt.verify(token, publicKey, { algorithms: ['RS256'], issuer: 'ezyhRM' });
+    const payload = jwt.verify(token, cachedPublicKey, { algorithms: ['RS256'], issuer: 'ezyhRM' });
     req.user = payload;
     req.headers['x-user-id'] = payload.sub;
     req.headers['x-user-role'] = payload.role;
@@ -83,18 +95,18 @@ const proxyOpts = {
   },
 };
 
-app.use('/api/auth',         proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.url.replace('/api/auth', '/auth') }));
-app.use('/api/employees',    proxy(SERVICES.employee,     { ...proxyOpts, proxyReqPathResolver: req => req.url.replace('/api/employees', '/employees') }));
-app.use('/api/documents',    proxy(SERVICES.employee,     { ...proxyOpts, proxyReqPathResolver: req => req.url.replace('/api/documents', '/documents') }));
-app.use('/api/payroll',      proxy(SERVICES.payroll,      { ...proxyOpts, proxyReqPathResolver: req => req.url.replace('/api/payroll', '/payroll') }));
-app.use('/api/components',   proxy(SERVICES.payroll,      { ...proxyOpts, proxyReqPathResolver: req => req.url.replace('/api/components', '/components') }));
-app.use('/api/leave',        proxy(SERVICES.leave,        { ...proxyOpts, proxyReqPathResolver: req => req.url.replace('/api/leave', '/leave') }));
-app.use('/api/claims',       proxy(SERVICES.claims,       { ...proxyOpts, proxyReqPathResolver: req => req.url.replace('/api/claims', '/claims') }));
-app.use('/api/recruitment',  proxy(SERVICES.recruitment,  { ...proxyOpts, proxyReqPathResolver: req => req.url.replace('/api/recruitment', '/recruitment') }));
-app.use('/api/attendance',   proxy(SERVICES.attendance,   { ...proxyOpts, proxyReqPathResolver: req => req.url.replace('/api/attendance', '/attendance') }));
-app.use('/api/offboarding',  proxy(SERVICES.offboarding,  { ...proxyOpts, proxyReqPathResolver: req => req.url.replace('/api/offboarding', '/offboarding') }));
-app.use('/api/notifications',proxy(SERVICES.notification, { ...proxyOpts, proxyReqPathResolver: req => req.url.replace('/api/notifications', '/notifications') }));
-app.use('/api/reports',      proxy(SERVICES.reporting,    { ...proxyOpts, proxyReqPathResolver: req => req.url.replace('/api/reports', '/reports') }));
+app.use('/api/auth',         proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/auth', '/auth') }));
+app.use('/api/employees',    proxy(SERVICES.employee,     { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/employees', '/employees') }));
+app.use('/api/documents',    proxy(SERVICES.employee,     { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/documents', '/documents') }));
+app.use('/api/payroll',      proxy(SERVICES.payroll,      { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/payroll', '/payroll') }));
+app.use('/api/components',   proxy(SERVICES.payroll,      { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/components', '/components') }));
+app.use('/api/leave',        proxy(SERVICES.leave,        { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/leave', '/leave') }));
+app.use('/api/claims',       proxy(SERVICES.claims,       { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/claims', '/claims') }));
+app.use('/api/recruitment',  proxy(SERVICES.recruitment,  { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/recruitment', '/recruitment') }));
+app.use('/api/attendance',   proxy(SERVICES.attendance,   { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/attendance', '/attendance') }));
+app.use('/api/offboarding',  proxy(SERVICES.offboarding,  { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/offboarding', '/offboarding') }));
+app.use('/api/notifications',proxy(SERVICES.notification, { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/notifications', '/notifications') }));
+app.use('/api/reports',      proxy(SERVICES.reporting,    { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/reports', '/reports') }));
 
 app.use((err, req, res, next) => { console.error(err.message); res.status(502).json({ error: 'Gateway error', message: err.message }); });
 

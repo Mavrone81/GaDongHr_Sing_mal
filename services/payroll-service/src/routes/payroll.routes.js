@@ -6,8 +6,8 @@ const path = require('path');
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const { PrismaClient } = require('@prisma/client');
-const { authenticate, authorize, ROLES } = require('../../../../shared/auth-middleware');
-const { encrypt, decrypt, encryptNumber, decryptNumber } = require('../../../../shared/crypto');
+const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
+const { encrypt, decrypt, encryptNumber, decryptNumber } = require('/app/shared/crypto');
 const { computeCpf, computeSdl, computeNetPay } = require('../engines/cpf.engine');
 
 const prisma = new PrismaClient();

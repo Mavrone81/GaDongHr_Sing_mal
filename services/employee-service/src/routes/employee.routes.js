@@ -3,8 +3,8 @@
 const router = require('express').Router();
 const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
-const { authenticate, authorize, authorizeSelfOrRole, ROLES } = require('../../../../shared/auth-middleware');
-const { encryptFields, decryptFields } = require('../../../../shared/crypto');
+const { authenticate, authorize, authorizeSelfOrRole, ROLES } = require('/app/shared/auth-middleware');
+const { encryptFields, decryptFields } = require('/app/shared/crypto');
 
 const prisma = new PrismaClient();
 
@@ -19,7 +19,7 @@ function sanitizeEmployee(emp, role) {
     // Decrypt sensitive fields for privileged roles
     SENSITIVE_OUT.forEach(f => {
       if (out[f]) {
-        try { out[f] = require('../../../../shared/crypto').decrypt(out[f]); } catch { out[f] = '[ERROR]'; }
+        try { out[f] = require('/app/shared/crypto').decrypt(out[f]); } catch { out[f] = '[ERROR]'; }
       }
     });
   } else {
@@ -151,7 +151,7 @@ router.get('/:id/salary-history', authenticate, authorize(ROLES.SUPER_ADMIN, ROL
     });
     const decrypted = history.map(h => ({
       ...h,
-      basicSalary: (() => { try { return require('../../../../shared/crypto').decrypt(h.basicSalaryEnc); } catch { return null; } })(),
+      basicSalary: (() => { try { return require('/app/shared/crypto').decrypt(h.basicSalaryEnc); } catch { return null; } })(),
     }));
     res.json(decrypted);
   } catch (err) { next(err); }

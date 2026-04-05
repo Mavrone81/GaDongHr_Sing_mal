@@ -2,278 +2,330 @@
 'use strict';
 
 /**
- * EzyHRM Seed Script
- * Populates: 
- *  - Super Admin user (auth-service)
- *  - CPF rate table (payroll-service)
- *  - 59 pay components (payroll-service)
- *  - SDL config (payroll-service)
- *  - 22 leave types (leave-service)
- *  - Claim categories (claims-service)
- *  - Singapore public holidays 2025 (leave-service)
+ * EzyHRM Seed Script — uses raw pg (PostgreSQL) queries
+ * Run from repo root: node scripts/seed.js
+ * Requires: docker-compose up  (postgres must be running on localhost:5432)
  */
 
-const { execSync } = require('child_process');
 const path = require('path');
-const bcrypt = require('bcryptjs');
-
-// We'll directly use Prisma clients for each service
-process.chdir(path.join(__dirname, '../services/auth-service'));
-const { PrismaClient: AuthPrisma } = require('@prisma/client');
-
-process.chdir(path.join(__dirname, '../services/payroll-service'));
-const { PrismaClient: PayrollPrisma } = require('@prisma/client');
-
-process.chdir(path.join(__dirname, '../services/leave-service'));
-const { PrismaClient: LeavePrisma } = require('@prisma/client');
-
-process.chdir(path.join(__dirname, '../services/claims-service'));
-const { PrismaClient: ClaimsPrisma } = require('@prisma/client');
-
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
-
+const { Client } = require('pg');
+const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 
-async function seedAuth() {
-  const authPrisma = new AuthPrisma({ datasources: { db: { url: `postgresql://${process.env.POSTGRES_USER}:${process.env.POSTGRES_PASSWORD}@${process.env.POSTGRES_HOST || 'localhost'}:5432/hrms_auth` } } });
-  try {
-    const existing = await authPrisma.user.findUnique({ where: { email: 'admin@ezyhRM.sg' } });
-    if (!existing) {
-      const hash = await bcrypt.hash('***REMOVED***', 12);
-      await authPrisma.user.create({
-        data: { id: uuidv4(), email: 'admin@ezyhRM.sg', passwordHash: hash, name: 'System Admin', role: 'SUPER_ADMIN' },
-      });
-      console.log('✅ Super Admin created: admin@ezyhRM.sg / ***REMOVED***');
-    } else {
-      console.log('ℹ️  Super Admin already exists');
-    }
-  } finally { await authPrisma.$disconnect(); }
+const HOST   = process.env.POSTGRES_HOST === 'postgres' ? 'localhost' : (process.env.POSTGRES_HOST || 'localhost');
+const PORT   = parseInt(process.env.POSTGRES_PORT) || 5432;
+const USER   = process.env.POSTGRES_USER || 'hrms';
+const PASS   = process.env.POSTGRES_PASSWORD || 'hrms_secret_2025';
+
+function client(database) {
+  return new Client({ host: HOST, port: PORT, user: USER, password: PASS, database });
 }
 
-async function seedPayroll() {
-  const payrollPrisma = new PayrollPrisma({ datasources: { db: { url: `postgresql://${process.env.POSTGRES_USER}:${process.env.POSTGRES_PASSWORD}@${process.env.POSTGRES_HOST || 'localhost'}:5432/hrms_payroll` } } });
+// ─── Auth: Users ──────────────────────────────────────────────────
+async function seedAuth() {
+  const db = client('hrms_auth');
+  await db.connect();
   try {
-    // CPF Rates (Jan 2025 rates)
-    const cpfRates = [
-      { id: uuidv4(), citizenStatus: 'SC_PR', ageMin: 0,  ageMax: 55,  employeeRate: 0.20, employerRate: 0.17, effectiveDate: new Date('2025-01-01') },
-      { id: uuidv4(), citizenStatus: 'SC_PR', ageMin: 55, ageMax: 60,  employeeRate: 0.16, employerRate: 0.15, effectiveDate: new Date('2025-01-01') },
-      { id: uuidv4(), citizenStatus: 'SC_PR', ageMin: 60, ageMax: 65,  employeeRate: 0.105,employerRate: 0.115,effectiveDate: new Date('2025-01-01') },
-      { id: uuidv4(), citizenStatus: 'SC_PR', ageMin: 65, ageMax: 70,  employeeRate: 0.075,employerRate: 0.09, effectiveDate: new Date('2025-01-01') },
-      { id: uuidv4(), citizenStatus: 'SC_PR', ageMin: 70, ageMax: null,employeeRate: 0.05, employerRate: 0.075,effectiveDate: new Date('2025-01-01') },
-      { id: uuidv4(), citizenStatus: 'PR_YEAR1', ageMin: 0, ageMax: null, employeeRate: 0.05, employerRate: 0.04, effectiveDate: new Date('2025-01-01') },
-      { id: uuidv4(), citizenStatus: 'PR_YEAR2', ageMin: 0, ageMax: null, employeeRate: 0.15, employerRate: 0.09, effectiveDate: new Date('2025-01-01') },
-      { id: uuidv4(), citizenStatus: 'FOREIGNER', ageMin: 0, ageMax: null, employeeRate: 0.0, employerRate: 0.0, effectiveDate: new Date('2025-01-01') },
-    ];
-    const existingRates = await payrollPrisma.cpfRate.count();
-    if (existingRates === 0) {
-      await payrollPrisma.cpfRate.createMany({ data: cpfRates });
-      console.log('✅ CPF rates seeded (Jan 2025)');
-    }
+    const hash = await bcrypt.hash('Password@123!', 12);
+    const adminHash = await bcrypt.hash('***REMOVED***', 12);
 
-    // SDL Config
-    const sdlCount = await payrollPrisma.sdlConfig.count();
-    if (sdlCount === 0) {
-      await payrollPrisma.sdlConfig.create({ data: { id: uuidv4(), rate: 0.0025, minAmount: 2.00, maxAmount: 11.25, salaryCap: 4500, effectiveDate: new Date('2025-01-01') } });
+    const usersToSeed = [
+      { email: 'admin@ezyhrm.sg', hash: adminHash, name: 'System Admin', role: 'SUPER_ADMIN' },
+      { email: 'hr@ezyhrm.sg', hash: hash, name: 'HR Admin', role: 'HR_ADMIN' },
+      { email: 'payroll@ezyhrm.sg', hash: hash, name: 'Payroll Officer', role: 'PAYROLL_OFFICER' },
+      { email: 'manager@ezyhrm.sg', hash: hash, name: 'Line Manager', role: 'MANAGER' },
+      { email: 'employee@ezyhrm.sg', hash: hash, name: 'Standard Employee', role: 'EMPLOYEE' }
+    ];
+
+    let count = 0;
+    for (const u of usersToSeed) {
+      const exists = await db.query(`SELECT id FROM users WHERE email = $1 LIMIT 1`, [u.email]);
+      if (exists.rows.length === 0) {
+        await db.query(
+          `INSERT INTO users (id, email, "passwordHash", name, role, "isActive", "mfaEnabled", "failedLogins", "createdAt", "updatedAt")
+           VALUES ($1, $2, $3, $4, $5, true, false, 0, NOW(), NOW())`,
+          [uuidv4(), u.email, u.hash, u.name, u.role]
+        );
+        count++;
+      }
+    }
+    
+    if (count > 0) {
+      console.log(`✅ Seeded ${count} authentication accounts successfully!`);
+    } else {
+      console.log(`ℹ️  Authentication accounts already exist — skipping`);
+    }
+  } finally { await db.end(); }
+}
+
+// ─── Payroll: CPF rates, SDL, FWL, pay components, public holidays ───────────
+async function seedPayroll() {
+  const db = client('hrms_payroll');
+  await db.connect();
+  try {
+    // CPF Rates (Jan 2025)
+    const cpfCount = await db.query(`SELECT COUNT(*) FROM cpf_rates`);
+    if (cpfCount.rows[0].count === '0') {
+      const rates = [
+        ['SC_PR',    0,  55,   0.20, 0.17],
+        ['SC_PR',   55,  60,   0.16, 0.15],
+        ['SC_PR',   60,  65,   0.105,0.115],
+        ['SC_PR',   65,  70,   0.075,0.09],
+        ['SC_PR',   70,  null, 0.05, 0.075],
+        ['PR_YEAR1', 0,  null, 0.05, 0.04],
+        ['PR_YEAR2', 0,  null, 0.15, 0.09],
+        ['FOREIGNER',0,  null, 0.0,  0.0],
+      ];
+      for (const [cs, amin, amax, er, emr] of rates) {
+        await db.query(
+          `INSERT INTO cpf_rates (id, "citizenStatus", "ageMin", "ageMax", "employeeRate", "employerRate", "owCeiling", "awCeiling", "effectiveDate", "isActive", "createdAt")
+           VALUES ($1,$2,$3,$4,$5,$6,6800,102000,'2025-01-01',true,NOW())`,
+          [uuidv4(), cs, amin, amax, er, emr]
+        );
+      }
+      console.log('✅ CPF rates seeded (Jan 2025)');
+    } else { console.log('ℹ️  CPF rates already exist'); }
+
+    // SDL config
+    const sdlCount = await db.query(`SELECT COUNT(*) FROM sdl_config`);
+    if (sdlCount.rows[0].count === '0') {
+      await db.query(
+        `INSERT INTO sdl_config (id, rate, "minAmount", "maxAmount", "salaryCap", "effectiveDate", "isActive", "createdAt")
+         VALUES ($1, 0.0025, 2.00, 11.25, 4500, '2025-01-01', true, NOW())`,
+        [uuidv4()]
+      );
       console.log('✅ SDL config seeded');
     }
 
-    // 59 Pay Components
-    const components = [
-      // A - Ordinary Wages
-      { code: 'BASIC', name: 'Basic Salary', category: 'ORDINARY_WAGES', isCpfApplicable: true, isIrasTaxable: true, wageType: 'OW', sortOrder: 1 },
-      { code: 'DAILY_WAGE', name: 'Daily-Rated Wage', category: 'ORDINARY_WAGES', isCpfApplicable: true, isIrasTaxable: true, wageType: 'OW', sortOrder: 2 },
-      { code: 'HOURLY_WAGE', name: 'Hourly-Rated Wage', category: 'ORDINARY_WAGES', isCpfApplicable: true, isIrasTaxable: true, wageType: 'OW', sortOrder: 3 },
-      { code: 'PIECE_RATE', name: 'Piece-Rate / Output-Based', category: 'ORDINARY_WAGES', isCpfApplicable: true, isIrasTaxable: true, wageType: 'OW', sortOrder: 4 },
-      // B - Allowances
-      { code: 'FIXED_ALLOW', name: 'Fixed Monthly Allowance', category: 'ALLOWANCE', isCpfApplicable: true, isIrasTaxable: true, wageType: 'OW', sortOrder: 5 },
-      { code: 'TRANSPORT_ALLOW', name: 'Transport Allowance (Fixed)', category: 'ALLOWANCE', isCpfApplicable: true, isIrasTaxable: true, wageType: 'OW', sortOrder: 6 },
-      { code: 'MEAL_ALLOW', name: 'Meal Allowance', category: 'ALLOWANCE', isCpfApplicable: true, isIrasTaxable: true, wageType: 'OW', sortOrder: 7 },
-      { code: 'HOUSING_ALLOW', name: 'Housing Allowance', category: 'ALLOWANCE', isCpfApplicable: true, isIrasTaxable: true, wageType: 'OW', sortOrder: 8 },
-      { code: 'MOBILE_ALLOW', name: 'Mobile / Handphone Allowance', category: 'ALLOWANCE', isCpfApplicable: true, isIrasTaxable: true, wageType: 'OW', sortOrder: 9 },
-      { code: 'CLOTHING_ALLOW', name: 'Clothing / Uniform Allowance', category: 'ALLOWANCE', isCpfApplicable: false, isIrasTaxable: false, wageType: 'OW', sortOrder: 10 },
-      { code: 'NIGHT_SHIFT_ALLOW', name: 'Night Shift Allowance', category: 'ALLOWANCE', isCpfApplicable: true, isIrasTaxable: true, wageType: 'OW', sortOrder: 11 },
-      { code: 'SHIFT_DIFF', name: 'Shift Differential Pay', category: 'ALLOWANCE', isCpfApplicable: true, isIrasTaxable: true, wageType: 'OW', sortOrder: 12 },
-      { code: 'OFFSHORE_ALLOW', name: 'Offshore / Sea Allowance', category: 'ALLOWANCE', isCpfApplicable: false, isIrasTaxable: false, wageType: 'OW', sortOrder: 13 },
-      { code: 'SITE_ALLOW', name: 'Site / Field Allowance', category: 'ALLOWANCE', isCpfApplicable: true, isIrasTaxable: true, wageType: 'OW', sortOrder: 14 },
-      // C - Overtime
-      { code: 'OT_PAY', name: 'Overtime Pay (EA Part IV)', category: 'OT', isCpfApplicable: true, isIrasTaxable: true, wageType: 'OW', sortOrder: 15 },
-      { code: 'REST_DAY_EMP', name: 'Rest Day Pay (Employee Request)', category: 'OT', isCpfApplicable: true, isIrasTaxable: true, wageType: 'OW', sortOrder: 16 },
-      { code: 'REST_DAY_ER', name: 'Rest Day Pay (Employer Request)', category: 'OT', isCpfApplicable: true, isIrasTaxable: true, wageType: 'OW', sortOrder: 17 },
-      { code: 'PH_WORK', name: 'Public Holiday Work Pay', category: 'OT', isCpfApplicable: true, isIrasTaxable: true, wageType: 'OW', sortOrder: 18 },
-      { code: 'OIL', name: 'Off-In-Lieu (OIL)', category: 'OT', isCpfApplicable: false, isIrasTaxable: false, wageType: 'OW', sortOrder: 19 },
-      // D - Additional Wages
-      { code: 'AWS', name: 'Annual Wage Supplement (AWS)', category: 'ADDITIONAL_WAGES', isCpfApplicable: true, isIrasTaxable: true, wageType: 'AW', sortOrder: 20 },
-      { code: 'PERF_BONUS', name: 'Performance Bonus', category: 'ADDITIONAL_WAGES', isCpfApplicable: true, isIrasTaxable: true, wageType: 'AW', sortOrder: 21 },
-      { code: 'COMMISSION', name: 'Commission', category: 'ADDITIONAL_WAGES', isCpfApplicable: true, isIrasTaxable: true, wageType: 'AW', sortOrder: 22 },
-      { code: 'PROFIT_SHARE', name: 'Profit-Sharing Bonus', category: 'ADDITIONAL_WAGES', isCpfApplicable: true, isIrasTaxable: true, wageType: 'AW', sortOrder: 23 },
-      { code: 'RETENTION_BONUS', name: 'Retention Bonus', category: 'ADDITIONAL_WAGES', isCpfApplicable: true, isIrasTaxable: true, wageType: 'AW', sortOrder: 24 },
-      { code: 'CONTRACT_BONUS', name: 'Contractual Bonus', category: 'ADDITIONAL_WAGES', isCpfApplicable: true, isIrasTaxable: true, wageType: 'AW', sortOrder: 25 },
-      { code: 'SIGN_ON', name: 'Sign-On Bonus', category: 'ADDITIONAL_WAGES', isCpfApplicable: true, isIrasTaxable: true, wageType: 'AW', sortOrder: 26 },
-      { code: 'DISC_BONUS', name: 'Discretionary Bonus', category: 'ADDITIONAL_WAGES', isCpfApplicable: true, isIrasTaxable: true, wageType: 'AW', sortOrder: 27 },
-      { code: 'LSA_CASH', name: 'Long Service Award (Cash)', category: 'ADDITIONAL_WAGES', isCpfApplicable: true, isIrasTaxable: false, wageType: 'AW', sortOrder: 28 },
-      // E - Deductions
-      { code: 'EMP_CPF', name: 'Employee CPF Contribution', category: 'DEDUCTION', isCpfApplicable: false, isIrasTaxable: false, wageType: 'DEDUCTION', sortOrder: 29 },
-      { code: 'NPL_DED', name: 'No-Pay Leave (NPL) Deduction', category: 'DEDUCTION', isCpfApplicable: false, isIrasTaxable: false, wageType: 'DEDUCTION', sortOrder: 30 },
-      { code: 'ABSENCE_DED', name: 'Absence / AWOL Deduction', category: 'DEDUCTION', isCpfApplicable: false, isIrasTaxable: false, wageType: 'DEDUCTION', sortOrder: 31 },
-      { code: 'SAL_ADV_RECOV', name: 'Salary Advance Recovery', category: 'DEDUCTION', isCpfApplicable: false, isIrasTaxable: false, wageType: 'DEDUCTION', sortOrder: 32 },
-      { code: 'STAFF_LOAN', name: 'Staff Loan Repayment', category: 'DEDUCTION', isCpfApplicable: false, isIrasTaxable: false, wageType: 'DEDUCTION', sortOrder: 33 },
-      { code: 'OVERPAY_RECOV', name: 'Overpayment Recovery', category: 'DEDUCTION', isCpfApplicable: false, isIrasTaxable: false, wageType: 'DEDUCTION', sortOrder: 34 },
-      { code: 'GARNISHMENT', name: 'Court Order / Garnishment', category: 'DEDUCTION', isCpfApplicable: false, isIrasTaxable: false, wageType: 'DEDUCTION', sortOrder: 35 },
-      // F - Reimbursements
-      { code: 'MED_REIMB', name: 'Medical Reimbursement', category: 'REIMBURSEMENT', isCpfApplicable: false, isIrasTaxable: false, wageType: 'REIMBURSEMENT', sortOrder: 36 },
-      { code: 'TRANSPORT_CLAIM', name: 'Transport Claim (Actual)', category: 'REIMBURSEMENT', isCpfApplicable: false, isIrasTaxable: false, wageType: 'REIMBURSEMENT', sortOrder: 37 },
-      { code: 'ENTERTAIN_REIMB', name: 'Entertainment Reimbursement', category: 'REIMBURSEMENT', isCpfApplicable: false, isIrasTaxable: false, wageType: 'REIMBURSEMENT', sortOrder: 38 },
-      { code: 'TRAINING_REIMB', name: 'Training / Course Reimbursement', category: 'REIMBURSEMENT', isCpfApplicable: false, isIrasTaxable: false, wageType: 'REIMBURSEMENT', sortOrder: 39 },
-      { code: 'HANDPHONE_REIMB', name: 'Handphone Bill Reimbursement', category: 'REIMBURSEMENT', isCpfApplicable: false, isIrasTaxable: false, wageType: 'REIMBURSEMENT', sortOrder: 40 },
-      { code: 'MILEAGE_REIMB', name: 'Mileage Reimbursement', category: 'REIMBURSEMENT', isCpfApplicable: false, isIrasTaxable: false, wageType: 'REIMBURSEMENT', sortOrder: 41 },
-      // G - Government-Paid Leave
-      { code: 'GPML', name: 'Government-Paid Maternity Leave', category: 'GOVT_PAID', isCpfApplicable: true, isIrasTaxable: false, wageType: 'OW', sortOrder: 42 },
-      { code: 'GPPL', name: 'Government-Paid Paternity Leave', category: 'GOVT_PAID', isCpfApplicable: true, isIrasTaxable: false, wageType: 'OW', sortOrder: 43 },
-      { code: 'GPCL', name: 'Government-Paid Childcare Leave', category: 'GOVT_PAID', isCpfApplicable: true, isIrasTaxable: false, wageType: 'OW', sortOrder: 44 },
-      { code: 'GPSL', name: 'Government-Paid Shared Parental Leave', category: 'GOVT_PAID', isCpfApplicable: true, isIrasTaxable: false, wageType: 'OW', sortOrder: 45 },
-      // H - BIK (Benefits in Kind)
-      { code: 'CAR_BIK', name: 'Company Car (BIK)', category: 'BIK', isCpfApplicable: false, isIrasTaxable: true, wageType: 'OW', sortOrder: 46 },
-      { code: 'HOUSING_BIK', name: 'Housing Benefit (BIK)', category: 'BIK', isCpfApplicable: false, isIrasTaxable: true, wageType: 'OW', sortOrder: 47 },
-      { code: 'CLUB_MEMB', name: 'Club Membership (BIK)', category: 'BIK', isCpfApplicable: false, isIrasTaxable: true, wageType: 'OW', sortOrder: 48 },
-      { code: 'GRP_INS', name: 'Group Insurance Premium (BIK)', category: 'BIK', isCpfApplicable: false, isIrasTaxable: true, wageType: 'OW', sortOrder: 49 },
-      // I - ESOP / Stock
-      { code: 'ESOP_GAIN', name: 'Stock Option Gain (ESOP)', category: 'ADDITIONAL_WAGES', isCpfApplicable: false, isIrasTaxable: true, wageType: 'AW', sortOrder: 50 },
-      // J - Statutory
-      { code: 'SDL', name: 'Skills Development Levy (SDL)', category: 'STATUTORY', isCpfApplicable: false, isIrasTaxable: false, wageType: 'DEDUCTION', sortOrder: 51 },
-      { code: 'FWL', name: 'Foreign Worker Levy (FWL)', category: 'STATUTORY', isCpfApplicable: false, isIrasTaxable: false, wageType: 'DEDUCTION', sortOrder: 52 },
-      { code: 'EMPL_CPF', name: 'Employer CPF Contribution', category: 'STATUTORY', isCpfApplicable: false, isIrasTaxable: false, wageType: 'DEDUCTION', sortOrder: 53 },
-      // K - Additional
-      { code: 'DIRECTOR_FEE', name: 'Director Fees', category: 'ADDITIONAL_WAGES', isCpfApplicable: false, isIrasTaxable: true, wageType: 'AW', sortOrder: 54 },
-      { code: 'GRATUITY', name: 'Gratuity Payment', category: 'ADDITIONAL_WAGES', isCpfApplicable: true, isIrasTaxable: true, wageType: 'AW', sortOrder: 55 },
-      { code: 'NOTICE_PAY', name: 'Pay in Lieu of Notice', category: 'ADDITIONAL_WAGES', isCpfApplicable: true, isIrasTaxable: true, wageType: 'AW', sortOrder: 56 },
-      { code: 'LEAVE_ENCASH', name: 'Leave Encashment', category: 'ADDITIONAL_WAGES', isCpfApplicable: true, isIrasTaxable: true, wageType: 'OW', sortOrder: 57 },
-      { code: 'NS_PAY', name: 'NSman Make-Up Pay', category: 'GOVT_PAID', isCpfApplicable: true, isIrasTaxable: false, wageType: 'OW', sortOrder: 58 },
-      { code: 'COMPASSIONATE', name: 'Compassionate Payment', category: 'ADDITIONAL_WAGES', isCpfApplicable: false, isIrasTaxable: true, wageType: 'AW', sortOrder: 59 },
-    ];
-
-    const existingComps = await payrollPrisma.payComponent.count();
-    if (existingComps === 0) {
-      await payrollPrisma.payComponent.createMany({ data: components.map(c => ({ ...c, id: uuidv4() })) });
-      console.log(`✅ ${components.length} pay components seeded`);
-    }
-
-    // FWL Rates (sample)
-    const fwlCount = await payrollPrisma.fwlRate.count();
-    if (fwlCount === 0) {
-      await payrollPrisma.fwlRate.createMany({
-        data: [
-          { id: uuidv4(), passType: 'WP', sector: 'SERVICES', tier: 'BASIC_SKILLED', dailyRate: 15.00, effectiveDate: new Date('2025-01-01') },
-          { id: uuidv4(), passType: 'WP', sector: 'SERVICES', tier: 'HIGHER_SKILLED', dailyRate: 7.00, effectiveDate: new Date('2025-01-01') },
-          { id: uuidv4(), passType: 'S_PASS', sector: 'SERVICES', tier: 'TIER1', dailyRate: 13.00, effectiveDate: new Date('2025-01-01') },
-          { id: uuidv4(), passType: 'WP', sector: 'CONSTRUCTION', tier: 'BASIC_SKILLED', dailyRate: 15.00, effectiveDate: new Date('2025-01-01') },
-        ],
-      });
+    // FWL rates
+    const fwlCount = await db.query(`SELECT COUNT(*) FROM fwl_rates`);
+    if (fwlCount.rows[0].count === '0') {
+      const fwlRates = [
+        ['WP',     'SERVICES',     'BASIC_SKILLED',  15.00],
+        ['WP',     'SERVICES',     'HIGHER_SKILLED',  7.00],
+        ['S_PASS', 'SERVICES',     'TIER1',           13.00],
+        ['WP',     'CONSTRUCTION', 'BASIC_SKILLED',  15.00],
+        ['WP',     'MANUFACTURING','BASIC_SKILLED',  15.00],
+      ];
+      for (const [pt, sec, tier, rate] of fwlRates) {
+        await db.query(
+          `INSERT INTO fwl_rates (id, "passType", sector, tier, "dailyRate", "effectiveDate", "isActive", "createdAt")
+           VALUES ($1,$2,$3,$4,$5,'2025-01-01',true,NOW())`,
+          [uuidv4(), pt, sec, tier, rate]
+        );
+      }
       console.log('✅ FWL rates seeded');
     }
 
+    // Pay Components (all 59 from PRD)
+    const compCount = await db.query(`SELECT COUNT(*) FROM pay_components`);
+    if (compCount.rows[0].count === '0') {
+      const components = [
+        ['BASIC',          'Basic Salary',                     'ORDINARY_WAGES',   true, true, 'OW',  1],
+        ['DAILY_WAGE',     'Daily-Rated Wage',                 'ORDINARY_WAGES',   true, true, 'OW',  2],
+        ['HOURLY_WAGE',    'Hourly-Rated Wage',                'ORDINARY_WAGES',   true, true, 'OW',  3],
+        ['PIECE_RATE',     'Piece-Rate / Output-Based',        'ORDINARY_WAGES',   true, true, 'OW',  4],
+        ['FIXED_ALLOW',    'Fixed Monthly Allowance',          'ALLOWANCE',        true, true, 'OW',  5],
+        ['TRANSPORT_ALLOW','Transport Allowance (Fixed)',       'ALLOWANCE',        true, true, 'OW',  6],
+        ['MEAL_ALLOW',     'Meal Allowance',                   'ALLOWANCE',        true, true, 'OW',  7],
+        ['HOUSING_ALLOW',  'Housing Allowance',                'ALLOWANCE',        true, true, 'OW',  8],
+        ['MOBILE_ALLOW',   'Mobile / Handphone Allowance',     'ALLOWANCE',        true, true, 'OW',  9],
+        ['CLOTHING_ALLOW', 'Clothing / Uniform Allowance',     'ALLOWANCE',       false,false, 'OW', 10],
+        ['NIGHT_SHIFT',    'Night Shift Allowance',            'ALLOWANCE',        true, true, 'OW', 11],
+        ['SHIFT_DIFF',     'Shift Differential Pay',           'ALLOWANCE',        true, true, 'OW', 12],
+        ['OFFSHORE_ALLOW', 'Offshore / Sea Allowance',         'ALLOWANCE',       false,false, 'OW', 13],
+        ['SITE_ALLOW',     'Site / Field Allowance',           'ALLOWANCE',        true, true, 'OW', 14],
+        ['OT_PAY',         'Overtime Pay (EA Part IV)',         'OT',               true, true, 'OW', 15],
+        ['REST_DAY_EMP',   'Rest Day Pay (Employee Request)',   'OT',               true, true, 'OW', 16],
+        ['REST_DAY_ER',    'Rest Day Pay (Employer Request)',   'OT',               true, true, 'OW', 17],
+        ['PH_WORK',        'Public Holiday Work Pay',           'OT',               true, true, 'OW', 18],
+        ['OIL',            'Off-In-Lieu (OIL)',                 'OT',              false,false, 'OW', 19],
+        ['AWS',            'Annual Wage Supplement (AWS)',      'ADDITIONAL_WAGES', true, true, 'AW', 20],
+        ['PERF_BONUS',     'Performance Bonus',                'ADDITIONAL_WAGES', true, true, 'AW', 21],
+        ['COMMISSION',     'Commission',                        'ADDITIONAL_WAGES', true, true, 'AW', 22],
+        ['PROFIT_SHARE',   'Profit-Sharing Bonus',             'ADDITIONAL_WAGES', true, true, 'AW', 23],
+        ['RETENTION_BONUS','Retention Bonus',                  'ADDITIONAL_WAGES', true, true, 'AW', 24],
+        ['CONTRACT_BONUS', 'Contractual Bonus',                'ADDITIONAL_WAGES', true, true, 'AW', 25],
+        ['SIGN_ON',        'Sign-On Bonus',                    'ADDITIONAL_WAGES', true, true, 'AW', 26],
+        ['DISC_BONUS',     'Discretionary Bonus',              'ADDITIONAL_WAGES', true, true, 'AW', 27],
+        ['LSA_CASH',       'Long Service Award (Cash)',         'ADDITIONAL_WAGES', true,false, 'AW', 28],
+        ['EMP_CPF',        'Employee CPF Contribution',         'DEDUCTION',       false,false,  'DEDUCTION', 29],
+        ['NPL_DED',        'No-Pay Leave (NPL) Deduction',      'DEDUCTION',       false,false,  'DEDUCTION', 30],
+        ['ABSENCE_DED',    'Absence / AWOL Deduction',          'DEDUCTION',       false,false,  'DEDUCTION', 31],
+        ['SAL_ADV_RECOV',  'Salary Advance Recovery',           'DEDUCTION',       false,false,  'DEDUCTION', 32],
+        ['STAFF_LOAN',     'Staff Loan Repayment',              'DEDUCTION',       false,false,  'DEDUCTION', 33],
+        ['OVERPAY_RECOV',  'Overpayment Recovery',              'DEDUCTION',       false,false,  'DEDUCTION', 34],
+        ['GARNISHMENT',    'Court Order / Garnishment',         'DEDUCTION',       false,false,  'DEDUCTION', 35],
+        ['MED_REIMB',      'Medical Reimbursement',             'REIMBURSEMENT',   false,false,  'REIMBURSEMENT', 36],
+        ['TRANSPORT_CLAIM','Transport Claim (Actual)',           'REIMBURSEMENT',   false,false,  'REIMBURSEMENT', 37],
+        ['ENTERTAIN_REIMB','Entertainment Reimbursement',       'REIMBURSEMENT',   false,false,  'REIMBURSEMENT', 38],
+        ['TRAINING_REIMB', 'Training / Course Reimbursement',   'REIMBURSEMENT',   false,false,  'REIMBURSEMENT', 39],
+        ['HANDPHONE_REIMB','Handphone Bill Reimbursement',      'REIMBURSEMENT',   false,false,  'REIMBURSEMENT', 40],
+        ['MILEAGE_REIMB',  'Mileage Reimbursement',             'REIMBURSEMENT',   false,false,  'REIMBURSEMENT', 41],
+        ['GPML',           'Government-Paid Maternity Leave',   'GOVT_PAID',        true,false, 'OW', 42],
+        ['GPPL',           'Government-Paid Paternity Leave',   'GOVT_PAID',        true,false, 'OW', 43],
+        ['GPCL',           'Government-Paid Childcare Leave',   'GOVT_PAID',        true,false, 'OW', 44],
+        ['GPSL',           'Government-Paid Shared Parental Leave','GOVT_PAID',     true,false, 'OW', 45],
+        ['CAR_BIK',        'Company Car (BIK)',                 'BIK',             false, true, 'OW', 46],
+        ['HOUSING_BIK',    'Housing Benefit (BIK)',             'BIK',             false, true, 'OW', 47],
+        ['CLUB_MEMB',      'Club Membership (BIK)',             'BIK',             false, true, 'OW', 48],
+        ['GRP_INS',        'Group Insurance Premium (BIK)',     'BIK',             false, true, 'OW', 49],
+        ['ESOP_GAIN',      'Stock Option Gain (ESOP)',          'ADDITIONAL_WAGES',false, true, 'AW', 50],
+        ['SDL',            'Skills Development Levy (SDL)',     'STATUTORY',       false,false,  'DEDUCTION', 51],
+        ['FWL',            'Foreign Worker Levy (FWL)',         'STATUTORY',       false,false,  'DEDUCTION', 52],
+        ['EMPL_CPF',       'Employer CPF Contribution',         'STATUTORY',       false,false,  'DEDUCTION', 53],
+        ['DIRECTOR_FEE',   'Director Fees',                     'ADDITIONAL_WAGES',false, true, 'AW', 54],
+        ['GRATUITY',       'Gratuity Payment',                  'ADDITIONAL_WAGES', true, true, 'AW', 55],
+        ['NOTICE_PAY',     'Pay in Lieu of Notice',             'ADDITIONAL_WAGES', true, true, 'AW', 56],
+        ['LEAVE_ENCASH',   'Leave Encashment',                  'ADDITIONAL_WAGES', true, true, 'OW', 57],
+        ['NS_PAY',         'NSman Make-Up Pay',                 'GOVT_PAID',        true,false, 'OW', 58],
+        ['COMPASSIONATE',  'Compassionate Payment',             'ADDITIONAL_WAGES',false, true, 'AW', 59],
+      ];
+      for (const [code, name, cat, cpf, iras, wt, sort] of components) {
+        await db.query(
+          `INSERT INTO pay_components (id, code, name, category, "isCpfApplicable", "isIrasTaxable", "wageType", "isActive", "sortOrder", "createdAt", "updatedAt")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,true,$8,NOW(),NOW())`,
+          [uuidv4(), code, name, cat, cpf, iras, wt, sort]
+        );
+      }
+      console.log(`✅ 59 pay components seeded`);
+    } else { console.log('ℹ️  Pay components already exist'); }
+
     // Singapore Public Holidays 2025
-    const phCount = await payrollPrisma.publicHoliday.count();
-    if (phCount === 0) {
-      await payrollPrisma.publicHoliday.createMany({
-        data: [
-          { id: uuidv4(), date: new Date('2025-01-01'), name: "New Year's Day", year: 2025 },
-          { id: uuidv4(), date: new Date('2025-01-29'), name: 'Chinese New Year', year: 2025 },
-          { id: uuidv4(), date: new Date('2025-01-30'), name: 'Chinese New Year (Day 2)', year: 2025 },
-          { id: uuidv4(), date: new Date('2025-03-31'), name: 'Hari Raya Puasa', year: 2025 },
-          { id: uuidv4(), date: new Date('2025-04-18'), name: 'Good Friday', year: 2025 },
-          { id: uuidv4(), date: new Date('2025-05-01'), name: 'Labour Day', year: 2025 },
-          { id: uuidv4(), date: new Date('2025-06-06'), name: 'Hari Raya Haji', year: 2025 },
-          { id: uuidv4(), date: new Date('2025-08-09'), name: 'National Day', year: 2025 },
-          { id: uuidv4(), date: new Date('2025-10-20'), name: 'Deepavali', year: 2025 },
-          { id: uuidv4(), date: new Date('2025-12-25'), name: 'Christmas Day', year: 2025 },
-        ],
-        skipDuplicates: true,
-      });
-      console.log('✅ Singapore Public Holidays 2025 seeded');
+    const phCount = await db.query(`SELECT COUNT(*) FROM public_holidays`);
+    if (phCount.rows[0].count === '0') {
+      const phs = [
+        ['2025-01-01', "New Year's Day"],
+        ['2025-01-29', 'Chinese New Year'],
+        ['2025-01-30', 'Chinese New Year (Day 2)'],
+        ['2025-03-31', 'Hari Raya Puasa'],
+        ['2025-04-18', 'Good Friday'],
+        ['2025-05-01', 'Labour Day'],
+        ['2025-06-06', 'Hari Raya Haji'],
+        ['2025-08-09', 'National Day'],
+        ['2025-10-20', 'Deepavali'],
+        ['2025-12-25', 'Christmas Day'],
+      ];
+      for (const [date, name] of phs) {
+        await db.query(
+          `INSERT INTO public_holidays (id, date, name, year) VALUES ($1,$2,$3,2025)
+           ON CONFLICT (date) DO NOTHING`,
+          [uuidv4(), date, name]
+        );
+      }
+      console.log('✅ Singapore Public Holidays 2025 seeded (payroll)');
     }
-  } finally { await payrollPrisma.$disconnect(); }
+  } finally { await db.end(); }
 }
 
+// ─── Leave: 22 leave types + public holidays ─────────────────────────────────
 async function seedLeave() {
-  const leavePrisma = new LeavePrisma({ datasources: { db: { url: `postgresql://${process.env.POSTGRES_USER}:${process.env.POSTGRES_PASSWORD}@${process.env.POSTGRES_HOST || 'localhost'}:5432/hrms_leave` } } });
+  const db = client('hrms_leave');
+  await db.connect();
   try {
-    const count = await leavePrisma.leaveType.count();
-    if (count > 0) { console.log('ℹ️  Leave types already seeded'); return; }
+    const count = await db.query(`SELECT COUNT(*) FROM leave_types`);
+    if (count.rows[0].count !== '0') { console.log('ℹ️  Leave types already exist'); } else {
+      const leaveTypes = [
+        ['AL',   'Annual Leave',                     true, true,  14, 5,  false, false],
+        ['SL',   'Sick Leave (Outpatient)',           true, true,  14, 0,  false, true],
+        ['HL',   'Hospitalisation Leave',             true, true,  60, 0,  false, true],
+        ['ML',   'Maternity Leave',                   true, true, 112, 0,  true,  true],
+        ['PL',   'Paternity Leave',                   true, true,  14, 0,  true,  false],
+        ['CL',   'Childcare Leave',                   true, true,   6, 0,  true,  false],
+        ['ECL',  'Extended Childcare Leave',          true, true,   2, 0,  false, false],
+        ['SPL',  'Shared Parental Leave',             true, true,  28, 0,  true,  false],
+        ['ADPL', 'Adoption Leave',                    true, true,  12, 0,  true,  true],
+        ['NSL',  'NSman Leave',                       true, true,   0, 0,  false, true],
+        ['COMP', 'Compassionate Leave',              false, true,   3, 0,  false, false],
+        ['MARR', 'Marriage Leave',                   false, true,   3, 0,  false, false],
+        ['EXAM', 'Examination Leave',                false, true,   5, 0,  false, true],
+        ['NPL',  'No-Pay Leave',                      true,false,   0, 0,  false, false],
+        ['OIL',  'Off-In-Lieu',                      false, true,   0, 0,  false, false],
+        ['PHI',  'Public Holiday In-Lieu',            true, true,   0, 0,  false, false],
+        ['VWO',  'VWO Leave',                        false,false,   0, 0,  false, false],
+        ['STUDY','Study Leave',                      false,false,   5, 0,  false, false],
+        ['LSL',  'Long Service Leave',               false, true,   5, 0,  false, false],
+        ['QUAR', 'Quarantine Leave',                  true, true,   0, 0,  false, true],
+        ['JURY', 'Jury Duty Leave',                   true, true,   0, 0,  false, true],
+        ['OTHER','Other Leave',                      false,false,   0, 0,  false, false],
+      ];
+      for (const [code, name, stat, paid, ent, cf, govt, doc] of leaveTypes) {
+        await db.query(
+          `INSERT INTO leave_types (id, code, name, "isStatutory", "isPaid", "annualEntitlement", "maxCarryForward", "isGovtPaid", "requiresDocument", "isActive", "createdAt")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true,NOW())`,
+          [uuidv4(), code, name, stat, paid, ent, cf, govt, doc]
+        );
+      }
+      console.log('✅ 22 leave types seeded');
+    }
 
-    const leaveTypes = [
-      { code: 'AL', name: 'Annual Leave', isStatutory: true, isPaid: true, annualEntitlement: 14, maxCarryForward: 5 },
-      { code: 'SL', name: 'Sick Leave (Outpatient)', isStatutory: true, isPaid: true, annualEntitlement: 14, requiresDocument: true },
-      { code: 'HL', name: 'Hospitalisation Leave', isStatutory: true, isPaid: true, annualEntitlement: 60, requiresDocument: true },
-      { code: 'ML', name: 'Maternity Leave', isStatutory: true, isPaid: true, annualEntitlement: 112, isGovtPaid: true, requiresDocument: true },
-      { code: 'PL', name: 'Paternity Leave', isStatutory: true, isPaid: true, annualEntitlement: 14, isGovtPaid: true },
-      { code: 'CL', name: 'Childcare Leave', isStatutory: true, isPaid: true, annualEntitlement: 6, isGovtPaid: true },
-      { code: 'ECL', name: 'Extended Childcare Leave', isStatutory: true, isPaid: true, annualEntitlement: 2 },
-      { code: 'SPL', name: 'Shared Parental Leave', isStatutory: true, isPaid: true, annualEntitlement: 28, isGovtPaid: true },
-      { code: 'ADPL', name: 'Adoption Leave', isStatutory: true, isPaid: true, annualEntitlement: 12, isGovtPaid: true },
-      { code: 'NSL', name: 'NSman Leave', isStatutory: true, isPaid: true, annualEntitlement: 0 },
-      { code: 'COMP', name: 'Compassionate Leave', isStatutory: false, isPaid: true, annualEntitlement: 3 },
-      { code: 'MARR', name: 'Marriage Leave', isStatutory: false, isPaid: true, annualEntitlement: 3 },
-      { code: 'EXAM', name: 'Examination Leave', isStatutory: false, isPaid: true, annualEntitlement: 5, requiresDocument: true },
-      { code: 'NPL', name: 'No-Pay Leave', isStatutory: true, isPaid: false, annualEntitlement: 0 },
-      { code: 'OIL', name: 'Off-In-Lieu', isStatutory: false, isPaid: true, annualEntitlement: 0 },
-      { code: 'PHI', name: 'Public Holiday In-Lieu', isStatutory: true, isPaid: true, annualEntitlement: 0 },
-      { code: 'VWO', name: 'VWO Leave', isStatutory: false, isPaid: false, annualEntitlement: 0 },
-      { code: 'STUDY', name: 'Study Leave', isStatutory: false, isPaid: false, annualEntitlement: 5 },
-      { code: 'LSL', name: 'Long Service Leave', isStatutory: false, isPaid: true, annualEntitlement: 5 },
-      { code: 'QUAR', name: 'Quarantine Leave', isStatutory: true, isPaid: true, annualEntitlement: 0, requiresDocument: true },
-      { code: 'JURY', name: 'Jury Duty Leave', isStatutory: true, isPaid: true, annualEntitlement: 0, requiresDocument: true },
-      { code: 'OTHER', name: 'Other Leave', isStatutory: false, isPaid: false, annualEntitlement: 0 },
-    ];
-    await leavePrisma.leaveType.createMany({ data: leaveTypes.map(l => ({ ...l, id: uuidv4() })) });
-    console.log(`✅ ${leaveTypes.length} leave types seeded`);
-
-    // Public Holidays in leave-service too
-    await leavePrisma.publicHoliday.createMany({
-      data: [
-        { id: uuidv4(), date: new Date('2025-01-01'), name: "New Year's Day", year: 2025 },
-        { id: uuidv4(), date: new Date('2025-01-29'), name: 'Chinese New Year', year: 2025 },
-        { id: uuidv4(), date: new Date('2025-01-30'), name: 'Chinese New Year (Day 2)', year: 2025 },
-        { id: uuidv4(), date: new Date('2025-03-31'), name: 'Hari Raya Puasa', year: 2025 },
-        { id: uuidv4(), date: new Date('2025-04-18'), name: 'Good Friday', year: 2025 },
-        { id: uuidv4(), date: new Date('2025-05-01'), name: 'Labour Day', year: 2025 },
-        { id: uuidv4(), date: new Date('2025-06-06'), name: 'Hari Raya Haji', year: 2025 },
-        { id: uuidv4(), date: new Date('2025-08-09'), name: 'National Day', year: 2025 },
-        { id: uuidv4(), date: new Date('2025-10-20'), name: 'Deepavali', year: 2025 },
-        { id: uuidv4(), date: new Date('2025-12-25'), name: 'Christmas Day', year: 2025 },
-      ], skipDuplicates: true,
-    });
-    console.log('✅ Singapore Public Holidays 2025 seeded (leave-service)');
-  } finally { await leavePrisma.$disconnect(); }
+    const phCount = await db.query(`SELECT COUNT(*) FROM public_holidays`);
+    if (phCount.rows[0].count === '0') {
+      const phs = [
+        ['2025-01-01', "New Year's Day"],
+        ['2025-01-29', 'Chinese New Year'],
+        ['2025-01-30', 'Chinese New Year (Day 2)'],
+        ['2025-03-31', 'Hari Raya Puasa'],
+        ['2025-04-18', 'Good Friday'],
+        ['2025-05-01', 'Labour Day'],
+        ['2025-06-06', 'Hari Raya Haji'],
+        ['2025-08-09', 'National Day'],
+        ['2025-10-20', 'Deepavali'],
+        ['2025-12-25', 'Christmas Day'],
+      ];
+      for (const [date, name] of phs) {
+        await db.query(
+          `INSERT INTO public_holidays (id, date, name, year) VALUES ($1,$2,$3,2025)
+           ON CONFLICT (date) DO NOTHING`,
+          [uuidv4(), date, name]
+        );
+      }
+      console.log('✅ Singapore Public Holidays 2025 seeded (leave)');
+    }
+  } finally { await db.end(); }
 }
 
+// ─── Claims: categories ───────────────────────────────────────────────────────
 async function seedClaims() {
-  const claimsPrisma = new ClaimsPrisma({ datasources: { db: { url: `postgresql://${process.env.POSTGRES_USER}:${process.env.POSTGRES_PASSWORD}@${process.env.POSTGRES_HOST || 'localhost'}:5432/hrms_claims` } } });
+  const db = client('hrms_claims');
+  await db.connect();
   try {
-    const count = await claimsPrisma.claimCategory.count();
-    if (count > 0) { console.log('ℹ️  Claim categories already seeded'); return; }
-    await claimsPrisma.claimCategory.createMany({
-      data: [
-        { id: uuidv4(), code: 'MEDICAL', name: 'Medical / Dental', requiresReceipt: true, isGstClaimable: false, maxAmount: 500 },
-        { id: uuidv4(), code: 'TRANSPORT', name: 'Transport (Business)', requiresReceipt: true, isGstClaimable: false },
-        { id: uuidv4(), code: 'ENTERTAINMENT', name: 'Business Entertainment', requiresReceipt: true, isGstClaimable: true, maxAmount: 1000 },
-        { id: uuidv4(), code: 'TRAINING', name: 'Training / Course Fees', requiresReceipt: true, isGstClaimable: true },
-        { id: uuidv4(), code: 'TELECOM', name: 'Telecommunication (Business)', requiresReceipt: true, isGstClaimable: true },
-        { id: uuidv4(), code: 'MEAL', name: 'Meal (Business)', requiresReceipt: true, isGstClaimable: false, maxAmount: 200 },
-        { id: uuidv4(), code: 'OTHER', name: 'Other Business Expense', requiresReceipt: true, isGstClaimable: false },
-      ],
-    });
-    console.log('✅ Claim categories seeded');
-  } finally { await claimsPrisma.$disconnect(); }
+    const count = await db.query(`SELECT COUNT(*) FROM claim_categories`);
+    if (count.rows[0].count !== '0') { console.log('ℹ️  Claim categories already exist'); return; }
+    const cats = [
+      ['MEDICAL',     'Medical / Dental',           true, false, 500],
+      ['TRANSPORT',   'Transport (Business)',        true, false, null],
+      ['ENTERTAINMENT','Business Entertainment',    true, true,  1000],
+      ['TRAINING',    'Training / Course Fees',     true, true,  null],
+      ['TELECOM',     'Telecommunication (Business)',true, true,  null],
+      ['MEAL',        'Meal (Business)',             true, false, 200],
+      ['OTHER',       'Other Business Expense',     true, false, null],
+    ];
+    for (const [code, name, rcpt, gst, max] of cats) {
+      await db.query(
+        `INSERT INTO claim_categories (id, code, name, "requiresReceipt", "isGstClaimable", "maxAmount", "requiresApproval", "isActive")
+         VALUES ($1,$2,$3,$4,$5,$6,true,true)`,
+        [uuidv4(), code, name, rcpt, gst, max]
+      );
+    }
+    console.log('✅ 7 claim categories seeded');
+  } finally { await db.end(); }
 }
 
+// ─── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log('\n🌱 EzyHRM Seed Script\n');
+  console.log('\n🌱 EzyHRM Seed Script');
+  console.log(`   Connecting to postgres at ${HOST}:${PORT}\n`);
   await seedAuth();
   await seedPayroll();
   await seedLeave();
   await seedClaims();
-  console.log('\n✅ Seeding complete!\n');
-  console.log('Default Super Admin: admin@ezyhRM.sg / ***REMOVED***');
+  console.log('\n✅ All done! Login: admin@ezyhRM.sg / ***REMOVED***\n');
 }
 
-main().catch(err => { console.error('❌ Seed failed:', err.message); process.exit(1); });
+main().catch(err => {
+  console.error('\n❌ Seed failed:', err.message);
+  console.error('   Make sure docker-compose is running (docker-compose up -d)');
+  process.exit(1);
+});

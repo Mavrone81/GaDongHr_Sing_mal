@@ -151,6 +151,35 @@ model PublicHoliday {
   @@map("public_holidays")
 }
 
-enum RunType   { MONTHLY BI_MONTHLY AD_HOC FINAL_PAY }
-enum RunStatus { DRAFT PENDING_APPROVAL APPROVED FINALISED CANCELLED }
-enum WageType  { OW AW DEDUCTION REIMBURSEMENT }
+enum ComponentCategory {
+  BASIC
+  ALLOWANCE
+  OT
+  ADDITIONAL_WAGES
+  DEDUCTION
+  REIMBURSEMENT
+  GOVT_PAID
+  BIK
+  STATUTORY
+}
+enum WageType {
+  OW
+  AW
+  DEDUCTION
+  REIMBURSEMENT
+}
+enum RunStatus {
+  DRAFT
+  IN_PROGRESS
+  PENDING_APPROVAL
+  APPROVED
+  FINALISED
+  CANCELLED
+}
+enum RunType {
+  MONTHLY
+  ADHOC
+  BONUS
+  FINAL_PAY
+  COMMISSION
+}

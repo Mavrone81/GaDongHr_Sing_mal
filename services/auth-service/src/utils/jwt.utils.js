@@ -31,12 +31,17 @@ async function generateKeysIfNeeded() {
   console.log('[jwt] RSA keypair generated');
 }
 
+let cachedPrivateKey = null;
+let cachedPublicKey = null;
+
 function getPrivateKey() {
-  return fs.readFileSync(PRIVATE_KEY_PATH, 'utf8');
+  if (!cachedPrivateKey) cachedPrivateKey = fs.readFileSync(PRIVATE_KEY_PATH, 'utf8');
+  return cachedPrivateKey;
 }
 
 function getPublicKey() {
-  return fs.readFileSync(PUBLIC_KEY_PATH, 'utf8');
+  if (!cachedPublicKey) cachedPublicKey = fs.readFileSync(PUBLIC_KEY_PATH, 'utf8');
+  return cachedPublicKey;
 }
 
 /**

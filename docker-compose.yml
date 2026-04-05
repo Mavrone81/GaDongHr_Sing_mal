@@ -12,7 +12,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-dbs.sql:/docker-entrypoint-initdb.d/init-dbs.sql
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hrms}"]
       interval: 10s
@@ -41,7 +41,7 @@ services:
       - NOTIFICATION_SERVICE_URL=http://notification-service:4009
       - REPORTING_SERVICE_URL=http://reporting-service:4010
     volumes:
-      - ./certs:/app/certs:ro
+      - shared_certs:/app/certs:ro
     depends_on:
       - auth-service
 
@@ -63,7 +63,7 @@ services:
       - JWT_ACCESS_EXPIRES=${JWT_ACCESS_EXPIRES:-15m}
       - JWT_REFRESH_EXPIRES=${JWT_REFRESH_EXPIRES:-7d}
     volumes:
-      - ./certs:/app/certs
+      - shared_certs:/app/certs
     depends_on:
       postgres:
         condition: service_healthy
@@ -83,7 +83,7 @@ services:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
     volumes:
-      - ./certs:/app/certs:ro
+      - shared_certs:/app/certs:ro
       - employee_uploads:/app/uploads
     depends_on:
       postgres:
@@ -107,7 +107,7 @@ services:
       - LEAVE_SERVICE_URL=http://leave-service:4004
       - NOTIFICATION_SERVICE_URL=http://notification-service:4009
     volumes:
-      - ./certs:/app/certs:ro
+      - shared_certs:/app/certs:ro
       - payroll_files:/app/generated
     depends_on:
       postgres:
@@ -129,7 +129,7 @@ services:
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - NOTIFICATION_SERVICE_URL=http://notification-service:4009
     volumes:
-      - ./certs:/app/certs:ro
+      - shared_certs:/app/certs:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -150,7 +150,7 @@ services:
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - NOTIFICATION_SERVICE_URL=http://notification-service:4009
     volumes:
-      - ./certs:/app/certs:ro
+      - shared_certs:/app/certs:ro
       - claims_uploads:/app/uploads
     depends_on:
       postgres:
@@ -172,7 +172,7 @@ services:
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - EMPLOYEE_SERVICE_URL=http://employee-service:4002
     volumes:
-      - ./certs:/app/certs:ro
+      - shared_certs:/app/certs:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -192,7 +192,7 @@ services:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
     volumes:
-      - ./certs:/app/certs:ro
+      - shared_certs:/app/certs:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -214,7 +214,7 @@ services:
       - PAYROLL_SERVICE_URL=http://payroll-service:4003
       - EMPLOYEE_SERVICE_URL=http://employee-service:4002
     volumes:
-      - ./certs:/app/certs:ro
+      - shared_certs:/app/certs:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -239,7 +239,7 @@ services:
       - SMTP_PASS=${SMTP_PASS}
       - SMTP_FROM=${SMTP_FROM:-noreply@ezyhRM.sg}
     volumes:
-      - ./certs:/app/certs:ro
+      - shared_certs:/app/certs:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -262,17 +262,23 @@ services:
       - EMPLOYEE_SERVICE_URL=http://employee-service:4002
       - LEAVE_SERVICE_URL=http://leave-service:4004
     volumes:
-      - ./certs:/app/certs:ro
+      - shared_certs:/app/certs:ro
     depends_on:
       postgres:
         condition: service_healthy
 
-  # frontend:
-  #   build: ./frontend
-  #   container_name: hrms-frontend
-  #   Uncomment once frontend is built
+  frontend:
+    build:
+      context: ./frontend
+    container_name: hrms-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=development
 
 volumes:
+  shared_certs:
   postgres_data:
   employee_uploads:
   payroll_files:
