@@ -11,19 +11,26 @@ const prisma = new PrismaClient();
 const ENCRYPTED_FIELDS = ['nricEncrypted', 'homeAddressEncrypted', 'basicSalaryEncrypted', 'bankAccountEncrypted'];
 const SENSITIVE_OUT = ['nricEncrypted', 'homeAddressEncrypted', 'basicSalaryEncrypted', 'bankAccountEncrypted'];
 
-function sanitizeEmployee(emp, role) {
+function sanitizeEmployee(emp, user) {
   if (!emp) return emp;
-  const canViewSensitive = ['super_admin', 'hr_admin', 'hr_manager', 'payroll_officer'].includes(role?.toLowerCase());
+  const permissions = user.permissions || [];
+  const role = user.role || '';
+  
+  // Backward compatibility for system roles during migration
+  const canViewSensitive = 
+    permissions.includes('employee:sensitive') || 
+    ['super_admin', 'hr_admin', 'hr_manager', 'payroll_officer'].includes(role.toLowerCase());
+
   const out = { ...emp };
   if (canViewSensitive) {
-    // Decrypt sensitive fields for privileged roles
+    // Decrypt sensitive fields for privileged users
     SENSITIVE_OUT.forEach(f => {
       if (out[f]) {
         try { out[f] = require('/app/shared/crypto').decrypt(out[f]); } catch { out[f] = '[ERROR]'; }
       }
     });
   } else {
-    // Mask sensitive fields for non-privileged roles
+    // Mask sensitive fields for non-privileged users
     SENSITIVE_OUT.forEach(f => { if (out[f]) out[f] = '****'; });
   }
   return out;
@@ -37,8 +44,24 @@ async function nextEmployeeCode() {
   return `EMP-${String(num).padStart(4, '0')}`;
 }
 
-// GET /employees
-router.get('/', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.PAYROLL_OFFICER, ROLES.LINE_MANAGER), async (req, res, next) => {
+// Internal check middleware
+const checkInternal = (req, res, next) => {
+  const incoming = req.headers['x-internal-service-key'];
+  const internalKey = process.env.INTERNAL_SERVICE_KEY;
+  if (incoming && internalKey && incoming === internalKey) {
+    req.isInternal = true;
+    return next();
+  }
+  next();
+};
+
+// GET /employees - Fetch many
+router.get('/', checkInternal, (req, res, next) => {
+  if (req.isInternal) return next();
+  authenticate(req, res, () => {
+    authorize('employee:view', ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.LINE_MANAGER)(req, res, next);
+  });
+}, async (req, res, next) => {
   try {
     const { page = 1, limit = 20, department, isActive, search } = req.query;
     const where = {};
@@ -71,20 +94,31 @@ router.get('/org-chart', authenticate, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /employees/code/:code
+router.get('/code/:code', authenticate, authorize('employee:view', ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const emp = await prisma.employee.findUnique({
+      where: { employeeCode: req.params.code },
+      include: { emergencyContacts: true, documents: { select: { id: true, docType: true, fileName: true, createdAt: true, expiryDate: true } } },
+    });
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    res.json(sanitizeEmployee(emp, req.user));
+  } catch (err) { next(err); }
+});
+
 // GET /employees/:id
-router.get('/:id', authenticate, authorizeSelfOrRole('id', ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+router.get('/:id', authenticate, authorizeSelfOrRole('id', 'employee:view', ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
   try {
     const emp = await prisma.employee.findUnique({
       where: { id: req.params.id },
       include: { emergencyContacts: true, documents: { select: { id: true, docType: true, fileName: true, createdAt: true, expiryDate: true } } },
     });
-    if (!emp) return res.status(404).json({ error: 'Employee not found' });
-    res.json(sanitizeEmployee(emp, req.user.role));
+    res.json(sanitizeEmployee(emp, req.user));
   } catch (err) { next(err); }
 });
 
 // POST /employees
-router.post('/', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+router.post('/', authenticate, authorize('employee:manage', ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
   try {
     const data = req.body;
     const fieldsToEncrypt = {};
@@ -106,12 +140,17 @@ router.post('/', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), asy
         startDate: new Date(data.startDate),
       },
     });
-    res.status(201).json(sanitizeEmployee(emp, req.user.role));
+
+    // Automatically create user account in auth-service
+    const { createAuthUser } = require('../utils/auth-client');
+    createAuthUser(emp);
+
+    res.status(201).json(sanitizeEmployee(emp, req.user));
   } catch (err) { next(err); }
 });
 
 // PUT /employees/:id
-router.put('/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+router.put('/:id', authenticate, authorize('employee:manage', ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
   try {
     const data = req.body;
     const fieldsToEncrypt = {};
@@ -130,12 +169,12 @@ router.put('/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), a
     if (data.bankAccount) { fieldsToEncrypt.bankAccountEncrypted = data.bankAccount; delete data.bankAccount; }
     const encrypted = encryptFields(fieldsToEncrypt, Object.keys(fieldsToEncrypt));
     const emp = await prisma.employee.update({ where: { id: req.params.id }, data: { ...data, ...encrypted } });
-    res.json(sanitizeEmployee(emp, req.user.role));
+    res.json(sanitizeEmployee(emp, req.user));
   } catch (err) { next(err); }
 });
 
 // DELETE /employees/:id (soft delete)
-router.delete('/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+router.delete('/:id', authenticate, authorize('employee:manage', ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
   try {
     await prisma.employee.update({ where: { id: req.params.id }, data: { isActive: false, endDate: new Date() } });
     res.json({ message: 'Employee deactivated' });

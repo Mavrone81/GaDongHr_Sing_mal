@@ -62,8 +62,15 @@ services:
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - JWT_ACCESS_EXPIRES=${JWT_ACCESS_EXPIRES:-15m}
       - JWT_REFRESH_EXPIRES=${JWT_REFRESH_EXPIRES:-7d}
+      - INTERNAL_SERVICE_KEY=***REMOVED***
+      - EMPLOYEE_DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${EMPLOYEE_DB:-hrms_employee}
     volumes:
       - shared_certs:/app/certs
+      - /app/services/auth-service/node_modules
+      - ./shared:/app/shared
+      - /app/shared/auth-middleware/node_modules
+      - /app/shared/payroll-utils/node_modules
+      - /app/shared/crypto/node_modules
     depends_on:
       postgres:
         condition: service_healthy
@@ -82,8 +89,14 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${EMPLOYEE_DB:-hrms_employee}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+      - INTERNAL_SERVICE_KEY=***REMOVED***
+      - AUTH_SERVICE_URL=http://auth-service:4001
     volumes:
       - shared_certs:/app/certs:ro
+      - /app/services/employee-service/node_modules
+      - ./shared:/app/shared
+      - /app/shared/auth-middleware/node_modules
+      - /app/shared/crypto/node_modules
       - employee_uploads:/app/uploads
     depends_on:
       postgres:
@@ -108,6 +121,11 @@ services:
       - NOTIFICATION_SERVICE_URL=http://notification-service:4009
     volumes:
       - shared_certs:/app/certs:ro
+      - /app/services/payroll-service/node_modules
+      - ./shared:/app/shared
+      - /app/shared/auth-middleware/node_modules
+      - /app/shared/payroll-utils/node_modules
+      - /app/shared/crypto/node_modules
       - payroll_files:/app/generated
     depends_on:
       postgres:
