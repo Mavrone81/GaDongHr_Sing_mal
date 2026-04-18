@@ -16,7 +16,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch('http://localhost:4000/api/auth/login', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -41,7 +41,7 @@ export default function LoginPage() {
       router.refresh();
       
     } catch (err) {
-      setError('Connection refused. Is the API Gateway running on port 4000?');
+      setError(`Connection refused. Is the API Gateway running on ${process.env.NEXT_PUBLIC_API_URL}?`);
     } finally {
       setLoading(false);
     }

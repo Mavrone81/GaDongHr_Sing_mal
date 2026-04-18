@@ -7,7 +7,7 @@ const morgan = require('morgan');
 const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
-const { computeOtPay } = require('../../../payroll-service/src/engines/cpf.engine');
+const { computeOtPay } = require('/app/shared/payroll-utils');
 
 const prisma = new PrismaClient();
 const app = express();

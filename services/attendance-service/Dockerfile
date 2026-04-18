@@ -4,6 +4,7 @@ WORKDIR /app
 COPY shared /app/shared
 RUN cd /app/shared/auth-middleware && npm install
 RUN cd /app/shared/crypto && npm install
+RUN cd /app/shared/payroll-utils && npm install
 
 WORKDIR /app/services/attendance-service
 COPY services/attendance-service/package*.json ./

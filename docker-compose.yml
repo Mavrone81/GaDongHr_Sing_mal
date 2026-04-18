@@ -276,6 +276,10 @@ services:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
       - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
 
 volumes:
   shared_certs:
