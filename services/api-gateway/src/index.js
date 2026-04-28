@@ -32,7 +32,7 @@ const corsOptions = {
   methods: ['GET','POST','PUT','DELETE','PATCH','OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-user-role', 'x-employee-id']
 };
-app.use(helmet());
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(morgan('combined'));
@@ -80,6 +80,7 @@ function jwtMiddleware(req, res, next) {
     req.headers['x-employee-id'] = payload.employeeId || '';
     next();
   } catch (err) {
+    console.error('[GATEWAY AUTH ERROR]', err.name, err.message);
     if (err.name === 'TokenExpiredError') return res.status(401).json({ error: 'Token expired', code: 'TOKEN_EXPIRED' });
     return res.status(401).json({ error: 'Invalid token' });
   }
@@ -96,6 +97,8 @@ const proxyOpts = {
 };
 
 app.use('/api/auth',         proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/auth', '/auth') }));
+app.use('/api/users',        proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/users', '/users') }));
+app.use('/api/roles',        proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/roles', '/roles') }));
 app.use('/api/employees',    proxy(SERVICES.employee,     { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/employees', '/employees') }));
 app.use('/api/documents',    proxy(SERVICES.employee,     { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/documents', '/documents') }));
 app.use('/api/payroll',      proxy(SERVICES.payroll,      { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/payroll', '/payroll') }));

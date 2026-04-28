@@ -11,4 +11,4 @@ RUN npm install --omit=dev
 COPY services/auth-service/ ./
 RUN npx prisma generate
 EXPOSE 4001
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss &&  node src/index.js"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && npm run seed:rbac && npm run seed:admin && node src/index.js"]

@@ -43,17 +43,27 @@ function authenticate(req, res, next) {
 }
 
 /**
- * RBAC middleware factory: allow only specified roles
- * Usage: router.get('/admin', authenticate, authorize('super_admin', 'hr_admin'), handler)
+ * RBAC middleware factory: allow specified roles OR permissions
+ * Usage: 
+ *   router.get('/payroll', authenticate, authorize('payroll:view'), handler)
+ *   router.get('/admin', authenticate, authorize('SUPER_ADMIN'), handler)
  */
-function authorize(...allowedRoles) {
+function authorize(...allowed) {
   return (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+    
     const userRole = req.user.role;
-    if (!allowedRoles.includes(userRole)) {
+    const userPerms = req.user.permissions || [];
+
+    // Allow if role is explicitly in list OR if permission is in list
+    const hasAccess = allowed.some(item => 
+      item === userRole || userPerms.includes(item)
+    );
+
+    if (!hasAccess) {
       return res.status(403).json({
         error: 'Forbidden',
-        message: `Role '${userRole}' is not permitted to access this resource. Required: ${allowedRoles.join(', ')}`,
+        message: `You do not have the required role or permission. Required one of: ${allowed.join(', ')}`,
       });
     }
     next();
@@ -62,31 +72,45 @@ function authorize(...allowedRoles) {
 
 /**
  * Self-access guard: employee can only access their own records,
- * unless they are a privileged role
+ * unless they are a privileged role OR have a specific permission.
  */
-function authorizeSelfOrRole(paramName, ...privilegedRoles) {
+function authorizeSelfOrRole(paramName, ...allowedItems) {
   return (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+    
     const targetId = req.params[paramName];
     const userId = req.user.employeeId || req.user.sub;
-    if (userId === targetId || privilegedRoles.includes(req.user.role)) {
+    const userRole = req.user.role;
+    const userPerms = req.user.permissions || [];
+
+    // Allow if target is SELF, OR role is in list, OR any listed permission is in user perms
+    const isSelf = userId === targetId;
+    const isPrivileged = allowedItems.some(item => 
+      item === userRole || userPerms.includes(item)
+    );
+
+    if (isSelf || isPrivileged) {
       return next();
     }
-    return res.status(403).json({ error: 'You can only access your own records' });
+    
+    return res.status(403).json({ 
+      error: 'Forbidden',
+      message: 'You can only access your own records or you lack the required permission.' 
+    });
   };
 }
 
 const ROLES = {
-  SUPER_ADMIN: 'super_admin',
-  HR_ADMIN: 'hr_admin',
-  HR_MANAGER: 'hr_manager',
-  PAYROLL_OFFICER: 'payroll_officer',
-  RECRUITER: 'recruiter',
-  TRAINING_MANAGER: 'training_manager',
-  LINE_MANAGER: 'line_manager',
-  EMPLOYEE: 'employee',
-  FINANCE_ADMIN: 'finance_admin',
-  IT_ADMIN: 'it_admin',
+  SUPER_ADMIN: 'SUPER_ADMIN',
+  HR_ADMIN: 'HR_ADMIN',
+  HR_MANAGER: 'HR_MANAGER',
+  PAYROLL_OFFICER: 'PAYROLL_OFFICER',
+  RECRUITER: 'RECRUITER',
+  TRAINING_MANAGER: 'TRAINING_MANAGER',
+  LINE_MANAGER: 'LINE_MANAGER',
+  EMPLOYEE: 'EMPLOYEE',
+  FINANCE_ADMIN: 'FINANCE_ADMIN',
+  IT_ADMIN: 'IT_ADMIN',
 };
 
 module.exports = { authenticate, authorize, authorizeSelfOrRole, ROLES };

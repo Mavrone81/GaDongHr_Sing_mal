@@ -1,0 +1,1763 @@
+PRODUCT REQUIREMENTS DOCUMENT
+Human Resource Management System (EzyHRM)
+Singapore – Full Statutory Compliance Edition
+Document Reference: PRD-HRMS-001  │  Version 1.0  │  March 2025
+Classification: Confidential
+Prepared by: RMA DEV TEAM
+
+1. Document Control
+1.1 Document Information
+Document Title
+Product Requirements Document – Human Resource Management System (EzyHRM)
+Document Reference
+PRD-HRMS-001
+Based on URD
+URD-HRMS-001 v1.0
+Version
+1.0 (Draft)
+Status
+Draft – For Review
+Prepared By
+[Name / Department]
+Reviewed By
+[Name / Role]
+Approved By
+[Name / Role]
+Date Issued
+[DD Month YYYY]
+Classification
+Confidential
+Target Market
+Singapore-based organisations (SME to Enterprise)
+1.2 Revision History
+Version
+Date
+Author
+Summary of Changes
+1.0
+[Date]
+[Author]
+Initial PRD derived from URD-HRMS-001 with full statutory detail embedded
+
+2. Executive Summary
+This Product Requirements Document (PRD) defines the complete feature set, workflows, acceptance criteria, and compliance obligations for EzyHRM – a cloud-native Human Resource Management System purpose-built for Singapore organisations. The system covers the full employee lifecycle from recruitment to offboarding and is designed for scalability across SMEs, large enterprises, government bodies, and non-profit organisations.
+EzyHRM operates in full compliance with the Employment Act (Cap. 91), CPF Act (Cap. 36), Personal Data Protection Act 2012, IRAS Income Tax Act (IR8A/IR21/AIS), Skills Development Levy Act, Employment of Foreign Manpower Act, Child Development Co-Savings Act, and Ministry of Manpower digital submission requirements including CPF e-Submit@cpf and MyCareersFuture.
+2.1 Product Vision
+To be Singapore’s most compliant, configurable, and user-friendly HRMS – eliminating manual HR administration, ensuring zero-defect statutory compliance, and providing workforce insights that support data-driven people management.
+2.2 Module Overview
+Module
+Scope
+Phase
+Priority
+Payroll & CPF
+End-to-end payroll, all 59 pay component types, CPF, SDL, FWL, IRAS, bank GIRO
+Phase 1
+Must Have
+Leave Management
+22 statutory and company leave types with proration, carry-forward, govt-paid tracking
+Phase 1
+Must Have
+Claims & Expenses
+Expense reimbursement, GST handling, approval workflows, payroll integration
+Phase 1
+Must Have
+Recruitment & Onboarding
+ATS, FCF/MyCareersFuture compliance, digital onboarding, work pass tracking
+Phase 1
+Must Have
+Time & Attendance
+Multi-method clock-in, shift scheduling, OT/rest-day/PH computation
+Phase 1
+Must Have
+Performance Management
+KPI setting, appraisal cycles, 360 feedback, calibration, probation
+Phase 2
+Should Have
+Training & Development
+LMS, SDL tracking, SkillsFuture, government grants, competency framework
+Phase 2
+Should Have
+Asset Management
+Asset register, handover forms, logistics requests, offboarding return
+Phase 1
+Should Have
+Offboarding
+Clearance workflow, final pay computation, IR21, exit interview
+Phase 1
+Must Have
+Analytics & Reporting
+Workforce dashboards, all statutory reports, custom report builder
+Phase 1
+Must Have
+
+3. Stakeholders & User Roles
+Role
+Responsibilities
+Access Level
+Modules
+Super Admin
+System configuration, tenancy setup, integration management, security settings
+Full system + config
+All + config
+HR Admin
+All HR records, payroll processing, statutory compliance, analytics, reports
+Full HR modules
+All HR
+HR Manager
+Strategic oversight, approvals, workforce analytics, compensation review
+Full + admin config
+All HR + analytics
+Payroll Officer
+Payroll computation, CPF/SDL/FWL filing, bank GIRO, tax form generation
+Payroll + finance
+Payroll, Claims, Reports
+Recruiter
+Job postings, ATS management, FCF compliance, onboarding workflow
+Recruitment module
+Recruitment, Onboarding
+Training Manager
+LMS administration, course management, SDL tracking, grant applications
+Training module
+Training, Reports
+Line Manager
+Leave approvals, performance reviews, team oversight, attendance anomaly review
+Team-level access
+Leave, T&A, Performance
+Employee
+Leave/claims submission, payslip view, personal profile update, self-service
+Own records only
+ESS portal
+Finance Admin
+Claims approval, payroll journals, cost centre reporting, GST reporting
+Finance modules
+Claims, Payroll reports
+IT Admin
+SSO/MFA config, integrations, audit logs, access provisioning
+System admin
+Security, Integrations
+
+4. Module 1: Payroll & CPF Management
+The payroll module is the core engine of EzyHRM. It processes all compensation types in full compliance with the Employment Act (Cap. 91), CPF Act (Cap. 36), Income Tax Act, and Skills Development Levy Act. All formulas, contribution rates, ceilings, and workflows below are applied automatically without manual calculation.
+4.1 Payroll Run Types & Workflow
+Monthly Run: Processed once per month for all employees. Payroll Officer initiates run for selected period and employee group. System locks attendance, leave, and claims data for the period, computes gross pay, deductions, and net pay per employee. Payroll Officer reviews exception and variance report. Maker submits for Checker approval (must be different user). Checker approves. System generates payslips, bank GIRO file, CPF submission file, SDL file, and accounting journal entries. Payroll is finalised and locked; subsequent changes require an ad-hoc correction run with full audit trail.
+Bi-Monthly Run: Processed twice per month (e.g., 1st and 15th), common for weekly-rated workers and part-timers.
+Ad-Hoc / Off-Cycle Run: Used for terminations, corrections, and supplementary payments (bonus, AWS). Each ad-hoc run requires maker-checker approval and is logged in audit trail.
+Payslip Timing: Payslips must be issued by the date of payment if payment is by bank transfer, or within 3 working days after payment if paid in person or by cheque, as required by MOM.
+4.2 Gross Pay Computation
+Basic Salary: Monthly Basic = Contracted Annual Salary ÷ 12.
+Daily Rate: Monthly Basic ÷ 26 (Employment Act standard working days for deduction/encashment purposes).
+Hourly Rate: Daily Rate ÷ Normal Daily Working Hours.
+Gross Pay Formula: Gross Pay = Basic Salary + Fixed Allowances + Variable Allowances + Overtime Pay + Shift Differentials + Commission + Bonus/AWS + Government-Paid Leave Reimbursements − No-Pay Leave Deductions − Absence Deductions.
+4.3 Overtime Computation (Employment Act Part IV Employees)
+Hourly Basic Rate: = (Monthly Basic Salary × 12) ÷ (52 × Contracted Weekly Hours). Allowances excluded from OT rate base unless contractually included.
+OT Pay: = Hourly Basic Rate × 1.5 × OT Hours worked (OT rate can be adjusted by HR Manager to increase or decrease).
+Monthly OT Cap: 72 hours per month per Employment Act s.38(5). System auto-enforces cap; flags and alerts HR when approaching cap; stops OT accrual at cap unless HR overrides with documented justification in audit trail.
+OT Eligibility: Applies to employees earning not more than SGD 2,600 basic per month (Part IV EA cap) or as configured per organisation.
+4.4 Rest Day & Public Holiday Pay
+Rest Day – Employee Request (EA s.37): Up to half day worked: employee paid half a day’s basic pay. Full day worked: employee paid one day’s basic pay.
+Rest Day – Employer Request (EA s.37): Up to half day worked: employee paid one day’s basic pay. Full day worked: employee paid two days’ basic pay.
+Public Holiday Work (EA s.88): Employee required to work on gazetted public holiday: paid normal salary for the day plus one additional day’s basic pay; alternatively, one day off-in-lieu by mutual agreement. Off-in-lieu is credited as a leave balance, not monetary payment.
+Singapore Gazetted Public Holidays (11 per year): New Year’s Day, Chinese New Year (2 days), Good Friday, Labour Day, Hari Raya Puasa, National Day, Hari Raya Haji, Deepavali, Christmas Day. Plus any additional public holidays declared by the Government. System is pre-loaded and updated annually by vendor by 1 November for the following year.
+4.5 CPF Contribution Rules
+Ordinary Wages (OW): Wages due in the month: basic salary, fixed allowances, overtime pay. OW Ceiling: SGD 6,800 per month (effective 1 January 2025; subject to annual CPF Board review).
+Additional Wages (AW): Wages not due every month: bonuses, AWS, commissions paid irregularly. AW Ceiling per year: SGD 102,000 minus total OW subject to CPF for the year.
+CPF Formula: CPF Contribution = (OW subject to CPF × Rate) + (AW subject to CPF × Rate). OW subject to CPF = min(OW, OW Ceiling). AW subject to CPF = min(AW, AW Ceiling for the year).
+Rounding: CPF contributions rounded to the nearest dollar. If cents ≥ 50 cents, round up; otherwise round down.
+Submission Deadline: CPF contributions due by the 14th of the following month. Late payment attracts late payment interest of 1.5% per month from CPF Board. The below table needs to be able to modify and add new lines. 
+Category & Age Band
+Employee %
+Employer %
+Total %
+Notes
+SC / PR Yr 3+ | Age ≤ 55
+20%
+17%
+37%
+Full standard rate
+SC / PR Yr 3+ | Age 55–60
+16%
+15%
+31%
+
+SC / PR Yr 3+ | Age 60–65
+10.5%
+11.5%
+22%
+
+SC / PR Yr 3+ | Age 65–70
+7.5%
+9%
+16.5%
+
+SC / PR Yr 3+ | Age > 70
+5%
+7.5%
+12.5%
+
+PR Year 1 (Graduated)
+5%
+4%
+9%
+Full rates if jointly elected at CPF Board
+PR Year 2 (Graduated)
+15%
+9%
+24%
+Full rates if jointly elected
+Foreigner (non-SC, non-PR)
+0%
+0%
+0%
+CPF not applicable
+OW Ceiling (Jan 2025)
+—
+—
+SGD 6,800/mth
+Subject to annual CPF Board update (needs to be able to modify by payroll) 
+AW Ceiling
+—
+—
+SGD 102,000 minus OW for year
+Subject to annual CPF Board update (needs to be able to modify by payroll)
+4.6 Skills Development Levy (SDL)
+Applicability: SDL is payable by the employer for ALL employees (local and foreign) earning less than SGD 4,500 per month.
+Rate: 0.25% of gross monthly remuneration.
+Minimum: SGD 2.00 per employee per month.
+Maximum: SGD 11.25 per employee per month (i.e., 0.25% of SGD 4,500 cap).
+Formula: SDL = min(max(Gross Monthly Remuneration × 0.0025, SGD 2.00), SGD 11.25).
+Submission: SDL is remitted together with CPF contributions via CPF Board’s e-Submit@cpf by the 14th of the following month. Payable to SkillsFuture Singapore (SSG).
+Workflow: System auto-computes SDL for all eligible employees during payroll run. SDL amounts included in payroll journal entries. SDL submission file generated in CPF Board flat-file format. Confirmation receipt stored with payroll run record.
+4.7 Foreign Worker Levy (FWL)
+Applicability: FWL applies to Work Permit (WP) holders and S-Pass holders employed by the organisation.
+Rate Determination: FWL rate varies by: (1) Sector (Services, Construction, Marine, Process, Manufacturing), (2) Worker tier (Basic Skilled vs Higher Skilled), (3) Dependency Ratio Ceiling (DRC) – percentage of foreign workers relative to total workforce.
+Formula: Monthly FWL = Applicable Daily FWL Rate × Number of Days in Month.
+Payment: FWL remitted to MOM by the 14th of the following month, together with CPF and SDL.
+System Behaviour: HR Admin configures FWL rate table by pass type and sector. System auto-applies correct rate based on employee’s pass type. FWL amount shown in payroll journal and employer cost report. System alerts HR when DRC approaches the sector quota limit.
+4.8 Payslip Requirements (MOM Mandatory)
+Under the Employment Act, employers must issue an itemised payslip to every employee. The following fields are mandatory per MOM requirements:
+	•	Full legal name and NRIC/FIN of employee
+	•	Employer name and Unique Entity Number (UEN)
+	•	Payslip date and salary payment date
+	•	Start and end date of the salary period
+	•	Basic salary for the period
+	•	All allowances itemised separately (transport, housing, meal, etc.)
+	•	Overtime hours worked and overtime pay amount
+	•	All deductions itemised (employee CPF, salary advance recovery, absent deductions, etc.)
+	•	Net salary payable (Gross Pay − All Deductions + Reimbursements)
+	•	Year-to-date (YTD) employee CPF contributions
+	•	Year-to-date (YTD) employer CPF contributions
+Payslips are auto-generated as PDF upon payroll finalisation, published to employee ESS portal, and email notification sent. Payslips must be retained for 5 years per MOM record-keeping requirements.
+4.9 Bank GIRO Payment File
+Net Pay Formula: Net Pay = Gross Pay − Employee CPF − Employee Medisave (if applicable) − Salary Advances / Loan Repayments − Absence Deductions + Approved Reimbursements.
+Supported Banks: DBS/POSB (IDEAL format), OCBC (Velocity format), UOB (BIBPlus format), Standard Chartered, HSBC, Citibank, Maybank. File format configurable per bank specification.
+File Contents: Employer bank account, employee bank code, branch code, account number, employee name, payment amount, payment reference (payroll period).
+Reconciliation: Bank returns acknowledgement file after processing. System reconciles payment status per employee; flags failed credits for HR follow-up.
+4.10 CPF e-Submit & IRAS AIS Workflow
+CPF e-Submit Monthly: After payroll finalisation, system generates CPF contribution flat-file (.txt) in CPF Board prescribed format. File fields: Employer UEN, contribution month, employee NRIC/FIN, employee name, OW amount, AW amount, employee CPF, employer CPF, employee Medisave amount. Payroll Officer uploads file to CPF e-Submit@cpf portal. Portal validates file and returns confirmation reference number, stored in HRMS audit log. CPF contributions due by 14th of following month.
+IRAS AIS / IR8A (Annual): At year-end, system aggregates annual employment income per employee: employment income, director fees, bonuses (AW), benefits-in-kind (Appendix 8A), stock option gains (Appendix 8B), CPF contributions. System generates IR8A data file in IRAS-prescribed format. Submitted to IRAS via AIS e-Service portal by 1 March annually. IRAS confirmation receipt stored in HRMS.
+IR21 Tax Clearance (Foreign Employees): Triggered automatically when offboarding is initiated for non-SC/non-PR employees. Employer must file IR21 at least 1 month before last day (or 1 week if sudden departure). System withholds all monies due to the employee until IRAS issues tax clearance. System tracks IR21 status (Submitted / Clearance Issued / Payment Released) and provides deadline reminders. IR21 auto-populated from payroll YTD data: employment income, benefits-in-kind, stock option gains.
+Appendix 8A (Benefits in Kind): System computes annual value of all non-cash benefits using IRAS prescribed formulas: company car (IRAS prescribed value), housing (annual value per IRAS), club membership (actual cost), group insurance premium (if taxable). Appended to IR8A filing.
+Appendix 8B (Stock Options / ESOP): Records gains from stock option exercise during the year. Employer reports: date of grant, date of exercise, number of shares, open market value at exercise, option price, taxable gains. Submitted to IRAS via AIS.
+4.11 Comprehensive Payroll Component Catalogue
+All 59 pay component types below are fully configurable, with CPF classification, IRAS taxability, and wage type (OW/AW) tracked per component. Components are mapped to payroll journal accounts by cost centre.
+#
+Component
+Singapore Rules & Computation
+CPF?
+IRAS Taxable?
+Wage Type
+A
+ORDINARY WAGES (OW)
+
+
+
+
+1
+Basic Salary
+Monthly fixed salary per employment contract. Monthly Basic = Annual Salary ÷ 12. OW Ceiling SGD 6,800/month from Jan 2025.
+Yes
+Yes
+OW
+2
+Daily-Rated Wage
+Daily Rate = Monthly Basic ÷ 26 (Employment Act). Used for part-month, NPL, and absence deductions.
+Yes
+Yes
+OW
+3
+Hourly-Rated Wage
+Hourly Rate = Daily Rate ÷ Normal Daily Hours. Applicable for part-time employees covered by EA.
+Yes
+Yes
+OW
+4
+Piece-Rate / Output-Based
+Pay per unit produced or task completed. Common in manufacturing. Must meet EA minimum wage at all times.
+Yes
+Yes
+OW
+B
+ALLOWANCES (Fixed Monthly = OW)
+
+
+
+
+5
+Fixed Monthly Allowance
+Transport, housing, meal, or handphone allowances paid every month regardless of work done. Fixed = OW.
+Yes
+Yes
+OW
+6
+Transport Allowance (Fixed)
+Fixed monthly: OW and CPF-applicable. Mileage reimbursement or actual claims: non-CPF, non-taxable if for business purposes.
+Yes (if fixed)
+Yes (if fixed)
+OW / Reimbursement
+7
+Meal Allowance
+Fixed monthly meal allowance is OW and taxable. IRAS exempts reasonable meal allowances within guidelines (context-dependent).
+Yes (if fixed)
+Partial
+OW
+8
+Housing Allowance
+Fully taxable benefit. Subject to CPF as OW.
+Yes
+Yes
+OW
+9
+Mobile / Handphone Allowance
+Fixed monthly: OW and taxable. Actual bill reimbursement: non-CPF, non-taxable if for business use.
+Yes (if fixed)
+Partial
+OW / Reimbursement
+10
+Clothing / Uniform Allowance
+Taxable only if allowance paid in cash in lieu of providing uniform. Actual provision of uniform is non-taxable BIK.
+Partial
+Partial
+OW / BIK
+11
+Night Shift Allowance
+Additional pay for working night-shift hours. Part of OW. Typically a fixed amount per night shift.
+Yes
+Yes
+OW
+12
+Shift Differential Pay
+Premium for working rotating or irregular shifts. Configured per shift type (e.g., night shift = Basic × 1.1). Applied to basic pay for shift hours.
+Yes
+Yes
+OW
+13
+Offshore / Sea Allowance
+Paid to maritime employees for offshore postings. May qualify for IRAS exemption under s.13(1)(i) Income Tax Act for overseas employment income.
+Partial
+Partial
+OW
+14
+Site / Field Allowance
+Paid to construction or field-based workers. OW if fixed and paid monthly.
+Yes
+Yes
+OW
+C
+OVERTIME & SPECIAL WORK PAY
+
+
+
+
+15
+Overtime Pay (EA Part IV)
+OT Rate = Hourly Basic Rate × 1.5. Hourly Basic Rate = (Annual Basic ÷ 52) ÷ Weekly Contracted Hours. Monthly cap 72 hours (EA s.38). Allowances excluded from OT base unless contractually included.
+Yes
+Yes
+OW
+16
+Rest Day Pay (Employee Request)
+Half day worked: 0.5 day’s basic pay. Full day worked: 1 day’s basic pay. EA s.37(1).
+Yes
+Yes
+OW
+17
+Rest Day Pay (Employer Request)
+Half day worked: 1 day’s basic pay. Full day worked: 2 days’ basic pay. EA s.37(2).
+Yes
+Yes
+OW
+18
+Public Holiday Work Pay
+Normal salary for the day + 1 additional day’s basic pay; or 1 day off-in-lieu. EA s.88. Off-in-lieu credited as leave balance.
+Yes
+Yes
+OW
+19
+Off-In-Lieu (OIL)
+Non-monetary. Day of rest granted in lieu of PH work or OT. Managed as leave credit in leave module. No CPF or IRAS implication.
+N/A
+N/A
+Leave Credit
+D
+ADDITIONAL WAGES (AW)
+
+
+
+
+20
+Annual Wage Supplement (AWS)
+13th month payment. Industry norm: 1 month’s basic salary. Pro-rated for partial year: AWS × (Months Served ÷ 12). AW. AW Ceiling = SGD 102,000 − Total OW for year subject to CPF.
+Yes
+Yes
+AW
+21
+Performance Bonus
+Discretionary or contractual variable bonus. AW. CPF applied up to AW ceiling.
+Yes
+Yes
+AW
+22
+Commission
+Regular sales commission paid monthly = OW. Irregular commission (quarterly, annual) = AW. Configurable per commission plan.
+Yes
+Yes
+AW / OW
+23
+Profit-Sharing Bonus
+Company-wide profit-sharing distribution. AW. CPF applicable.
+Yes
+Yes
+AW
+24
+Retention Bonus
+One-time or milestone retention payment. AW.
+Yes
+Yes
+AW
+25
+Contractual Bonus
+Fixed bonus stipulated in employment contract (e.g., 1-month bonus every June). AW.
+Yes
+Yes
+AW
+26
+Sign-On Bonus
+One-time payment upon joining. AW if paid within first year of employment.
+Yes
+Yes
+AW
+27
+Discretionary Bonus
+Bonus at management discretion; not contractual. AW.
+Yes
+Yes
+AW
+28
+Long Service Award (Cash)
+Cash award for service milestones. AW. IRAS exemption of SGD 200 × completed years of service (e.g., 10 years = SGD 2,000 exempt).
+Yes
+Partial (see IRAS rule)
+AW
+E
+DEDUCTIONS
+
+
+
+
+29
+Employee CPF Contribution
+Statutory deduction. Rates per CPF Board age and citizenship bands. Deducted from gross pay before net pay computation.
+N/A (is the contribution itself)
+No
+Deduction
+30
+No-Pay Leave (NPL) Deduction
+Salary deduction for approved unpaid leave. Daily Rate = Monthly Salary ÷ Working Days in Month. Total Deduction = Daily Rate × NPL Days. Reduces OW for CPF purposes.
+Reduces OW
+Reduces taxable income
+Deduction
+31
+Absence / AWOL Deduction
+Unauthorised absence: Deduction = (Monthly Basic ÷ Working Days in Month) × Days Absent. Employment Act s.27(1)(a) limits total deductions to 25% of one month’s salary.
+Reduces OW
+Reduces taxable income
+Deduction
+32
+Salary Advance Recovery
+Recovery of previously paid salary advance. Does not affect CPF base (CPF was already contributed on the advance month’s OW). EA deduction limit of 25% of monthly salary applies per deduction event.
+No new CPF
+No
+Deduction
+33
+Staff Loan Repayment
+Monthly repayment of company staff loan. Non-CPF, non-taxable repayment transaction.
+No
+No
+Deduction
+34
+Overpayment Recovery
+Recovery of salary overpayment in prior period. Must comply with EA s.27 deduction limits. HR documents reason and employee acknowledges recovery.
+Reduces OW if in same month
+Reduces income
+Deduction
+35
+Court Order / Garnishment
+Mandatory wage garnishment under court order (e.g., maintenance order, judgment debt). EA s.27(1)(f). System applies fixed or percentage deduction as per court order.
+No
+No
+Deduction
+F
+REIMBURSEMENTS (Non-CPF, Non-Taxable)
+
+
+
+
+36
+Medical Reimbursement
+Actual outpatient medical expenses reimbursed per company policy. Non-CPF. Non-taxable under IRAS if within reasonable limits and not in lieu of salary.
+No
+No
+Reimbursement
+37
+Transport Claim (Actual)
+Actual taxi, Grab, or public transport receipts for business travel. Non-CPF. Non-taxable if for business purposes with receipts.
+No
+No
+Reimbursement
+38
+Entertainment Reimbursement
+Client entertainment with business purpose. Non-CPF. Non-taxable if genuine business purpose documented. Director approval required above threshold.
+No
+No
+Reimbursement
+39
+Training / Course Fee Reimbursement
+Actual course fees reimbursed upon completion. Non-CPF. Non-taxable.
+No
+No
+Reimbursement
+40
+Business Travel (Per Diem / Actual)
+Daily per diem or actual accommodation and airfare for business travel. Non-CPF. Non-taxable per IRAS travel allowance guidelines.
+No
+No
+Reimbursement
+41
+Professional Membership Reimbursement
+Annual professional body subscription (e.g., ISCA, SILA) reimbursed. Non-CPF. Non-taxable if job-related.
+No
+No
+Reimbursement
+G
+TERMINATION & SPECIAL PAYMENTS
+
+
+
+
+42
+Salary-in-Lieu of Notice
+= (Monthly Salary ÷ 26) × Notice Period Days. EA s.11. Treated as OW for CPF purposes. Taxable income.
+Yes
+Yes
+OW
+43
+Leave Encashment on Cessation
+= (Monthly Basic ÷ 26) × Unused Annual Leave Days. Unused Leave = Pro-rated Entitlement − Leave Taken YTD. CPF applicable on leave encashment (AW). Taxable.
+Yes
+Yes
+AW
+44
+Retrenchment Benefit
+Ex-gratia retrenchment payment. Generally non-CPF. Taxable but IRAS may grant administrative concession for amounts within range of 1–2 weeks’ salary per year of service.
+No
+Partial
+Ex-Gratia
+45
+Retirement Gratuity
+One-time payment upon retirement. Non-CPF. IRAS exempts up to SGD 10,000 for each year of service with employer.
+No
+Partial (IRAS exemption)
+Ex-Gratia
+46
+Ex-Gratia Payment
+Discretionary goodwill payment on exit. Non-CPF. Fully taxable unless covered by specific IRAS exemption.
+No
+Yes
+Ex-Gratia
+47
+Payment in Lieu of Benefits
+Compensation for forfeited contractual benefits. Non-CPF. Taxable.
+No
+Yes
+Ex-Gratia
+H
+BENEFITS IN KIND (BIK) – IRAS Appendix 8A
+
+
+
+
+48
+Company Car Benefit
+IRAS prescribed formula: Annual value based on engine capacity and purchase price. Reported on Appendix 8A. Employer bears no CPF but employee’s taxable income increases.
+No
+Yes (IRAS Appendix 8A)
+BIK
+49
+Company Housing Benefit
+Annual Value (AV) of accommodation provided, assessed by IRAS. Reported on Appendix 8A.
+No
+Yes
+BIK
+50
+Club Membership Benefit
+Annual subscription paid by company. Actual cost is taxable BIK. Reported on Appendix 8A.
+No
+Yes
+BIK
+51
+Stock Options / ESOP / ESPP
+Gains = (Open Market Value at Exercise − Option Price) × Shares Exercised. Reported on IRAS Appendix 8B. Taxable in year of exercise.
+No
+Yes (Appendix 8B)
+BIK
+52
+Group Insurance Premium (Taxable)
+Company-paid group term life or medical insurance where policy is in employee’s name. Non-CPF. May be taxable; IRAS provides specific guidance per policy type.
+No
+Partial
+BIK
+I
+GOVERNMENT SCHEMES (Pass-Through)
+
+
+
+
+53
+Govt-Paid Maternity Leave (GPML)
+16 weeks for SC child; 8 weeks for non-SC child. First 8 weeks: employer-paid. Last 8 weeks (SC child): government-reimbursed via MSF. CPF applicable on employer-paid portion at normal OW rates. CDCA s.9.
+Yes (employer portion)
+No
+Govt Scheme
+54
+Govt-Paid Paternity Leave (GPPL)
+2 weeks for SC/PR child. Government-reimbursed. CPF applicable on employer-paid portion. Must be taken within 16 weeks of birth/adoption. CDCA s.12A.
+Yes (employer portion)
+No
+Govt Scheme
+55
+Govt-Paid Childcare Leave
+6 days/year for parents of SC children under 7. First 3 days employer-paid; next 3 days government-reimbursed. CDCA s.12.
+Yes (employer portion)
+No
+Govt Scheme
+56
+Shared Parental Leave (SPL)
+Up to 4 weeks transferred from maternity leave. Government-reimbursed at prescribed cap. Must be used within 12 months of birth. CDCA s.12B.
+Yes (employer portion)
+No
+Govt Scheme
+57
+NS Make-Up Pay
+Employer tops up difference between NS allowance and civilian pay during NS in-camp training. CPF contributions based on civilian pay rate. Enlistment Act. Formula: Make-Up Pay = Civilian Daily Pay − NS Allowance (per day) × NS Days.
+Yes (on civilian rate)
+Yes
+Govt Scheme
+58
+WorkRight Top-Up
+MOM WorkRight compliance wage top-up for specific sectors. Administered by MOM. CPF and tax treatment depends on specific scheme.
+Depends on scheme
+Depends
+Govt Scheme
+J
+STATUTORY LEVIES (Employer-Borne)
+
+
+
+
+59
+Skills Development Levy (SDL)
+0.25% of gross wages per employee per month (min SGD 2, max SGD 11.25). Employer cost only. For all employees earning < SGD 4,500/month. Remitted with CPF by 14th of following month to SSG via CPF Board.
+N/A (employer levy)
+No
+Employer Levy
+4.12 Payroll Module Requirements
+Req. ID
+Feature
+Requirement (Full Detail)
+Priority
+Compliance
+PAY-001
+Payroll Run Types & Workflow
+System shall support monthly, bi-monthly, and ad-hoc off-cycle payroll runs.
+Monthly: initiated by Payroll Officer for selected period and employee group. System locks attendance, leave, and claims data. Computes gross pay, CPF, SDL, FWL, and net pay per employee. Payroll Officer reviews exception and variance report. Maker submits for Checker approval (different user mandatory). Checker approves. System generates payslips, GIRO file, CPF e-Submit file, SDL file, and journal entries. Payroll finalised and locked.
+Off-cycle: for terminations, corrections, and supplementary payments. Each off-cycle run requires full maker-checker approval and is logged in audit trail. Cannot modify a finalised payroll run directly – must raise an ad-hoc correction run.
+Variance Report: auto-generated before approval showing current period vs prior period per pay component. Variance > configurable threshold (default 10%) flagged for reviewer explanation.
+Must Have
+Employment Act
+PAY-002
+CPF Auto-Calculation
+System automatically calculates employee and employer CPF for every payroll run based on: employee date of birth (auto-determines age band), citizenship / PR status and PR year, OW and AW classification of each pay component, OW ceiling (SGD 6,800/month), AW ceiling (SGD 102,000 minus year-to-date OW subject to CPF).
+Contribution rates applied per CPF Board table: SC/PR 3+ yrs ≤55: Employee 20%, Employer 17%, Total 37%. Ages 55-60: 16% / 15% / 31%. Ages 60-65: 10.5% / 11.5% / 22%. Ages 65-70: 7.5% / 9% / 16.5%. Above 70: 5% / 7.5% / 12.5%.
+PR Year 1 graduated: Employee 5%, Employer 4% (or full rates if jointly elected at CPF Board). PR Year 2: Employee 15%, Employer 9%.
+Rounding: round up if cents ≥ 50, else round down. CPF rates must be updateable by Super Admin without code deployment (rate table in admin UI).
+Employee CPF deducted from gross pay. Employer CPF recorded as liability in payroll journal. Both lines itemised on payslip.
+Must Have
+CPF Act Cap. 36
+PAY-003
+Gross Pay & OT Computation
+Gross Pay = Basic Salary + All OW Allowances + Overtime Pay + Shift Differentials + AW Bonuses/Commission + Government-paid leave reimbursements − NPL Deductions − Absence Deductions.
+OT Pay = Hourly Basic Rate × 1.5 × OT Hours. Hourly Basic Rate = (Monthly Basic × 12) ÷ (52 × Weekly Contracted Hours). Monthly OT cap: 72 hours (EA s.38). System blocks OT accrual at cap; HR override requires documented justification in audit trail.
+Rest Day (Employee Request): 0.5 day worked = 0.5 day pay; full day = 1 day pay. Rest Day (Employer Request): 0.5 day worked = 1 day pay; full day = 2 days pay.
+Public Holiday work: normal salary + 1 day’s basic pay; or 1 day off-in-lieu.
+AWS = 1 month’s basic salary (industry norm). Pro-rated: AWS × (Months Served ÷ 12). Shift Differential = Basic Pay × Shift Premium Rate (e.g., 1.1 for night shift), applied to hours within shift window.
+Must Have
+EA Cap. 91 s.38
+PAY-004
+SDL & FWL Computation
+SDL: computed for all employees earning < SGD 4,500/month. Formula: min(max(Gross Pay × 0.0025, SGD 2.00), SGD 11.25) per employee per month. Remitted with CPF by 14th of following month.
+FWL: computed for WP and S-Pass holders. FWL Rate configured by HR Admin per sector (Services / Construction / Marine / Process / Manufacturing) and worker tier (Basic Skilled / Higher Skilled). Monthly FWL = Daily FWL Rate × Days in Month. Remitted to MOM by 14th of following month.
+Both SDL and FWL amounts included in payroll journal entries. System generates combined CPF/SDL submission file and separate FWL report for MOM remittance.
+Alerts: system warns HR when FWL dependency ratio ceiling (DRC) for a sector approaches the MOM-set quota limit.
+Must Have
+SDL Act / EFMA
+PAY-005
+Payslip Generation (MOM Mandatory)
+System generates itemised PDF payslip per employee upon payroll finalisation. Mandatory MOM fields: employee full name, NRIC/FIN, employer name, UEN, payslip date, payment date, salary period (start/end), basic salary, all allowances (itemised), OT hours worked, OT pay, all deductions (itemised including employee CPF), net salary payable, YTD employee CPF, YTD employer CPF.
+Payslip published to employee ESS portal and mobile app immediately on payroll approval. Email notification sent. Employee can download PDF.
+Payslips retained for 5 years per MOM record-keeping requirements (EA s.96). Archive searchable by HR and by employee (own records only).
+Timing: must be issued by payment date (bank transfer) or within 3 working days after payment (cash/cheque). System enforces this SLA and alerts HR if not met.
+Must Have
+EA s.96 / MOM
+PAY-006
+Bank GIRO File Generation
+System generates bank GIRO credit advice file per bank format: DBS/POSB IDEAL, OCBC Velocity, UOB BIBPlus, SCB, HSBC, Citibank, Maybank. HR Admin selects bank format on payroll setup.
+File contains per employee: employer bank account details, employee bank code (3 digits), branch code (3 digits), account number, employee name, net pay amount, payment reference (payroll period code).
+Finance Officer downloads file and uploads to internet banking portal. Bank processes credits on designated salary payment date. Bank returns acknowledgement file; system reconciles payment status per employee and flags failed credits for HR follow-up.
+Net Pay = Gross Pay − Employee CPF − All Deductions + Approved Reimbursements.
+Must Have
+MAS / Bank requirements
+PAY-007
+CPF e-Submit & IRAS AIS Filing
+CPF Monthly: system generates CPF flat-file (.txt) in CPF Board format. Fields: Employer UEN, contribution month (YYYYMM), employee NRIC/FIN, employee name, OW, AW, employee CPF, employer CPF, Medisave amount. Payroll Officer uploads to CPF e-Submit@cpf portal. Confirmation reference number stored in HRMS. Deadline: 14th of following month.
+IRAS AIS / IR8A Annual: system aggregates annual employment income per employee. Generates IR8A data file in IRAS format. Includes: employment income, director fees, bonuses, Appendix 8A (BIK), Appendix 8B (stock options), CPF contributions. Submitted to IRAS AIS by 1 March. IRAS confirmation receipt stored.
+IR21 (Foreign Employees): auto-triggered on offboarding of non-SC/non-PR. System withholds all monies until IRAS clearance. Must file ≥1 month before last day. System tracks IR21 status (Pending / Submitted / Cleared / Payment Released).
+System stores all submission history: dates, reference numbers, file copies, confirmation receipts. Accessible to HR Admin and Payroll Officer.
+Must Have
+IRAS / CPF Board
+PAY-008
+Maker-Checker Approval & Audit Trail
+All payroll runs (monthly, bi-monthly, ad-hoc) require two-level maker-checker approval before finalisation. Maker and checker must be different users. Checker cannot approve their own submission.
+Audit trail records for every payroll action: user ID, timestamp, IP address, action performed, before/after values for any data changes. Audit log is immutable – no user can edit or delete audit records.
+Finalised payroll is locked. Any correction requires a new ad-hoc run referencing the original run. Original run remains on record. Both runs visible in payroll history.
+Variance report auto-generated and must be reviewed before approval. Variances > configured threshold require documented explanation by maker before checker can approve.
+Must Have
+Internal Control / MOM
+PAY-009
+Salary Revision History & Back-Dating
+Full history of all salary revisions maintained per employee: previous salary, new salary, effective date, reason code (promotion, annual increment, market adjustment, role change), recommended by, approved by.
+Back-dated salary adjustments supported: system auto-recalculates all affected payroll periods and generates a catch-up payment run for the difference.
+Salary increment formula configurable: New Salary = Current Salary × (1 + Increment %). Budget envelope tool: Total Increment Cost = Σ (New Salary − Current Salary) × 12 months flagged against configured budget cap.
+All salary data encrypted at field level. Accessible only to HR Admin, HR Manager, and Payroll Officer. Manager sees own direct reports’ salary only during increment cycle.
+Must Have
+Employment Act
+PAY-010
+Benefits-in-Kind & Appendix 8A/8B Tracking
+System tracks all non-cash benefits per employee per year for IRAS reporting. HR Admin configures BIK items: type, value (annual), IRAS prescribed formula (if applicable), reporting period.
+Company Car: IRAS formula = prescribed annual value based on engine capacity + 3/7 of actual running cost if employer provides fuel. System maintains lookup table by engine capacity.
+Club Membership: actual annual subscription cost. Housing: annual value (AV) as assessed by IRAS. Group Insurance: actual premium if taxable.
+All BIK values auto-included in Appendix 8A fields of IR8A filing. Stock option gains (Appendix 8B): date granted, date exercised, shares exercised, market value at exercise, option price, taxable gain = (Market Value − Option Price) × Shares.
+Appendix 8A and 8B data exported in IRAS-prescribed format and submitted as part of AIS annual filing.
+Must Have
+IRAS Appendix 8A/8B
+PAY-011
+Government-Paid Leave Integration
+System tracks all government-paid leave (GPML, GPPL, CCL, SPL, Infant Care Leave) separately from employer-paid leave.
+For each government-reimbursable leave period, system auto-generates reimbursement claim: employee name, NRIC, leave type, leave dates, daily rate of pay, total reimbursable amount. Claim submitted to MSF/CPF Board per scheme requirements.
+CPF applies on employer-paid leave pay portions at normal OW rates. Government-reimbursed portions are processed as pass-through (employer pays employee first, then claims back from government).
+NS Make-Up Pay: Make-Up Pay = (Civilian Daily Rate − NS Daily Allowance) × NS Days. Civilian Daily Rate = Monthly Basic ÷ 26. CPF contributions on civilian pay rate. System generates NS Make-Up Pay report for each NS period.
+Must Have
+CDCA / Enlistment Act
+PAY-012
+Cost Centre & Payroll Journal
+Payroll costs allocated to cost centres per employee (support single or split cost centre by percentage). HR Admin configures cost centre mapping per employee.
+Payroll journal entries auto-generated upon payroll finalisation: Debit Salary Expense (by cost centre), Credit CPF Payable, Credit SDL Payable, Credit FWL Payable, Credit Bank/GIRO Payable.
+Journal exported in formats compatible with Xero, QuickBooks, SAP, and standard CSV for manual import. Journal reference = payroll run ID.
+Should Have
+Finance / Accounting
+
+5. Module 2: Leave Management
+The leave module manages all statutory and company leave types across the full employee lifecycle. Entitlement rules, proration formulas, approval workflows, and government-paid leave tracking are all automated based on Singapore statutory requirements.
+5.1 Singapore Leave Entitlements – Statutory Basis
+Annual Leave (EA s.88A): Minimum entitlement: 7 days for the first year of service, increasing by 1 day per year up to a maximum of 14 days for 8+ years of service. Entitlement only accrues after 3 months of service. Pro-rated for new joiners and leavers (see proration formulas below). AL must be taken; any untaken AL that cannot be carried forward must be encashed upon cessation of employment.
+Sick Leave (EA s.89): 14 days outpatient sick leave per year (after 6 months of service; pro-rated in first 6 months: 5 days at 3 months, 8 days at 4 months, 11 days at 5 months). Up to 60 days hospitalisation leave per year (inclusive of 14 days outpatient). Valid Medical Certificate (MC) or Memo from a Singapore-registered doctor required. Employee must inform manager on the first day of sick leave absence.
+Maternity Leave (CDCA s.9): 16 weeks for SC or PR child (or child who becomes SC within 12 months of birth). 8 weeks for non-SC/non-PR child. First 8 weeks employer-paid; last 8 weeks (for SC/PR child) government-reimbursed via MSF at capped amount. Employee must have worked for employer for at least 3 months before confinement. Leave may be taken in one continuous stretch or flexibly within 12 months of birth if employer agrees.
+Paternity Leave (CDCA s.12A): 2 weeks for SC or PR child. Government-reimbursed at capped daily rate. Must be taken within 16 weeks of child’s birth. Employee must be legally married. Minimum 3 months’ service before birth.
+Childcare Leave (CDCA s.12): 6 days per year for parents of at least one SC child under 7 years of age. First 3 days employer-paid; next 3 days government-reimbursed. Applicable to both parents per year. Employee must have worked at least 3 months.
+Extended Childcare Leave (CDCA s.12H): 2 days per year for parents of at least one SC child aged 7 to 12 years (inclusive). Government-reimbursed at capped rate.
+Shared Parental Leave (CDCA s.12B): Up to 4 weeks transferred from mother’s maternity leave entitlement to father. Government-reimbursed. Must be used within 12 months of birth. Father must be legally married to child’s mother.
+Infant Care Leave: 6 days per year for parents of SC child under 2 years of age. Government-reimbursed.
+Unpaid Infant Care Leave (UICL): 6 days per year for parents of SC child under 2 years. Unpaid; employer must grant. Not reimbursed.
+Adoption Leave (CDCA s.12G): 4 weeks for adoptive mother of SC child. Government-reimbursed. Taken within 1 year of formal adoption order.
+NS Leave (Enlistment Act): Employer must grant leave for NS in-camp training or full-time NS. NS Make-Up Pay applies. No specific entitlement limit – as ordered by MINDEF/SCDF/SPF.
+No-Pay Leave (EA s.88A): Unpaid leave by mutual agreement. Salary deduction = (Monthly Salary ÷ Working Days in Month) × NPL Days taken. CPF contributions reduced proportionally.
+5.2 Leave Proration Formulas
+New Joiner AL Proration: AL Entitled for current leave year = Full Year AL Entitlement × (Months Remaining in Leave Year ÷ 12). Months Remaining = number of complete months from join month to end of leave year + 1 if join date is on or before the 15th of the month. E.g., joins 10 March in a Jan–Dec leave year: 10 months remaining ÷ 12 = 83% of full year entitlement.
+Resignee AL Proration: AL Entitled for final year = Full Year AL Entitlement × (Months Served in Final Leave Year ÷ 12). If Leave Taken exceeds Entitled: excess deducted from final salary at Daily Rate = Monthly Basic ÷ 26. If Leave Balance remains: Encashment Value = (Monthly Basic ÷ 26) × Remaining Leave Days.
+Sick Leave Proration (first year): 3 months service: 5 days outpatient. 4 months: 8 days. 5 months: 11 days. From 6 months: full 14 days. System auto-applies based on length of service at date of each sick leave application.
+5.3 Leave Carry-Forward Rules
+Configuration: HR Admin configures per leave type: maximum carry-forward days (e.g., 14 days AL), expiry date for carried-forward leave (e.g., 31 March of following year), auto-forfeit rule for days exceeding carry-forward limit (forfeit or flag for encashment approval).
+Year-End Processing: At end of leave year (31 December or service anniversary depending on configuration), system computes unused AL balance. Carries forward up to the configured maximum. Excess balance forfeited or flagged for encashment approval. Carried-forward balance tagged with expiry date.
+Expiry Alert: Employee reminded 30 days before expiry of carried-forward leave via in-app notification and email.
+5.4 Leave Type Catalogue
+#
+Leave Type
+Statutory Basis & Entitlement
+Min. Entitlement
+Paid/Unpaid
+CPF Impact
+Ref.
+S
+STATUTORY LEAVE
+
+
+
+
+
+1
+Annual Leave
+7 days yr 1; +1/yr up to 14 days at yr 8+. Accrues after 3 months. Pro-rated on join/exit. Unused balance encashed at cessation.
+7–14 days
+Paid
+Reduces OW if unpaid
+EA s.88A
+2
+Sick Leave (Outpatient)
+14 days/yr (after 6 months). Pro-rated in first 6 months: 5 days at 3 months, 8 at 4, 11 at 5. MC required. Employee must notify on day 1.
+14 days
+Paid
+No impact
+EA s.89
+3
+Hospitalisation Leave
+Up to 60 days/yr inclusive of outpatient SL. MC or hospital memo required. May be taken consecutively with outpatient SL.
+60 days (total)
+Paid
+No impact
+EA s.89
+4
+Maternity Leave
+16 weeks SC/PR child; 8 weeks other. First 8 weeks employer-paid; last 8 (SC) govt-reimbursed via MSF at capped daily rate. Flexible use within 12 months if agreed.
+8–16 weeks
+Paid
+CPF on employer-paid
+CDCA s.9
+5
+Paternity Leave
+2 weeks SC/PR child. Govt-reimbursed. Within 16 weeks of birth. Legally married. Min 3 months service.
+2 weeks
+Govt-paid
+CPF on employer-paid
+CDCA s.12A
+6
+Childcare Leave
+6 days/yr for parents of SC child <7. First 3 days employer-paid; next 3 govt-reimbursed. Both parents eligible (each 6 days). Min 3 months service.
+6 days
+Paid
+CPF on employer-paid
+CDCA s.12
+7
+Extended Childcare Leave
+2 days/yr for parents of SC child age 7–12. Govt-reimbursed at capped rate.
+2 days
+Govt-paid
+CPF on employer-paid
+CDCA s.12H
+8
+Shared Parental Leave
+Up to 4 weeks from mother’s ML. Govt-reimbursed. Within 12 months of birth. Legally married.
+Up to 4 weeks
+Govt-paid
+CPF on employer-paid
+CDCA s.12B
+9
+Infant Care Leave
+6 days/yr for parents of SC child <2. Govt-reimbursed.
+6 days
+Govt-paid
+CPF on employer-paid
+CDCA
+10
+Unpaid Infant Care Leave
+6 days/yr for parents of SC child <2. Unpaid. Employer must grant.
+6 days
+Unpaid
+Reduces OW
+CDCA
+11
+Adoption Leave
+4 weeks for adoptive mother of SC child. Govt-reimbursed. Within 1 year of adoption order.
+4 weeks
+Govt-paid
+CPF on employer-paid
+CDCA s.12G
+12
+NS / Reservist Leave
+Leave for in-camp training or full-time NS as ordered by MINDEF/SCDF/SPF. NS Make-Up Pay applies. Employer must grant.
+Per NS order
+Special
+CPF on civilian pay
+Enlistment Act
+13
+Quarantine Order (QO) Leave
+Government-issued QO. Employee cannot report to work. Treated as paid sick leave. IRAS exempts QO pay under s.13(1)(a) Income Tax Act.
+Per QO duration
+Paid
+No impact
+Infectious Diseases Act
+C
+COMPANY LEAVE (CONFIGURABLE)
+
+
+
+
+
+14
+No-Pay Leave (NPL)
+Unpaid leave by mutual agreement. Salary deduction = Monthly Salary ÷ Working Days × NPL Days. CPF contributions reduced proportionally.
+N/A
+Unpaid
+Reduces OW
+EA s.88A
+15
+Marriage Leave
+Not statutory. Common practice: 2–5 days for own wedding. Configurable per policy.
+Company policy
+Paid
+No impact
+Company
+16
+Compassionate / Bereavement
+Not statutory. Common: 3–5 days for immediate family death. Configurable relationship types and entitlement per relationship.
+Company policy
+Paid
+No impact
+Company
+17
+Birthday Leave
+1 day on or around employee’s birthday. Optional company benefit.
+1 day
+Paid
+No impact
+Company
+18
+Examination / Study Leave
+For approved examinations or professional courses. Configurable days per year. Supporting exam slip required.
+Company policy
+Paid
+No impact
+Company
+19
+Volunteer / CSR Leave
+For approved volunteer activities. Company policy.
+Company policy
+Paid / Unpaid
+No impact
+Company
+20
+Menstrual / Wellness Leave
+Increasingly common. 1–2 days/month. Configurable entitlement. No MC required.
+Company policy
+Paid
+No impact
+Company
+21
+Court / Jury / Subpoena Leave
+For mandatory court attendance. Employer must grant. Paid at company policy.
+As required
+Paid
+No impact
+Company
+22
+Work Injury Leave (WICA)
+Leave pending WICA claim outcome. Employer bears cost while claim processed. Employee entitled to medical leave as per WICA compensation.
+Per WICA
+Paid
+No impact
+WICA
+5.5 Leave Module Requirements
+Req. ID
+Feature
+Requirement (Full Detail)
+Priority
+Compliance
+LEA-001
+Leave Entitlement Engine
+System auto-applies entitlements for all 22 leave types based on: employee type (full-time / part-time / contract), years of service (for AL increments), join date, and citizenship/residency (for statutory govt-paid leave eligibility).
+AL increments: 7 days at year 1, +1 day each subsequent year up to 14 days maximum. System auto-upgrades entitlement on each service anniversary.
+Sick leave proration in first year: 5 days at 3 months, 8 days at 4 months, 11 days at 5 months, 14 days from 6 months. Hospitalisation leave: 60 days total inclusive of outpatient SL.
+Each leave type configurable: entitlement quantum, accrual method (upfront vs monthly), eligibility criteria, required documents, approval levels.
+Must Have
+Employment Act
+LEA-002
+Leave Proration
+New Joiner AL: AL Entitled = Full Year AL × (Months Remaining in Leave Year ÷ 12). Months Remaining = complete months from join month to leave year end. If joined on or before 15th: join month counts as full month.
+Resignee AL: AL Entitled (final year) = Full Year AL × (Months Served in Final Year ÷ 12). If Leave Taken > Entitled: Deduction = (Monthly Basic ÷ 26) × Excess Days. If balance remains: Encashment = (Monthly Basic ÷ 26) × Remaining Days.
+System auto-computes proration on join date entry and resignation/termination date entry. Generates leave encashment figure passed to payroll module for final pay computation.
+Must Have
+EA s.88A
+LEA-003
+Approval Workflow
+Configurable multi-level approval: Employee submits > L1 Approver (Line Manager) > L2 Approver (HOD or HR, if configured). Approver views team calendar before approving to check coverage.
+Escalation: if L1 approver takes no action within configured SLA (default 2 working days), reminder sent. After second reminder (another working day), escalated to L2 or HR Admin.
+Blocked dates: HR can configure blackout dates (e.g., year-end closing) during which certain leave types cannot be applied. System blocks submission on blackout dates.
+Notice period restriction: configurable option to block leave application during notice period. Cancellation of approved leave also subject to approval workflow.
+Must Have
+
+LEA-004
+MC & Document Tracking
+For sick leave: employee must upload Medical Certificate (MC) from Singapore-registered doctor. MC contains: doctor name, clinic name, date of issue, number of days certified, and employee name.
+System tracks MC patterns: flags repeated Monday/Friday sick leave for manager review. Dashboard shows sick leave frequency trends per employee and per department.
+For hospitalisation leave: hospital memo or inpatient discharge summary required. For government-paid leave types: supporting documents (birth certificate for maternity/paternity, adoption order for adoption leave) uploaded and retained.
+Must Have
+EA s.89
+LEA-005
+Government-Paid Leave Tracking & Claims
+System separately tracks government-reimbursable leave periods for GPML, GPPL, CCL (govt portion), SPL, Extended CCL, Infant Care Leave, Adoption Leave.
+For each government-paid leave period: auto-generates reimbursement claim data: employee NRIC, leave type, leave dates, daily rate, total government-reimbursable amount (subject to MOM/MSF daily cap).
+Daily reimbursement caps (per current MSF schedules): GPML last 8 weeks: SGD 10,000/4-week block capped. GPPL: SGD 2,500/week. CCL govt portion: SGD 500/week. Configurable when caps change.
+HR generates government claim report; system tracks claim status (Not Submitted / Submitted / Reimbursed). Reimbursement amounts reconciled back to employer payroll account.
+Must Have
+CDCA / MSF
+LEA-006
+Leave Liability Report
+Leave Liability Report shows monetary value of all employees’ unused leave balances for financial provisioning purposes.
+Formula per employee: Leave Liability = Unused Leave Days (by type) × (Monthly Basic Salary ÷ 26). Report shows: employee name, department, leave type, days balance, monetary value. Department and organisation totals included.
+Generated on-demand or scheduled monthly. Exportable in PDF, Excel, CSV. Used by Finance for accrual provisioning under FRS 19 Employee Benefits standard.
+Absenteeism rate calculation: (Total Unplanned Absent Days ÷ (Headcount × Working Days in Period)) × 100. Reported monthly per department.
+Must Have
+MOM / FRS 19
+LEA-007
+Carry-Forward & Year-End Processing
+At end of leave year, system computes unused AL for all employees. Carries forward up to configured maximum (e.g., 14 days). Excess forfeited or flagged for HR encashment approval.
+Carried-forward balance tagged with expiry date. Employee reminded 30 days before expiry. If balance not used by expiry: auto-forfeit or auto-flag for encashment per policy.
+Year-end processing run can be triggered manually by HR Admin or scheduled. System generates report of carry-forward actions taken for HR audit.
+Should Have
+
+
+6. Module 3: Claims & Expenses
+The claims module manages all employee expense reimbursements from submission through approval to payroll integration. Singapore GST rules and IRAS taxability classifications are applied per claim category.
+6.1 GST Handling
+Current Singapore GST Rate: 9% (effective 1 January 2024). Employee enters total amount and indicates if GST is included.
+GST-Inclusive Calculation: GST Amount = Total Amount × (9 ÷ 109). Net Amount = Total Amount − GST Amount.
+Input Tax Claims: For GST-registered organisations, GST amount captured separately per claim for finance input tax claim reporting. Vendor GST registration number recorded on claim (required for valid input tax claim). Finance exports GST claim report for IRAS GST return.
+6.2 Claim Category Configuration
+HR Admin configures each claim category with: category name, per-event / per-month / per-year limit (in SGD), reimbursable percentage (e.g., 80% for medical), eligible employee grades or departments, required supporting documents (receipt, MC, invoice), taxable/non-taxable flag (for IRAS Appendix 8A), approval routing (standard vs elevated for large amounts), submission deadline (e.g., within 60 days of expense date).
+Standard Singapore claim categories and typical policies:
+Category
+Typical Limit
+Reimbursable %
+IRAS Taxable
+Requirements
+Medical (Outpatient)
+SGD 200–500/year
+100%
+No (within limits)
+Clinic receipt or MC
+Transport (Taxi/Grab)
+Per trip or monthly cap
+100%
+No (business use)
+Receipt required; business purpose stated
+Entertainment
+SGD 200–500/event
+100%
+No (bona fide)
+Receipt; business purpose; guest names; director approval >threshold
+Training / Course Fees
+Per course or annual cap
+80–100%
+No
+Pre-approval required; completion certificate
+Mobile / Handphone
+Actual bill or fixed cap
+100% or fixed
+Partial (personal use portion)
+Copy of phone bill
+Business Travel (Local)
+Per trip
+100%
+No
+Receipts; travel report
+Business Travel (Overseas)
+Per diem or actual
+100%
+No
+Receipts; travel request approved
+Professional Membership
+Actual annual fee
+100%
+No (job-related)
+Invoice from professional body
+Dental
+SGD 100–300/year
+100%
+No
+Dental clinic receipt
+Optical
+SGD 100–200/year
+100%
+No
+Receipt from optical shop
+Req. ID
+Feature
+Requirement (Full Detail)
+Priority
+Compliance
+CLM-001
+Claims Submission Portal
+Employee submits itemised expense claims via web portal or mobile app. Fields: claim type (from configured categories), expense date, amount (SGD), GST amount (if applicable), GST-inclusive toggle, vendor/merchant name, vendor GST registration number (if applicable), business purpose description, receipt attachment (JPG/PNG/PDF, max 5MB, multiple files per claim line).
+Mobile OCR: camera points at receipt; system auto-extracts merchant name, date, amount using OCR. Employee validates and edits extracted data before submission.
+Submission deadline enforcement: claims submitted more than 60 days (configurable) after expense date flagged with warning; blocked beyond configurable hard deadline (e.g., 90 days).
+Duplicate detection: system flags claims with same employee, same date, same amount within 30-day window. Approver must acknowledge flag before approving.
+Must Have
+
+CLM-002
+Approval Workflow & Delegation
+Configurable multi-level routing: L1 = Line Manager (all claims). L2 = HOD or Finance Officer (if amount > configurable threshold e.g., SGD 500). L3 = Director (for entertainment claims above threshold, e.g., SGD 200 per event).
+Hard limits: system auto-rejects claims exceeding configured hard limit for the category. Soft limits: system flags and routes to elevated approver with flag annotation.
+Delegation: approver can delegate approval authority during leave to a designated delegate. System re-routes pending approvals to delegate automatically. Delegation period and scope configurable.
+SLA enforcement: approver reminded if no action within 2 working days. After second reminder (1 more working day), escalated to next level or HR Admin.
+Batch approval: approver can select multiple claims and approve all in one action.
+Must Have
+
+CLM-003
+Payroll Integration
+Approved claims marked Approved-for-Payment with payment-in-period flag. At payroll run, system aggregates all approved-for-payment claims per employee for the period. Claims total added to net pay as non-CPF reimbursement. Each claim reimbursement itemised on payslip.
+Cut-off rule: claims approved after payroll cut-off date queued for next payroll cycle. Cut-off date configurable per payroll run.
+Taxable claims (e.g., company car fuel reimbursement) segregated and included in Appendix 8A reporting for IRAS.
+Claims marked Paid upon payroll finalisation with payroll run reference number stored against each claim record.
+Must Have
+IRAS
+CLM-004
+GST & Finance Reporting
+GST captured per claim: GST Amount = Total × (9÷109) for GST-inclusive entries. Net Amount = Total − GST.
+Finance dashboard: total GST-claimable expenses by period, by category, by cost centre. Export GST input tax report in format compatible with IRAS GST F5/F7 returns.
+Vendor GST registration number validated against IRAS GST-registered business list where API integration available.
+Claims analytics: spend by category vs budget, top claimants by amount, month-over-month trend, department vs budget. Exportable Excel/CSV.
+Should Have
+IRAS GST
+
+7. Module 4: Recruitment & Onboarding
+7.1 Fair Consideration Framework (FCF) Requirements
+FCF Obligation: Under MOM’s Fair Consideration Framework, all employers with 10 or more employees must advertise job vacancies on MyCareersFuture.sg for at least 14 calendar days before submitting an Employment Pass (EP) application to MOM, for roles open to EP holders.
+Documentation Required (FCF Audit Trail): Job description, advertisement posting date and closing date, number of applications received, nationality breakdown of applicants, shortlisting criteria, reason for selection of successful candidate, and final hiring decision. HRMS retains all these records for MOM audit purposes for minimum 2 years.
+Penalty: MOM may investigate employers who appear to discriminate against Singaporeans. Non-compliant employers may be placed on MOM’s Fair Hiring watchlist, which restricts EP/S-Pass quota.
+7.2 Work Pass Types & MOM Tracking
+Pass Type
+Criteria
+Monthly Salary Threshold
+Quota
+FWL Applicable
+Employment Pass (EP)
+Professionals, managers, executives. Min fixed monthly salary threshold.
+SGD 5,000 (general); SGD 5,500 (financial services) from Sep 2023
+No quota
+No FWL
+S Pass
+Mid-level skilled workers.
+SGD 3,150 from Sep 2023
+Up to 10–15% of workforce (sector-dependent)
+Yes, for employers
+Work Permit (WP)
+Semi-skilled workers in construction, marine, process, manufacturing, services.
+No minimum salary (subject to sector requirements)
+Sector-specific DRC quota
+Yes – varies by sector and tier
+Dependant’s Pass (DP)
+Dependants of EP/S-Pass holders. May work with LOC.
+N/A
+N/A
+No
+Long-Term Visit Pass (LTVP)
+Family members of SC/PR. Some may work.
+N/A
+N/A
+No
+Training Employment Pass
+Professionals on short-term training stints.
+SGD 3,000
+N/A
+No
+Req. ID
+Feature
+Requirement (Full Detail)
+Priority
+Compliance
+REC-001
+Applicant Tracking System (ATS)
+End-to-end recruitment pipeline: Job Requisition (JR) submitted by Line Manager (position, headcount, budget, target start date) > HR Manager and Finance approve JR > HR creates job posting > applications received and tracked.
+Pipeline stages (configurable per job type): Applied > Screening > Phone Interview > Technical/Panel Interview > Assessment > Offer > Hired / Rejected. Rejection at any stage auto-notifies candidate with configurable rejection email template.
+Interview scheduling: calendar integration sends interview invites to interviewers and candidates. Interview feedback forms completed by each interviewer within HRMS. Aggregated panel score visible to HR.
+Offer letter generation: system auto-populates offer letter from approved template with: position, grade, salary, start date, probation period, benefits. Candidate e-signs via portal or email link. Signed offer archived. Accepted offer triggers onboarding workflow.
+Must Have
+
+REC-002
+FCF & MyCareersFuture Compliance
+For all jobs open to EP holders (configured per JR): system mandates MyCareersFuture posting and records posting start date. System calculates 14-day elapsed date and blocks EP application trigger until 14 calendar days confirmed.
+FCF audit trail stored per job: description, posting date, closing date, applicant count by nationality, shortlisting notes, hiring decision rationale. Retained for 2 years minimum.
+System generates FCF Compliance Report on request: all open and closed positions with FCF posting status, days advertised, applicant nationality breakdown.
+If job is modified after posting, system prompts HR to confirm whether re-advertisement is required and resets 14-day timer if significant change (title, salary range, responsibilities).
+Must Have
+MOM FCF
+REC-003
+Work Pass Tracking & Expiry Alerts
+For all foreign employees: system stores pass type (EP/S Pass/WP/DP/LTVP/TEP), pass number, issue date, expiry date, MOM application/renewal reference.
+Expiry alerts: system sends reminders at 90 days, 60 days, and 30 days before pass expiry to HR Admin and Line Manager. Dashboard shows all passes expiring within 90 days.
+For WP/S-Pass holders: system tracks MOM levy amounts per employee and flags when Dependency Ratio Ceiling (DRC) for the sector approaches the quota limit.
+Pass renewal workflow: HR initiates renewal request in HRMS. System generates pre-filled renewal checklist. Renewal outcome (approved / rejected / new pass number / new expiry) updated in HRMS.
+Must Have
+EFMA
+REC-004
+Digital Onboarding Workflow
+Pre-boarding portal accessible from day of offer acceptance. New hire completes before Day 1: personal particulars, bank account details (for GIRO), emergency contact, tax residency declaration, NRIC/FIN upload, educational certificates, read and e-sign employee handbook, workplace harassment policy, data protection policy, and any other mandatory acknowledgements.
+IT provisioning request auto-created on Day -5 (configurable): laptop, email account, system access by role. HR Buddy/Mentor assigned. Orientation schedule sent.
+HR notified of incomplete onboarding tasks 3 days before start date. Day 1 checklist: ID verification, access card issuance, asset handover (with digital acknowledgement form), meet Line Manager.
+All documents collected and stored per PDPA data retention policy. NRIC/FIN, passport, and salary information encrypted at field level.
+Must Have
+PDPA
+REC-005
+Employee Record Auto-Creation
+On HR Admin approval of completed onboarding checklist: system auto-creates full employee record with unique Employee ID. System triggers: IT access provisioning, payroll setup (bank details, CPF profile with citizenship status and date of birth), leave entitlement creation for current year (pro-rated), assets to be issued, probation period tracking.
+Employee activated in system on effective start date. Confirmation email to new employee and Line Manager. Employee appears in org chart and team calendars from Day 1.
+Must Have
+
+
+8. Module 5: Time & Attendance
+Hourly Basic Rate (for OT/rest day calculations): = (Monthly Basic Salary × 12) ÷ (52 × Weekly Contracted Hours). This rate excludes allowances unless contractually stated otherwise.
+Daily Basic Rate (for deductions): = Monthly Basic Salary ÷ Working Days in Month. Working days per month = actual calendar working days in the month (excluding weekends and public holidays).
+Absent Deduction Formula: Daily Deduction = Monthly Basic ÷ Working Days in Month. Total Deduction = Daily Deduction × Days Absent Without Approval.
+Req. ID
+Feature
+Requirement (Full Detail)
+Priority
+Compliance
+TAT-001
+Multi-Method Time Capture
+Biometric: fingerprint or facial recognition at physical device. Device pushes clock event to HRMS via REST API or file sync every 5 minutes. Tamper-proof timestamp. Device ID and location recorded per clock event.
+Mobile with Geofencing: employee clocks in/out via mobile app. GPS coordinates verified against configured work locations (multiple locations supported). Clock-in rejected if outside geofence radius (configurable, default 200m). Useful for field staff, construction sites, remote locations.
+Web-based: employee clicks Clock In/Out on HRMS portal. IP address logged. Suitable for office-based staff on company network or VPN.
+Manual Entry: HR Admin or Line Manager enters time with mandatory justification and supporting document upload. Manual entries flagged distinctly in reports. Requires L2 approval. Auto-generates exception flag in attendance audit log.
+Workflow: employee clocks in > system records timestamp, method, location/device > employee works > clocks out > system computes hours worked = Clock-Out Time − Clock-In Time − Break Duration > anomalies flagged > daily attendance record compiled > payroll feed at period end.
+Must Have
+
+TAT-002
+Work Schedule & Shift Configuration
+HR Admin defines work schedules: days of work, contracted start/end time, break duration, contracted weekly hours, OT eligibility flag, shift differential pay rate. Schedule assigned to employee or department.
+Shift patterns: shift name, start time, end time, break duration, days in rotation, shift premium rate (e.g., morning 1.0x, afternoon 1.05x, night 1.1x). System assigns shift to employee for each day.
+Flexible work arrangements: flexi-hours (core hours 10am–3pm; employee works contracted hours around core window). Compressed work week (e.g., 5 days in 4 with 10-hour days). WFH flag on clock-in. WFH count tracked monthly against company WFH policy cap (configurable). Manager notified when employee exceeds WFH cap.
+Singapore PH Calendar: pre-loaded with all 11 gazetted public holidays per year. Updated annually by vendor by 1 November for the following year. Configurable additional company-declared holidays. Multi-entity support (different entities may observe different holidays, e.g., regional offices).
+Must Have
+EA / MOM FWA
+TAT-003
+OT, Rest Day & Public Holiday Computation
+OT Calculation: OT Hours = max(0, Hours Worked − Contracted Daily Hours). Monthly OT cap: 72 hours (EA s.38). OT Pay = OT Hours × (Hourly Basic Rate × 1.5). System enforces 72-hour cap; alerts HR and employee when 60 hours reached; blocks further OT accrual at 72 hours unless HR overrides with documented justification.
+Rest Day (Employee Request): 0.5 day worked = 0.5 × Daily Basic Rate paid. Full day worked = 1 × Daily Basic Rate paid. EA s.37(1).
+Rest Day (Employer Request): 0.5 day worked = 1 × Daily Basic Rate paid. Full day worked = 2 × Daily Basic Rate paid. EA s.37(2).
+Public Holiday Work (EA s.88): employee paid normal daily salary for the day + 1 additional day’s basic pay. Or: 1 day off-in-lieu by mutual agreement (credited as OIL leave balance).
+All computed amounts passed automatically to payroll module. Payroll Officer sees attendance-linked payroll components in pre-approval review.
+Must Have
+EA s.37, s.38, s.88
+TAT-004
+Attendance Anomaly Detection
+Auto-flagged anomaly types and thresholds (all configurable): Late Arrival: clock-in > contracted start time + grace period (default 10 minutes). Early Departure: clock-out < contracted end time − grace period. Missing Clock-Out: no clock-out recorded by end of work day + 2 hours. AWOL: no clock-in and no approved leave or prior notification. Excessive OT: OT hours > configured threshold in a week (e.g., 18 hours/week).
+Workflow: anomaly detected > manager receives daily summary email of team anomalies > manager reviews: acknowledge, request explanation from employee, approve deduction, or approve manual correction > employee notified if action required.
+Attendance dashboard (real-time): who is in, WFH, on leave, absent, late today. Weekly view: attendance rate (%), OT hours by employee, late arrivals count.
+Should Have
+
+TAT-005
+Payroll Integration from Attendance
+Attendance period closes (end of month). HR Admin reviews and approves attendance records. Approved data locked and passed to payroll module as: regular hours per day, OT hours per day (capped at 72/month), absent days without approval, PH worked days, shift type per day (for differential).
+Absent Deduction: Daily Deduction = Monthly Basic Salary ÷ Working Days in Month. Total Deduction = Daily Deduction × Unapproved Absent Days. Passed to payroll as a deduction line item.
+Payroll Officer reviews all attendance-linked payroll components in variance report before finalisation.
+Must Have
+
+
+9. Module 6: Performance Management (Phase 2)
+Req. ID
+Feature
+Requirement (Full Detail)
+Priority
+Compliance
+PMS-001
+Review Cycles & Goal Setting
+Configurable appraisal cycles: Annual (Jan–Dec or financial year), Mid-Year (interim check-in, no formal rating), Quarterly (lightweight OKR check-in), Probation (at end of probation period). Each cycle type has its own timeline, participants, and rating scale.
+Goal setting: employee sets SMART goals at start of cycle. Manager reviews and approves or modifies. Goals cascaded from organisation OKRs (configurable) to department to individual. Goal weightings configurable per goal (must sum to 100%). Goals can be updated mid-cycle with mutual agreement.
+Probation review: auto-triggered 30, 14, and 7 days before probation end date. Reminder to Line Manager and HR. Outcome: Confirm / Extend Probation (with new end date) / Terminate (with reason). Confirmation triggers permanent employee status in system.
+Should Have
+
+PMS-002
+Appraisal Workflow
+Self-assessment: employee rates own performance against each goal and competency. Submits written comments. Manager assessment: Line Manager rates employee against same goals and competencies, adds manager comments. Optional skip-level review by HOD.
+Notification timeline: cycle opens > notification to all participants. 7 days before deadline: reminder to incomplete actions. 3 days before: urgent reminder. Deadline passed: escalation to HR Admin with list of overdue items.
+Rating scale configurable (e.g., 1–5 numeric, or Exceeds / Meets / Partially Meets / Does Not Meet). Overall rating computed as weighted average of goal ratings.
+Employee acknowledgement: employee reviews finalised appraisal, adds optional response, clicks Acknowledge. Acknowledgement date and comments recorded. Dispute: employee can flag for HR escalation within 5 working days. HR mediates; outcome documented.
+Should Have
+
+PMS-003
+Calibration & Bell Curve
+Calibration workflow: managers submit preliminary ratings > HR Admin opens calibration view (all employees with proposed ratings by department/level) > HR facilitates calibration session > managers adjust ratings for consistency.
+Bell curve enforcement: configurable distribution targets (e.g., max 20% Exceeds Expectations, max 10% Below Expectations). Formula: Count per Band = Round(Total Employees × Band Target %). System warns if actual distribution deviates from target by > configured tolerance (e.g., 5%).
+Calibrated ratings locked by HR Admin. Managers informed of final ratings. Historical ratings non-editable once locked.
+Should Have
+
+PMS-004
+Salary Increment Linkage
+Salary review cycle triggered after performance ratings finalised. System presents compensation matrix: employee list with current salary, performance rating, salary band position (percentile), proposed increment.
+Increment formula: New Salary = Current Salary × (1 + Increment %). Increment % = Base Increment % + Performance Modifier %. Example: Rating “Exceeds” = Base 4% + 2% = 6%. “Meets” = Base 4% + 0% = 4%. “Below” = Base 0% + 0% = 0%.
+Budget envelope: Total Increment Budget = Total Payroll × Budget %. System flags if total manager recommendations exceed budget envelope. Manager adjusts within envelope before HR approval.
+Approved increments fed to payroll module as salary revision entries with effective date.
+Should Have
+
+PMS-005
+Probation Management
+Probation period tracked per employee (configurable duration: default 3–6 months per employment contract). Reminders sent to Line Manager and HR: 30 days, 14 days, 7 days before probation end.
+Outcomes: (1) Confirm – employee status changes to permanent, probation review form signed and stored. (2) Extend Probation – new probation end date set, reason documented, employee notified. Maximum extensions configurable. (3) Terminate – reason code selected (unsatisfactory performance, conduct, attendance), termination workflow triggered.
+PIP (Performance Improvement Plan): initiable for underperforming employees. Document: objectives, timeline (e.g., 60 days), support measures, check-in schedule. PIP progress tracked. Outcome: removed from PIP (satisfactory) or termination recommendation.
+Must Have
+MOM
+PMS-006
+360-Degree Feedback
+Configurable peer and stakeholder feedback: employee nominates reviewers (peers, subordinates, external). HR Admin approves reviewer list. Anonymity configurable (anonymous by default for peer feedback, named for manager).
+Feedback form configurable per question type (rating scale, open text). Aggregate feedback report shows average scores per competency dimension without identifying individual reviewers. Employee and manager see aggregate report.
+360 feedback scores factored into overall appraisal rating at configurable weight (e.g., 20% of final rating).
+Nice to Have
+
+
+10. Module 7: Training & Development (Phase 2)
+10.1 Government Training Grants (Singapore)
+Enhanced Training Support for SMEs (ETS): SMEs (< 200 employees or < SGD 100M annual turnover) receive enhanced course fee subsidy up to 90% for eligible courses funded by SSG. System tracks ETS-eligible training for grant claim reports.
+Absentee Payroll (AP): Employers claim AP grant from SSG for salary of employees attending eligible SSG-funded training. AP Rate: SGD 7.50/hour (for employees earning < SGD 4,500/month). System computes AP claimable amount: AP Amount = Hours Trained × SGD 7.50 (or applicable rate). Tracks training hours per employee per course.
+SkillsFuture Enterprise Credit (SFEC): One-time SGD 10,000 credit per eligible enterprise (from 2020) for enterprise transformation and workforce upskilling. System tracks SFEC utilisation per training programme.
+Training Budget Formula: Remaining Training Budget = Annual Training Budget − YTD Actual Training Spend. System alerts Training Manager when budget utilisation exceeds 80%.
+Req. ID
+Feature
+Requirement (Full Detail)
+Priority
+Compliance
+TRN-001
+Learning Management System (LMS)
+Training Coordinator creates course records: name, description, type (classroom / e-learning / on-the-job / blended), provider (internal or external), cost per pax, duration (hours/days), CPD hours awarded, certification details.
+Training scheduled: date, venue or virtual link, maximum headcount. Waitlist managed if oversubscribed.
+Workflow: Training need identified (by employee, manager, or HR competency gap analysis) > nomination submitted > manager and Training Manager approval (checks availability and budget) > confirmation sent > post-training: attendance marked, assessment score recorded (pass/fail), completion status updated, certificate uploaded/generated.
+Training history per employee: all courses completed, assessment scores, CPD hours, certifications held with expiry dates. Non-editable once locked.
+Should Have
+
+TRN-002
+SDL Computation & Reporting
+SDL computed during every payroll run for all eligible employees (earning < SGD 4,500/month). Formula: min(max(Gross Pay × 0.0025, SGD 2.00), SGD 11.25) per employee per month.
+Monthly SDL report by department: employee name, gross pay, SDL amount. Year-to-date SDL totals. SDL submission file generated in CPF Board format, remitted with monthly CPF by 14th of following month.
+SDL credits tracking: each employee’s SDL contributions tracked. HR reports on SDL-funded training spend vs SDL contributions for workforce planning.
+Must Have
+SDL Act
+TRN-003
+Government Grant Claims & SkillsFuture
+ETS tracking: system flags SSG-eligible courses and employee eligibility for ETS. HR generates ETS grant claim report: course name, SSG course reference, employees trained, hours, cost, enhanced subsidy amount.
+Absentee Payroll: system computes AP claimable amount per employee per course: AP Amount = Training Hours × AP Rate (SGD 7.50/hour). HR exports AP claim report for SSG portal submission.
+SkillsFuture Credit: employee declares SFC used for a course. System records: course name, SSG course reference number, SFC amount applied. HR dashboard shows SFC utilisation across workforce.
+SFEC tracking: HR Admin marks SFEC-funded programmes. System tracks SFEC balance consumed vs SGD 10,000 enterprise credit.
+Should Have
+SSG
+TRN-004
+Certification Expiry & Competency
+Certificate tracking per employee: certificate name, issuing body, issue date, expiry date, renewal course link. System sends reminder alerts at 90, 60, and 30 days before expiry to employee and HR. Overdue certifications flagged on employee record and manager dashboard.
+Competency framework: competencies defined per job family (e.g., for Finance: Financial Reporting, Excel Advanced, IFRS). Training courses linked to competencies. Employee competency profile shows assessed level (Awareness / Practitioner / Expert) vs required level per role.
+Renewal training auto-nominated when certification nears expiry if renewal course available in LMS.
+Should Have
+
+
+11. Module 8: Asset & Logistics Management
+Req. ID
+Feature
+Requirement (Full Detail)
+Priority
+Compliance
+AST-001
+Asset Register & Assignment
+System maintains full asset register: Asset ID (auto-generated), description, category (laptop / mobile / access card / vehicle / PPE / uniform), brand/model, serial number, purchase date, purchase cost, warranty expiry, current condition (Good / Fair / Damaged), current assignee, assignment date.
+Assignment workflow: Logistics Officer assigns asset to employee. System auto-generates digital Asset Handover Acknowledgement Form containing: organisation name, employee name and ID, asset description, serial number, condition at handover, accessories list, date. Employee e-signs via portal or mobile. Signed form stored as PDF against asset and employee records. Email copy to employee and HR.
+Asset transfer: reassignment between employees requires return (condition noted) and re-handover (new employee signs new form). Full assignment history retained per asset.
+Must Have
+
+AST-002
+Logistics Requests & Inventory
+Employees submit logistics requests for items (stationery, PPE, uniforms) via ESS portal: item, quantity, business justification. Manager approves. Logistics Officer fulfils from stock. Employee acknowledges receipt.
+Inventory management: stock levels tracked per item. Low-stock alerts configured (e.g., alert when PPE stock < 20 units). If stock insufficient, system auto-generates purchase request. Stock transactions (receive, issue, adjust) logged with user and timestamp.
+Purchase request workflow: auto-created on stock alert trigger > Logistics Manager approves > Finance approves PO > item received > stock updated.
+Should Have
+
+AST-003
+Asset Expiry & Maintenance Alerts
+Warranty expiry alerts: 60 days before expiry date to Logistics Officer and IT Admin (for IT assets).
+Scheduled maintenance alerts: 30 days before due date. Maintenance completion recorded with date, service provider, cost, and next service due date.
+Asset return alert: 14 days before employee contract end date or confirmed offboarding date. Alerts sent to Logistics Officer, assigned employee, and IT Admin.
+Software licence expiry: 30 days before licence expiry. Asset category ‘Software Licence’ with associated seat count, renewal cost, and authorised users.
+Should Have
+
+AST-004
+Offboarding Asset Return
+On offboarding initiation, system auto-generates asset return checklist from all current asset assignments of the departing employee.
+Logistics Officer marks each asset as: Returned (condition noted) / Not Returned (reason) / Written Off (with approval). IT Admin confirms access card and IT equipment returned. Outstanding unreturned assets flagged.
+Offboarding cannot be fully cleared until all assets marked Returned or exception approved by HR Manager. Final Asset Return Acknowledgement Form generated and signed by both parties.
+Deduction for lost or damaged assets (if applicable): computed by Logistics and passed to payroll module as a deduction in final pay, subject to Employment Act deduction limits.
+Must Have
+
+
+12. Module 9: Offboarding
+12.1 Final Pay Computation (Employment Act)
+Salary for Days Worked in Final Month: = (Monthly Salary ÷ Working Days in Month) × Days Worked in Final Month.
+Salary-in-Lieu of Notice (EA s.11): = (Monthly Basic Salary ÷ 26) × Notice Period Days Not Served. Subject to CPF as OW.
+Leave Encashment: = (Monthly Basic Salary ÷ 26) × Unused AL Days. Unused AL = Pro-rated AL Entitlement for the year − AL Days Taken YTD. CPF applicable on leave encashment (treated as AW).
+Excess Leave Deduction: If Leave Taken > Pro-rated Entitlement: Deduction = (Monthly Basic ÷ 26) × Excess Leave Days.
+Outstanding Claims: All approved claims included in final payroll as normal non-CPF reimbursements.
+Salary Advance Recovery: Full outstanding balance of salary advances or staff loans deducted from final pay, subject to EA s.27 deduction limits (max 25% of monthly salary per deduction). If total deduction would exceed net pay, HR must agree repayment schedule.
+CPF on Final Pay: CPF applicable on final month OW (including salary-in-lieu of notice, leave encashment). Termination payments (retrenchment benefits, ex-gratia) generally not subject to CPF. Final CPF included in final month’s CPF submission.
+Req. ID
+Feature
+Requirement (Full Detail)
+Priority
+Compliance
+OFF-001
+Offboarding Initiation & Workflow
+Offboarding triggers: (1) Resignation – employee submits resignation letter via ESS or physical; HR confirms acceptance and enters last working day. (2) Termination – HR initiates with mandatory reason code (performance, misconduct, redundancy, end of contract). (3) Retirement – system auto-triggers based on configured retirement age (default 63, per Retirement and Re-employment Act). (4) End of Contract – system auto-triggers 30 days before contract end date.
+On initiation: system computes last working day based on notice period (contracted or waived). Tasks auto-created and assigned: IT (system access revocation, email deactivation, device return), Finance (final expense claim cut-off, advance settlement), HR (exit interview, employment certificate), Logistics (uniform, PPE, keys, access card), Legal (NDA reminder, IP assignment, non-compete clause reminder).
+HR monitors offboarding progress dashboard. Employee access deactivated on last day automatically (or on resignation date if garden leave). Final payroll triggered on last day.
+Must Have
+EA
+OFF-002
+Offboarding Checklist (Full Detail)
+IT Checklist: laptop return (condition noted, serial checked), mobile phone return, access card deactivation, all system access revoked (AD/LDAP, email, HRMS, ERP, cloud accounts), company email deactivated (auto-reply set for configurable period), VPN certificate revoked.
+Finance Checklist: all outstanding salary advances or company loans settled or repayment plan agreed, final expense claim submitted and approved before payroll cut-off, corporate credit card cancelled and outstanding balance cleared.
+HR Checklist: acknowledgement of offboarding by employee, exit interview conducted or waived (reason documented), employment certificate / reference letter issued (if requested), non-disclosure reminder letter issued, reference check authorisation obtained.
+Logistics Checklist: company uniform returned (quantity and condition noted), PPE returned, company vehicle returned with odometer reading and condition report, office keys and drawers cleared.
+Legal Checklist: NDA/confidentiality agreement reminder (with relevant clause number), IP assignment reminder, non-compete clause notification (if applicable, with applicable period and geography).
+Each item: assigned to responsible department, due date set relative to last day, completion tracked in real time. Items can be marked N/A with justification. HR Manager approves final clearance.
+Must Have
+
+OFF-003
+Final Pay Computation
+System auto-computes all final pay components: (1) Salary for days worked = Monthly Salary ÷ Working Days in Month × Days Worked. (2) Notice pay (if waived) = Monthly Basic ÷ 26 × Notice Days. (3) Leave encashment = Monthly Basic ÷ 26 × Unused AL Days. (4) Excess leave deduction = Monthly Basic ÷ 26 × Excess Days. (5) Outstanding approved claims added. (6) Salary advance recovery deducted.
+CPF on final OW and AW computed as normal. Termination payments (ex-gratia, retrenchment benefit) excluded from CPF.
+Maker-Checker approval on final pay. Final payslip generated. GIRO file for final payment created. Final CPF included in that month’s CPF e-Submit. Payslip issued on final payment date.
+Must Have
+EA s.93
+OFF-004
+IR21 Tax Clearance (Foreign Employees)
+Auto-triggered on offboarding initiation for non-SC / non-PR employees. Requirement: employer must file IR21 at least 1 month before last day (or 1 week in case of sudden departure/no advance notice). Employer must withhold ALL monies due to the employee (including salary, bonus, any payments) until IRAS issues tax clearance.
+System auto-populates IR21 form from payroll YTD data: employment income, director fees, bonuses (AW), benefits-in-kind (Appendix 8A), stock option gains (Appendix 8B), CPF contributions.
+IR21 status tracking: Pending > Draft Generated > Submitted to IRAS > Tax Clearance Issued > Payment Released. Alert to HR at each status change. Deadline countdown shown on offboarding dashboard.
+Upon IRAS tax clearance, system releases withheld monies for payment. IRAS clearance reference number stored in HRMS.
+Must Have
+IRAS s.68(2)
+OFF-005
+Exit Interview & Analytics
+Digital exit interview form configurable by HR. Questions cover: overall satisfaction rating (1–5), reason for leaving (category: better opportunity, compensation, management, personal, relocation, retirement, etc.), satisfaction with: compensation, work environment, career growth, management. Open-text comments field. Duration: typically 15–20 minutes.
+Employee completes online before last day. HR can also conduct structured verbal interview with notes recorded in HRMS.
+Analytics: exit interview dashboard shows attrition rate by department, by tenure band, by reason category. Formula: Attrition Rate (%) = (Leavers in Period ÷ Average Headcount in Period) × 100. Voluntary vs involuntary attrition split. Trending over time. Exportable for HR reporting.
+Should Have
+
+
+13. System, Security & Integration Requirements
+Req. ID
+Feature
+Requirement (Full Detail)
+Priority
+Compliance
+GEN-001
+PDPA Compliance
+All personal employee data (NRIC, FIN, salary, bank account, medical records, disciplinary records) encrypted at rest (AES-256) and in transit (TLS 1.2 minimum).
+Data residency: all personal data hosted in Singapore or PDPA-approved jurisdictions. Written confirmation from vendor. Data must not be routed outside approved jurisdictions without consent.
+Consent management: employees consent to data collection on onboarding. Purpose limitation enforced: data collected for HR purposes only; not shared with third parties without consent.
+Data Subject Access Request (DSAR): HR processes DSAR within 10 business days. System provides export of all personal data held on an individual (all modules) in structured format (PDF/JSON).
+Data retention: employee records retained for minimum 5 years post-cessation (Employment Act requirement). PDPA-compliant disposal with certificate. Configurable retention rules per data category. System auto-flags records due for disposal review.
+Must Have
+PDPA 2012
+GEN-002
+Authentication & Access Control
+SSO via SAML 2.0 or OAuth 2.0 / OpenID Connect. Integration with Azure AD, Google Workspace, and Okta. Mandatory MFA for all admin roles (HR Admin, Payroll Officer, Super Admin, Finance Admin). MFA via TOTP authenticator app or SMS OTP.
+Granular RBAC: permissions at module, function, and record level. Field-level masking for sensitive data: non-authorised roles see masked salary (e.g., SGD ***,***) and masked NRIC (e.g., S****1234A).
+Session timeout: configurable (default 30 minutes idle). IP whitelisting configurable for admin access.
+Principle of least privilege: each role receives only permissions required. No single role can create and approve a payroll run (maker-checker enforced at system level).
+Must Have
+PDPA
+GEN-003
+Audit Trail & Record-Keeping
+Immutable audit log captures every data create / read / update / delete operation across all modules: user ID, user role, timestamp, IP address, action type, module/entity, record ID, field name, before value, after value.
+Audit log is read-only – no admin can edit or delete audit records. Minimum retention: 5 years.
+Employment Act record-keeping: salary records, payslips, CPF submission records, leave records retained for 5 years. IR8A/IR21 records retained as per IRAS guidelines (5–7 years).
+Audit log searchable and filterable by: date range, user, module, action type. Exportable for MOM/IRAS/PDPA audit purposes.
+Must Have
+EA / PDPA
+GEN-004
+Infrastructure & Availability
+Minimum 99.5% uptime SLA (max ~43.8 hours downtime/year excluding planned maintenance). Real-time system status page. Automated failover to secondary node. HR notified within 30 minutes of unplanned outage via email and SMS.
+Data backup: daily incremental backup, weekly full backup. Encrypted backups stored in separate availability zone or region within Singapore/approved jurisdiction. RPO: 4 hours. RTO: 8 hours. Annual DR drill with documented results submitted to customer.
+Planned maintenance windows: scheduled off-peak hours (e.g., Sunday 2am–5am SGT). Minimum 7 days advance notice. Maintenance windows excluded from uptime SLA calculation.
+Performance targets: page load < 3 seconds under normal load. Payroll computation for 5,000 employees within 30 minutes. Report generation < 60 seconds for 12 months of data. Concurrent user support: minimum 10,000.
+Must Have
+
+GEN-005
+Integrations & API
+REST API with OpenAPI 3.0 / Swagger documentation. All endpoints: HTTP methods, request/response schemas, authentication, error codes, rate limits, versioning policy. Interactive API documentation (Swagger UI). Sandbox environment with pre-loaded sample data for integration testing.
+Pre-built connectors: accounting (Xero, QuickBooks, SAP B1, NetSuite), biometric devices (ZKTeco, Suprema, Dahua via API/file sync), email (Microsoft 365, Gmail), collaboration (Slack, Microsoft Teams for notifications), Singapore banks (DBS, OCBC, UOB GIRO file formats).
+Webhooks: configurable webhooks for key events (employee created, payroll approved, leave approved). Event payload in JSON. Retry logic for failed webhook deliveries.
+SSG SDL portal: SDL submission file generated in CPF Board flat-file format for upload to e-Submit@cpf. CPF Board e-Submit and IRAS AIS: file formats per authority specification.
+Should Have
+
+GEN-006
+Statutory Update Process
+CPF rate changes: effective 1 January each year. System updated and regression-tested by 1 December of the preceding year. Vendor provides written confirmation of compliance by this date.
+Public holiday calendar: updated by 1 November for the following year. MOM-gazetted holidays auto-applied. Vendor notifies HR Admin of any mid-year changes within 5 business days of MOM gazette.
+IRAS AIS format changes: system updated before 1 January of the tax year affected.
+MOM Employment Act changes: statutory leave entitlements, OT caps, and payslip requirements updated within 30 days of legislation effective date. Vendor communicates change summary and system update notes to all customers.
+Must Have
+
+
+14. Module 10: Reporting & Analytics
+Req. ID
+Feature
+Requirement (Full Detail)
+Priority
+Compliance
+RPT-001
+Executive Workforce Dashboard
+Real-time KPI widgets (drag-and-drop configurable): current headcount by department / nationality / pass type, monthly new hires vs terminations, attrition rate (voluntary vs involuntary), leave liability value (SGD), monthly payroll cost vs prior month, OT hours by department trend, training completion rate, open positions count.
+Attrition Rate formula: (Leavers in Period ÷ Average Headcount in Period) × 100. Displayed as monthly and rolling 12-month average.
+Data refreshed in real-time or near real-time (max 5-minute delay). Drill-down from summary widget to individual record level. Exportable dashboard as PDF or PowerPoint.
+Must Have
+
+RPT-002
+Statutory Reports (Pre-Built)
+CPF: Monthly CPF Contribution Report (per employee OW, AW, employee CPF, employer CPF, Medisave). CPF e-Submit flat-file in CPF Board format (.txt). SDL Report (per employee SDL amount, total SDL payable). FWL Report (per WP/S-Pass employee FWL amount).
+IRAS: IR8A Annual Income Return (all employment income components per employee). Appendix 8A (Benefits in Kind: car, housing, club membership, insurance). Appendix 8B (Stock option gains). IR21 Tax Clearance form (for foreign employees ceasing employment). All in IRAS-prescribed format for AIS e-submission.
+MOM: Monthly Headcount Report by nationality and pass type. Annual MOM Manpower Survey data. Leave Liability Report (unused leave × daily rate per employee).
+SDL: Monthly SDL computation summary for SSG submission.
+All statutory reports auto-populated from payroll and employee master data. HR reviews and validates before submission. System stores submission history with dates, reference numbers, and file copies.
+Must Have
+Multi-statutory
+RPT-003
+Custom Report Builder & Scheduled Delivery
+Drag-and-drop field selection from all data entities (employee master, payroll, leave, claims, T&A, training, performance). Filter, group, sort, cross-tab, and formula options. Save as named report template. Share templates with other authorised users.
+Scheduling: report frequency (daily, weekly, monthly, on payroll completion). Recipients by name or role. Delivered in PDF (formatted, with logo), Excel (full data, auto-filter), or CSV (UTF-8, raw data). Failed delivery logged and alerted to HR Admin.
+Workforce analytics pre-built reports: headcount trend, attrition by department/tenure band, leave utilisation rate, absenteeism rate, OT hours analysis, training hours per employee, certification expiry summary.
+Should Have
+
+
+15. Singapore Regulatory Compliance Matrix
+Legislation
+Governing Body
+Key HRMS Obligations (Full Detail)
+Modules Affected
+Employment Act (Cap. 91)
+MOM
+Minimum AL entitlement (7–14 days). SL 14 days outpatient + 60 days hospitalisation. OT at 1.5x hourly basic rate, capped at 72 hours/month. Rest day pay (0.5x–2x daily). PH pay (normal + 1 day or OIL). Itemised payslip mandatory with specified fields, issued by payment date. Salary records retained 5 years. Deduction limits (max 25% of monthly salary per deduction). Notice period for termination. No unfair discrimination in hiring/firing.
+Payroll, Leave, T&A, Offboarding
+CPF Act (Cap. 36)
+CPF Board
+CPF contribution rates by age band and citizenship/PR status. OW ceiling SGD 6,800/month. AW ceiling SGD 102,000 minus OW for year. CPF rounding (cents ≥50 round up). e-Submit@cpf monthly by 14th. PR graduated rates (Year 1/2/3+). CPF on salary-in-lieu of notice and leave encashment. Late payment interest 1.5%/month.
+Payroll, Offboarding
+Personal Data Protection Act 2012
+PDPC
+Consent for personal data collection. Purpose limitation. AES-256 at rest, TLS 1.2+ in transit. Singapore data residency (or PDPA-approved). DSAR within 10 business days. Breach notification within 3 days. Retention minimum 5 years post-cessation. Disposal certificate. Field-level encryption for NRIC, salary, bank account.
+All modules
+Income Tax Act – AIS / IR8A
+IRAS
+IR8A annual income return by 1 March for all employees. Appendix 8A (BIK: car, housing, club). Appendix 8B (stock option gains). IR21 filed ≥1 month before foreign employee’s last day; monies withheld until clearance. AIS e-submission in IRAS format.
+Payroll, Offboarding
+Skills Development Levy Act
+SSG / SkillsFuture
+SDL 0.25% of gross wages per employee per month. Min SGD 2, max SGD 11.25. For employees earning <SGD 4,500/month. Remitted with CPF by 14th of following month. SDL credit available for workforce training.
+Payroll, Training
+Employment of Foreign Manpower Act
+MOM
+EP/S-Pass/WP/DP/LTVP tracking. Pass expiry alerts. FWL for WP/S-Pass by sector and tier. DRC quota monitoring. EP renewal workflow. Fair Consideration Framework: MyCareersFuture advertising ≥14 days for EP roles, audit trail retained 2 years.
+Recruitment, HR Records, Payroll
+Child Development Co-Savings Act
+MSF / CPF Board
+GPML (16 wks SC; 8 wks non-SC). GPPL (2 wks govt-paid). CCL (6 days; 3 employer, 3 govt). Extended CCL (2 days govt-paid). SPL (up to 4 weeks). Infant Care Leave (6 days govt-paid). Adoption Leave (4 weeks). Daily reimbursement caps per MSF schedule. CPF on employer-paid portions.
+Leave, Payroll
+Retirement and Re-Employment Act
+MOM
+Retirement age: 63 (scheduled to increase to 65 by 2030). Re-employment obligation: employer must offer re-employment to eligible employees aged 63–68. System tracks re-employment eligibility and workflow. Re-employment contract (up to 1-year, renewable).
+HR Records, Offboarding
+Workplace Safety & Health Act
+MOM / WSH Council
+WSH incident reporting records. Risk assessment records. Safety training completion tracking (mandatory WSH courses). Contractor safety records for worksite-based organisations.
+Training, HR Records
+Enlistment Act
+MINDEF
+NS in-camp training leave grant (mandatory). NS Make-Up Pay: top-up = Civilian Daily Pay − NS Allowance. CPF contributions at civilian pay rate. System tracks NS periods and make-up pay history per employee.
+Leave, Payroll
+Income Tax Act – Long Service Award
+IRAS
+Cash long service awards exempt up to SGD 200 × completed years of service (e.g., 10 years = SGD 2,000 exempt). Excess amount taxable. System auto-applies exemption in IRAS reporting.
+Payroll
+
+16. Non-Functional Requirements
+Ref.
+Category
+Requirement (Full Detail)
+Priority
+Metric
+NF-001
+Performance
+Page load < 3 seconds for 95% of user transactions under normal load (up to 500 concurrent users). Payroll computation for 5,000 employees within 30 minutes. Report generation < 60 seconds for 12 months data. CPF e-Submit file generation < 5 minutes.
+Must Have
+3s / 30min
+NF-002
+Scalability
+Minimum 10,000 concurrent users supported. Auto-scaling for payroll processing peaks (end of month). Database designed for 100,000+ employee records. Multi-tenant architecture supports 500+ client organisations.
+Must Have
+10,000 users
+NF-003
+Availability
+99.5% uptime SLA. Max 43.8 hours downtime/year (excl. planned maintenance). Automated failover. Status page. HR notified within 30 minutes of unplanned outage. Planned maintenance: off-peak, min 7 days advance notice.
+Must Have
+99.5%
+NF-004
+Security
+AES-256 encryption at rest. TLS 1.2+ in transit. OWASP Top 10 compliance. Annual penetration testing by independent firm. Critical vulnerability patched within 7 days. High within 30 days. MFA mandatory for admin roles. Field-level encryption for NRIC, salary, bank account.
+Must Have
+AES-256 / TLS 1.2+
+NF-005
+Data Residency
+All employee personal data hosted in Singapore or PDPA-approved jurisdictions. Written vendor confirmation. Data must not be routed outside approved jurisdictions. Sub-processors listed and bound by PDPA-equivalent obligations.
+Must Have
+Singapore
+NF-006
+Backup & Recovery
+Daily incremental, weekly full backup. Encrypted, geo-redundant storage. RPO: 4 hours. RTO: 8 hours. Annual DR drill with documented test report. Backup restoration tested quarterly.
+Must Have
+RPO 4hr / RTO 8hr
+NF-007
+Statutory Updates
+CPF rates: updated and tested by 1 December before effective date. PH calendar: updated by 1 November for following year. IRAS AIS format: updated before 1 January of affected year. EA changes: within 30 days of legislation effective date. Vendor provides written compliance confirmation for each update.
+Must Have
+Vendor SLA
+NF-008
+Support SLA
+Critical (system down, payroll blocked, data breach): Response 1hr, Resolution 4hrs. High (major feature unavailable): Response 2hrs, Resolution 8hrs. Medium (feature degraded, workaround available): Response 4hrs, Resolution 2 business days. Low (cosmetic): Response 1 business day, Resolution next release. SLA credits apply for breach per contract.
+Must Have
+4-tier SLA
+NF-009
+Usability & Accessibility
+WCAG 2.1 AA accessibility compliance. Mobile-responsive web. Native iOS (14+) and Android (10+) apps. Guided in-app tours for new users. In-system contextual help and knowledge base. Support for Singapore English; secondary UI languages: Simplified Chinese, Malay, Tamil.
+Should Have
+WCAG 2.1 AA
+NF-010
+API Documentation
+OpenAPI 3.0 (Swagger) documentation for all endpoints. Interactive Swagger UI. Versioning policy (min 12 months backward compatibility). Changelog for each API version. Sandbox environment with pre-loaded data available 24/7. Rate limits documented.
+Should Have
+OpenAPI 3.0
+NF-011
+Training
+Instructor-led and recorded training sessions: Super Admin (system config, integration, security), HR Admin (all modules, payroll, statutory), End Users (ESS, leave, claims). In-system guided tours. Post go-live: refresher sessions on statutory updates. User guides and quick reference cards maintained in HRMS help centre.
+Must Have
+
+NF-012
+Localisation
+Date format DD/MM/YYYY throughout. Currency SGD with thousands separator (SGD 1,234.56). All amounts rounded to 2 decimal places except CPF (rounded per CPF Board rules). Time zone: Singapore Standard Time (UTC+8). Calendar: Gregorian with Singapore PH pre-loaded.
+Must Have
+SGT / SGD
+
+17. Acceptance Criteria
+Ref.
+Acceptance Criterion
+Test Method
+Owner
+AC-001
+Payroll run for 100% of active employees completes without errors in UAT environment using production-like data. All payslip fields (per MOM mandatory list) present and correct.
+UAT parallel run vs manual payroll
+Payroll Officer / HR
+AC-002
+CPF contributions computed correctly for all employee categories: SC all age bands, PR Year 1/2/3+ all age bands, foreigners, using CPF Board published test cases. OW and AW ceiling logic verified.
+CPF Board test data set validation
+HR Admin / Payroll
+AC-003
+All statutory reports generated in authority-accepted format: IR8A (IRAS AIS), IR21, Appendix 8A, 8B, CPF e-Submit flat-file, SDL report. Tested in authority sandbox where available.
+Authority sandbox submission test
+HR Admin / IT
+AC-004
+Leave entitlements correctly pro-rated for: (a) new joiner mid-year, (b) resignee mid-year, (c) hospitalisation leave consumed after outpatient SL. All 22 leave types configured and tested.
+UAT leave test scenarios
+HR Admin
+AC-005
+Bank GIRO file accepted by at least 3 Singapore banks (DBS, OCBC, UOB) without format errors. Net pay per employee matches payslip. Reconciliation report generated.
+Bank format validation / sandbox
+Finance / IT
+AC-006
+Final pay computed correctly for 10 test cases: (a) resignation with notice, (b) resignation without notice, (c) termination, (d) retirement. Components: salary, notice pay, leave encashment, CPF, IR21 trigger for foreign employee.
+Manual calculation vs system
+HR Admin / Payroll
+AC-007
+FCF compliance: system blocks EP application trigger until 14-day MyCareersFuture advertisement period confirmed. Audit trail with all required FCF documentation stored.
+UAT FCF workflow test
+HR / Recruiter
+AC-008
+RBAC verified: employee cannot access another employee’s salary, NRIC, or leave records. Manager sees only direct reports. Payroll Maker cannot approve own payroll run.
+Security penetration test / UAT RBAC matrix
+IT Admin
+AC-009
+System response time < 3 seconds for 95% of transactions under 500 concurrent user load test. Payroll for 5,000 employees completes within 30 minutes.
+Load test (k6 or JMeter)
+IT / Vendor
+AC-010
+All personal data encrypted at rest (AES-256) and in transit (TLS 1.2+). Vendor provides current penetration test report (< 12 months old) and security certificate.
+Vendor security audit documentation
+IT Admin
+AC-011
+SDL and FWL computed correctly for all eligible employees. SDL submission file matches CPF Board format. FWL amounts correct per sector rate table.
+Manual calculation vs system for 20 test cases
+HR Admin / Payroll
+AC-012
+Onboarding workflow: new hire pre-boarding portal accessible from Day 0. All mandatory documents collected and stored. IT provisioning request auto-created. Employee record activated on start date.
+UAT onboarding scenario walkthrough
+HR Admin / IT
+
+18. Assumptions & Constraints
+18.1 Assumptions
+	•	The organisation has a stable broadband internet connection (minimum 10 Mbps per concurrent user) suitable for cloud HRMS access.
+	•	Existing employee data is available in structured format (Excel/CSV) for data migration. Vendor provides data migration template and validation tool.
+	•	The vendor is responsible for maintaining statutory compliance updates (CPF Board rates, MOM Employment Act changes, IRAS format changes, SDL rates, FWL rates) as part of the subscription, at no additional charge.
+	•	User Acceptance Testing (UAT) will be conducted by HR, Finance, and IT representatives for minimum 4 weeks before go-live.
+	•	The organisation will designate at least one Super Admin and one HR Admin as primary system contacts during implementation.
+	•	Integration with third-party systems (accounting software, biometric devices) is subject to separate scoping. Core HRMS go-live does not depend on integration completion.
+	•	For government-paid leave reimbursement (GPML, GPPL, CCL, SPL): the organisation will submit claims to MSF/CPF Board through the prescribed government portals. HRMS provides the claim data and amounts.
+18.2 Constraints
+	•	All employee personal data must reside in Singapore or PDPA-approved jurisdictions under the Second Schedule of the PDPA.
+	•	Implementation timeline and budget are subject to organisational approval processes.
+	•	Third-party integrations are subject to existing IT security policies and approval by the organisation’s IT department.
+	•	The HRMS must not require proprietary hardware beyond standard end-user devices (PC, laptop, smartphone).
+	•	The system must comply with MAS Technology Risk Management Guidelines where the organisation is a regulated financial entity.
+	•	CPF rates, IRAS formats, and MOM statutory requirements are set by Singapore government authorities and may change annually; the system must be updated to reflect changes before they take effect.
+19. Document Approval
+Name
+Role
+Signature
+Date
+
+Prepared By
+
+
+
+Reviewed By
+
+
+
+Approved By (Product)
+
+
+
+Approved By (Compliance)
+
+
+— End of Document —

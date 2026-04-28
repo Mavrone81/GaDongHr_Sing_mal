@@ -79,7 +79,9 @@ router.post('/', checkInternal, (req, res, next) => {
 // PUT /users/:id  (update user)
 router.put('/:id', authenticate, authorize('user:manage'), async (req, res, next) => {
   try {
+    const { name, role, isActive } = req.body;
     let roleId = undefined;
+    
     if (role) {
       const targetRole = await prisma.role.findFirst({
         where: { name: { equals: role, mode: 'insensitive' } }

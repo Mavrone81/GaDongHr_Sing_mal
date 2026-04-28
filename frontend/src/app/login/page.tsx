@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [email, setEmail] = useState('admin@ezyhrm.sg');
   const [password, setPassword] = useState('***REMOVED***');
   const [error, setError] = useState('');
@@ -16,14 +18,15 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:4000/api`;
+      const res = await fetch(`${apiUrl}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      
+
       const data = await res.json();
-      
+
       if (!res.ok) {
         if (data.mfaRequired) {
           setError('MFA is currently active. The dashboard does not yet implement the MFA hook.');
@@ -33,76 +36,101 @@ export default function LoginPage() {
         return;
       }
 
-      // Successful Auth: Store token in cookie so Next.js Middleware detects it
-      document.cookie = `ezyhrm_token=${data.accessToken}; path=/; max-age=3600; SameSite=Lax`;
-      
-      // Redirect to protected dashboard entry point
+      // Store token + hydrate AuthContext before navigating so the dashboard
+      // never sees user=null on first render
+      await login(data.accessToken);
       router.push('/');
-      router.refresh();
-      
+
     } catch (err) {
-      setError(`Connection refused. Is the API Gateway running on ${process.env.NEXT_PUBLIC_API_URL}?`);
+      setError(`Connection refused. Is the API Gateway running on ${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}?`);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen w-full bg-white">
-      {/* Left Branding Panel */}
-      <div className="hidden lg:flex w-[45%] bg-gradient-to-br from-brand-600 to-emerald-900 border-r border-brand-800 p-12 flex-col justify-between relative overflow-hidden">
-        <div className="absolute top-[-20%] left-[-10%] w-96 h-96 bg-brand-500 rounded-full mix-blend-multiply filter blur-3xl opacity-50"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-emerald-500 rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>
+    <div className="flex min-h-screen w-full bg-white font-sans">
+      {/* 1. BRAND INTELLIGENCE PANEL (Left) */}
+      <div className="hidden lg:flex w-[45%] bg-slate-950 border-r border-slate-900 p-16 flex-col justify-between relative overflow-hidden">
+        {/* Abstract Ambient Glow */}
+        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-indigo-500/5 rounded-full blur-[100px]"></div>
         
-        <div className="relative z-10">
-          <h1 className="text-4xl font-extrabold text-white tracking-tight">Ezy<span className="text-emerald-300">HRM</span></h1>
-          <p className="mt-4 text-emerald-100/80 max-w-sm leading-relaxed text-sm">
-            The next generation Enterprise Resource Planning suite for managing personnel, claims, payroll, and corporate infrastructure seamlessly.
-          </p>
+        <div className="relative z-10 space-y-10">
+          <div className="flex items-center gap-4">
+             <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center shadow-2xl shadow-indigo-500/40">
+                <img src="/logo.png" alt="EzyHRM" className="w-8 h-8 object-contain brightness-0 invert" />
+             </div>
+             <span className="text-2xl font-black text-white tracking-[0.2em] uppercase">EzyHRM</span>
+          </div>
+          
+          <div className="space-y-6">
+            <h1 className="text-5xl font-black text-white tracking-tighter leading-[0.9]">
+              Enterprise <br/>
+              <span className="text-indigo-500 underline decoration-indigo-500/30 underline-offset-8">Intelligence</span> Suite
+            </h1>
+            <p className="text-slate-400 max-w-sm leading-relaxed text-[13px] font-bold uppercase tracking-widest opacity-80">
+              Operational Command Center for modern personnel management, payroll terminal, and departmental auditing.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-4 pt-10">
+             {[
+               { icon: '🔒', text: 'Military-Grade Encryption' },
+               { icon: '📋', text: 'Section 2 RBAC Compliant' },
+               { icon: '⏱️', text: 'Real-time Analytics Feed' }
+             ].map((feature, i) => (
+               <div key={i} className="flex items-center gap-3 text-slate-500 font-black text-[10px] tracking-widest uppercase">
+                  <span className="opacity-50">{feature.icon}</span>
+                  {feature.text}
+               </div>
+             ))}
+          </div>
         </div>
-        <div className="relative z-10 text-xs text-brand-200/60 font-medium">
-          © 2026 UrbanWerkz Group SG. SOC2 Compliant.
+
+        <div className="relative z-10 text-[10px] text-slate-600 font-black tracking-[0.3em] uppercase">
+          © 2026 RMA Group SG • RM-HRMS-001 • v1.1.0-STABLE
         </div>
       </div>
 
-      {/* Right Login Form */}
-      <div className="flex-1 flex flex-col justify-center items-center px-6 sm:px-12 lg:px-24 bg-gray-50/50">
-        <div className="w-full max-w-sm space-y-8">
+      {/* 2. AUTHENTICATION MODULE (Right) */}
+      <div className="flex-1 flex flex-col justify-center items-center px-6 sm:px-12 lg:px-24 bg-slate-50/30">
+        <div className="w-full max-w-sm space-y-10">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Sign in to your account</h2>
-            <p className="mt-2 text-sm text-gray-500">Provide your corporate credentials to access the internal dashboard.</p>
+            <h2 className="text-sm font-black text-slate-900 tracking-[0.2em] uppercase mb-3">System Access Required</h2>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-relaxed">Identity verification protocol for internal HRMS personnel.</p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={handleLogin} className="space-y-6">
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm font-medium animate-pulse">
-                {error}
+              <div className="bg-red-500/5 border border-red-500/20 text-red-600 px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest animate-pulse">
+                ERR: {error}
               </div>
             )}
             
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Work Email</label>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">Terminal Email ID</label>
               <input 
                 type="email" 
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-shadow outline-none"
-                placeholder="admin@ezyhrm.sg"
+                className="w-full rounded-xl border border-slate-200 bg-white px-5 py-4 text-xs font-bold text-slate-900 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all outline-none shadow-sm"
+                placeholder="EMAIL_ADDRESS"
                 required
               />
             </div>
             
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Password</label>
-                <a href="#" className="text-xs font-medium text-brand-600 hover:text-brand-500">Forgot password?</a>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between ml-1">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Secure Access Key</label>
+                <a href="#" className="text-[10px] font-black text-indigo-600 hover:text-indigo-700 tracking-widest">RESET KEY</a>
               </div>
               <input 
                 type="password" 
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-shadow outline-none"
-                placeholder="••••••••"
+                className="w-full rounded-xl border border-slate-200 bg-white px-5 py-4 text-xs font-bold text-slate-900 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all outline-none shadow-sm"
+                placeholder="PASSWORD_TERMINAL"
                 required
               />
             </div>
@@ -110,16 +138,19 @@ export default function LoginPage() {
             <button 
               type="submit" 
               disabled={loading}
-              className={`w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand-600 hover:bg-brand-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 transition-all ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+              className={`w-full flex justify-center py-5 px-4 rounded-xl shadow-xl shadow-indigo-600/20 text-[11px] font-black text-white bg-indigo-600 hover:bg-indigo-700 hover:translate-y-[-2px] focus:outline-none transition-all uppercase tracking-[0.3em] ${loading ? 'opacity-70 cursor-not-allowed' : ''} active:scale-95`}
             >
               {loading ? (
-                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-              ) : 'Authenticate Session'}
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <span>VERIFYING...</span>
+                </div>
+              ) : 'Initialize Session'}
             </button>
           </form>
           
-          <div className="mt-8 text-center text-xs text-gray-400">
-            Protected by Advanced Microservice Encryption
+          <div className="mt-12 text-center text-[9px] font-black text-slate-400 uppercase tracking-[0.4em] opacity-40">
+            SECURE PORTAL ENTRY
           </div>
         </div>
       </div>

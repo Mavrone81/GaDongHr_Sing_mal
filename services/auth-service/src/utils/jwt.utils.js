@@ -31,7 +31,8 @@ function signAccessToken(payload) {
   const privateKey = fs.readFileSync(PRIVATE_KEY_PATH, 'utf8');
   return jwt.sign(payload, privateKey, { 
     algorithm: 'RS256', 
-    expiresIn: process.env.JWT_ACCESS_EXPIRES || '15m' 
+    expiresIn: process.env.JWT_ACCESS_EXPIRES || '15m',
+    issuer: 'ezyhRM'
   });
 }
 
@@ -39,7 +40,8 @@ function signRefreshToken(payload) {
   const privateKey = fs.readFileSync(PRIVATE_KEY_PATH, 'utf8');
   return jwt.sign(payload, privateKey, { 
     algorithm: 'RS256', 
-    expiresIn: process.env.JWT_REFRESH_EXPIRES || '7d' 
+    expiresIn: process.env.JWT_REFRESH_EXPIRES || '7d',
+    issuer: 'ezyhRM'
   });
 }
 

@@ -10,11 +10,11 @@ services:
       POSTGRES_DB: ${POSTGRES_ROOT_DB:-postgres}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-dbs.sql:/docker-entrypoint-initdb.d/init-dbs.sql
+#      - ./scripts/init-dbs.sql:/docker-entrypoint-initdb.d/init-dbs.sql
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hrms}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hrms} -d postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -67,7 +67,7 @@ services:
     volumes:
       - shared_certs:/app/certs
       - /app/services/auth-service/node_modules
-      - ./shared:/app/shared
+#      - ./shared:/app/shared
       - /app/shared/auth-middleware/node_modules
       - /app/shared/payroll-utils/node_modules
       - /app/shared/crypto/node_modules
@@ -94,7 +94,7 @@ services:
     volumes:
       - shared_certs:/app/certs:ro
       - /app/services/employee-service/node_modules
-      - ./shared:/app/shared
+#      - ./shared:/app/shared
       - /app/shared/auth-middleware/node_modules
       - /app/shared/crypto/node_modules
       - employee_uploads:/app/uploads
@@ -122,7 +122,7 @@ services:
     volumes:
       - shared_certs:/app/certs:ro
       - /app/services/payroll-service/node_modules
-      - ./shared:/app/shared
+#      - ./shared:/app/shared
       - /app/shared/auth-middleware/node_modules
       - /app/shared/payroll-utils/node_modules
       - /app/shared/crypto/node_modules

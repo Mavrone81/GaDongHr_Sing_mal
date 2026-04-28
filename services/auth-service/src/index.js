@@ -7,10 +7,14 @@ const morgan = require('morgan');
 
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
+const roleRoutes = require('./routes/role.routes');
 const { generateKeysIfNeeded } = require('./utils/jwt.utils');
 
 const app = express();
 const PORT = process.env.PORT || 4001;
+
+// Trust proxy for rate limiting behind gateway
+app.set('trust proxy', 1);
 
 // Security headers
 app.use(helmet());
@@ -24,6 +28,7 @@ app.get('/health', (req, res) => res.json({ service: 'auth-service', status: 'ok
 // Routes
 app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
+app.use('/roles', roleRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {
