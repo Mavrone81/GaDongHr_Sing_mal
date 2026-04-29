@@ -66,6 +66,8 @@ model Employee {
   cpfPrYear           Int?     // 1, 2, 3+ for Graduated PR
   cpfVoluntaryRate    Boolean  @default(false)
 
+  profilePhotoUrl     String?  // base64 data URL for face verification
+
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

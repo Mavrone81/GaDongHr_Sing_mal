@@ -379,6 +379,38 @@ router.delete('/:id', authenticate, authorize('employee:manage', ROLES.SUPER_ADM
   } catch (err) { next(err); }
 });
 
+// ── GET /me/photo — employee fetches their own profile photo ─────────────────
+router.get('/me/photo', authenticate, async (req, res, next) => {
+  try {
+    const employeeId = req.user.employeeId;
+    if (!employeeId) return res.status(400).json({ error: 'No employee profile linked to this account' });
+    const emp = await prisma.employee.findUnique({ where: { id: employeeId }, select: { profilePhotoUrl: true } });
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    res.json({ profilePhotoUrl: emp.profilePhotoUrl || null });
+  } catch (err) { next(err); }
+});
+
+// ── POST /me/photo — employee uploads their own profile photo ────────────────
+router.post('/me/photo', authenticate, async (req, res, next) => {
+  try {
+    const employeeId = req.user.employeeId;
+    if (!employeeId) return res.status(400).json({ error: 'No employee profile linked to this account' });
+    const { profilePhotoUrl } = req.body;
+    if (!profilePhotoUrl || !profilePhotoUrl.startsWith('data:image/')) {
+      return res.status(400).json({ error: 'Invalid image data. Must be a base64 data URL.' });
+    }
+    if (profilePhotoUrl.length > 2_800_000) {
+      return res.status(400).json({ error: 'Image too large. Maximum 2MB.' });
+    }
+    const emp = await prisma.employee.update({
+      where: { id: employeeId },
+      data: { profilePhotoUrl },
+      select: { id: true, profilePhotoUrl: true },
+    });
+    res.json({ success: true, profilePhotoUrl: emp.profilePhotoUrl });
+  } catch (err) { next(err); }
+});
+
 // ── GET /:id/salary-history ───────────────────────────────────────────────────
 router.get('/:id/salary-history', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
   try {

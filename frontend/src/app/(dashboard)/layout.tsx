@@ -23,7 +23,7 @@ interface NavGroup {
 const SUPER_ADMIN_NAV: NavGroup[] = [
   {
     group: 'COMMAND',
-    color: 'text-indigo-500',
+    color: 'text-indigo-400',
     items: [
       { name: 'Dashboard', path: '/', icon: '⬡' },
     ]
@@ -32,94 +32,108 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
     group: 'WORKFORCE',
     color: 'text-blue-400',
     items: [
-      { name: 'Employees',     path: '/employees',    icon: '◈' },
-      { name: 'Recruitment',   path: '/recruitment',  icon: '◇' },
-      { name: 'Attendance',    path: '/attendance',   icon: '◉' },
-      { name: 'Performance',   path: '/performance',  icon: '▣' },
-      { name: 'Training',      path: '/training',     icon: '◑' },
-      { name: 'Offboarding',   path: '/offboarding',  icon: '◐' },
+      { name: 'Employees',   path: '/employees',           icon: '◈' },
+      { name: 'Recruitment', path: '/recruitment',         icon: '◇' },
+      { name: 'Attendance',  path: '/attendance/registry', icon: '◉' },
+      { name: 'Performance', path: '/performance',         icon: '▣' },
+      { name: 'Training',    path: '/training',            icon: '◑' },
+      { name: 'Offboarding', path: '/offboarding',         icon: '◐' },
+    ]
+  },
+  {
+    group: 'EMPLOYEE',
+    color: 'text-sky-400',
+    items: [
+      { name: 'Emp_Attendance', path: '/attendance', icon: '◉' },
+      { name: 'Emp_Leave',      path: '/leave',      icon: '◌' },
+      { name: 'Emp_Claims',     path: '/claims',     icon: '◫' },
     ]
   },
   {
     group: 'FINANCIAL',
     color: 'text-emerald-400',
     items: [
-      { name: 'Payroll',       path: '/payroll',      icon: '◆', badge: 'Action' },
-      { name: 'Leave',         path: '/leave',        icon: '◌' },
-      { name: 'Claims',        path: '/claims',       icon: '◫' },
-      { name: 'Assets',        path: '/assets',       icon: '◧' },
+      { name: 'Payroll', path: '/payroll', icon: '◆', badge: 'Action' },
+      { name: 'Assets',  path: '/assets',  icon: '◧' },
     ]
   },
   {
     group: 'COMPLIANCE',
     color: 'text-amber-400',
     items: [
-      { name: 'Reports',       path: '/reports',      icon: '▤' },
+      { name: 'Reports', path: '/reports', icon: '▤' },
     ]
   },
   {
     group: 'ADMINISTRATION',
     color: 'text-violet-400',
     items: [
-      { name: 'Tenancy & Config',    path: '/settings',        icon: '◎' },
-      { name: 'User Management',     path: '/settings/users',  icon: '◪' },
-      { name: 'Role & Permissions',  path: '/settings/roles',  icon: '◧' },
-      { name: 'Security (SSO/MFA)',  path: '/settings/security', icon: '◰' },
-      { name: 'Audit Logs',          path: '/settings/audit',  icon: '▤' },
-      { name: 'Statutory Tables',    path: '/settings/rates',  icon: '▦' },
-      { name: 'API & Webhooks',      path: '/settings/api',    icon: '◱' },
-      { name: 'PDPA Compliance',     path: '/settings/pdpa',   icon: '▩' },
-      { name: 'System Overrides',    path: '/settings/overrides', icon: '◒' },
+      { name: 'Tenancy & Config',   path: '/settings',          icon: '◎' },
+      { name: 'User Management',    path: '/settings/users',    icon: '◪' },
+      { name: 'Role & Permissions', path: '/settings/roles',    icon: '◧' },
+      { name: 'Security (SSO/MFA)', path: '/settings/security', icon: '◰' },
+      { name: 'Audit Logs',         path: '/settings/audit',    icon: '▤' },
+      { name: 'Statutory Tables',   path: '/settings/rates',    icon: '▦' },
+      { name: 'API & Webhooks',     path: '/settings/api',      icon: '◱' },
+      { name: 'PDPA Compliance',    path: '/settings/pdpa',     icon: '▩' },
+      { name: 'System Overrides',   path: '/settings/overrides',icon: '◒' },
     ]
   },
 ];
 
-// HR Admin nav (Y = Full access per matrix)
+// HR Admin nav
 const HR_ADMIN_NAV: NavGroup[] = [
-  { group: 'COMMAND',    color: 'text-indigo-500', items: [{ name: 'Dashboard', path: '/', icon: '⬡' }] },
-  { group: 'WORKFORCE',  color: 'text-blue-400',   items: [
-    { name: 'Employees', path: '/employees', icon: '◈' },
-    { name: 'Recruitment', path: '/recruitment', icon: '◇' },
-    { name: 'Attendance', path: '/attendance', icon: '◉' },
-    { name: 'Performance', path: '/performance', icon: '▣' },
-    { name: 'Training', path: '/training', icon: '◑' },
+  { group: 'COMMAND',    color: 'text-indigo-400',  items: [{ name: 'Dashboard', path: '/', icon: '⬡' }] },
+  { group: 'WORKFORCE',  color: 'text-blue-400',    items: [
+    { name: 'Employees',   path: '/employees',           icon: '◈' },
+    { name: 'Recruitment', path: '/recruitment',         icon: '◇' },
+    { name: 'Attendance',  path: '/attendance/registry', icon: '◉' },
+    { name: 'Performance', path: '/performance',         icon: '▣' },
+    { name: 'Training',    path: '/training',            icon: '◑' },
+  ]},
+  { group: 'EMPLOYEE',   color: 'text-sky-400',     items: [
+    { name: 'Emp_Attendance', path: '/attendance', icon: '◉' },
+    { name: 'Emp_Leave',      path: '/leave',      icon: '◌' },
+    { name: 'Emp_Claims',     path: '/claims',     icon: '◫' },
   ]},
   { group: 'FINANCIAL',  color: 'text-emerald-400', items: [
     { name: 'Payroll', path: '/payroll', icon: '◆' },
-    { name: 'Leave', path: '/leave', icon: '◌' },
-    { name: 'Claims', path: '/claims', icon: '◫' },
   ]},
-  { group: 'COMPLIANCE', color: 'text-amber-400',  items: [{ name: 'Reports', path: '/reports', icon: '▤' }] },
+  { group: 'COMPLIANCE', color: 'text-amber-400',   items: [{ name: 'Reports', path: '/reports', icon: '▤' }] },
   { group: 'ADMIN',      color: 'text-violet-400',  items: [{ name: 'User Management', path: '/settings/users', icon: '◪' }] },
 ];
 
-// Payroll Officer nav (full payroll access, limited HR)
+// Payroll Officer nav
 const PAYROLL_OFFICER_NAV: NavGroup[] = [
-  { group: 'COMMAND',    color: 'text-indigo-500', items: [{ name: 'Dashboard', path: '/', icon: '⬡' }] },
-  { group: 'WORKFORCE',  color: 'text-blue-400',   items: [
-    { name: 'Employees',  path: '/employees',  icon: '◈' },
-    { name: 'Attendance', path: '/attendance', icon: '◉' },
+  { group: 'COMMAND',    color: 'text-indigo-400',  items: [{ name: 'Dashboard', path: '/', icon: '⬡' }] },
+  { group: 'WORKFORCE',  color: 'text-blue-400',    items: [
+    { name: 'Employees', path: '/employees', icon: '◈' },
+  ]},
+  { group: 'EMPLOYEE',   color: 'text-sky-400',     items: [
+    { name: 'Emp_Attendance', path: '/attendance', icon: '◉' },
+    { name: 'Emp_Leave',      path: '/leave',      icon: '◌' },
+    { name: 'Emp_Claims',     path: '/claims',     icon: '◫' },
   ]},
   { group: 'FINANCIAL',  color: 'text-emerald-400', items: [
-    { name: 'Payroll',  path: '/payroll',  icon: '◆', badge: 'Action' },
-    { name: 'Leave',    path: '/leave',    icon: '◌' },
-    { name: 'Claims',   path: '/claims',   icon: '◫' },
+    { name: 'Payroll', path: '/payroll', icon: '◆', badge: 'Action' },
   ]},
-  { group: 'COMPLIANCE', color: 'text-amber-400', items: [
+  { group: 'COMPLIANCE', color: 'text-amber-400',   items: [
     { name: 'Reports', path: '/reports', icon: '▤' },
   ]},
 ];
 
-// Employee ESS nav (own records only)
+// Employee ESS nav — default inherited role for all employees
 const EMPLOYEE_NAV: NavGroup[] = [
-  { group: 'MY WORKSPACE', color: 'text-indigo-400', items: [{ name: 'Dashboard', path: '/', icon: '⬡' }] },
-  { group: 'SELF SERVICE', color: 'text-blue-400',   items: [
-    { name: 'My Leave',      path: '/leave',      icon: '◌' },
-    { name: 'My Claims',     path: '/claims',     icon: '◫' },
-    { name: 'My Payslips',   path: '/payroll',    icon: '◆' },
-    { name: 'My Attendance', path: '/attendance', icon: '◉' },
+  { group: 'OVERVIEW',  color: 'text-indigo-400',  items: [{ name: 'Dashboard', path: '/', icon: '⬡' }] },
+  { group: 'EMPLOYEE',  color: 'text-sky-400',     items: [
+    { name: 'Emp_Attendance', path: '/attendance', icon: '◉' },
+    { name: 'Emp_Leave',      path: '/leave',      icon: '◌' },
+    { name: 'Emp_Claims',     path: '/claims',     icon: '◫' },
   ]},
-  { group: 'SUPPORT', color: 'text-slate-400', items: [
+  { group: 'PAYSLIPS',  color: 'text-emerald-400', items: [
+    { name: 'My Payslips', path: '/payroll', icon: '◆' },
+  ]},
+  { group: 'SUPPORT',   color: 'text-slate-400',   items: [
     { name: 'Staff Directory', path: '/staff',   icon: '◈' },
     { name: 'Help & Support',  path: '/support', icon: '◇' },
   ]},
@@ -215,36 +229,43 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {authErrorBanner}
 
       {/* ── SIDEBAR ─────────────────────────────────────────────────────────── */}
-      <aside className="w-72 bg-slate-950 flex flex-col border-r border-slate-900/50 z-50 shadow-2xl shadow-black/50 shrink-0">
+      <aside className="w-64 bg-[#0a0f1e] flex flex-col z-50 shadow-2xl shadow-black/60 shrink-0 relative">
+        {/* Subtle gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-b from-indigo-950/20 via-transparent to-indigo-950/10 pointer-events-none" />
 
         {/* Brand */}
-        <div className="px-6 py-5 border-b border-slate-900 flex items-center gap-3.5 group cursor-default relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-indigo-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-          <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-500/30 group-hover:scale-110 transition-transform duration-500 shrink-0">
-            <span className="font-black text-white text-base italic">E</span>
+        <div className="relative px-5 pt-5 pb-4 border-b border-white/5 flex items-center gap-3">
+          <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/40 shrink-0">
+            <span className="font-black text-white text-sm italic">E</span>
           </div>
-          <div className="flex flex-col">
-            <span className="font-black text-white tracking-[0.12em] text-sm leading-none">EzyHRM</span>
-            <span className="text-[8px] font-black text-indigo-400/60 mt-1.5 tracking-[0.3em] uppercase">Enterprise v2 · SG Compliance</span>
+          <div className="flex flex-col min-w-0">
+            <span className="font-black text-white tracking-wider text-sm leading-none">EzyHRM</span>
+            <span className="text-[8px] font-bold text-indigo-400/50 mt-1 tracking-widest uppercase truncate">SG Compliance · v2</span>
           </div>
         </div>
 
-        {/* SA Identity Badge */}
-        {isSuperAdmin && (
-          <div className="mx-4 mt-4 px-4 py-2.5 bg-indigo-600/10 border border-indigo-600/20 rounded-2xl flex items-center gap-3">
-            <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse shrink-0" />
-            <span className="text-[8px] font-black text-indigo-400 uppercase tracking-[0.3em] leading-tight">Full System Access · All Modules</span>
+        {/* Role badge */}
+        <div className="relative mx-3 mt-3">
+          <div className={`px-3 py-2 rounded-xl border flex items-center gap-2.5 ${
+            isSuperAdmin
+              ? 'bg-indigo-600/10 border-indigo-500/20'
+              : 'bg-white/3 border-white/6'
+          }`}>
+            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${roleInfo.dot} ${isSuperAdmin ? 'animate-pulse' : ''}`} />
+            <span className={`text-[9px] font-black uppercase tracking-widest truncate ${roleInfo.color}`}>
+              {isSuperAdmin ? 'Full System Access' : roleInfo.label}
+            </span>
           </div>
-        )}
+        </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5 custom-scrollbar">
+        <nav className="relative flex-1 overflow-y-auto py-3 px-2.5 space-y-4 custom-scrollbar mt-1">
           {navGroups.map((group) => (
             <div key={group.group}>
               {/* Group label */}
-              <div className="flex items-center gap-2 px-3 mb-1.5">
-                <span className={`text-[7px] font-black uppercase tracking-[0.35em] ${group.color}`}>{group.group}</span>
-                <div className="flex-1 h-px bg-slate-900" />
+              <div className="flex items-center gap-2 px-2 mb-1">
+                <span className={`text-[7.5px] font-black uppercase tracking-[0.3em] ${group.color} opacity-70`}>{group.group}</span>
+                <div className="flex-1 h-px bg-white/5" />
               </div>
               {/* Items */}
               <div className="space-y-0.5">
@@ -255,18 +276,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <Link
                       key={item.path}
                       href={item.path}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[10px] font-black tracking-[0.12em] transition-all duration-200 group relative overflow-hidden ${
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[11px] font-bold tracking-wide transition-all duration-200 group relative ${
                         isActive
-                          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
-                          : 'text-slate-500 hover:bg-slate-900 hover:text-slate-100'
+                          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25'
+                          : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'
                       }`}
                     >
-                      <span className={`text-sm shrink-0 transition-colors ${isActive ? 'text-white' : 'text-slate-700 group-hover:text-indigo-400'}`}>
+                      {isActive && (
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-white/60 rounded-full" />
+                      )}
+                      <span className={`text-xs shrink-0 w-5 text-center transition-colors ${isActive ? 'text-white' : 'text-slate-600 group-hover:text-indigo-400'}`}>
                         {item.icon}
                       </span>
                       <span className="flex-1 truncate">{item.name}</span>
                       {item.badge && (
-                        <span className="text-[7px] font-black px-1.5 py-0.5 bg-amber-500 text-slate-950 rounded-full uppercase tracking-wider shrink-0">
+                        <span className="text-[7px] font-black px-1.5 py-0.5 bg-amber-400 text-slate-900 rounded-md uppercase tracking-wide shrink-0">
                           {item.badge}
                         </span>
                       )}
@@ -279,23 +303,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
 
         {/* User Footer */}
-        <div className="p-3 border-t border-slate-900/80">
-          <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-900/50 border border-slate-800/40 mb-2 group hover:border-slate-700 transition-all cursor-default">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-[10px] font-black border shrink-0 ${
-              isSuperAdmin ? 'bg-indigo-600/20 border-indigo-600/30 text-indigo-300' : 'bg-slate-800 border-slate-700 text-slate-400'
+        <div className="relative p-3 border-t border-white/5">
+          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-white/4 border border-white/6 mb-2 cursor-default">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0 ${
+              isSuperAdmin ? 'bg-indigo-600/30 text-indigo-200' : 'bg-white/10 text-slate-300'
             }`}>
-              {user?.name?.substring(0, 2).toUpperCase() || (isSuperAdmin ? 'SA' : 'ID')}
+              {user?.name?.substring(0, 2).toUpperCase() || (isSuperAdmin ? 'SA' : 'U')}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-black text-slate-100 truncate uppercase tracking-wider">
-                {user?.name || (isSuperAdmin ? 'System Administrator' : 'User')}
+              <p className="text-[10px] font-bold text-slate-200 truncate">
+                {user?.name || (isSuperAdmin ? 'Administrator' : 'User')}
               </p>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <div className={`w-1 h-1 rounded-full shrink-0 ${roleInfo.dot}`} />
-                <p className={`text-[8px] font-black uppercase tracking-widest truncate ${roleInfo.color}`}>
-                  {roleInfo.label}
-                </p>
-              </div>
+              <p className="text-[8px] text-slate-500 truncate mt-0.5 uppercase tracking-wider">
+                {user?.email || ''}
+              </p>
             </div>
           </div>
           <button
