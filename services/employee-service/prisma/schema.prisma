@@ -122,6 +122,26 @@ model EmergencyContact {
   @@map("emergency_contacts")
 }
 
+model AuditLog {
+  id            String   @id @default(uuid())
+  entityType    String   // 'Employee'
+  entityId      String   // employee UUID
+  entityCode    String?  // EMP-0001 for quick display
+  entityName    String?  // employee full name at time of change
+  action        String   // CREATE | UPDATE | DELETE | VIEW_SENSITIVE
+  actorId       String?
+  actorEmail    String?
+  actorRole     String?
+  changedFields Json?    // { field: { from, to } } — sensitive fields noted but not stored
+  ipAddress     String?
+  createdAt     DateTime @default(now())
+
+  @@index([entityId])
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}
+
 enum NricType {
   NRIC
   FIN

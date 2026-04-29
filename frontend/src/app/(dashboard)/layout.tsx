@@ -93,6 +93,23 @@ const HR_ADMIN_NAV: NavGroup[] = [
   { group: 'ADMIN',      color: 'text-violet-400',  items: [{ name: 'User Management', path: '/settings/users', icon: '◪' }] },
 ];
 
+// Payroll Officer nav (full payroll access, limited HR)
+const PAYROLL_OFFICER_NAV: NavGroup[] = [
+  { group: 'COMMAND',    color: 'text-indigo-500', items: [{ name: 'Dashboard', path: '/', icon: '⬡' }] },
+  { group: 'WORKFORCE',  color: 'text-blue-400',   items: [
+    { name: 'Employees',  path: '/employees',  icon: '◈' },
+    { name: 'Attendance', path: '/attendance', icon: '◉' },
+  ]},
+  { group: 'FINANCIAL',  color: 'text-emerald-400', items: [
+    { name: 'Payroll',  path: '/payroll',  icon: '◆', badge: 'Action' },
+    { name: 'Leave',    path: '/leave',    icon: '◌' },
+    { name: 'Claims',   path: '/claims',   icon: '◫' },
+  ]},
+  { group: 'COMPLIANCE', color: 'text-amber-400', items: [
+    { name: 'Reports', path: '/reports', icon: '▤' },
+  ]},
+];
+
 // Employee ESS nav (own records only)
 const EMPLOYEE_NAV: NavGroup[] = [
   { group: 'MY WORKSPACE', color: 'text-indigo-400', items: [{ name: 'Dashboard', path: '/', icon: '⬡' }] },
@@ -126,7 +143,8 @@ function getNavGroups(role: string, email: string, cached: boolean) {
   const e = email.toLowerCase();
   if (r === 'SUPER_ADMIN' || e === 'admin@ezyhrm.sg' || e === 'admin@hrms.com' || cached) return SUPER_ADMIN_NAV;
   if (r === 'HR_ADMIN' || r === 'ADMIN') return HR_ADMIN_NAV;
-  if (r === 'HR_MANAGER') return HR_ADMIN_NAV; // similar scope
+  if (r === 'HR_MANAGER') return HR_ADMIN_NAV;
+  if (r === 'PAYROLL_OFFICER') return PAYROLL_OFFICER_NAV;
   return EMPLOYEE_NAV;
 }
 

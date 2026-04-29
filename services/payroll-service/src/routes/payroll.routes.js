@@ -152,6 +152,99 @@ router.post('/runs/:id/finalise', authenticate, authorize(ROLES.SUPER_ADMIN, ROL
   } catch (err) { next(err); }
 });
 
+// ─── GET /payroll/payslips/me ─ Employee's own payslip list ──────────────────
+router.get('/payslips/me', authenticate, async (req, res, next) => {
+  try {
+    const employeeId = req.user.employeeId;
+    if (!employeeId) return res.status(400).json({ error: 'No employee profile linked to this account' });
+
+    const payslips = await prisma.payslip.findMany({
+      where: { employeeId, isPublished: true },
+      orderBy: { period: 'desc' },
+      select: {
+        id: true, period: true, isPublished: true, createdAt: true,
+        netPayEnc: true, grossPayEnc: true, employeeCpfEnc: true, basicSalaryEnc: true,
+        ytdGrossEnc: true, ytdEmployeeCpfEnc: true,
+      },
+    });
+
+    const result = payslips.map(ps => ({
+      id: ps.id,
+      period: ps.period,
+      isPublished: ps.isPublished,
+      createdAt: ps.createdAt,
+      basicSalary: parseFloat(decrypt(ps.basicSalaryEnc)) || 0,
+      grossPay: parseFloat(decrypt(ps.grossPayEnc)) || 0,
+      netPay: parseFloat(decrypt(ps.netPayEnc)) || 0,
+      employeeCpf: parseFloat(decrypt(ps.employeeCpfEnc)) || 0,
+      ytdGross: ps.ytdGrossEnc ? (parseFloat(decrypt(ps.ytdGrossEnc)) || 0) : null,
+      ytdEmployeeCpf: ps.ytdEmployeeCpfEnc ? (parseFloat(decrypt(ps.ytdEmployeeCpfEnc)) || 0) : null,
+    }));
+
+    res.json({ payslips: result, total: result.length, employeeId });
+  } catch (err) { next(err); }
+});
+
+// ─── GET /payroll/payslips/me/:period ─ Employee's own payslip PDF ────────────
+router.get('/payslips/me/:period', authenticate, async (req, res, next) => {
+  try {
+    const employeeId = req.user.employeeId;
+    if (!employeeId) return res.status(400).json({ error: 'No employee profile linked to this account' });
+
+    const payslip = await prisma.payslip.findFirst({
+      where: { employeeId, period: req.params.period, isPublished: true },
+    });
+    if (!payslip) return res.status(404).json({ error: 'Payslip not found or not yet published' });
+
+    const data = {
+      period: req.params.period,
+      basicSalary: decrypt(payslip.basicSalaryEnc),
+      grossPay: decrypt(payslip.grossPayEnc),
+      netPay: decrypt(payslip.netPayEnc),
+      employeeCpf: decrypt(payslip.employeeCpfEnc),
+      employerCpf: decrypt(payslip.employerCpfEnc),
+      sdl: payslip.sdlAmountEnc ? decrypt(payslip.sdlAmountEnc) : 0,
+      ytdGross: payslip.ytdGrossEnc ? decrypt(payslip.ytdGrossEnc) : null,
+      ytdEmployeeCpf: payslip.ytdEmployeeCpfEnc ? decrypt(payslip.ytdEmployeeCpfEnc) : null,
+    };
+
+    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=payslip-${employeeId}-${req.params.period}.pdf`);
+    doc.pipe(res);
+
+    doc.fontSize(20).font('Helvetica-Bold').text('PAYSLIP', { align: 'center' });
+    doc.fontSize(12).font('Helvetica').text(`${process.env.COMPANY_NAME || 'EzyHRM Pte Ltd'}`, { align: 'center' });
+    doc.text(`UEN: ${process.env.COMPANY_UEN || '202512345A'}`, { align: 'center' });
+    doc.moveDown();
+    doc.text(`Pay Period: ${data.period}`);
+    doc.text(`Employee ID: ${employeeId}`);
+    doc.moveDown();
+    drawLine(doc);
+    doc.font('Helvetica-Bold').text('EARNINGS', 50, doc.y);
+    doc.font('Helvetica');
+    doc.text(`Basic Salary`, 50, doc.y + 5); doc.text(`SGD ${parseFloat(data.basicSalary).toFixed(2)}`, 400, doc.y - 12, { align: 'right' });
+    doc.moveDown(0.5);
+    drawLine(doc);
+    doc.font('Helvetica-Bold').text(`GROSS PAY: SGD ${parseFloat(data.grossPay).toFixed(2)}`, { align: 'right' });
+    doc.moveDown();
+    doc.font('Helvetica').text(`DEDUCTIONS`);
+    doc.text(`Employee CPF`, 50, doc.y + 5); doc.text(`SGD ${parseFloat(data.employeeCpf).toFixed(2)}`, 400, doc.y - 12, { align: 'right' });
+    doc.moveDown(0.5);
+    drawLine(doc);
+    doc.font('Helvetica-Bold').text(`NET PAY: SGD ${parseFloat(data.netPay).toFixed(2)}`, { align: 'right' });
+    doc.moveDown();
+    doc.font('Helvetica').text(`Employer CPF Contribution: SGD ${parseFloat(data.employerCpf).toFixed(2)}`);
+    doc.text(`SDL: SGD ${parseFloat(data.sdl).toFixed(2)}`);
+    if (data.ytdGross) {
+      doc.moveDown();
+      doc.text(`YTD Gross: SGD ${parseFloat(data.ytdGross).toFixed(2)}`);
+      doc.text(`YTD Employee CPF: SGD ${parseFloat(data.ytdEmployeeCpf).toFixed(2)}`);
+    }
+    doc.end();
+  } catch (err) { next(err); }
+});
+
 // ─── GET /payroll/payslips/:employeeId/:period ─ Download payslip PDF ────────
 router.get('/payslips/:employeeId/:period', authenticate, async (req, res, next) => {
   try {

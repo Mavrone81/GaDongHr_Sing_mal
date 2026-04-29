@@ -8,8 +8,8 @@ export const metadata = {
   title: 'EzyHRM - SG Compliant HRMS',
   description: 'Singapore Payroll, CPF, and Leave Management',
   icons: {
-    icon: '/icon.png',
-    apple: '/icon.png',
+    icon: '/favicon.svg',
+    shortcut: '/favicon.svg',
   },
 }
 

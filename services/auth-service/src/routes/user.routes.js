@@ -25,8 +25,7 @@ router.get('/', authenticate, authorize('user:manage'), async (req, res, next) =
       prisma.user.count({ where }),
     ]);
 
-    // Format for response to keep contract
-    const formattedUsers = users.map(u => ({ ...u, role: u.role?.name }));
+    const formattedUsers = users.map(({ passwordHash: _ph, mfaSecret: _ms, ...u }) => ({ ...u, role: u.role?.name }));
     res.json({ users: formattedUsers, total, page: Number(page), pages: Math.ceil(total / limit) });
   } catch (err) { next(err); }
 });
@@ -109,9 +108,41 @@ router.post('/:id/reset-password', authenticate, authorize('user:manage'), async
     if (!newPassword || newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
     const passwordHash = await bcrypt.hash(newPassword, 12);
     await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash, failedLogins: 0, lockedUntil: null } });
-    // Revoke all refresh tokens
     await prisma.refreshToken.updateMany({ where: { userId: req.params.id }, data: { isRevoked: true } });
     res.json({ message: 'Password reset. All sessions invalidated.' });
+  } catch (err) { next(err); }
+});
+
+// POST /users/:id/reset-mfa  (admin — clears TOTP secret, forces re-enrolment)
+router.post('/:id/reset-mfa', authenticate, authorize('user:manage'), async (req, res, next) => {
+  try {
+    const target = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, mfaEnabled: true } });
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    await prisma.user.update({
+      where: { id: req.params.id },
+      data: { mfaEnabled: false, mfaSecret: null, failedLogins: 0, lockedUntil: null },
+    });
+    // Revoke all active sessions so the user must re-login and re-enrol MFA
+    await prisma.refreshToken.updateMany({ where: { userId: req.params.id }, data: { isRevoked: true } });
+    res.json({ message: 'MFA cleared. User must re-enrol on next login.' });
+  } catch (err) { next(err); }
+});
+
+// PATCH /users/:id/toggle-active  (lock / unlock account)
+router.patch('/:id/toggle-active', authenticate, authorize('user:manage'), async (req, res, next) => {
+  try {
+    const target = await prisma.user.findUnique({ where: { id: req.params.id }, select: { isActive: true } });
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    const user = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { isActive: !target.isActive, ...(target.isActive ? {} : { failedLogins: 0, lockedUntil: null }) },
+      include: { role: true },
+    });
+    if (target.isActive) {
+      // Revoke sessions when locking
+      await prisma.refreshToken.updateMany({ where: { userId: req.params.id }, data: { isRevoked: true } });
+    }
+    res.json({ ...user, role: user.role?.name });
   } catch (err) { next(err); }
 });
 
