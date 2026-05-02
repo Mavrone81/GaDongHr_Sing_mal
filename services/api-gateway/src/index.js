@@ -51,6 +51,8 @@ app.get('/health', (req, res) => res.json({ service: 'api-gateway', status: 'ok'
 const PUBLIC_ROUTES = [
   { method: 'POST', path: /^\/api\/auth\/login$/ },
   { method: 'POST', path: /^\/api\/auth\/refresh$/ },
+  { method: 'POST', path: /^\/api\/auth\/otp\/resend$/ },
+  { method: 'GET',  path: /^\/api\/auth\/org-settings\/mfa$/ },
   { method: 'GET',  path: /^\/health$/ },
 ];
 

@@ -5,7 +5,7 @@ import { AuthProvider } from '@/context/AuthContext'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
-  title: 'EzyHRM - SG Compliant HRMS',
+  title: 'Vorkhive - SG Compliant HRMS',
   description: 'Singapore Payroll, CPF, and Leave Management',
   icons: {
     icon: '/favicon.svg',

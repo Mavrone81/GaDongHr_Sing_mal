@@ -18,8 +18,8 @@ export default function SettingsPage() {
       desc: 'CPF, SDL, FWL rate tables and compliance settings.',
       icon: '◎',
       links: [
-        { label: 'CPF Rate Tables', href: '/settings/cpf', badge: 'SA Only' },
-        { label: 'SDL / FWL Config', href: '/settings/sdl', badge: 'SA Only' },
+        { label: 'Statutory Rate Tables', href: '/settings/rates', badge: 'SA Only' },
+        { label: 'Payroll Overrides', href: '/settings/overrides', badge: 'SA Only' },
         { label: 'PDPA Data Retention', href: '/settings/pdpa', badge: 'SA Only' },
       ]
     },
@@ -28,19 +28,9 @@ export default function SettingsPage() {
       desc: 'SSO, MFA, API keys, webhook endpoints and audit logs.',
       icon: '◇',
       links: [
-        { label: 'SSO / MFA Config', href: '/settings/sso', badge: 'IT Admin' },
+        { label: 'SSO / MFA Config', href: '/settings/security', badge: 'IT Admin' },
         { label: 'API Keys & Webhooks', href: '/settings/api', badge: 'IT Admin' },
         { label: 'Audit Log', href: '/settings/audit', badge: 'Read-Only' },
-      ]
-    },
-    {
-      title: 'Organisation',
-      desc: 'Departments, cost centres, and public holiday calendar.',
-      icon: '▣',
-      links: [
-        { label: 'Departments & Cost Centres', href: '/settings/departments', badge: '' },
-        { label: 'Public Holiday Calendar', href: '/settings/holidays', badge: '' },
-        { label: 'Company Profile', href: '/settings/company', badge: '' },
       ]
     },
   ];

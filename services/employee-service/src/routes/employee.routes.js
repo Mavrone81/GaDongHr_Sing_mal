@@ -176,10 +176,15 @@ router.get('/', checkInternal, (req, res, next) => {
   });
 }, async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, department, isActive, search } = req.query;
+    const { page = 1, limit = 20, department, isActive, search, startDateFrom, startDateTo } = req.query;
     const where = {};
     if (department) where.department = department;
     if (isActive !== undefined) where.isActive = isActive === 'true';
+    if (startDateFrom || startDateTo) {
+      where.startDate = {};
+      if (startDateFrom) where.startDate.gte = new Date(startDateFrom);
+      if (startDateTo)   where.startDate.lte = new Date(startDateTo);
+    }
     if (search) where.OR = [
       { fullName:     { contains: search, mode: 'insensitive' } },
       { workEmail:    { contains: search, mode: 'insensitive' } },
@@ -219,6 +224,30 @@ router.get('/code/:code', authenticate, authorize('employee:view', ROLES.SUPER_A
     });
     if (!emp) return res.status(404).json({ error: 'Employee not found' });
     res.json(sanitizeEmployee(emp, req.user));
+  } catch (err) { next(err); }
+});
+
+// ── GET /payroll-data ─ Returns salary + CPF + bank fields for all active employees ──
+router.get('/payroll-data', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const employees = await prisma.employee.findMany({
+      where: { isActive: true },
+      select: { id: true, employeeCode: true, fullName: true, department: true, citizenshipStatus: true, dateOfBirth: true, basicSalaryEncrypted: true, salaryBasis: true, bankName: true, bankCode: true, bankBranchCode: true, bankAccountEncrypted: true },
+      orderBy: { employeeCode: 'asc' },
+    });
+    const result = employees.map(emp => {
+      let basicSalary = 0;
+      try { if (emp.basicSalaryEncrypted) basicSalary = parseFloat(decrypt(emp.basicSalaryEncrypted)) || 0; } catch {}
+      let bankAccount = '';
+      try { if (emp.bankAccountEncrypted) bankAccount = decrypt(emp.bankAccountEncrypted) || ''; } catch {}
+      const age = emp.dateOfBirth ? Math.floor((Date.now() - new Date(emp.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25)) : 35;
+      return {
+        employeeId: emp.id, employeeCode: emp.employeeCode, fullName: emp.fullName, department: emp.department,
+        citizenStatus: emp.citizenshipStatus || 'SC', age, ow: basicSalary, grossPay: basicSalary,
+        bankName: emp.bankName || '', bankCode: emp.bankCode || '', bankBranchCode: emp.bankBranchCode || '', bankAccount,
+      };
+    });
+    res.json(result);
   } catch (err) { next(err); }
 });
 
@@ -273,6 +302,47 @@ router.post('/', authenticate, authorize('employee:manage', ROLES.SUPER_ADMIN, R
     createAuthUser(emp);
 
     res.status(201).json(sanitizeEmployee(emp, req.user));
+  } catch (err) { next(err); }
+});
+
+// ── POST /employees/bulk-import ───────────────────────────────────────────────
+router.post('/bulk-import', authenticate, authorize('employee:manage', ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const rows = Array.isArray(req.body) ? req.body : req.body?.employees;
+    if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'Request body must be a non-empty array of employee records' });
+    if (rows.length > 500) return res.status(400).json({ error: 'Maximum 500 records per import' });
+
+    const created = [], failed = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      try {
+        const data = normaliseEnums({ ...rows[i] });
+        if (!data.fullName || !data.email || !data.dateOfBirth || !data.startDate) {
+          failed.push({ row: i + 1, name: data.fullName || '?', error: 'Missing required field: fullName, email, dateOfBirth, or startDate' });
+          continue;
+        }
+        const fieldsToEncrypt = {};
+        if (data.nric)        { fieldsToEncrypt.nricEncrypted        = data.nric;        delete data.nric; }
+        if (data.homeAddress) { fieldsToEncrypt.homeAddressEncrypted = data.homeAddress; delete data.homeAddress; }
+        if (data.basicSalary) { fieldsToEncrypt.basicSalaryEncrypted = String(data.basicSalary); delete data.basicSalary; }
+        if (data.bankAccount) { fieldsToEncrypt.bankAccountEncrypted = data.bankAccount; delete data.bankAccount; }
+        const encrypted = encryptFields(fieldsToEncrypt, Object.keys(fieldsToEncrypt));
+        const employeeCode = await nextEmployeeCode();
+        const emp = await prisma.employee.create({
+          data: { id: uuidv4(), employeeCode, ...data, ...encrypted, dateOfBirth: new Date(data.dateOfBirth), startDate: new Date(data.startDate) },
+        });
+        await writeAudit({ entityId: emp.id, entityCode: emp.employeeCode, entityName: emp.fullName, action: 'BULK_IMPORT', actor: req.user, changedFields: null, req });
+        const { createAuthUser } = require('../utils/auth-client');
+        createAuthUser(emp);
+        created.push({ row: i + 1, employeeCode: emp.employeeCode, name: emp.fullName });
+      } catch (rowErr) {
+        const msg = rowErr.code === 'P2002' ? `Duplicate value on unique field` : rowErr.message;
+        failed.push({ row: i + 1, name: rows[i]?.fullName || '?', error: msg });
+      }
+    }
+
+    const status = failed.length === 0 ? 201 : created.length === 0 ? 400 : 207;
+    res.status(status).json({ total: rows.length, created: created.length, failed: failed.length, results: { created, failed } });
   } catch (err) { next(err); }
 });
 

@@ -1,7 +1,7 @@
 {
   "name": "@hrms/auth-service",
   "version": "1.0.0",
-  "description": "EzyHRM Authentication & Authorization Service",
+  "description": "Vorkhive Authentication & Authorization Service",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",

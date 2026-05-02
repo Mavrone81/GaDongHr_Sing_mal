@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 
-// ─── RBAC Navigation Matrix — Section 2, EzyHRM_RBAC_Workflow_Reference.pdf ──
+// ─── RBAC Navigation Matrix — Section 2, Vorkhive_RBAC_Workflow_Reference.pdf ──
 // SA = Superadmin (full, unrestricted access to ALL modules)
 interface NavItem {
   name: string;
@@ -35,6 +35,8 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
       { name: 'Employees',   path: '/employees',           icon: '◈' },
       { name: 'Recruitment', path: '/recruitment',         icon: '◇' },
       { name: 'Attendance',  path: '/attendance/registry', icon: '◉' },
+      { name: 'Leave',       path: '/leave/registry',      icon: '◌' },
+      { name: 'Claims',      path: '/claims/registry',     icon: '◫' },
       { name: 'Performance', path: '/performance',         icon: '▣' },
       { name: 'Training',    path: '/training',            icon: '◑' },
       { name: 'Offboarding', path: '/offboarding',         icon: '◐' },
@@ -44,9 +46,9 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
     group: 'EMPLOYEE',
     color: 'text-sky-400',
     items: [
-      { name: 'Emp_Attendance', path: '/attendance', icon: '◉' },
-      { name: 'Emp_Leave',      path: '/leave',      icon: '◌' },
-      { name: 'Emp_Claims',     path: '/claims',     icon: '◫' },
+      { name: 'My Attendance', path: '/attendance', icon: '◉' },
+      { name: 'My Leave',      path: '/leave',      icon: '◌' },
+      { name: 'My Claims',     path: '/claims',     icon: '◫' },
     ]
   },
   {
@@ -88,13 +90,15 @@ const HR_ADMIN_NAV: NavGroup[] = [
     { name: 'Employees',   path: '/employees',           icon: '◈' },
     { name: 'Recruitment', path: '/recruitment',         icon: '◇' },
     { name: 'Attendance',  path: '/attendance/registry', icon: '◉' },
+    { name: 'Leave',       path: '/leave/registry',      icon: '◌' },
+    { name: 'Claims',      path: '/claims/registry',     icon: '◫' },
     { name: 'Performance', path: '/performance',         icon: '▣' },
     { name: 'Training',    path: '/training',            icon: '◑' },
   ]},
   { group: 'EMPLOYEE',   color: 'text-sky-400',     items: [
-    { name: 'Emp_Attendance', path: '/attendance', icon: '◉' },
-    { name: 'Emp_Leave',      path: '/leave',      icon: '◌' },
-    { name: 'Emp_Claims',     path: '/claims',     icon: '◫' },
+    { name: 'My Attendance', path: '/attendance', icon: '◉' },
+    { name: 'My Leave',      path: '/leave',      icon: '◌' },
+    { name: 'My Claims',     path: '/claims',     icon: '◫' },
   ]},
   { group: 'FINANCIAL',  color: 'text-emerald-400', items: [
     { name: 'Payroll', path: '/payroll', icon: '◆' },
@@ -107,12 +111,15 @@ const HR_ADMIN_NAV: NavGroup[] = [
 const PAYROLL_OFFICER_NAV: NavGroup[] = [
   { group: 'COMMAND',    color: 'text-indigo-400',  items: [{ name: 'Dashboard', path: '/', icon: '⬡' }] },
   { group: 'WORKFORCE',  color: 'text-blue-400',    items: [
-    { name: 'Employees', path: '/employees', icon: '◈' },
+    { name: 'Employees',  path: '/employees',           icon: '◈' },
+    { name: 'Attendance', path: '/attendance/registry', icon: '◉' },
+    { name: 'Leave',      path: '/leave/registry',      icon: '◌' },
+    { name: 'Claims',     path: '/claims/registry',     icon: '◫' },
   ]},
   { group: 'EMPLOYEE',   color: 'text-sky-400',     items: [
-    { name: 'Emp_Attendance', path: '/attendance', icon: '◉' },
-    { name: 'Emp_Leave',      path: '/leave',      icon: '◌' },
-    { name: 'Emp_Claims',     path: '/claims',     icon: '◫' },
+    { name: 'My Attendance', path: '/attendance', icon: '◉' },
+    { name: 'My Leave',      path: '/leave',      icon: '◌' },
+    { name: 'My Claims',     path: '/claims',     icon: '◫' },
   ]},
   { group: 'FINANCIAL',  color: 'text-emerald-400', items: [
     { name: 'Payroll', path: '/payroll', icon: '◆', badge: 'Action' },
@@ -126,9 +133,9 @@ const PAYROLL_OFFICER_NAV: NavGroup[] = [
 const EMPLOYEE_NAV: NavGroup[] = [
   { group: 'OVERVIEW',  color: 'text-indigo-400',  items: [{ name: 'Dashboard', path: '/', icon: '⬡' }] },
   { group: 'EMPLOYEE',  color: 'text-sky-400',     items: [
-    { name: 'Emp_Attendance', path: '/attendance', icon: '◉' },
-    { name: 'Emp_Leave',      path: '/leave',      icon: '◌' },
-    { name: 'Emp_Claims',     path: '/claims',     icon: '◫' },
+    { name: 'My Attendance', path: '/attendance', icon: '◉' },
+    { name: 'My Leave',      path: '/leave',      icon: '◌' },
+    { name: 'My Claims',     path: '/claims',     icon: '◫' },
   ]},
   { group: 'PAYSLIPS',  color: 'text-emerald-400', items: [
     { name: 'My Payslips', path: '/payroll', icon: '◆' },
@@ -155,7 +162,7 @@ const ROLE_LABELS: Record<string, { label: string; color: string; dot: string }>
 function getNavGroups(role: string, email: string, cached: boolean) {
   const r = role.toUpperCase();
   const e = email.toLowerCase();
-  if (r === 'SUPER_ADMIN' || e === 'admin@ezyhrm.sg' || e === 'admin@hrms.com' || cached) return SUPER_ADMIN_NAV;
+  if (r === 'SUPER_ADMIN' || e === 'admin@vorkhive.sg' || e === 'admin@hrms.com' || cached) return SUPER_ADMIN_NAV;
   if (r === 'HR_ADMIN' || r === 'ADMIN') return HR_ADMIN_NAV;
   if (r === 'HR_MANAGER') return HR_ADMIN_NAV;
   if (r === 'PAYROLL_OFFICER') return PAYROLL_OFFICER_NAV;
@@ -164,12 +171,13 @@ function getNavGroups(role: string, email: string, cached: boolean) {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, loading, logout } = useAuth();
 
   // Lazy-init from localStorage so first render shows correct nav immediately
   const [cachedAdmin, setCachedAdmin] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
-    return localStorage.getItem('ezyhrm_admin_confirmed') === '1';
+    return localStorage.getItem('vorkhive_admin_confirmed') === '1';
   });
 
   useEffect(() => {
@@ -178,26 +186,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const role = (user.role || '').toUpperCase().trim();
     const isAdmin =
       role === 'SUPER_ADMIN' || role === 'HR_ADMIN' || role === 'ADMIN' ||
-      email === 'admin@ezyhrm.sg' || email === 'admin@hrms.com';
+      email === 'admin@vorkhive.sg' || email === 'admin@hrms.com';
     if (isAdmin) {
-      localStorage.setItem('ezyhrm_admin_confirmed', '1');
-      localStorage.setItem('ezyhrm_user_role', role === 'SUPER_ADMIN' || email === 'admin@ezyhrm.sg' || email === 'admin@hrms.com' ? 'SUPER_ADMIN' : role);
+      localStorage.setItem('vorkhive_admin_confirmed', '1');
+      localStorage.setItem('vorkhive_user_role', role === 'SUPER_ADMIN' || email === 'admin@vorkhive.sg' || email === 'admin@hrms.com' ? 'SUPER_ADMIN' : role);
       setCachedAdmin(true);
     }
   }, [user]);
 
   const liveEmail = (user?.email || '').toLowerCase().trim();
   const liveRole  = (user?.role  || '').toUpperCase().trim();
-  const isSuperAdmin = liveRole === 'SUPER_ADMIN' || liveEmail === 'admin@ezyhrm.sg' || liveEmail === 'admin@hrms.com' || cachedAdmin;
+  const isSuperAdmin = liveRole === 'SUPER_ADMIN' || liveEmail === 'admin@vorkhive.sg' || liveEmail === 'admin@hrms.com' || cachedAdmin;
 
-  // VISUAL DIAGNOSTIC BANNER IF USER IS NULL AFTER LOADING
-  const authErrorBanner = !loading && !user ? (
-    <div className="absolute top-0 left-0 w-full z-[999] bg-red-600 text-white p-4 font-bold text-center text-xs animate-pulse shadow-2xl">
-      CRITICAL ERROR: AuthContext failed to fetch user identity from /auth/me. Network or CORS failure occurred. Check browser console!
-    </div>
-  ) : null;
+  // Redirect unauthenticated users to login
+  useEffect(() => {
+    if (!loading && !user && !cachedAdmin) {
+      router.replace('/login');
+    }
+  }, [loading, user, cachedAdmin]);
 
-  const cachedRole = typeof window !== 'undefined' ? (localStorage.getItem('ezyhrm_user_role') || '') : '';
+  const authErrorBanner = null;
+
+  const cachedRole = typeof window !== 'undefined' ? (localStorage.getItem('vorkhive_user_role') || '') : '';
   const effectiveRole = liveRole || cachedRole;
   const roleInfo = ROLE_LABELS[effectiveRole] || ROLE_LABELS['EMPLOYEE'];
 
@@ -236,10 +246,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Brand */}
         <div className="relative px-5 pt-5 pb-4 border-b border-white/5 flex items-center gap-3">
           <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/40 shrink-0">
-            <span className="font-black text-white text-sm italic">E</span>
+            <span className="font-black text-white text-sm italic">V</span>
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="font-black text-white tracking-wider text-sm leading-none">EzyHRM</span>
+            <span className="font-black text-white tracking-wider text-sm leading-none">Vorkhive</span>
             <span className="text-[8px] font-bold text-indigo-400/50 mt-1 tracking-widest uppercase truncate">SG Compliance · v2</span>
           </div>
         </div>
@@ -321,8 +331,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
           <button
             onClick={() => {
-              localStorage.removeItem('ezyhrm_admin_confirmed');
-              localStorage.removeItem('ezyhrm_user_role');
+              localStorage.removeItem('vorkhive_admin_confirmed');
+              localStorage.removeItem('vorkhive_user_role');
               logout();
             }}
             className="w-full py-2 text-[8px] font-black text-slate-600 hover:text-red-400 transition-all uppercase tracking-[0.3em] border border-slate-900 rounded-xl hover:bg-red-500/5 hover:border-red-500/20 active:scale-95"

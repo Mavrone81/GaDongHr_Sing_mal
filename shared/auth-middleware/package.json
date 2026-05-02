@@ -1,7 +1,7 @@
 {
   "name": "@hrms/auth-middleware",
   "version": "1.0.0",
-  "description": "JWT RS256 verification + RBAC middleware for EzyHRM services",
+  "description": "JWT RS256 verification + RBAC middleware for Vorkhive services",
   "main": "index.js",
   "license": "UNLICENSED",
   "private": true,

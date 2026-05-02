@@ -8,6 +8,7 @@ interface User {
   name: string;
   email: string;
   role: string;
+  employeeId: string | null;
   permissions: string[];
 }
 
@@ -33,7 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const applyUserData = (userData: any) => {
     const userEmail = (userData.email || '').toLowerCase().trim();
     const isSystemAdmin =
-      userEmail === 'admin@ezyhrm.sg' ||
+      userEmail === 'admin@vorkhive.sg' ||
       userEmail === 'admin@hrms.com' ||
       userEmail === 'admin@urbanwerkz.com';
 
@@ -47,6 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       name: userData.name,
       email: userData.email,
       role: normalizedRole,
+      employeeId: userData.employeeId || null,
       permissions: normalizedRole === 'SUPER_ADMIN' ? [] : (userData.permissions || []),
     });
   };
@@ -67,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const tokenCookie = document.cookie
           .split('; ')
-          .find(row => row.startsWith('ezyhrm_token='));
+          .find(row => row.startsWith('vorkhive_token='));
         const token = tokenCookie ? tokenCookie.split('=').slice(1).join('=') : undefined;
 
         if (!token) return;
@@ -85,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (token: string): Promise<void> => {
-    document.cookie = `ezyhrm_token=${token}; path=/; max-age=3600; SameSite=Lax`;
+    document.cookie = `vorkhive_token=${token}; path=/; max-age=3600; SameSite=Lax`;
     try {
       const ok = await fetchUserWithToken(token);
       if (!ok) throw new Error('Identity fetch failed');
@@ -104,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
-    document.cookie = 'ezyhrm_token=; Max-Age=0; path=/';
+    document.cookie = 'vorkhive_token=; Max-Age=0; path=/';
     setUser(null);
     router.push('/login');
   };

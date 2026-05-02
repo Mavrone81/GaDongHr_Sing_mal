@@ -11,7 +11,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     // Check localStorage for resilient admin detection
-    const stored = localStorage.getItem('ezyhrm_admin_confirmed');
+    const stored = localStorage.getItem('vorkhive_admin_confirmed');
     if (stored === '1') setCachedAdmin(true);
 
     // If user is confirmed admin, cache it
@@ -20,9 +20,9 @@ export default function DashboardPage() {
       const role = (user.role || '').toUpperCase().trim();
       if (
         role === 'SUPER_ADMIN' || role === 'HR_ADMIN' || role === 'ADMIN' ||
-        email === 'admin@ezyhrm.sg' || email === 'admin@hrms.com'
+        email === 'admin@vorkhive.sg' || email === 'admin@hrms.com'
       ) {
-        localStorage.setItem('ezyhrm_admin_confirmed', '1');
+        localStorage.setItem('vorkhive_admin_confirmed', '1');
         setCachedAdmin(true);
       }
     }
@@ -46,7 +46,7 @@ export default function DashboardPage() {
     user?.role === 'ADMIN' ||
     user?.role === 'HR_ADMIN' ||
     user?.role === 'HR_MANAGER' ||
-    normalizedEmail === 'admin@ezyhrm.sg' ||
+    normalizedEmail === 'admin@vorkhive.sg' ||
     normalizedEmail === 'admin@hrms.com' ||
     cachedAdmin;
 

@@ -19,6 +19,7 @@ model User {
   isActive      Boolean   @default(true)
   mfaEnabled    Boolean   @default(false)
   mfaSecret     String?   // TOTP secret (encrypted)
+  mfaExempt     Boolean   @default(false)
   failedLogins  Int       @default(0)
   lockedUntil   DateTime?
   lastLoginAt   DateTime?
@@ -102,5 +103,27 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// Short-lived OTP tokens for Email OTP method
+model OtpToken {
+  id        String   @id @default(uuid())
+  userId    String
+  codeHash  String   // bcrypt hash of the 6-digit code
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("otp_tokens")
+}
+
+// Org-wide key-value settings (e.g. mfaMethod)
+model OrgSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("org_settings")
 }
 

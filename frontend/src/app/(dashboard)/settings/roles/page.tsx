@@ -35,7 +35,7 @@ export default function RoleManagementPage() {
 
   const fetchRolesAndPermissions = async () => {
     try {
-      const token = document.cookie.split('ezyhrm_token=')[1]?.split(';')[0];
+      const token = document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
       const [rolesRes, permsRes] = await Promise.all([
         fetch(`${apiBaseUrl}/roles`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`${apiBaseUrl}/roles/permissions`, { headers: { Authorization: `Bearer ${token}` } })
@@ -54,7 +54,7 @@ export default function RoleManagementPage() {
 
   const handleUpdatePermissions = async (role: Role, perms: string[]) => {
     try {
-      const token = document.cookie.split('ezyhrm_token=')[1]?.split(';')[0];
+      const token = document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
       const res = await fetch(`${apiBaseUrl}/roles/${role.id}`, {
         method: 'PUT',
         headers: { 

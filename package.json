@@ -1,7 +1,7 @@
 {
   "name": "ezy-hrms",
   "version": "1.0.0",
-  "description": "EzyHRM - Singapore-compliant HRMS Microservice System",
+  "description": "Vorkhive - Singapore-compliant HRMS Microservice System",
   "private": true,
   "workspaces": [
     "shared/*",

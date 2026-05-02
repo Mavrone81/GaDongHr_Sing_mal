@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  const token = request.cookies.get('ezyhrm_token')?.value;
+  const token = request.cookies.get('vorkhive_token')?.value;
   const isLoginPage = request.nextUrl.pathname === '/login';
 
   // Protect all non-login routes

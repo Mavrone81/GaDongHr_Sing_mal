@@ -52,6 +52,28 @@ app.post('/attendance/clock-out', authenticate, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /attendance/admin/records?date=YYYY-MM-DD — all records for a date (admin only)
+app.get('/attendance/admin/records', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const dateStr = req.query.date;
+    let targetDate;
+    if (dateStr) {
+      targetDate = new Date(dateStr + 'T00:00:00');
+    } else {
+      const now = new Date();
+      targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+    const nextDay = new Date(targetDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+
+    const records = await prisma.attendanceRecord.findMany({
+      where: { date: { gte: targetDate, lt: nextDay } },
+      orderBy: { clockIn: 'asc' },
+    });
+    res.json({ date: targetDate.toISOString().slice(0, 10), records });
+  } catch (err) { next(err); }
+});
+
 // GET /attendance/:employeeId
 app.get('/attendance/:employeeId', authenticate, async (req, res, next) => {
   try {

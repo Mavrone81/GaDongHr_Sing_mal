@@ -1,7 +1,7 @@
 {
   "name": "@hrms/payroll-service",
   "version": "1.0.0",
-  "description": "EzyHRM Payroll & CPF Engine",
+  "description": "Vorkhive Payroll & CPF Engine",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",

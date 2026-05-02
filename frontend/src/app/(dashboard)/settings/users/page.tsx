@@ -68,7 +68,7 @@ function AdjustPanel({
   const [mfaMsg, setMfaMsg]         = useState('');
   const [mfaConfirm, setMfaConfirm] = useState(false);
 
-  const token = () => document.cookie.split('ezyhrm_token=')[1]?.split(';')[0];
+  const token = () => document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
 
   const handleRoleSave = async () => {
     setRoleLoading(true); setRoleMsg('');
@@ -451,7 +451,7 @@ export default function UserManagementPage() {
   const [createError, setCreateError]     = useState('');
 
   const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
-  const token   = () => document.cookie.split('ezyhrm_token=')[1]?.split(';')[0];
+  const token   = () => document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
 
   const fetchData = useCallback(async () => {
     try {

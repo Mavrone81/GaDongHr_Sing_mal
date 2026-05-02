@@ -178,7 +178,7 @@ export default function AuditPage() {
   const fetchLogs = useCallback(async () => {
     setLoading(true);
     try {
-      const token = document.cookie.split('ezyhrm_token=')[1]?.split(';')[0];
+      const token = document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
       const params = new URLSearchParams({
         page: String(page),
         limit: String(LIMIT),

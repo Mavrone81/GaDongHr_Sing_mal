@@ -15,7 +15,7 @@ async function createAuthUser(employee) {
     const response = await axios.post(`${authUrl}/users`, {
       email: employee.workEmail,
       name: employee.fullName,
-      password: 'EzyHRM@2025!', // Default temporary password
+      password: '***REMOVED***', // Default temporary password
       role: 'EMPLOYEE',
       employeeId: employee.id
     }, {

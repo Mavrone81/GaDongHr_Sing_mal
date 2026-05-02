@@ -33,7 +33,7 @@ function apiBase() {
 
 function getToken(): string {
   if (typeof document === 'undefined') return '';
-  return document.cookie.split('ezyhrm_token=')[1]?.split(';')[0] ?? '';
+  return document.cookie.split('vorkhive_token=')[1]?.split(';')[0] ?? '';
 }
 
 // ─── Clock display ────────────────────────────────────────────────────────────
@@ -54,15 +54,40 @@ function LiveClock() {
   );
 }
 
-// ─── Mock week data ───────────────────────────────────────────────────────────
+// ─── Week helpers ──────────────────────────────────────────────────────────────
 
-const MOCK_WEEK: AttendanceRecord[] = [
-  { date: 'Mon 28 Apr', clockIn: '08:58 AM', clockOut: '06:02 PM', duration: '9h 04m', status: 'present' },
-  { date: 'Tue 29 Apr', clockIn: null, clockOut: null, duration: null, status: 'absent' },
-  { date: 'Wed 30 Apr', clockIn: null, clockOut: null, duration: null, status: 'absent' },
-  { date: 'Thu 1 May',  clockIn: null, clockOut: null, duration: null, status: 'absent' },
-  { date: 'Fri 2 May',  clockIn: null, clockOut: null, duration: null, status: 'absent' },
-];
+function getWeekBounds(): { start: Date; end: Date } {
+  const now = new Date();
+  const day = now.getDay(); // 0=Sun
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((day + 6) % 7));
+  monday.setHours(0, 0, 0, 0);
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+  return { start: monday, end: friday };
+}
+
+function buildWeekLog(apiRecords: Array<{ date: string; clockIn?: string | null; clockOut?: string | null; hoursWorked?: number | null; status?: string }>): AttendanceRecord[] {
+  const { start } = getWeekBounds();
+  const recMap = new Map<string, typeof apiRecords[0]>();
+  for (const r of apiRecords) recMap.set(r.date.slice(0, 10), r);
+
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  return Array.from({ length: 5 }).map((_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    const label = `${days[i]} ${d.getDate()} ${d.toLocaleDateString('en-SG', { month: 'short' })}`;
+    const rec = recMap.get(key);
+    if (!rec) return { date: label, clockIn: null, clockOut: null, duration: null, status: 'absent' as const };
+    const fmtT = (iso: string | null | undefined) => iso ? new Date(iso).toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', hour12: true }) : null;
+    const dur = rec.hoursWorked != null ? `${Math.floor(rec.hoursWorked)}h ${Math.round((rec.hoursWorked % 1) * 60)}m` : null;
+    let status: AttendanceRecord['status'] = 'present';
+    if (rec.status === 'HALF_DAY') status = 'half';
+    else if (rec.status === 'LEAVE') status = 'leave';
+    return { date: label, clockIn: fmtT(rec.clockIn), clockOut: fmtT(rec.clockOut), duration: dur, status };
+  });
+}
 
 // ─── Employee self-service view ───────────────────────────────────────────────
 
@@ -78,7 +103,8 @@ function EmployeeAttendanceView() {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [modelsLoaded, setModelsLoaded] = useState(false);
-  const [weekLog, setWeekLog]         = useState<AttendanceRecord[]>(MOCK_WEEK);
+  const [weekLog, setWeekLog]         = useState<AttendanceRecord[]>([]);
+  const [weekLoading, setWeekLoading] = useState(true);
 
   // Upload photo state
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
@@ -126,6 +152,21 @@ function EmployeeAttendanceView() {
     }
     fetchPhoto();
   }, []);
+
+  // ── Load this week's attendance records ───────────────────────────────────
+  useEffect(() => {
+    if (!user?.employeeId) { setWeekLoading(false); return; }
+    const { start, end } = getWeekBounds();
+    const from = start.toISOString().slice(0, 10);
+    const to = end.toISOString().slice(0, 10);
+    fetch(`${apiBase()}/attendance/${user.employeeId}?from=${from}&to=${to}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then(r => r.ok ? r.json() : [])
+      .then((records: any[]) => setWeekLog(buildWeekLog(records)))
+      .catch(() => setWeekLog(buildWeekLog([])))
+      .finally(() => setWeekLoading(false));
+  }, [user?.employeeId]);
 
   // ── Attach camera stream after video element is in DOM ────────────────────
   useEffect(() => {
@@ -653,43 +694,59 @@ function EmployeeAttendanceView() {
       </div>
 
       {/* ── This Week's Log ──────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 overflow-hidden">
-        <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">This Week</h3>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">28 Apr – 2 May 2026</p>
-          </div>
-          <div className="px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-xl">
-            <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">1 / 5 days</p>
-          </div>
-        </div>
-        <div className="divide-y divide-slate-50">
-          {weekLog.map((rec, i) => (
-            <div key={i} className="flex items-center px-8 py-4 hover:bg-slate-50/50 transition-all">
-              <div className="w-28">
-                <p className="text-[11px] font-black text-slate-700 uppercase tracking-tight">{rec.date}</p>
+      {(() => {
+        const { start, end } = getWeekBounds();
+        const fmt = (d: Date) => d.toLocaleDateString('en-SG', { day: 'numeric', month: 'short' });
+        const presentCount = weekLog.filter(r => r.status === 'present' || r.status === 'half').length;
+        return (
+          <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 overflow-hidden">
+            <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">This Week</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{fmt(start)} – {fmt(end)} {end.getFullYear()}</p>
               </div>
-              <div className="flex-1 flex items-center gap-6">
-                <div className="flex flex-col">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Clock In</p>
-                  <p className="text-xs font-black text-slate-900 mt-0.5">{rec.clockIn ?? '—'}</p>
+              {!weekLoading && (
+                <div className="px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-xl">
+                  <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">{presentCount} / 5 days</p>
                 </div>
-                <div className="flex flex-col">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Clock Out</p>
-                  <p className="text-xs font-black text-slate-900 mt-0.5">{rec.clockOut ?? '—'}</p>
-                </div>
-                <div className="flex flex-col">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Duration</p>
-                  <p className="text-xs font-bold text-indigo-600 mt-0.5">{rec.duration ?? '—'}</p>
-                </div>
-              </div>
-              <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-lg border ${statusColor(rec.status)}`}>
-                {rec.status === 'present' ? 'Present' : rec.status === 'half' ? 'Half Day' : rec.status === 'leave' ? 'On Leave' : '—'}
-              </span>
+              )}
             </div>
-          ))}
-        </div>
-      </div>
+            <div className="divide-y divide-slate-50">
+              {weekLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center px-8 py-4 animate-pulse">
+                    <div className="w-28 h-4 bg-slate-100 rounded" />
+                    <div className="flex-1 ml-6 h-4 bg-slate-100 rounded" />
+                  </div>
+                ))
+              ) : weekLog.map((rec, i) => (
+                <div key={i} className="flex items-center px-8 py-4 hover:bg-slate-50/50 transition-all">
+                  <div className="w-28">
+                    <p className="text-[11px] font-black text-slate-700 uppercase tracking-tight">{rec.date}</p>
+                  </div>
+                  <div className="flex-1 flex items-center gap-6">
+                    <div className="flex flex-col">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Clock In</p>
+                      <p className="text-xs font-black text-slate-900 mt-0.5">{rec.clockIn ?? '—'}</p>
+                    </div>
+                    <div className="flex flex-col">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Clock Out</p>
+                      <p className="text-xs font-black text-slate-900 mt-0.5">{rec.clockOut ?? '—'}</p>
+                    </div>
+                    <div className="flex flex-col">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Duration</p>
+                      <p className="text-xs font-bold text-indigo-600 mt-0.5">{rec.duration ?? '—'}</p>
+                    </div>
+                  </div>
+                  <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-lg border ${statusColor(rec.status)}`}>
+                    {rec.status === 'present' ? 'Present' : rec.status === 'half' ? 'Half Day' : rec.status === 'leave' ? 'On Leave' : '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
     </div>
     </>
   );

@@ -1,7 +1,7 @@
 {
   "name": "@hrms/scripts",
   "version": "1.0.0",
-  "description": "EzyHRM database seed & utility scripts",
+  "description": "Vorkhive database seed & utility scripts",
   "private": true,
   "scripts": {
     "seed": "node seed.js"

@@ -1,7 +1,7 @@
 {
   "name": "@hrms/employee-service",
   "version": "1.0.0",
-  "description": "EzyHRM Employee Lifecycle Service",
+  "description": "Vorkhive Employee Lifecycle Service",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",

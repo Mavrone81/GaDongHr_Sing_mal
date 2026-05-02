@@ -2,7 +2,7 @@
 
 /**
  * JWT RS256 verification middleware + RBAC helpers
- * Used by all EzyHRM microservices via the shared lib
+ * Used by all Vorkhive microservices via the shared lib
  */
 
 const jwt = require('jsonwebtoken');

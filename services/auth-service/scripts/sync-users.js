@@ -51,7 +51,7 @@ async function main() {
       continue;
     }
 
-    const passwordHash = await bcrypt.hash('EzyHRM@2025!', 12);
+    const passwordHash = await bcrypt.hash('***REMOVED***', 12);
     await authPrisma.user.create({
       data: {
         id: uuidv4(),

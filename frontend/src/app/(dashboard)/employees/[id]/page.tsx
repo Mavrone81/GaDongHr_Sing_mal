@@ -179,7 +179,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
 
   const fetchEmployee = useCallback(async () => {
     try {
-      const token = document.cookie.split('ezyhrm_token=')[1]?.split(';')[0];
+      const token = document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
       const headers = { 'Authorization': `Bearer ${token}` };
       let res = await fetch(`${apiBaseUrl}/employees/${params.id}`, { headers });
       if (!res.ok) res = await fetch(`${apiBaseUrl}/employees/code/${params.id}`, { headers });
@@ -215,7 +215,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
     setSaving(true);
     setSaveError('');
     try {
-      const token = document.cookie.split('ezyhrm_token=')[1]?.split(';')[0];
+      const token = document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
       const res = await fetch(`${apiBaseUrl}/employees/${employee.id}`, {
         method: 'PATCH',
         headers: {

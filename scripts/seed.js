@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * EzyHRM Seed Script — uses raw pg (PostgreSQL) queries
+ * Vorkhive Seed Script — uses raw pg (PostgreSQL) queries
  * Run from repo root: node scripts/seed.js
  * Requires: docker-compose up  (postgres must be running on localhost:5432)
  */
@@ -31,11 +31,11 @@ async function seedAuth() {
     const adminHash = await bcrypt.hash('***REMOVED***', 12);
 
     const usersToSeed = [
-      { email: 'admin@ezyhrm.sg', hash: adminHash, name: 'System Admin', role: 'SUPER_ADMIN' },
-      { email: 'hr@ezyhrm.sg', hash: hash, name: 'HR Admin', role: 'HR_ADMIN' },
-      { email: 'payroll@ezyhrm.sg', hash: hash, name: 'Payroll Officer', role: 'PAYROLL_OFFICER' },
-      { email: 'manager@ezyhrm.sg', hash: hash, name: 'Line Manager', role: 'MANAGER' },
-      { email: 'employee@ezyhrm.sg', hash: hash, name: 'Standard Employee', role: 'EMPLOYEE' }
+      { email: 'admin@vorkhive.sg', hash: adminHash, name: 'System Admin', role: 'SUPER_ADMIN' },
+      { email: 'hr@vorkhive.sg', hash: hash, name: 'HR Admin', role: 'HR_ADMIN' },
+      { email: 'payroll@vorkhive.sg', hash: hash, name: 'Payroll Officer', role: 'PAYROLL_OFFICER' },
+      { email: 'manager@vorkhive.sg', hash: hash, name: 'Line Manager', role: 'MANAGER' },
+      { email: 'employee@vorkhive.sg', hash: hash, name: 'Standard Employee', role: 'EMPLOYEE' }
     ];
 
     let count = 0;
@@ -315,7 +315,7 @@ async function seedClaims() {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log('\n🌱 EzyHRM Seed Script');
+  console.log('\n🌱 Vorkhive Seed Script');
   console.log(`   Connecting to postgres at ${HOST}:${PORT}\n`);
   await seedAuth();
   await seedPayroll();

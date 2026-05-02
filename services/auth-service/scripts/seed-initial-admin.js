@@ -24,7 +24,7 @@ async function main() {
   // 2. Ensure all known admin accounts are pinned to SUPER_ADMIN
   const adminAccounts = [
     { email: adminEmail.toLowerCase(), password: adminPassword, name: adminName },
-    { email: 'admin@ezyhrm.sg', password: '***REMOVED***', name: 'Main System Admin' },
+    { email: 'admin@vorkhive.sg', password: '***REMOVED***', name: 'Main System Admin' },
   ];
 
   for (const acc of adminAccounts) {

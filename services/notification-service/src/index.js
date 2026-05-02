@@ -21,12 +21,27 @@ const transporter = nodemailer.createTransport({
   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
 });
 
+let smtpFromOverride = null;
+function effectiveFrom() { return smtpFromOverride || process.env.SMTP_FROM || 'noreply@ezyhrm.sg'; }
+
+// GET /notifications/config
+app.get('/notifications/config', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN), (req, res) => {
+  res.json({ smtpFrom: effectiveFrom() });
+});
+
+// PUT /notifications/config — update live sender address (survives until restart)
+app.put('/notifications/config', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN), (req, res) => {
+  const { smtpFrom } = req.body;
+  if (smtpFrom !== undefined) smtpFromOverride = smtpFrom || null;
+  res.json({ smtpFrom: effectiveFrom() });
+});
+
 // POST /notifications/email  (internal)
 app.post('/notifications/email', authenticate, async (req, res, next) => {
   try {
     const { to, subject, html, text } = req.body;
     if (!to || !subject) return res.status(400).json({ error: 'to, subject required' });
-    await transporter.sendMail({ from: process.env.SMTP_FROM || 'noreply@ezyhRM.sg', to, subject, html, text });
+    await transporter.sendMail({ from: effectiveFrom(), to, subject, html, text });
     res.json({ message: 'Email sent' });
   } catch (err) { next(err); }
 });

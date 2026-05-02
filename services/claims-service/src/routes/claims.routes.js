@@ -36,20 +36,62 @@ router.post('/', authenticate, async (req, res, next) => {
   try {
     const { categoryId, title, description, claimDate, totalAmount, gstAmount, items, notes } = req.body;
     const employeeId = req.body.employeeId || req.user.employeeId;
+
+    if (!employeeId) return res.status(400).json({ error: 'No employee profile linked to your account. Contact HR to link your employee record before submitting claims.' });
     if (!categoryId || !title || !claimDate || !totalAmount) return res.status(400).json({ error: 'categoryId, title, claimDate, totalAmount required' });
 
     const cat = await prisma.claimCategory.findUnique({ where: { id: categoryId } });
     if (cat?.maxAmount && totalAmount > cat.maxAmount) return res.status(400).json({ error: `Amount exceeds category limit of SGD ${cat.maxAmount}` });
 
+    const claimData = {
+      id: uuidv4(), employeeId, categoryId, title, description: description || null,
+      claimDate: new Date(claimDate), totalAmount: Number(totalAmount),
+      gstAmount: Number(gstAmount) || 0, notes: notes || null,
+      status: 'SUBMITTED', submittedAt: new Date(),
+    };
+
     const claim = await prisma.claim.create({
-      data: {
-        id: uuidv4(), employeeId, categoryId, title, description, claimDate: new Date(claimDate),
-        totalAmount, gstAmount: gstAmount || 0, notes, status: 'SUBMITTED', submittedAt: new Date(),
-        items: items ? { create: items.map(i => ({ id: uuidv4(), ...i })) } : undefined,
-      },
+      data: items && items.length > 0
+        ? { ...claimData, items: { create: items.map(i => ({ id: uuidv4(), ...i })) } }
+        : claimData,
       include: { category: true, items: true },
     });
     res.status(201).json(claim);
+  } catch (err) { next(err); }
+});
+
+// PATCH /claims/:id  (amend a SUBMITTED claim — owner or admin only)
+router.patch('/:id', authenticate, async (req, res, next) => {
+  try {
+    const claim = await prisma.claim.findUnique({ where: { id: req.params.id } });
+    if (!claim) return res.status(404).json({ error: 'Claim not found' });
+    if (claim.status !== 'SUBMITTED') return res.status(400).json({ error: 'Only pending claims can be amended' });
+
+    const isOwner = req.user.employeeId && claim.employeeId === req.user.employeeId;
+    const isAdmin = ['SUPER_ADMIN', 'HR_ADMIN', 'FINANCE_ADMIN'].includes(req.user.role?.toUpperCase());
+    if (!isOwner && !isAdmin) return res.status(403).json({ error: 'Not authorised to amend this claim' });
+
+    const { categoryId, title, description, claimDate, totalAmount, gstAmount } = req.body;
+
+    if (categoryId) {
+      const cat = await prisma.claimCategory.findUnique({ where: { id: categoryId } });
+      if (cat?.maxAmount && (totalAmount ?? claim.totalAmount) > cat.maxAmount)
+        return res.status(400).json({ error: `Amount exceeds category limit of SGD ${cat.maxAmount}` });
+    }
+
+    const updated = await prisma.claim.update({
+      where: { id: claim.id },
+      data: {
+        ...(categoryId   !== undefined && { categoryId }),
+        ...(title        !== undefined && { title }),
+        ...(description  !== undefined && { description }),
+        ...(claimDate    !== undefined && { claimDate: new Date(claimDate) }),
+        ...(totalAmount  !== undefined && { totalAmount }),
+        ...(gstAmount    !== undefined && { gstAmount }),
+      },
+      include: { category: true },
+    });
+    res.json(updated);
   } catch (err) { next(err); }
 });
 

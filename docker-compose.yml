@@ -119,6 +119,12 @@ services:
       - EMPLOYEE_SERVICE_URL=http://employee-service:4002
       - LEAVE_SERVICE_URL=http://leave-service:4004
       - NOTIFICATION_SERVICE_URL=http://notification-service:4009
+      - DISABLE_MAKER_CHECKER=${DISABLE_MAKER_CHECKER:-true}
+      - COMPANY_NAME=${COMPANY_NAME:-VORKHIVE PTE LTD}
+      - COMPANY_UEN=${COMPANY_UEN:-202512345A}
+      - UOB_ACCOUNT_NO=${UOB_ACCOUNT_NO:-}
+      - OCBC_ACCOUNT_NO=${OCBC_ACCOUNT_NO:-}
+      - DBS_ACCOUNT_NO=${DBS_ACCOUNT_NO:-}
     volumes:
       - shared_certs:/app/certs:ro
       - /app/services/payroll-service/node_modules
