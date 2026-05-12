@@ -60,10 +60,15 @@ services:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PRIVATE_KEY_PATH=/app/certs/private.pem
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
-      - JWT_ACCESS_EXPIRES=${JWT_ACCESS_EXPIRES:-15m}
+      - JWT_ACCESS_EXPIRES=${JWT_ACCESS_EXPIRES:-8h}
       - JWT_REFRESH_EXPIRES=${JWT_REFRESH_EXPIRES:-7d}
       - INTERNAL_SERVICE_KEY=***REMOVED***
       - EMPLOYEE_DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${EMPLOYEE_DB:-hrms_employee}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID:-}
+      - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET:-}
+      - MICROSOFT_TENANT_ID=${MICROSOFT_TENANT_ID:-common}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8081}
     volumes:
       - shared_certs:/app/certs
       - /app/services/auth-service/node_modules
@@ -197,6 +202,7 @@ services:
       - EMPLOYEE_SERVICE_URL=http://employee-service:4002
     volumes:
       - shared_certs:/app/certs:ro
+      - recruitment_uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -311,3 +317,4 @@ volumes:
   employee_uploads:
   payroll_files:
   claims_uploads:
+  recruitment_uploads:

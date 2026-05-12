@@ -1,23 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-
-function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  const c = document.cookie.split('; ').find(r => r.startsWith('vorkhive_token='));
-  return c ? c.split('=').slice(1).join('=') : null;
-}
-function apiBase(): string {
-  return process.env.NEXT_PUBLIC_API_URL ?? `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:4000/api`;
-}
-async function apiFetch(path: string, opts: RequestInit = {}) {
-  const token = getToken();
-  const h: Record<string, string> = { 'Content-Type': 'application/json', ...(opts.headers as Record<string, string> ?? {}) };
-  if (token) h['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${apiBase()}${path}`, { ...opts, headers: h });
-  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`); }
-  return res.json();
-}
+import { apiFetch } from '@/lib/api';
 
 type Tab = 'email' | 'keys' | 'webhooks';
 
@@ -90,108 +74,147 @@ function CopyButton({ value }: { value: string }) {
 
 // ── Email Tab ─────────────────────────────────────────────────────────────────
 function EmailTab() {
-  const [smtpFrom, setSmtpFrom] = useState('');
+  const [smtp, setSmtp] = useState({ host: '', port: '587', user: '', pass: '', from: '', hasPassword: false });
+  const [showPass, setShowPass] = useState(false);
+  const [passEditing, setPassEditing] = useState(false);
   const [testEmail, setTestEmail] = useState('');
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch('/auth/org-settings/general').then(d => setSmtpFrom(d.smtpFrom || '')).catch(() => {});
+    apiFetch('/notifications/smtp-config')
+      .then(d => { setSmtp({ host: d.host || '', port: String(d.port || 587), user: d.user || '', pass: d.pass || '', from: d.from || '', hasPassword: d.hasPassword }); setLoading(false); })
+      .catch(() => setLoading(false));
   }, []);
 
   async function handleSave() {
     setSaving(true);
     try {
-      await apiFetch('/auth/org-settings/general', { method: 'PUT', body: JSON.stringify({ smtpFrom }) });
-      await apiFetch('/notifications/config', { method: 'PUT', body: JSON.stringify({ smtpFrom }) }).catch(() => {});
-      setToast({ msg: 'Email sender address saved.', type: 'ok' });
+      await apiFetch('/notifications/smtp-config', {
+        method: 'PUT',
+        body: JSON.stringify({ host: smtp.host, port: Number(smtp.port), user: smtp.user, pass: passEditing ? smtp.pass : undefined, from: smtp.from }),
+      });
+      setPassEditing(false);
+      setToast({ msg: 'SMTP configuration saved and applied.', type: 'ok' });
     } catch (e: any) { setToast({ msg: e.message, type: 'err' }); }
     finally { setSaving(false); }
   }
 
-  async function handleTestEmail() {
+  async function handleTest() {
     if (!testEmail) return;
     setTesting(true);
     try {
-      await apiFetch('/notifications/email', {
-        method: 'POST',
-        body: JSON.stringify({
-          to: testEmail,
-          subject: 'Vorkhive — Test Email',
-          html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
-            <h2 style="color:#1e293b;margin-bottom:8px">This is a test email</h2>
-            <p style="color:#64748b">Your Vorkhive email configuration is working correctly.</p>
-            <p style="color:#94a3b8;font-size:12px;margin-top:24px">Sent from: ${smtpFrom || '(default)'}</p>
-          </div>`,
-          text: 'Vorkhive test email — your email configuration is working correctly.',
-        }),
-      });
-      setToast({ msg: `Test email sent to ${testEmail}`, type: 'ok' });
-    } catch (e: any) { setToast({ msg: `Send failed: ${e.message}`, type: 'err' }); }
+      await apiFetch('/notifications/smtp-test', { method: 'POST', body: JSON.stringify({ to: testEmail }) });
+      setToast({ msg: `Test email sent to ${testEmail} — check your inbox.`, type: 'ok' });
+    } catch (e: any) { setToast({ msg: `Test failed: ${e.message}`, type: 'err' }); }
     finally { setTesting(false); }
   }
+
+  if (loading) return <div className="p-12 text-center text-slate-400 text-sm font-bold">Loading…</div>;
 
   return (
     <div className="flex flex-col gap-6">
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
-      <div className="bg-white border border-slate-100 rounded-2xl p-6 flex flex-col gap-4">
-        <div>
-          <h3 className="text-base font-black text-slate-900 tracking-tighter">Outbound Email Address</h3>
-          <p className="text-xs text-slate-500 mt-1">All system emails (OTP codes, payslip notifications, leave approvals) will be sent from this address.</p>
-        </div>
-        <div className="flex gap-3">
-          <input
-            type="email"
-            value={smtpFrom}
-            onChange={e => setSmtpFrom(e.target.value)}
-            placeholder="noreply@yourcompany.sg"
-            className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-          />
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-black rounded-xl transition-all"
-          >
-            {saving ? 'Saving…' : 'Save'}
+
+      {/* SMTP Server Config */}
+      <div className="bg-white border border-slate-100 rounded-2xl p-6 flex flex-col gap-5">
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="text-base font-black text-slate-900 tracking-tighter">SMTP Server Configuration</h3>
+            <p className="text-xs text-slate-500 mt-1">All system emails are sent through this mail server. Changes apply immediately without a restart.</p>
+          </div>
+          <button onClick={handleSave} disabled={saving}
+            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-black rounded-xl transition-all flex-shrink-0">
+            {saving ? 'Saving…' : 'Save Changes'}
           </button>
         </div>
-      </div>
 
-      <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 flex flex-col gap-4">
-        <div>
-          <h3 className="text-base font-black text-slate-900 tracking-tighter">SMTP Server Configuration</h3>
-          <p className="text-xs text-slate-500 mt-1">Connection settings are managed via environment variables. Contact your system administrator to update them.</p>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          {['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS'].map(k => (
-            <div key={k} className="bg-white border border-slate-100 rounded-xl p-3">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{k}</p>
-              <p className="text-sm font-bold text-slate-500 mt-1 font-mono">Set via env var</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="col-span-2 flex flex-col gap-1.5">
+            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">SMTP Host</label>
+            <input value={smtp.host} onChange={e => setSmtp(p => ({ ...p, host: e.target.value }))}
+              placeholder="smtp.titan.email"
+              className="border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Port</label>
+            <select value={smtp.port} onChange={e => setSmtp(p => ({ ...p, port: e.target.value }))}
+              className="border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100">
+              <option value="587">587 (STARTTLS — recommended)</option>
+              <option value="465">465 (SSL)</option>
+              <option value="25">25 (Plain — not recommended)</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">From Address</label>
+            <input value={smtp.from} onChange={e => setSmtp(p => ({ ...p, from: e.target.value }))}
+              placeholder="enquires@vorkhive.com"
+              className="border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Username</label>
+            <input value={smtp.user} onChange={e => setSmtp(p => ({ ...p, user: e.target.value }))}
+              placeholder="enquires@vorkhive.com"
+              className="border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Password</label>
+            <div className="flex gap-2">
+              {passEditing ? (
+                <input
+                  type={showPass ? 'text' : 'password'}
+                  value={smtp.pass}
+                  onChange={e => setSmtp(p => ({ ...p, pass: e.target.value }))}
+                  placeholder="Enter new password"
+                  className="flex-1 border border-indigo-300 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  autoFocus
+                />
+              ) : (
+                <div className="flex-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-400 bg-slate-50 flex items-center">
+                  {smtp.hasPassword ? '••••••••••••' : <span className="text-slate-300">Not set</span>}
+                </div>
+              )}
+              <button onClick={() => { setPassEditing(e => !e); setShowPass(false); }}
+                className="px-3 py-2.5 border border-slate-200 rounded-xl text-[10px] font-black text-slate-500 hover:bg-slate-50 uppercase tracking-widest transition-all">
+                {passEditing ? 'Cancel' : 'Change'}
+              </button>
+              {passEditing && (
+                <button onClick={() => setShowPass(s => !s)}
+                  className="px-3 py-2.5 border border-slate-200 rounded-xl text-[10px] font-black text-slate-500 hover:bg-slate-50 uppercase tracking-widest transition-all">
+                  {showPass ? 'Hide' : 'Show'}
+                </button>
+              )}
             </div>
-          ))}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-[10px] font-bold text-slate-500">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+          Changes apply immediately to the running server. To persist across container restarts, update the <code className="font-mono bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-700">.env</code> file as well.
         </div>
       </div>
 
+      {/* Send Test Email */}
       <div className="bg-white border border-slate-100 rounded-2xl p-6 flex flex-col gap-4">
         <div>
           <h3 className="text-base font-black text-slate-900 tracking-tighter">Send Test Email</h3>
-          <p className="text-xs text-slate-500 mt-1">Verify your SMTP configuration by sending a test message.</p>
+          <p className="text-xs text-slate-500 mt-1">Verify the current SMTP configuration by sending a live test message. The email will arrive from <span className="font-bold text-slate-700">{smtp.from || 'the configured From address'}</span>.</p>
         </div>
         <div className="flex gap-3">
-          <input
-            type="email"
-            value={testEmail}
-            onChange={e => setTestEmail(e.target.value)}
-            placeholder="recipient@example.com"
-            className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-medium placeholder:text-slate-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+          <input type="email" value={testEmail} onChange={e => setTestEmail(e.target.value)}
+            placeholder="your@email.com"
+            className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
           />
-          <button
-            onClick={handleTestEmail}
-            disabled={testing || !testEmail}
-            className="px-5 py-2.5 bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white text-sm font-black rounded-xl transition-all"
-          >
-            {testing ? 'Sending…' : 'Send Test'}
+          <button onClick={handleTest} disabled={testing || !testEmail}
+            className="px-6 py-2.5 bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white text-sm font-black rounded-xl transition-all flex items-center gap-2">
+            {testing && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            {testing ? 'Sending…' : 'Send Test Email'}
           </button>
         </div>
       </div>

@@ -1,17 +1,19 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-export function middleware(request: NextRequest) {
-  const token = request.cookies.get('vorkhive_token')?.value;
-  const isLoginPage = request.nextUrl.pathname === '/login';
+const PUBLIC_PREFIXES = ['/login', '/onboard', '/auth'];
 
-  // Protect all non-login routes
-  if (!token && !isLoginPage) {
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const token = request.cookies.get('vorkhive_token')?.value;
+
+  const isPublic = PUBLIC_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'));
+
+  if (!token && !isPublic) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Redirect authenticated users away from the login page
-  if (token && isLoginPage) {
+  if (token && pathname === '/login') {
     return NextResponse.redirect(new URL('/', request.url));
   }
 

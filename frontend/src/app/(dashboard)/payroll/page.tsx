@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { apiFetch, getAccessToken } from '@/lib/api';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -15,22 +16,9 @@ function fmtPeriod(period: string) {
   return d.toLocaleString('en-SG', { month: 'long', year: 'numeric' });
 }
 
-function getToken() {
-  return document.cookie.split('vorkhive_token=')[1]?.split(';')[0] ?? '';
-}
-
-function apiBase() {
+function resolveApiBase() {
   const h = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
   return process.env.NEXT_PUBLIC_API_URL ?? `http://${h}:4000/api`;
-}
-
-async function apiFetch(path: string, opts: RequestInit = {}) {
-  const token = getToken();
-  const h: Record<string, string> = { 'Content-Type': 'application/json', ...(opts.headers as Record<string, string> ?? {}) };
-  if (token) h['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${apiBase()}${path}`, { ...opts, headers: h });
-  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`); }
-  return res.json();
 }
 
 function fmtRunStatus(s: string): string {
@@ -93,11 +81,7 @@ function EmployeePayslipsView() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(`${apiBase()}/payroll/payslips/me`, {
-          headers: { Authorization: `Bearer ${getToken()}` },
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const data = await res.json();
+        const data = await apiFetch('/payroll/payslips/me');
         setPayslips(data.payslips ?? []);
       } catch (e: any) {
         setError(e.message || 'Failed to load payslips');
@@ -146,8 +130,8 @@ function EmployeePayslipsView() {
   const downloadPdf = async (period: string, label?: string) => {
     setDownloading(period);
     try {
-      const res = await fetch(`${apiBase()}/payroll/payslips/me/${period}`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
+      const res = await fetch(`${resolveApiBase()}/payroll/payslips/me/${period}`, {
+        headers: { Authorization: `Bearer ${getAccessToken()}` },
       });
       if (!res.ok) throw new Error('Download failed');
       const blob = await res.blob();
@@ -451,6 +435,16 @@ function AdminPayrollDashboard() {
   const [runsLoading, setRunsLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState('2026-04');
   const [processingGroup, setProcessingGroup] = useState('all');
+  const [selectedRunType, setSelectedRunType] = useState('MONTHLY');
+  const [confirmCancelRun, setConfirmCancelRun] = useState(false);
+  const [payComponents, setPayComponents] = useState<any[]>([]);
+  const [runPaycodes, setRunPaycodes] = useState<{ [empId: string]: any[] }>({});
+  const [addingPaycodeFor, setAddingPaycodeFor] = useState<string | null>(null);
+  const [newPcComponentId, setNewPcComponentId] = useState('');
+  const [newPcAmount, setNewPcAmount] = useState('');
+  const [newPcDesc, setNewPcDesc] = useState('');
+  const [paycodesDirty, setPaycodesDirty] = useState(false);
+  const [reviewFullscreen, setReviewFullscreen] = useState(false);
 
   async function loadRuns() {
     try {
@@ -492,8 +486,21 @@ function AdminPayrollDashboard() {
   }, [payslipRunId]);
 
   useEffect(() => {
-    if (!reviewRunData) { setReviewPayslips([]); return; }
+    if (!reviewRunData) { setReviewPayslips([]); setRunPaycodes({}); setAddingPaycodeFor(null); setPaycodesDirty(false); return; }
     fetchPayslipsForRun(reviewRunData.id).then(({ payslips }) => setReviewPayslips(payslips));
+    if (reviewRunData.status !== 'DRAFT') {
+      apiFetch(`/payroll/runs/${reviewRunData.id}/paycodes`).then((items: any[]) => {
+        const grouped: { [k: string]: any[] } = {};
+        for (const item of items) { if (!grouped[item.employeeId]) grouped[item.employeeId] = []; grouped[item.employeeId].push(item); }
+        setRunPaycodes(grouped);
+      }).catch(() => {});
+      if (payComponents.length === 0) {
+        apiFetch('/payroll/components').then((comps: any[]) => {
+          setPayComponents(comps);
+          if (comps.length > 0) setNewPcComponentId(comps[0].id);
+        }).catch(() => {});
+      }
+    }
   }, [reviewRunData?.id]);
 
   const filteredEmployees = useMemo(() => {
@@ -504,8 +511,8 @@ function AdminPayrollDashboard() {
   const downloadPayslipPdf = async (employeeId: string, period: string, name: string) => {
     setDlProgress(`Downloading ${name}…`);
     try {
-      const res = await fetch(`${apiBase()}/payroll/payslips/${employeeId}/${period}`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
+      const res = await fetch(`${resolveApiBase()}/payroll/payslips/${employeeId}/${period}`, {
+        headers: { Authorization: `Bearer ${getAccessToken()}` },
       });
       if (!res.ok) throw new Error('PDF not available');
       const blob = await res.blob();
@@ -531,8 +538,8 @@ function AdminPayrollDashboard() {
     setGiroDownloading(true);
     try {
       const params = new URLSearchParams({ bank: giroBank, ...Object.fromEntries(Object.entries(giroFields).filter(([, v]) => v)) });
-      const res = await fetch(`${apiBase()}/payroll/bank-giro/${giroRunId}?${params}`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
+      const res = await fetch(`${resolveApiBase()}/payroll/bank-giro/${giroRunId}?${params}`, {
+        headers: { Authorization: `Bearer ${getAccessToken()}` },
       });
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`); }
       const blob = await res.blob();
@@ -556,7 +563,7 @@ function AdminPayrollDashboard() {
   const handleExecute = async () => {
     setIsProcessing(true);
     try {
-      await apiFetch('/payroll/runs', { method: 'POST', body: JSON.stringify({ period: selectedPeriod, runType: 'MONTHLY' }) });
+      await apiFetch('/payroll/runs', { method: 'POST', body: JSON.stringify({ period: selectedPeriod, runType: selectedRunType }) });
       setIsRunModalOpen(false);
       await loadRuns();
       setShowSuccessToast(true);
@@ -717,6 +724,7 @@ function AdminPayrollDashboard() {
                           <button onClick={() => { const ref = generateGiroRef(run.period); setGiroRunId(run.id); setGiroBank('uob'); setGiroFields({ acct: '', companyName: 'VORKHIVE PTE LTD', valueDate: new Date().toISOString().slice(0,10), ref, batchNo: '001', payDesc: `SALARY ${run.period}` }); }} className="px-4 py-2 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-slate-800 transition-all">GIRO</button>
                           <button onClick={() => handleActionToast('Opening CPF E-Submit Portal…')} className="px-4 py-2 bg-emerald-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-emerald-700 transition-all">FTP</button>
                           <button onClick={() => { setPayslipRunId(run.id); setPayslipRows([]); }} className="px-4 py-2 bg-white border border-slate-200 text-[9px] font-black text-slate-400 uppercase tracking-widest rounded-lg hover:text-indigo-600 hover:border-indigo-600 transition-all">Payslips</button>
+                          <button onClick={() => { setConfirmCancelRun(false); setReviewRunData(run); }} className="px-4 py-2 bg-white border border-red-200 text-[9px] font-black text-red-400 uppercase tracking-widest rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-400 transition-all">Void</button>
                         </div>
                       )}
                     </div>
@@ -887,6 +895,16 @@ function AdminPayrollDashboard() {
                 <input type="month" value={selectedPeriod} onChange={e => setSelectedPeriod(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-sm font-black text-slate-900 outline-none focus:border-indigo-600 transition-all" />
               </div>
               <div className="flex flex-col gap-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Run Type</label>
+                <select value={selectedRunType} onChange={e => setSelectedRunType(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-sm font-black text-slate-900 outline-none focus:border-indigo-600 appearance-none cursor-pointer">
+                  <option value="MONTHLY">Monthly Payroll</option>
+                  <option value="ADHOC">Ad-hoc / Supplemental</option>
+                  <option value="BONUS">Bonus</option>
+                  <option value="COMMISSION">Commission</option>
+                  <option value="FINAL_PAY">Final Pay</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-3">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Workforce Partition</label>
                 <select value={processingGroup} onChange={e => setProcessingGroup(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-sm font-black text-slate-900 outline-none focus:border-indigo-600 appearance-none cursor-pointer">
                   <option value="all">Global Workforce (All Sectors)</option>
@@ -934,8 +952,8 @@ function AdminPayrollDashboard() {
 
       {/* Review Run Modal */}
       {reviewRunData && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/60 backdrop-blur-xl p-8 animate-in fade-in duration-300">
-          <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-4xl border border-slate-100 flex flex-col max-h-[90vh] animate-in slide-in-from-top-10 overflow-hidden">
+        <div className={`fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/60 backdrop-blur-xl animate-in fade-in duration-300 ${reviewFullscreen ? 'p-0' : 'p-8'}`}>
+          <div className={`bg-white shadow-2xl w-full border border-slate-100 flex flex-col animate-in slide-in-from-top-10 overflow-hidden transition-all duration-300 ${reviewFullscreen ? 'h-full rounded-none max-w-none' : 'rounded-[3rem] max-w-4xl max-h-[90vh]'}`}>
             <div className="bg-slate-900 border-b border-slate-800 p-10 flex justify-between items-center shrink-0">
               <div className="flex gap-6 items-center">
                  <div className="w-14 h-14 bg-indigo-600 rounded-3xl flex items-center justify-center text-2xl font-black text-white shadow-2xl shadow-indigo-500/20 shadow-inner">R</div>
@@ -944,7 +962,16 @@ function AdminPayrollDashboard() {
                     <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mt-2">Fiscal Deployment: {fmtPeriod(reviewRunData.period)}</p>
                  </div>
               </div>
-              <button onClick={() => setReviewRunData(null)} className="w-12 h-12 flex items-center justify-center bg-slate-800 border border-slate-700 rounded-2xl text-slate-400 hover:text-white transition-all text-2xl">&times;</button>
+              <div className="flex items-center gap-3">
+                <button onClick={() => setReviewFullscreen(f => !f)} className="w-12 h-12 flex items-center justify-center bg-slate-800 border border-slate-700 rounded-2xl text-slate-400 hover:text-white transition-all" title={reviewFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+                  {reviewFullscreen ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 9L4 4m0 0h5m-5 0v5M15 9l5-5m0 0h-5m5 0v5M9 15l-5 5m0 0h5m-5 0v-5M15 15l5 5m0 0h-5m5 0v-5" /></svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5M20 8V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5M20 16v4m0 0h-4m4 0l-5-5" /></svg>
+                  )}
+                </button>
+                <button onClick={() => { setReviewRunData(null); setReviewFullscreen(false); }} className="w-12 h-12 flex items-center justify-center bg-slate-800 border border-slate-700 rounded-2xl text-slate-400 hover:text-white transition-all text-2xl">&times;</button>
+              </div>
             </div>
             <div className="p-10 overflow-y-auto space-y-12">
               <div className="grid grid-cols-3 gap-8">
@@ -970,14 +997,59 @@ function AdminPayrollDashboard() {
                           </td></tr>
                         ) : filteredEmployees.map((ps, i) => {
                           const name = empNameMap.get(ps.employeeId) ?? ps.employeeId;
+                          const empCodes = runPaycodes[ps.employeeId] || [];
+                          const canEdit = reviewRunData?.status === 'PENDING_APPROVAL';
+                          const isAddingHere = addingPaycodeFor === ps.employeeId;
                           return (
-                            <tr key={i} className="hover:bg-slate-50 cursor-pointer transition-all">
-                              <td className="px-8 py-4"><div className="flex flex-col"><span className="font-black text-slate-900 uppercase tracking-tight">{name}</span><span className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">{ps.employeeId.slice(0, 8)}</span></div></td>
-                              <td className="px-8 py-4 text-right text-slate-600">SGD {fmtSGD(ps.grossPay)}</td>
-                              <td className="px-8 py-4 text-right text-red-500 italic">-SGD {fmtSGD(ps.employeeCpf)}</td>
-                              <td className="px-8 py-4 text-right text-slate-400">SGD {fmtSGD(ps.employerCpf)}</td>
-                              <td className="px-8 py-4 text-right font-black text-indigo-600 tracking-tight">SGD {fmtSGD(ps.netPay)}</td>
-                            </tr>
+                            <React.Fragment key={i}>
+                              <tr className="hover:bg-slate-50 transition-all">
+                                <td className="px-8 py-4">
+                                  <div className="flex flex-col gap-1">
+                                    <span className="font-black text-slate-900 uppercase tracking-tight">{name}</span>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase">{ps.employeeId.slice(0, 8)}</span>
+                                    {canEdit && <button onClick={() => { setAddingPaycodeFor(isAddingHere ? null : ps.employeeId); setNewPcAmount(''); setNewPcDesc(''); if (payComponents.length > 0 && !newPcComponentId) setNewPcComponentId(payComponents[0].id); }} className="text-[9px] font-black text-indigo-500 uppercase tracking-widest hover:text-indigo-700 text-left mt-1">+ Add Paycode</button>}
+                                  </div>
+                                </td>
+                                <td className="px-8 py-4 text-right text-slate-600">SGD {fmtSGD(ps.grossPay)}</td>
+                                <td className="px-8 py-4 text-right text-red-500 italic">-SGD {fmtSGD(ps.employeeCpf)}</td>
+                                <td className="px-8 py-4 text-right text-slate-400">SGD {fmtSGD(ps.employerCpf)}</td>
+                                <td className="px-8 py-4 text-right font-black text-indigo-600 tracking-tight">SGD {fmtSGD(ps.netPay)}</td>
+                              </tr>
+                              {(empCodes.length > 0 || isAddingHere) && (
+                                <tr className="bg-indigo-50/30">
+                                  <td colSpan={5} className="px-8 pb-4 pt-1">
+                                    <div className="flex flex-col gap-2">
+                                      {empCodes.map((pc: any) => (
+                                        <div key={pc.id} className="flex items-center justify-between bg-white border border-slate-100 rounded-xl px-4 py-2">
+                                          <span className="text-[10px] font-black text-slate-600 uppercase tracking-wide">{pc.description}</span>
+                                          <div className="flex items-center gap-3">
+                                            <span className={`text-[10px] font-black ${pc.amount >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{pc.amount >= 0 ? '+' : ''}SGD {fmtSGD(Math.abs(pc.amount))}</span>
+                                            <span className="text-[9px] text-slate-300 uppercase">{pc.wageType}</span>
+                                            {canEdit && <button onClick={async () => { await apiFetch(`/payroll/runs/${reviewRunData.id}/paycodes/${pc.id}`, { method: 'DELETE' }); setRunPaycodes(p => { const n = { ...p }; n[ps.employeeId] = (n[ps.employeeId] || []).filter((x: any) => x.id !== pc.id); return n; }); setPaycodesDirty(true); }} className="text-red-400 hover:text-red-600 text-xs font-black">×</button>}
+                                          </div>
+                                        </div>
+                                      ))}
+                                      {isAddingHere && (
+                                        <div className="flex items-center gap-3 bg-white border border-indigo-200 rounded-xl px-4 py-3 mt-1">
+                                          <select value={newPcComponentId} onChange={e => setNewPcComponentId(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-900 outline-none focus:border-indigo-500 flex-1">
+                                            {payComponents.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                          </select>
+                                          <input type="number" placeholder="Amount (neg = deduction)" value={newPcAmount} onChange={e => setNewPcAmount(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-900 outline-none focus:border-indigo-500 w-44" />
+                                          <button onClick={async () => {
+                                            if (!newPcAmount) return;
+                                            const comp = payComponents.find((c: any) => c.id === newPcComponentId);
+                                            const item = await apiFetch(`/payroll/runs/${reviewRunData.id}/paycodes`, { method: 'POST', body: JSON.stringify({ employeeId: ps.employeeId, componentId: newPcComponentId, description: newPcDesc || comp?.name, amount: parseFloat(newPcAmount) }) });
+                                            setRunPaycodes(p => { const n = { ...p }; n[ps.employeeId] = [...(n[ps.employeeId] || []), item]; return n; });
+                                            setAddingPaycodeFor(null); setNewPcAmount(''); setNewPcDesc(''); setPaycodesDirty(true);
+                                          }} className="px-4 py-1.5 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-indigo-700 transition-all whitespace-nowrap">Add</button>
+                                          <button onClick={() => setAddingPaycodeFor(null)} className="text-slate-400 hover:text-slate-600 text-xs font-black">×</button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
                           );
                         })}
                       </tbody>
@@ -987,38 +1059,87 @@ function AdminPayrollDashboard() {
               </div>
             </div>
             <div className="bg-slate-50 border-t border-slate-100 p-10 flex justify-between items-center rounded-b-[3rem]">
-               <button onClick={() => setReviewRunData(null)} className="px-10 py-5 bg-white border border-slate-200 text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-slate-100 transition-all">Close</button>
+               <div className="flex gap-3">
+                 <button onClick={() => { setReviewRunData(null); setConfirmCancelRun(false); setReviewFullscreen(false); }} className="px-10 py-5 bg-white border border-slate-200 text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-slate-100 transition-all">Close</button>
+                 {!confirmCancelRun ? (
+                   <button onClick={() => {
+                     if (reviewRunData?.status === 'FINALISED') { setConfirmCancelRun(true); } else {
+                       const id = reviewRunData.id; const period = reviewRunData.period;
+                       setReviewRunData(null);
+                       apiFetch(`/payroll/runs/${id}/cancel`, { method: 'POST' })
+                         .then(() => { handleActionToast(`Payroll run for ${period} cancelled.`); loadRuns(); })
+                         .catch((e: any) => handleActionToast(e.message || 'Failed to cancel run'));
+                     }
+                   }} className="px-10 py-5 bg-white border border-red-200 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-red-50 transition-all">
+                     Cancel Run
+                   </button>
+                 ) : (
+                   <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-2xl px-5 py-3">
+                     <span className="text-[9px] font-black text-red-600 uppercase tracking-widest">This will void all published payslips. Confirm?</span>
+                     <button onClick={async () => {
+                       const id = reviewRunData.id; const period = reviewRunData.period;
+                       setConfirmCancelRun(false); setReviewRunData(null);
+                       try {
+                         await apiFetch(`/payroll/runs/${id}/cancel`, { method: 'POST' });
+                         handleActionToast(`Payroll run for ${period} voided.`); loadRuns();
+                       } catch (e: any) { handleActionToast(e.message || 'Failed to void run'); }
+                     }} className="px-5 py-2 bg-red-600 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-red-700 transition-all">Void</button>
+                     <button onClick={() => setConfirmCancelRun(false)} className="px-5 py-2 bg-white border border-slate-200 text-slate-500 text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-100 transition-all">Back</button>
+                   </div>
+                 )}
+               </div>
                <div className="flex gap-4 items-center">
                  {reviewRunData?.status === 'DRAFT' && (
                    <div className="text-[9px] font-black text-amber-600 uppercase tracking-widest bg-amber-50 border border-amber-100 px-4 py-2 rounded-xl">
                      Step 1 of 3 · Compute payroll to proceed
                    </div>
                  )}
-                 {reviewRunData?.status === 'PENDING_APPROVAL' && (
+                 {reviewRunData?.status === 'PENDING_APPROVAL' && paycodesDirty && (
+                   <div className="text-[9px] font-black text-amber-600 uppercase tracking-widest bg-amber-50 border border-amber-200 px-4 py-2 rounded-xl">
+                     ⚠ Paycodes changed · Recompute to apply
+                   </div>
+                 )}
+                 {reviewRunData?.status === 'PENDING_APPROVAL' && !paycodesDirty && (
                    <div className="text-[9px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 border border-indigo-100 px-4 py-2 rounded-xl">
                      Step 2 of 3 · Awaiting authorisation
                    </div>
                  )}
-                 <button onClick={async () => {
-                   const id = reviewRunData.id;
-                   const status = reviewRunData.status;
-                   setReviewRunData(null);
-                   try {
-                     if (status === 'APPROVED') {
-                       await apiFetch(`/payroll/runs/${id}/finalise`, { method: 'POST' });
-                       handleActionToast('Payroll finalised. Payslips published.');
-                     } else if (status === 'PENDING_APPROVAL') {
-                       await apiFetch(`/payroll/runs/${id}/approve`, { method: 'POST' });
-                       handleActionToast('Payroll approved. Ready to finalise.');
-                     } else if (status === 'DRAFT') {
+                 {reviewRunData?.status === 'PENDING_APPROVAL' && paycodesDirty && (
+                   <button onClick={async () => {
+                     const id = reviewRunData.id;
+                     try {
                        await apiFetch(`/payroll/runs/${id}/compute`, { method: 'POST', body: JSON.stringify({}) });
-                       handleActionToast('Payroll computed. Pending authorisation.');
-                     }
-                     loadRuns();
-                   } catch (e: any) { handleActionToast(e.message || 'Action failed'); }
-                 }} className="px-12 py-5 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-indigo-700 shadow-2xl shadow-indigo-500/20 active:scale-95 transition-all">
-                   {reviewRunData?.status === 'APPROVED' ? 'Finalise & Publish' : reviewRunData?.status === 'PENDING_APPROVAL' ? 'Authorize Disbursement' : 'Compute Payroll'}
-                 </button>
+                       const { payslips } = await fetchPayslipsForRun(id);
+                       setReviewPayslips(payslips);
+                       setPaycodesDirty(false);
+                       handleActionToast('Recomputed with updated paycodes.');
+                     } catch (e: any) { handleActionToast(e.message || 'Recompute failed'); }
+                   }} className="px-10 py-5 bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-amber-600 shadow-xl shadow-amber-500/20 active:scale-95 transition-all">
+                     Recompute
+                   </button>
+                 )}
+                 {reviewRunData?.status !== 'FINALISED' && !(reviewRunData?.status === 'PENDING_APPROVAL' && paycodesDirty) && (
+                   <button onClick={async () => {
+                     const id = reviewRunData.id;
+                     const status = reviewRunData.status;
+                     setReviewRunData(null);
+                     try {
+                       if (status === 'APPROVED') {
+                         await apiFetch(`/payroll/runs/${id}/finalise`, { method: 'POST' });
+                         handleActionToast('Payroll finalised. Payslips published.');
+                       } else if (status === 'PENDING_APPROVAL') {
+                         await apiFetch(`/payroll/runs/${id}/approve`, { method: 'POST' });
+                         handleActionToast('Payroll approved. Ready to finalise.');
+                       } else if (status === 'DRAFT') {
+                         await apiFetch(`/payroll/runs/${id}/compute`, { method: 'POST', body: JSON.stringify({}) });
+                         handleActionToast('Payroll computed. Pending authorisation.');
+                       }
+                       loadRuns();
+                     } catch (e: any) { handleActionToast(e.message || 'Action failed'); }
+                   }} className="px-12 py-5 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-indigo-700 shadow-2xl shadow-indigo-500/20 active:scale-95 transition-all">
+                     {reviewRunData?.status === 'APPROVED' ? 'Finalise & Publish' : reviewRunData?.status === 'PENDING_APPROVAL' ? 'Authorize Disbursement' : 'Compute Payroll'}
+                   </button>
+                 )}
                </div>
             </div>
           </div>

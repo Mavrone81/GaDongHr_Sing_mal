@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import { apiFetch, getAccessToken } from '@/lib/api';
 
 type SortKey = 'fullName' | 'employeeCode' | 'department' | 'employmentType' | 'isActive';
 type SortDir = 'asc' | 'desc';
@@ -16,6 +17,7 @@ interface Employee {
   employmentType: string;
   isActive: boolean;
   citizenshipStatus: string;
+  workEmail?: string;
 }
 
 interface ParsedRow { [key: string]: string }
@@ -82,11 +84,29 @@ export default function EmployeeDirectoryPage() {
   const [uploadResult, setUploadResult] = useState<{ created: number; failed: number; results: { created: { row: number; employeeCode: string; name: string }[]; failed: { row: number; name: string; error: string }[] } } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+  // Provision identity state
+  const [provisionOpen, setProvisionOpen] = useState(false);
+  const [provisionEmpId, setProvisionEmpId] = useState('');
+  const [provisionEmail, setProvisionEmail] = useState('');
+  const [provisionName, setProvisionName] = useState('');
+  const [provisionPassword, setProvisionPassword] = useState('');
+  const [provisionRole, setProvisionRole] = useState('EMPLOYEE');
+  const [provisioning, setProvisioning] = useState(false);
+  const [provisionResult, setProvisionResult] = useState<{ ok: boolean; message: string; userId?: string } | null>(null);
+  const [sendingInvite, setSendingInvite] = useState(false);
+  const [inviteSent, setInviteSent] = useState(false);
 
-  const getToken = () => typeof document !== 'undefined'
-    ? document.cookie.split('vorkhive_token=')[1]?.split(';')[0] ?? ''
-    : '';
+  // Applications state
+  const [applicationsOpen, setApplicationsOpen] = useState(false);
+  type Application = { id: string; fullName: string; preferredName?: string; email: string; userId: string; gender?: string; dateOfBirth?: string; nationality?: string; nricFin?: string; personalPhone?: string; homeAddress?: string; department?: string; designation?: string; employmentType?: string; startDate?: string; bankName?: string; bankAccount?: string; notes?: string; status: string; createdAt: string };
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<{ id: string; name: string; email: string; inviteExpiry: string; createdAt: string }[]>([]);
+  const [appLoading, setAppLoading] = useState(false);
+  const [approvingId, setApprovingId] = useState('');
+  const [retriggeringId, setRetriggeringId] = useState('');
+  const [reviewingApp, setReviewingApp] = useState<Application | null>(null);
+
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
   const handleSort = (key: SortKey) => {
     if (key === sortKey) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -111,26 +131,23 @@ export default function EmployeeDirectoryPage() {
 
   const fetchEmployees = useCallback(async () => {
     try {
-      const token = getToken();
-      const res = await fetch(`${apiBaseUrl}/employees?search=${searchQuery}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setEmployees(data.employees || []);
-        setTotal(data.total || 0);
-      }
+      const data = await apiFetch(`/employees?search=${searchQuery}`);
+      setEmployees(data.employees || []);
+      setTotal(data.total || 0);
     } catch (err) {
       console.error('Failed to fetch employees:', err);
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, apiBaseUrl]);
+  }, [searchQuery]);
 
   useEffect(() => {
     const t = setTimeout(fetchEmployees, 300);
     return () => clearTimeout(t);
   }, [fetchEmployees]);
+
+  // Load pending count on mount so badge shows without clicking
+  useEffect(() => { loadApplications(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -151,7 +168,7 @@ export default function EmployeeDirectoryPage() {
     try {
       const res = await fetch(`${apiBaseUrl}/employees/bulk-import`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAccessToken()}` },
         body: JSON.stringify(csvRows),
       });
       const data = await res.json();
@@ -171,6 +188,103 @@ export default function EmployeeDirectoryPage() {
     setCsvFile('');
     setUploadResult(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const resetProvision = () => {
+    setProvisionOpen(false);
+    setProvisionEmpId('');
+    setProvisionEmail('');
+    setProvisionName('');
+    setProvisionPassword('');
+    setProvisionRole('EMPLOYEE');
+    setProvisionResult(null);
+  };
+
+  const submitProvision = async () => {
+    if (!provisionEmail || !provisionPassword || !provisionName) return;
+    setProvisioning(true);
+    setProvisionResult(null);
+    try {
+      const data = await apiFetch('/users', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: provisionEmail,
+          password: provisionPassword,
+          name: provisionName,
+          role: provisionRole,
+          employeeId: provisionEmpId || undefined,
+        }),
+      });
+      setProvisionResult({ ok: true, message: `Login account created for ${provisionName}`, userId: data.id });
+    } catch (e: any) {
+      setProvisionResult({ ok: false, message: e.message });
+    } finally {
+      setProvisioning(false);
+    }
+  };
+
+  const sendOnboardingInvite = async (userId: string) => {
+    setSendingInvite(true);
+    try {
+      await apiFetch(`/users/${userId}/send-invite`, { method: 'POST' });
+      setInviteSent(true);
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setSendingInvite(false);
+    }
+  };
+
+  const loadApplications = async () => {
+    setAppLoading(true);
+    try {
+      const token = getAccessToken();
+      const [appRes, inviteRes] = await Promise.all([
+        fetch(`${apiBaseUrl}/employees/applications`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${apiBaseUrl}/users/pending-invites`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      const apps = appRes.ok ? await appRes.json() : [];
+      const invites = inviteRes.ok ? await inviteRes.json() : [];
+      setApplications(apps);
+      // Filter out users who already submitted an application
+      const submittedUserIds = new Set((apps as { userId: string }[]).map(a => a.userId));
+      setPendingInvites(invites.filter((u: { id: string }) => !submittedUserIds.has(u.id)));
+    } finally {
+      setAppLoading(false);
+    }
+  };
+
+  const retriggerInvite = async (userId: string) => {
+    setRetriggeringId(userId);
+    try {
+      await apiFetch(`/users/${userId}/send-invite`, { method: 'POST' });
+      alert('Invite re-sent successfully.');
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setRetriggeringId('');
+    }
+  };
+
+  const approveApplication = async (id: string) => {
+    setApprovingId(id);
+    try {
+      await apiFetch(`/employees/applications/${id}/approve`, { method: 'POST' });
+      await loadApplications();
+      await fetchEmployees();
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setApprovingId('');
+    }
+  };
+
+  const rejectApplication = async (id: string) => {
+    if (!confirm('Reject this application?')) return;
+    try {
+      await apiFetch(`/employees/applications/${id}/reject`, { method: 'PATCH' });
+      await loadApplications();
+    } catch {}
   };
 
   return (
@@ -331,7 +445,19 @@ export default function EmployeeDirectoryPage() {
           </button>
 
           <button
-            onClick={() => {}}
+            onClick={() => { loadApplications(); setApplicationsOpen(true); }}
+            className="px-8 py-4 bg-amber-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-amber-600 shadow-xl shadow-amber-500/20 transition-all active:scale-95 flex items-center gap-2 relative"
+          >
+            Pending Profiles
+            {(applications.length + pendingInvites.length) > 0 && (
+              <span className="ml-1 bg-white text-amber-600 rounded-full text-[9px] font-black w-5 h-5 flex items-center justify-center">
+                {applications.length + pendingInvites.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => { setProvisionResult(null); setInviteSent(false); setProvisionOpen(true); }}
             className="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-indigo-700 shadow-xl shadow-indigo-500/30 transition-all active:scale-95 flex items-center gap-3"
           >
             <span>+</span> Provision Identity
@@ -441,6 +567,384 @@ export default function EmployeeDirectoryPage() {
           </div>
         </div>
       </section>
+
+      {/* Provision Identity Modal */}
+      {provisionOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-white rounded-[2rem] shadow-2xl shadow-slate-900/20 flex flex-col overflow-hidden">
+
+            <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
+              <div>
+                <h2 className="text-lg font-black text-slate-900 tracking-tighter">Provision Identity</h2>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Create login credentials for an employee</p>
+              </div>
+              <button onClick={resetProvision} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all text-lg">✕</button>
+            </div>
+
+            <div className="flex flex-col gap-5 p-8">
+
+              {/* Link to employee */}
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Link to Employee</label>
+                <select
+                  value={provisionEmpId}
+                  onChange={e => {
+                    const emp = employees.find(em => em.id === e.target.value);
+                    setProvisionEmpId(e.target.value);
+                    if (emp) {
+                      setProvisionName(emp.fullName);
+                      setProvisionEmail(emp.workEmail || '');
+                    }
+                  }}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all appearance-none"
+                >
+                  <option value="">— Standalone account (no employee record) —</option>
+                  {employees.map(emp => (
+                    <option key={emp.id} value={emp.id}>{emp.fullName} · {emp.employeeCode}</option>
+                  ))}
+                </select>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                  When linked, this login inherits the employee's contractual details — leave entitlements, compliance status, payroll &amp; attendance records
+                </p>
+              </div>
+
+              {/* Display name */}
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Display Name</label>
+                <input
+                  type="text"
+                  value={provisionName}
+                  onChange={e => setProvisionName(e.target.value)}
+                  placeholder="Full name"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all placeholder:font-normal placeholder:text-slate-300"
+                />
+              </div>
+
+              {/* Email */}
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Login Email</label>
+                <input
+                  type="email"
+                  value={provisionEmail}
+                  onChange={e => setProvisionEmail(e.target.value)}
+                  placeholder="user@company.com"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all placeholder:font-normal placeholder:text-slate-300"
+                />
+              </div>
+
+              {/* Temporary password */}
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Temporary Password</label>
+                <input
+                  type="text"
+                  value={provisionPassword}
+                  onChange={e => setProvisionPassword(e.target.value)}
+                  placeholder="Min 8 characters"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all placeholder:font-normal placeholder:text-slate-300"
+                />
+              </div>
+
+              {/* Role */}
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">System Role</label>
+                <select
+                  value={provisionRole}
+                  onChange={e => setProvisionRole(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all appearance-none"
+                >
+                  <option value="EMPLOYEE">Employee</option>
+                  <option value="HR_ADMIN">HR Admin</option>
+                  <option value="PAYROLL_OFFICER">Payroll Officer</option>
+                  <option value="ADMIN">Admin</option>
+                  <option value="SUPER_ADMIN">Super Admin</option>
+                </select>
+              </div>
+
+              {/* Result banner */}
+              {provisionResult && (
+                <div className={`px-4 py-3 rounded-xl text-xs font-bold ${provisionResult.ok ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
+                  {provisionResult.message}
+                </div>
+              )}
+
+              {provisionResult?.ok && provisionResult.userId && !inviteSent && (
+                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
+                  <p className="text-xs font-black text-indigo-700 mb-1">Send Onboarding Invitation</p>
+                  <p className="text-[10px] font-bold text-indigo-500 mb-3">Send a secure link so the user can fill in their personal details for HR clearance.</p>
+                  <button onClick={() => sendOnboardingInvite(provisionResult.userId!)} disabled={sendingInvite}
+                    className="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+                    {sendingInvite ? 'Sending…' : 'Send Onboarding Email'}
+                  </button>
+                </div>
+              )}
+
+              {inviteSent && (
+                <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 text-xs font-bold text-emerald-700">
+                  Onboarding invite sent to {provisionEmail}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => { resetProvision(); setInviteSent(false); }}
+                  className="flex-1 px-4 py-3 border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 uppercase tracking-widest hover:bg-slate-50 transition-all"
+                >
+                  {provisionResult?.ok ? 'Close' : 'Cancel'}
+                </button>
+                {!provisionResult?.ok && (
+                  <button
+                    onClick={submitProvision}
+                    disabled={provisioning || !provisionEmail || !provisionPassword || !provisionName}
+                    className="flex-1 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                  >
+                    {provisioning ? 'Provisioning…' : 'Create Account'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Application Review Panel ─────────────────────────────────────────── */}
+      {reviewingApp && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl shadow-slate-900/20 flex flex-col max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className="px-8 pt-8 pb-6 border-b border-slate-100 flex items-start justify-between flex-shrink-0">
+              <div>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Pending HR Verification</p>
+                <h2 className="text-xl font-black text-slate-900 tracking-tighter">{reviewingApp.fullName}</h2>
+                <p className="text-xs font-bold text-slate-400 mt-0.5">{reviewingApp.email} · Submitted {new Date(reviewingApp.createdAt).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+              </div>
+              <button onClick={() => setReviewingApp(null)} className="text-slate-300 hover:text-slate-600 transition-colors text-xl leading-none">✕</button>
+            </div>
+
+            {/* Body */}
+            <div className="overflow-y-auto flex-1 px-8 py-6 flex flex-col gap-6">
+
+              {/* Personal Details */}
+              <section>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-100 pb-2">Personal Details</p>
+                <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+                  {[
+                    ['Full Legal Name', reviewingApp.fullName],
+                    ['Preferred Name', reviewingApp.preferredName || '—'],
+                    ['Gender', reviewingApp.gender || '—'],
+                    ['Date of Birth', reviewingApp.dateOfBirth ? new Date(reviewingApp.dateOfBirth).toLocaleDateString('en-SG') : '—'],
+                    ['Nationality', reviewingApp.nationality || '—'],
+                    ['NRIC / FIN', reviewingApp.nricFin || '—'],
+                  ].map(([label, val]) => (
+                    <div key={label}>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                      <p className="text-sm font-bold text-slate-800 mt-0.5">{val}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* Contact */}
+              <section>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-100 pb-2">Contact & Address</p>
+                <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+                  {[
+                    ['Mobile', reviewingApp.personalPhone || '—'],
+                    ['Home Address', reviewingApp.homeAddress || '—'],
+                  ].map(([label, val]) => (
+                    <div key={label} className={label === 'Home Address' ? 'col-span-2' : ''}>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                      <p className="text-sm font-bold text-slate-800 mt-0.5">{val}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* Employment */}
+              <section>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-100 pb-2">Employment</p>
+                <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+                  {[
+                    ['Department', reviewingApp.department || '—'],
+                    ['Designation', reviewingApp.designation || '—'],
+                    ['Employment Type', reviewingApp.employmentType?.replace('_', ' ') || '—'],
+                    ['Start Date', reviewingApp.startDate ? new Date(reviewingApp.startDate).toLocaleDateString('en-SG') : '—'],
+                  ].map(([label, val]) => (
+                    <div key={label}>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                      <p className="text-sm font-bold text-slate-800 mt-0.5">{val}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* Banking */}
+              <section>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-100 pb-2">Banking</p>
+                <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+                  {[
+                    ['Bank', reviewingApp.bankName || '—'],
+                    ['Account Number', reviewingApp.bankAccount || '—'],
+                  ].map(([label, val]) => (
+                    <div key={label}>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                      <p className="text-sm font-bold text-slate-800 mt-0.5">{val}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {reviewingApp.notes && (
+                <section>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Notes from Employee</p>
+                  <p className="text-sm font-bold text-slate-700 bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">{reviewingApp.notes}</p>
+                </section>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="px-8 py-5 border-t border-slate-100 flex items-center justify-between flex-shrink-0">
+              <button onClick={() => { rejectApplication(reviewingApp.id); setReviewingApp(null); }}
+                className="px-5 py-2.5 text-[10px] font-black text-red-500 border border-red-200 bg-red-50 rounded-xl uppercase tracking-widest hover:bg-red-100 transition-all">
+                Reject Application
+              </button>
+              <div className="flex items-center gap-3">
+                <button onClick={() => setReviewingApp(null)}
+                  className="px-5 py-2.5 text-[10px] font-black text-slate-500 border border-slate-200 rounded-xl uppercase tracking-widest hover:bg-slate-50 transition-all">
+                  Cancel
+                </button>
+                <button
+                  onClick={() => { approveApplication(reviewingApp.id); setReviewingApp(null); }}
+                  disabled={approvingId === reviewingApp.id}
+                  className="px-6 py-2.5 text-[10px] font-black text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl uppercase tracking-widest shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2">
+                  {approvingId === reviewingApp.id && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  Approve & Create Employee
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Profiles Modal */}
+      {applicationsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="w-full max-w-4xl bg-white rounded-[2rem] shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+            <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
+              <div>
+                <h2 className="text-lg font-black text-slate-900 tracking-tighter">Pending Employee Profiles</h2>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                  {pendingInvites.length} awaiting submission · {applications.length} awaiting HR verification
+                </p>
+              </div>
+              <button onClick={() => setApplicationsOpen(false)} className="text-slate-400 hover:text-slate-600 text-xl font-black transition-colors">✕</button>
+            </div>
+
+            <div className="overflow-y-auto flex-1">
+              {appLoading ? (
+                <div className="p-16 text-center text-slate-400 text-sm font-bold">Loading…</div>
+              ) : pendingInvites.length === 0 && applications.length === 0 ? (
+                <div className="p-16 flex flex-col items-center gap-4">
+                  <div className="w-14 h-14 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-center text-2xl">📋</div>
+                  <p className="text-sm font-black text-slate-400 uppercase tracking-widest">No pending profiles</p>
+                  <p className="text-xs font-bold text-slate-300 text-center max-w-sm">Provision a user and send them an onboarding invite to get started.</p>
+                </div>
+              ) : (
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-400 text-[9px] font-black uppercase tracking-[0.18em] border-b border-slate-100">
+                      <th className="px-8 py-4">Name / Email</th>
+                      <th className="px-4 py-4">Status</th>
+                      <th className="px-4 py-4">Department</th>
+                      <th className="px-4 py-4">Date</th>
+                      <th className="px-8 py-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+
+                    {/* ── Pending User Submission (invited, not yet filled form) ── */}
+                    {pendingInvites.map(u => (
+                      <tr key={u.id} className="hover:bg-slate-50/60 transition-all">
+                        <td className="px-8 py-5">
+                          <p className="text-sm font-black text-slate-900">{u.name}</p>
+                          <p className="text-[9px] font-bold text-slate-400 mt-0.5">{u.email}</p>
+                        </td>
+                        <td className="px-4 py-5">
+                          <span className="inline-flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest border px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border-amber-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                            Pending User Submission
+                          </span>
+                        </td>
+                        <td className="px-4 py-5">
+                          <span className="text-[9px] text-slate-400 font-bold">—</span>
+                        </td>
+                        <td className="px-4 py-5">
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-400">Invited {new Date(u.createdAt).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                            {u.inviteExpiry && new Date(u.inviteExpiry) < new Date() && (
+                              <p className="text-[9px] font-black text-red-500 mt-0.5">Link expired</p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-8 py-5 text-right">
+                          <button
+                            onClick={() => retriggerInvite(u.id)}
+                            disabled={retriggeringId === u.id}
+                            className="text-[9px] font-black text-indigo-600 border border-indigo-200 bg-indigo-50 px-3 py-1.5 rounded-lg uppercase tracking-widest hover:bg-indigo-100 disabled:opacity-50 transition-all"
+                          >
+                            {retriggeringId === u.id ? 'Sending…' : 'Re-send Invite'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+
+                    {/* ── Pending HR Verification (submitted, waiting for HR) ── */}
+                    {applications.map(app => (
+                      <tr key={app.id} className="hover:bg-slate-50/60 transition-all">
+                        <td className="px-8 py-5">
+                          <p className="text-sm font-black text-slate-900">{app.fullName}</p>
+                          <p className="text-[9px] font-bold text-slate-400 mt-0.5">{app.email}</p>
+                        </td>
+                        <td className="px-4 py-5">
+                          <span className="inline-flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest border px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border-blue-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                            Pending HR Verification
+                          </span>
+                        </td>
+                        <td className="px-4 py-5">
+                          <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">{app.department || '—'}</span>
+                          {app.designation && <p className="text-[9px] font-bold text-slate-400 mt-0.5">{app.designation}</p>}
+                        </td>
+                        <td className="px-4 py-5">
+                          <span className="text-[9px] font-bold text-slate-400">{new Date(app.createdAt).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                        </td>
+                        <td className="px-8 py-5 text-right">
+                          <button onClick={() => setReviewingApp(app)}
+                            className="text-[9px] font-black text-indigo-600 border border-indigo-200 bg-indigo-50 px-3 py-1.5 rounded-lg uppercase tracking-widest hover:bg-indigo-100 transition-all">
+                            Review →
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="px-8 py-5 border-t border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-6 text-[9px] font-black uppercase tracking-widest text-slate-400">
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400" /> Pending User Submission — awaiting employee self-fill</span>
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500" /> Pending HR Verification — HR action required</span>
+              </div>
+              <button onClick={() => setApplicationsOpen(false)}
+                className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

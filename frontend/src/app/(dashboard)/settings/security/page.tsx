@@ -2,23 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-
-function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  const c = document.cookie.split('; ').find(r => r.startsWith('vorkhive_token='));
-  return c ? c.split('=').slice(1).join('=') : null;
-}
-function apiBase(): string {
-  return process.env.NEXT_PUBLIC_API_URL ?? `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:4000/api`;
-}
-async function apiFetch(path: string, opts: RequestInit = {}) {
-  const token = getToken();
-  const h: Record<string, string> = { 'Content-Type': 'application/json', ...(opts.headers as Record<string, string> ?? {}) };
-  if (token) h['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${apiBase()}${path}`, { ...opts, headers: h });
-  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`); }
-  return res.json();
-}
+import { apiFetch } from '@/lib/api';
 
 interface OrgUser { id: string; name: string; email: string; role: string; mfaEnabled: boolean; mfaExempt: boolean; isActive: boolean; }
 interface ResetMfaState { userId: string; step: 'confirm' | 'loading'; }
@@ -218,7 +202,9 @@ export default function SecurityPage() {
     setSaving(true);
     const settings = { mfaRequired, ssoEnabled, ssoConfig, sessionTimeout, ipWhitelist };
     localStorage.setItem('vorkhive_security_settings', JSON.stringify(settings));
-    await new Promise(r => setTimeout(r, 600));
+    // Persist SSO config to server so auth-service can read the clientId
+    apiFetch('/auth/org-settings/general', { method: 'PUT', body: JSON.stringify({ ssoConfig }) }).catch(() => {});
+    await new Promise(r => setTimeout(r, 400));
     setSaving(false);
     showToast('Security settings saved');
   };
@@ -496,7 +482,7 @@ export default function SecurityPage() {
 
                 {enabled && expanded && (
                   <div className="px-5 pb-5 border-t border-violet-100 pt-4 flex flex-col gap-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className={`grid gap-4 ${provider.id === 'microsoft' ? 'grid-cols-3' : 'grid-cols-2'}`}>
                       <div className="flex flex-col gap-2">
                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Client ID / App ID</label>
                         <input
@@ -508,6 +494,19 @@ export default function SecurityPage() {
                           className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 transition-all placeholder:font-normal placeholder:text-slate-300 disabled:opacity-60"
                         />
                       </div>
+                      {provider.id === 'microsoft' && (
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tenant ID</label>
+                          <input
+                            type="text"
+                            value={(cfg as { clientId: string; domain: string; tenantId?: string }).tenantId ?? ''}
+                            onChange={e => setSsoConfig(prev => ({ ...prev, [provider.id]: { ...cfg, tenantId: e.target.value } }))}
+                            placeholder="common (or your tenant UUID)"
+                            disabled={!canEdit}
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 transition-all placeholder:font-normal placeholder:text-slate-300 disabled:opacity-60"
+                          />
+                        </div>
+                      )}
                       <div className="flex flex-col gap-2">
                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Organisation Domain</label>
                         <input

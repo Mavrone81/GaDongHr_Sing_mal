@@ -1,0 +1,104 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
+
+function apiUrl() {
+  if (typeof window === 'undefined') return 'http://localhost:4000/api';
+  return process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:4000/api`;
+}
+
+function getSearchParams() {
+  if (typeof window === 'undefined') return new URLSearchParams();
+  return new URLSearchParams(window.location.search);
+}
+
+export default function MicrosoftCallbackPage() {
+  const router = useRouter();
+  const { login } = useAuth();
+  const [status, setStatus] = useState<'loading' | 'error'>('loading');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    const params = getSearchParams();
+    const code = params.get('code');
+    const errorParam = params.get('error');
+    const errorDescription = params.get('error_description');
+
+    if (errorParam) {
+      setErrorMsg(errorParam === 'access_denied' ? 'You declined the Microsoft sign-in request.' : (errorDescription || errorParam));
+      setStatus('error');
+      return;
+    }
+
+    if (!code) {
+      setErrorMsg('No authorization code received from Microsoft.');
+      setStatus('error');
+      return;
+    }
+
+    const redirectUri = `${window.location.origin}/auth/callback/microsoft`;
+
+    fetch(`${apiUrl()}/auth/sso/microsoft/callback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, redirectUri }),
+    })
+      .then(async res => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        return data;
+      })
+      .then(async data => {
+        if (data.ssoMfaPending) {
+          sessionStorage.setItem('sso_pending_token', data.pendingToken);
+          sessionStorage.setItem('sso_mfa_method', data.mfaMethod || 'TOTP');
+          sessionStorage.setItem('sso_mfa_setup', data.mfaSetupRequired ? '1' : '0');
+          router.replace('/login?sso_mfa=1');
+          return;
+        }
+        await login(data.accessToken);
+        router.replace('/');
+      })
+      .catch(err => {
+        setErrorMsg(err.message || 'Sign-in failed. Please try again.');
+        setStatus('error');
+      });
+  }, []);
+
+  if (status === 'error') {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-2xl p-10 w-full max-w-sm text-center flex flex-col items-center gap-5">
+          <div className="w-14 h-14 bg-red-50 border-2 border-red-200 rounded-2xl flex items-center justify-center text-2xl">✕</div>
+          <div>
+            <h2 className="text-sm font-black text-slate-900 tracking-tighter mb-1">Sign-In Failed</h2>
+            <p className="text-xs font-bold text-slate-500">{errorMsg}</p>
+          </div>
+          <button onClick={() => router.replace('/login')}
+            className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl uppercase tracking-widest transition-all">
+            Back to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+      <div className="bg-white rounded-[2rem] border border-slate-100 shadow-2xl p-10 w-full max-w-sm text-center flex flex-col items-center gap-5">
+        <div className="w-14 h-14 bg-blue-50 border-2 border-blue-200 rounded-2xl flex items-center justify-center">
+          <svg className="w-6 h-6 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        </div>
+        <div>
+          <h2 className="text-sm font-black text-slate-900 tracking-tighter mb-1">Completing Sign-In</h2>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Verifying your Microsoft account…</p>
+        </div>
+      </div>
+    </div>
+  );
+}

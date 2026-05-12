@@ -38,14 +38,17 @@ router.post('/runs', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, 
     const { period, runType = 'MONTHLY', employeeGroup } = req.body;
     if (!period) return res.status(400).json({ error: 'Period is required (YYYY-MM)' });
 
-    const existing = await prisma.payrollRun.findFirst({ where: { period, runType, status: { in: ['DRAFT', 'PENDING_APPROVAL', 'APPROVED'] } } });
-    if (existing) return res.status(409).json({ error: `A payroll run for ${period} is already in progress (${existing.status})` });
+    const existing = await prisma.payrollRun.findFirst({ where: { period, runType: runType.toUpperCase() } });
+    if (existing) return res.status(409).json({ error: `A ${runType.toLowerCase()} payroll run for ${period} already exists (status: ${existing.status.toLowerCase().replace('_', ' ')}). Only one run per period is allowed.` });
 
     const run = await prisma.payrollRun.create({
       data: { id: uuidv4(), period, runType: runType.toUpperCase(), status: 'DRAFT', initiatedBy: req.user.sub, employeeGroup },
     });
     res.status(201).json(run);
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: `A payroll run for this period already exists. Please check the payroll list before creating a new one.` });
+    next(err);
+  }
 });
 
 // ─── GET /payroll/runs/:id ───────────────────────────────────────────────────
@@ -57,16 +60,15 @@ router.get('/runs/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMI
   } catch (err) { next(err); }
 });
 
-// ─── POST /payroll/runs/:id/compute ─ Compute CPF for all employees ──────────
+// ─── POST /payroll/runs/:id/compute ─ Compute (or recompute) payroll ─────────
 router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
   try {
     const run = await prisma.payrollRun.findUnique({ where: { id: req.params.id } });
     if (!run) return res.status(404).json({ error: 'Run not found' });
-    if (!['DRAFT'].includes(run.status)) return res.status(400).json({ error: 'Can only compute a DRAFT run' });
+    if (!['DRAFT', 'PENDING_APPROVAL'].includes(run.status)) return res.status(400).json({ error: 'Can only compute a DRAFT or PENDING_APPROVAL run' });
 
-    let { lineItems = [], employees } = req.body;
+    let { employees } = req.body;
 
-    // Auto-fetch employee payroll data if not provided
     if (!employees) {
       const EMPLOYEE_SERVICE_URL = process.env.EMPLOYEE_SERVICE_URL || 'http://employee-service:4002';
       const empRes = await fetch(`${EMPLOYEE_SERVICE_URL}/employees/payroll-data`, {
@@ -81,43 +83,57 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
 
     if (!employees || employees.length === 0) return res.status(400).json({ error: 'No active employees found for payroll computation' });
 
-    // Get CPF rates and SDL config
     const cpfRates = await prisma.cpfRate.findMany({ where: { isActive: true } });
     const sdlConfig = await prisma.sdlConfig.findFirst({ where: { isActive: true } });
+    const savedLineItems = await prisma.payrollLineItem.findMany({ where: { runId: run.id } });
 
     let totalGross = 0, totalNet = 0, totalEmployee = 0, totalEmployer = 0, totalSdl = 0;
-    const payslips = [];
 
     for (const emp of employees) {
+      const empItems = savedLineItems.filter(li => li.employeeId === emp.employeeId);
+
+      let owAdj = 0, awAdj = 0, nonCpfAdj = 0, deductions = 0, reimbursements = 0;
+      for (const item of empItems) {
+        const amt = parseFloat(decrypt(item.amountEncrypted)) || 0;
+        if (item.wageType === 'DEDUCTION')      deductions    += Math.abs(amt);
+        else if (item.wageType === 'REIMBURSEMENT') reimbursements += amt;
+        else if (item.isCpfApplicable && item.wageType === 'AW') awAdj += amt;
+        else if (item.isCpfApplicable)           owAdj         += amt;
+        else                                     nonCpfAdj     += amt;
+      }
+
+      const effectiveOw    = (emp.ow || 0) + owAdj;
+      const effectiveAw    = (emp.aw || 0) + awAdj;
+      const effectiveGross = (emp.grossPay || emp.ow || 0) + owAdj + awAdj + nonCpfAdj;
+
       const rate = findCpfRate(cpfRates, emp.citizenStatus, emp.age);
-      const cpf = computeCpf({ ow: emp.ow, aw: emp.aw || 0, ytdOw: emp.ytdOw || 0, ytdAw: emp.ytdAw || 0, citizenStatus: emp.citizenStatus, age: emp.age, rates: rate });
-      const sdl = computeSdl(emp.grossPay || emp.ow, sdlConfig);
-      const net = computeNetPay({ grossPay: emp.grossPay || emp.ow + (emp.aw || 0), employeeCpf: cpf.totalEmployee, nplDeduction: emp.nplDeduction || 0, reimbursements: emp.reimbursements || 0 });
+      const cpf  = computeCpf({ ow: effectiveOw, aw: effectiveAw, ytdOw: emp.ytdOw || 0, ytdAw: emp.ytdAw || 0, citizenStatus: emp.citizenStatus, age: emp.age, rates: rate });
+      const sdl  = computeSdl(effectiveGross, sdlConfig);
+      const net  = computeNetPay({ grossPay: effectiveGross, employeeCpf: cpf.totalEmployee, nplDeduction: (emp.nplDeduction || 0) + deductions, reimbursements: (emp.reimbursements || 0) + reimbursements });
 
-      totalGross += (emp.grossPay || emp.ow + (emp.aw || 0));
-      totalNet += net;
-      totalEmployee += cpf.totalEmployee;
-      totalEmployer += cpf.totalEmployer;
-      totalSdl += sdl;
+      totalGross += effectiveGross; totalNet += net;
+      totalEmployee += cpf.totalEmployee; totalEmployer += cpf.totalEmployer; totalSdl += sdl;
 
-      payslips.push({
-        id: uuidv4(), runId: run.id, employeeId: emp.employeeId, period: run.period,
+      const payslipData = {
+        runId: run.id, employeeId: emp.employeeId, period: run.period,
         basicSalaryEnc: encrypt(String(emp.ow)),
-        grossPayEnc: encrypt(String(emp.grossPay || emp.ow)),
+        grossPayEnc: encrypt(String(effectiveGross)),
         netPayEnc: encrypt(String(net)),
         employeeCpfEnc: encrypt(String(cpf.totalEmployee)),
         employerCpfEnc: encrypt(String(cpf.totalEmployer)),
         sdlAmountEnc: encrypt(String(sdl)),
-        ytdGrossEnc: encrypt(String((emp.ytdGross || 0) + (emp.grossPay || emp.ow))),
+        ytdGrossEnc: encrypt(String((emp.ytdGross || 0) + effectiveGross)),
         ytdEmployeeCpfEnc: encrypt(String((emp.ytdEmployeeCpf || 0) + cpf.totalEmployee)),
         ytdEmployerCpfEnc: encrypt(String((emp.ytdEmployerCpf || 0) + cpf.totalEmployer)),
+      };
+
+      await prisma.payslip.upsert({
+        where: { runId_employeeId: { runId: run.id, employeeId: emp.employeeId } },
+        create: { id: uuidv4(), ...payslipData },
+        update: payslipData,
       });
     }
 
-    // Bulk upsert payslips
-    await prisma.payslip.createMany({ data: payslips, skipDuplicates: true });
-
-    // Update run totals
     await prisma.payrollRun.update({
       where: { id: run.id },
       data: {
@@ -130,6 +146,62 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
       },
     });
     res.json({ message: 'Payroll computed. Status: PENDING_APPROVAL', total: { gross: totalGross, net: totalNet, employeeCpf: totalEmployee, employerCpf: totalEmployer, sdl: totalSdl } });
+  } catch (err) { next(err); }
+});
+
+// ─── GET /payroll/components ─ List pay components for paycode dropdown ───────
+router.get('/components', authenticate, async (req, res, next) => {
+  try {
+    const components = await prisma.payComponent.findMany({ where: { isActive: true }, orderBy: { sortOrder: 'asc' } });
+    res.json(components);
+  } catch (err) { next(err); }
+});
+
+// ─── GET /payroll/runs/:id/paycodes ─ List line items for a run ───────────────
+router.get('/runs/:id/paycodes', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const items = await prisma.payrollLineItem.findMany({ where: { runId: req.params.id }, orderBy: { createdAt: 'asc' } });
+    const result = items.map(item => ({ ...item, amount: parseFloat(decrypt(item.amountEncrypted)) || 0 }));
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// ─── POST /payroll/runs/:id/paycodes ─ Add a paycode to a run ────────────────
+router.post('/runs/:id/paycodes', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const run = await prisma.payrollRun.findUnique({ where: { id: req.params.id } });
+    if (!run) return res.status(404).json({ error: 'Run not found' });
+    if (run.status === 'FINALISED') return res.status(400).json({ error: 'Cannot add paycodes to a finalised run' });
+
+    const { employeeId, componentId, description, amount } = req.body;
+    if (!employeeId || !componentId || amount === undefined) return res.status(400).json({ error: 'employeeId, componentId and amount are required' });
+
+    const component = await prisma.payComponent.findUnique({ where: { id: componentId } });
+    if (!component) return res.status(404).json({ error: 'Pay component not found' });
+
+    const item = await prisma.payrollLineItem.create({
+      data: {
+        id: uuidv4(), runId: run.id, employeeId,
+        componentId,
+        description: description || component.name,
+        amountEncrypted: encrypt(String(amount)),
+        wageType: component.wageType,
+        isCpfApplicable: component.isCpfApplicable,
+        isIrasTaxable: component.isIrasTaxable,
+      },
+    });
+    res.status(201).json({ ...item, amount: parseFloat(amount) });
+  } catch (err) { next(err); }
+});
+
+// ─── DELETE /payroll/runs/:id/paycodes/:itemId ─ Remove a paycode ─────────────
+router.delete('/runs/:id/paycodes/:itemId', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const run = await prisma.payrollRun.findUnique({ where: { id: req.params.id } });
+    if (!run) return res.status(404).json({ error: 'Run not found' });
+    if (run.status === 'FINALISED') return res.status(400).json({ error: 'Cannot modify a finalised run' });
+    await prisma.payrollLineItem.delete({ where: { id: req.params.itemId } });
+    res.json({ message: 'Paycode removed' });
   } catch (err) { next(err); }
 });
 
@@ -150,6 +222,20 @@ router.post('/runs/:id/approve', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
       data: { status: 'APPROVED', approvedBy: req.user.sub, approvedAt: new Date() },
     });
     res.json({ message: 'Payroll approved', run: updated });
+  } catch (err) { next(err); }
+});
+
+// ─── POST /payroll/runs/:id/cancel ─ Void any run including finalised ────────
+router.post('/runs/:id/cancel', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const run = await prisma.payrollRun.findUnique({ where: { id: req.params.id } });
+    if (!run) return res.status(404).json({ error: 'Run not found' });
+
+    await prisma.payslip.deleteMany({ where: { runId: run.id } });
+    await prisma.payrollLineItem.deleteMany({ where: { runId: run.id } });
+    await prisma.payrollRun.delete({ where: { id: run.id } });
+
+    res.json({ message: `Payroll run for ${run.period} (${run.runType}) has been voided.` });
   } catch (err) { next(err); }
 });
 
@@ -660,5 +746,40 @@ function drawLine(doc) {
   doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();
   doc.moveDown(0.5);
 }
+
+// POST /payroll/purge — PDPA data retention purge (internal, SUPER_ADMIN only)
+// Purges PayrollRuns whose period end date + retentionYears <= today
+router.post('/purge', authenticate, authorize(ROLES.SUPER_ADMIN), async (req, res, next) => {
+  try {
+    const retentionYears = parseInt(req.body.retentionYears) || 5;
+    const cutoff = new Date();
+    cutoff.setUTCHours(0, 0, 0, 0);
+    cutoff.setUTCFullYear(cutoff.getUTCFullYear() - retentionYears);
+
+    // period field is "YYYY-MM" — last day of that month is the retention anchor
+    // Purge runs where the last day of their period <= cutoff
+    const targets = await prisma.$queryRaw`
+      SELECT id FROM payroll_runs
+      WHERE (to_date(period, 'YYYY-MM') + INTERVAL '1 month - 1 day') <= ${cutoff}
+        AND status IN ('FINALISED', 'PAID')
+    `;
+
+    if (targets.length === 0) {
+      return res.json({ purged: 0, cutoff: cutoff.toISOString().slice(0, 10) });
+    }
+
+    const ids = targets.map(t => t.id);
+
+    await prisma.$executeRaw`DELETE FROM payroll_line_items WHERE "runId" = ANY(${ids}::uuid[])`;
+    await prisma.$executeRaw`DELETE FROM payslips WHERE "runId" = ANY(${ids}::uuid[])`;
+    const purged = await prisma.$executeRaw`DELETE FROM payroll_runs WHERE id = ANY(${ids}::uuid[])`;
+
+    for (const tbl of ['payroll_runs', 'payroll_line_items', 'payslips']) {
+      await prisma.$executeRawUnsafe(`VACUUM ANALYZE ${tbl}`).catch(() => {});
+    }
+
+    res.json({ purged: Number(purged), cutoff: cutoff.toISOString().slice(0, 10) });
+  } catch (err) { next(err); }
+});
 
 module.exports = router;

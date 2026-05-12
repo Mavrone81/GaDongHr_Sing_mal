@@ -31,7 +31,7 @@ model PayrollRun {
   lineItems       PayrollLineItem[]
   payslips        Payslip[]
 
-  @@unique([period, runType, status])
+  @@unique([period, runType])
   @@index([period])
   @@map("payroll_runs")
 }

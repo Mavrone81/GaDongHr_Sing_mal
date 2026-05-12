@@ -46,9 +46,10 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
     group: 'EMPLOYEE',
     color: 'text-sky-400',
     items: [
-      { name: 'My Attendance', path: '/attendance', icon: '◉' },
-      { name: 'My Leave',      path: '/leave',      icon: '◌' },
-      { name: 'My Claims',     path: '/claims',     icon: '◫' },
+      { name: 'My Attendance', path: '/attendance',          icon: '◉' },
+      { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
+      { name: 'My Leave',      path: '/leave',               icon: '◌' },
+      { name: 'My Claims',     path: '/claims',              icon: '◫' },
     ]
   },
   {
@@ -96,9 +97,10 @@ const HR_ADMIN_NAV: NavGroup[] = [
     { name: 'Training',    path: '/training',            icon: '◑' },
   ]},
   { group: 'EMPLOYEE',   color: 'text-sky-400',     items: [
-    { name: 'My Attendance', path: '/attendance', icon: '◉' },
-    { name: 'My Leave',      path: '/leave',      icon: '◌' },
-    { name: 'My Claims',     path: '/claims',     icon: '◫' },
+    { name: 'My Attendance', path: '/attendance',          icon: '◉' },
+    { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
+    { name: 'My Leave',      path: '/leave',               icon: '◌' },
+    { name: 'My Claims',     path: '/claims',              icon: '◫' },
   ]},
   { group: 'FINANCIAL',  color: 'text-emerald-400', items: [
     { name: 'Payroll', path: '/payroll', icon: '◆' },
@@ -117,9 +119,10 @@ const PAYROLL_OFFICER_NAV: NavGroup[] = [
     { name: 'Claims',     path: '/claims/registry',     icon: '◫' },
   ]},
   { group: 'EMPLOYEE',   color: 'text-sky-400',     items: [
-    { name: 'My Attendance', path: '/attendance', icon: '◉' },
-    { name: 'My Leave',      path: '/leave',      icon: '◌' },
-    { name: 'My Claims',     path: '/claims',     icon: '◫' },
+    { name: 'My Attendance', path: '/attendance',          icon: '◉' },
+    { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
+    { name: 'My Leave',      path: '/leave',               icon: '◌' },
+    { name: 'My Claims',     path: '/claims',              icon: '◫' },
   ]},
   { group: 'FINANCIAL',  color: 'text-emerald-400', items: [
     { name: 'Payroll', path: '/payroll', icon: '◆', badge: 'Action' },
@@ -133,9 +136,10 @@ const PAYROLL_OFFICER_NAV: NavGroup[] = [
 const EMPLOYEE_NAV: NavGroup[] = [
   { group: 'OVERVIEW',  color: 'text-indigo-400',  items: [{ name: 'Dashboard', path: '/', icon: '⬡' }] },
   { group: 'EMPLOYEE',  color: 'text-sky-400',     items: [
-    { name: 'My Attendance', path: '/attendance', icon: '◉' },
-    { name: 'My Leave',      path: '/leave',      icon: '◌' },
-    { name: 'My Claims',     path: '/claims',     icon: '◫' },
+    { name: 'My Attendance', path: '/attendance',          icon: '◉' },
+    { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
+    { name: 'My Leave',      path: '/leave',               icon: '◌' },
+    { name: 'My Claims',     path: '/claims',              icon: '◫' },
   ]},
   { group: 'PAYSLIPS',  color: 'text-emerald-400', items: [
     { name: 'My Payslips', path: '/payroll', icon: '◆' },

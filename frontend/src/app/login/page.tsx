@@ -46,17 +46,50 @@ export default function LoginPage() {
 
   // SSO from settings
   const [activeSso, setActiveSso] = useState<SsoProvider[]>([]);
+  const [ssoConfig, setSsoConfig] = useState<Record<string, { clientId: string; domain: string; tenantId?: string }>>({});
   const [ssoError, setSsoError] = useState('');
 
+  // SSO MFA pending state (set by callback pages via sessionStorage + ?sso_mfa=1)
+  const [ssoMfaPending, setSsoMfaPending] = useState(false);
+  const [ssoPendingToken, setSsoPendingToken] = useState('');
+
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('vorkhive_security_settings');
-      if (!saved) return;
-      const settings = JSON.parse(saved);
-      const enabled = (settings.ssoEnabled ?? {}) as Record<string, boolean>;
-      const cfg = (settings.ssoConfig ?? {}) as Record<string, { clientId: string }>;
-      setActiveSso(ALL_SSO.filter(p => enabled[p.id] && cfg[p.id]?.clientId?.trim()));
-    } catch {}
+    // Check if we were redirected here from an SSO callback that needs MFA
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('sso_mfa') === '1') {
+      const pendingToken = sessionStorage.getItem('sso_pending_token') || '';
+      const method = (sessionStorage.getItem('sso_mfa_method') || 'TOTP') as MfaMethod;
+      if (pendingToken) {
+        setSsoMfaPending(true);
+        setSsoPendingToken(pendingToken);
+        setMfaMethod(method);
+        setStep('mfa-challenge');
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    // Fetch SSO configs from server for each provider
+    Promise.all([
+      fetch(`${apiUrl()}/auth/sso/google/config`).then(r => r.json()).catch(() => null),
+      fetch(`${apiUrl()}/auth/sso/microsoft/config`).then(r => r.json()).catch(() => null),
+    ]).then(([google, microsoft]) => {
+      const active: SsoProvider[] = [];
+      const cfg: Record<string, any> = {};
+      if (google?.clientId) { cfg.google = { clientId: google.clientId, domain: google.domain }; active.push(ALL_SSO.find(p => p.id === 'google')!); }
+      if (microsoft?.clientId) { cfg.microsoft = { clientId: microsoft.clientId, tenantId: microsoft.tenantId, domain: microsoft.domain }; active.push(ALL_SSO.find(p => p.id === 'microsoft')!); }
+      if (Object.keys(cfg).length > 0) { setSsoConfig(cfg); setActiveSso(active.filter(Boolean)); return; }
+      // Fall back to localStorage
+      try {
+        const saved = localStorage.getItem('vorkhive_security_settings');
+        if (!saved) return;
+        const settings = JSON.parse(saved);
+        const enabled = (settings.ssoEnabled ?? {}) as Record<string, boolean>;
+        const lsCfg = (settings.ssoConfig ?? {}) as Record<string, any>;
+        setSsoConfig(lsCfg);
+        setActiveSso(ALL_SSO.filter(p => enabled[p.id] && lsCfg[p.id]?.clientId?.trim()));
+      } catch {}
+    });
   }, []);
 
   const orgMfaRequired = () => {
@@ -92,7 +125,7 @@ export default function LoginPage() {
 
       // Server indicates org MFA required but user not yet enrolled — run setup flow
       if (data.mfaSetupRequired) {
-        await login(data.accessToken);
+        await login(data.accessToken, data.refreshToken);
         const setupRes = await fetch(`${apiUrl()}/auth/mfa/setup`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
@@ -107,7 +140,7 @@ export default function LoginPage() {
       }
 
       // Successful login — no MFA required
-      await login(data.accessToken);
+      await login(data.accessToken, data.refreshToken);
       router.push('/');
     } catch {
       setError(`Cannot reach API. Is the gateway running on port 4000?`);
@@ -118,6 +151,23 @@ export default function LoginPage() {
   const handleMfaChallenge = async (code: string) => {
     setError(''); setLoading(true);
     try {
+      // SSO MFA path — use the pending token issued by the SSO callback
+      if (ssoMfaPending && ssoPendingToken) {
+        const res = await fetch(`${apiUrl()}/auth/sso/mfa-verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pendingToken: ssoPendingToken, mfaCode: code }),
+        });
+        const data = await res.json();
+        if (!res.ok) { setMfaCode(''); setError(data.error || 'Invalid MFA code'); return; }
+        sessionStorage.removeItem('sso_pending_token');
+        sessionStorage.removeItem('sso_mfa_method');
+        sessionStorage.removeItem('sso_mfa_setup');
+        await login(data.accessToken, data.refreshToken);
+        router.push('/');
+        return;
+      }
+      // Regular login MFA path
       const res = await fetch(`${apiUrl()}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -125,7 +175,7 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) { setMfaCode(''); setError(data.error || 'Invalid MFA code'); return; }
-      await login(data.accessToken);
+      await login(data.accessToken, data.refreshToken);
       router.push('/');
     } catch { setError('Connection error'); }
     finally { setLoading(false); }
@@ -185,10 +235,32 @@ export default function LoginPage() {
   // ── SSO click ─────────────────────────────────────────────────────────────
   const handleSso = (provider: SsoProvider) => {
     setSsoError('');
-    // In production this would redirect to OAuth authorization URL.
-    // For local dev, redirect to callback placeholder with provider hint.
-    const callbackUrl = `${window.location.origin}/auth/callback/${provider.id}`;
-    setSsoError(`SSO redirect → ${callbackUrl} (configure OAuth app in your ${provider.name} console to complete)`);
+    const cfg = ssoConfig[provider.id];
+    if (!cfg?.clientId) {
+      setSsoError(`No Client ID configured for ${provider.name} SSO. Set it in Settings → Security.`);
+      return;
+    }
+
+    if (provider.id === 'google') {
+      const redirectUri = `${window.location.origin}/auth/callback/google`;
+      const p = new URLSearchParams({
+        client_id: cfg.clientId, redirect_uri: redirectUri,
+        response_type: 'code', scope: 'openid email profile',
+        access_type: 'offline', prompt: 'select_account',
+      });
+      window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${p}`;
+    } else if (provider.id === 'microsoft') {
+      const tenant = cfg.tenantId || 'common';
+      const redirectUri = `${window.location.origin}/auth/callback/microsoft`;
+      const p = new URLSearchParams({
+        client_id: cfg.clientId, redirect_uri: redirectUri,
+        response_type: 'code', response_mode: 'query',
+        scope: 'openid email profile', prompt: 'select_account',
+      });
+      window.location.href = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize?${p}`;
+    } else {
+      setSsoError(`SSO for ${provider.name} not yet implemented.`);
+    }
   };
 
   return (

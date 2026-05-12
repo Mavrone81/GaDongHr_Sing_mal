@@ -53,6 +53,13 @@ const PUBLIC_ROUTES = [
   { method: 'POST', path: /^\/api\/auth\/refresh$/ },
   { method: 'POST', path: /^\/api\/auth\/otp\/resend$/ },
   { method: 'GET',  path: /^\/api\/auth\/org-settings\/mfa$/ },
+  { method: 'GET',  path: /^\/api\/auth\/sso\/google\/config$/ },
+  { method: 'POST', path: /^\/api\/auth\/sso\/google\/callback$/ },
+  { method: 'GET',  path: /^\/api\/auth\/sso\/microsoft\/config$/ },
+  { method: 'POST', path: /^\/api\/auth\/sso\/microsoft\/callback$/ },
+  { method: 'POST', path: /^\/api\/auth\/sso\/mfa-verify$/ },
+  { method: 'GET',  path: /^\/api\/users\/invite\/.+$/ },
+  { method: 'POST', path: /^\/api\/employees\/apply$/ },
   { method: 'GET',  path: /^\/health$/ },
 ];
 
@@ -107,6 +114,8 @@ app.use('/api/payroll',      proxy(SERVICES.payroll,      { ...proxyOpts, proxyR
 app.use('/api/components',   proxy(SERVICES.payroll,      { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/components', '/components') }));
 app.use('/api/leave',        proxy(SERVICES.leave,        { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/leave', '/leave') }));
 app.use('/api/claims',       proxy(SERVICES.claims,       { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/claims', '/claims') }));
+// Resume upload route needs raw body streaming (no body parsing)
+app.use('/api/recruitment/candidates/:id/resume', proxy(SERVICES.recruitment, { ...proxyOpts, parseReqBody: false, proxyReqPathResolver: req => req.originalUrl.replace('/api/recruitment', '/recruitment') }));
 app.use('/api/recruitment',  proxy(SERVICES.recruitment,  { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/recruitment', '/recruitment') }));
 app.use('/api/attendance',   proxy(SERVICES.attendance,   { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/attendance', '/attendance') }));
 app.use('/api/offboarding',  proxy(SERVICES.offboarding,  { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/offboarding', '/offboarding') }));

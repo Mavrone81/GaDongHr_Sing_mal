@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Script from 'next/script';
 import { useAuth } from '@/context/AuthContext';
+import { apiFetch } from '@/lib/api';
 
 // face-api.js is loaded as a UMD script from /js/face-api.min.js
 // and exposes itself on window.faceapi — no webpack bundling needed
@@ -22,18 +23,6 @@ interface AttendanceRecord {
   clockOut: string | null;
   duration: string | null;
   status: 'present' | 'half' | 'absent' | 'leave';
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function apiBase() {
-  const h = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-  return `http://${h}:4000/api`;
-}
-
-function getToken(): string {
-  if (typeof document === 'undefined') return '';
-  return document.cookie.split('vorkhive_token=')[1]?.split(';')[0] ?? '';
 }
 
 // ─── Clock display ────────────────────────────────────────────────────────────
@@ -112,6 +101,11 @@ function EmployeeAttendanceView() {
   const [uploadError, setUploadError]     = useState<string | null>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
+  const [photoSource, setPhotoSource] = useState<'file' | 'camera'>('file');
+  const uploadVideoRef   = useRef<HTMLVideoElement>(null);
+  const uploadStreamRef  = useRef<MediaStream | null>(null);
+  const uploadCanvasRef  = useRef<HTMLCanvasElement>(null);
+
   const videoRef         = useRef<HTMLVideoElement>(null);
   const canvasRef        = useRef<HTMLCanvasElement>(null);
   const streamRef        = useRef<MediaStream | null>(null);
@@ -137,15 +131,10 @@ function EmployeeAttendanceView() {
   useEffect(() => {
     async function fetchPhoto() {
       try {
-        const res = await fetch(`${apiBase()}/employees/me/photo`, {
-          headers: { Authorization: `Bearer ${getToken()}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setProfilePhoto(data.profilePhotoUrl ?? null);
-        }
-      } catch (e) {
-        console.error('Failed to fetch profile photo', e);
+        const data = await apiFetch('/employees/me/photo');
+        setProfilePhoto(data.profilePhotoUrl ?? null);
+      } catch {
+        // no photo yet or auth error — stay null
       } finally {
         setPhotoLoading(false);
       }
@@ -159,10 +148,7 @@ function EmployeeAttendanceView() {
     const { start, end } = getWeekBounds();
     const from = start.toISOString().slice(0, 10);
     const to = end.toISOString().slice(0, 10);
-    fetch(`${apiBase()}/attendance/${user.employeeId}?from=${from}&to=${to}`, {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    })
-      .then(r => r.ok ? r.json() : [])
+    apiFetch(`/attendance/${user.employeeId}?from=${from}&to=${to}`)
       .then((records: any[]) => setWeekLog(buildWeekLog(records)))
       .catch(() => setWeekLog(buildWeekLog([])))
       .finally(() => setWeekLoading(false));
@@ -186,6 +172,43 @@ function EmployeeAttendanceView() {
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
   }, []);
+
+  const stopUploadCamera = useCallback(() => {
+    uploadStreamRef.current?.getTracks().forEach(t => t.stop());
+    uploadStreamRef.current = null;
+  }, []);
+
+  // ── Start webcam for profile photo capture ────────────────────────────────
+  useEffect(() => {
+    if (clockState !== 'upload_photo' || photoSource !== 'camera') return;
+    let active = true;
+    navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 480 }, height: { ideal: 480 }, facingMode: 'user' },
+    }).then(stream => {
+      if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
+      uploadStreamRef.current = stream;
+      if (uploadVideoRef.current) {
+        uploadVideoRef.current.srcObject = stream;
+        uploadVideoRef.current.play().catch(console.error);
+      }
+    }).catch(() => {
+      if (active) {
+        setUploadError('Camera access denied. Please allow camera permission.');
+        setPhotoSource('file');
+      }
+    });
+    return () => { active = false; stopUploadCamera(); };
+  }, [photoSource, clockState, stopUploadCamera]);
+
+  const captureUploadPhoto = () => {
+    const video  = uploadVideoRef.current;
+    const canvas = uploadCanvasRef.current;
+    if (!video || !canvas) return;
+    canvas.width  = video.videoWidth  || 480;
+    canvas.height = video.videoHeight || 480;
+    canvas.getContext('2d')!.drawImage(video, 0, 0);
+    setUploadPreview(canvas.toDataURL('image/jpeg', 0.92));
+  };
 
   const startCamera = async () => {
     if (!profilePhoto) { setClockState('no_photo'); return; }
@@ -305,17 +328,14 @@ function EmployeeAttendanceView() {
     setUploadSaving(true);
     setUploadError(null);
     try {
-      const res = await fetch(`${apiBase()}/employees/me/photo`, {
+      await apiFetch('/employees/me/photo', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
         body: JSON.stringify({ profilePhotoUrl: uploadPreview }),
       });
-      if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.error || 'Failed to save photo');
-      }
       setProfilePhoto(uploadPreview);
       setUploadPreview(null);
+      stopUploadCamera();
+      setPhotoSource('file');
       setClockState('idle');
     } catch (err: unknown) {
       setUploadError(err instanceof Error ? err.message : 'Failed to save photo');
@@ -432,7 +452,7 @@ function EmployeeAttendanceView() {
 
                     {/* Update photo link */}
                     <button
-                      onClick={() => { setUploadPreview(null); setUploadError(null); setClockState('upload_photo'); }}
+                      onClick={() => { setUploadPreview(null); setUploadError(null); setPhotoSource('file'); setClockState('upload_photo'); }}
                       className="text-[9px] font-black text-slate-600 hover:text-indigo-400 uppercase tracking-widest transition-all"
                     >
                       {profilePhoto ? 'Update Profile Photo' : '+ Add Profile Photo'}
@@ -459,7 +479,7 @@ function EmployeeAttendanceView() {
               </div>
               <div className="flex gap-4">
                 <button
-                  onClick={() => { setUploadPreview(null); setUploadError(null); setClockState('upload_photo'); }}
+                  onClick={() => { setUploadPreview(null); setUploadError(null); setPhotoSource('file'); setClockState('upload_photo'); }}
                   className="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all active:scale-95 shadow-xl shadow-indigo-500/20"
                 >
                   Add Profile Photo
@@ -478,28 +498,95 @@ function EmployeeAttendanceView() {
                 {profilePhoto ? 'Update Profile Photo' : 'Add Profile Photo'}
               </p>
 
-              {/* Preview / drop zone */}
-              <div
-                className="relative w-52 h-52 rounded-[2rem] border-2 border-dashed border-white/15 bg-white/3 flex items-center justify-center cursor-pointer hover:border-indigo-400/40 hover:bg-indigo-500/5 transition-all overflow-hidden"
-                onClick={() => uploadInputRef.current?.click()}
-              >
-                {uploadPreview ? (
-                  <img src={uploadPreview} className="w-full h-full object-cover" alt="Preview" />
-                ) : profilePhoto ? (
-                  <>
-                    <img src={profilePhoto} className="w-full h-full object-cover opacity-40" alt="Current" />
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <svg className="w-8 h-8 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" /></svg>
-                      <p className="text-[9px] font-black text-white/60 mt-1 uppercase tracking-wider">Replace</p>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center gap-2 text-slate-600">
-                    <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" /></svg>
-                    <p className="text-[9px] font-black uppercase tracking-wider text-center px-4">Click to select photo</p>
-                  </div>
-                )}
+              {/* Source tabs */}
+              <div className="flex rounded-xl bg-white/5 border border-white/10 p-0.5 gap-0.5 w-full">
+                <button
+                  onClick={() => { stopUploadCamera(); setUploadPreview(null); setPhotoSource('file'); }}
+                  className={`flex-1 py-2 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${photoSource === 'file' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                  Upload File
+                </button>
+                <button
+                  onClick={() => { setUploadPreview(null); setPhotoSource('camera'); }}
+                  className={`flex-1 py-2 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${photoSource === 'camera' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                  Use Camera
+                </button>
               </div>
+
+              {/* File upload mode */}
+              {photoSource === 'file' && (
+                <div
+                  className="relative w-52 h-52 rounded-[2rem] border-2 border-dashed border-white/15 bg-white/3 flex items-center justify-center cursor-pointer hover:border-indigo-400/40 hover:bg-indigo-500/5 transition-all overflow-hidden"
+                  onClick={() => uploadInputRef.current?.click()}
+                >
+                  {uploadPreview ? (
+                    <img src={uploadPreview} className="w-full h-full object-cover" alt="Preview" />
+                  ) : profilePhoto ? (
+                    <>
+                      <img src={profilePhoto} className="w-full h-full object-cover opacity-40" alt="Current" />
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <svg className="w-8 h-8 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" /></svg>
+                        <p className="text-[9px] font-black text-white/60 mt-1 uppercase tracking-wider">Replace</p>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-slate-600">
+                      <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" /></svg>
+                      <p className="text-[9px] font-black uppercase tracking-wider text-center px-4">Click to select photo</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Camera capture mode */}
+              {photoSource === 'camera' && (
+                <div className="flex flex-col items-center gap-3">
+                  <div className="relative w-52 h-52 rounded-[2rem] overflow-hidden border border-white/10 bg-black">
+                    <video
+                      ref={uploadVideoRef}
+                      className="w-full h-full object-cover"
+                      playsInline
+                      muted
+                      style={{ display: uploadPreview ? 'none' : 'block' }}
+                    />
+                    {uploadPreview && (
+                      <img src={uploadPreview} className="w-full h-full object-cover" alt="Captured" />
+                    )}
+                    {!uploadPreview && (
+                      <>
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="w-32 h-40 border-2 border-indigo-400/60 rounded-full" style={{ boxShadow: '0 0 0 9999px rgba(10,15,30,0.5)' }} />
+                        </div>
+                        <div className="absolute bottom-3 left-0 right-0 flex justify-center">
+                          <span className="text-[9px] font-black text-indigo-300 uppercase tracking-widest bg-indigo-900/60 px-3 py-1 rounded-full backdrop-blur-sm">
+                            Position face in oval
+                          </span>
+                        </div>
+                      </>
+                    )}
+                    {uploadPreview && (
+                      <div className="absolute inset-0 flex items-end justify-center pb-3">
+                        <button
+                          onClick={() => setUploadPreview(null)}
+                          className="px-4 py-1.5 bg-black/60 text-white rounded-xl text-[9px] font-black uppercase tracking-wider backdrop-blur-sm"
+                        >
+                          Retake
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {!uploadPreview && (
+                    <button
+                      onClick={captureUploadPhoto}
+                      className="px-8 py-3 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-500/20 flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" /><path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm0 18a8 8 0 110-16 8 8 0 010 16z" /></svg>
+                      Capture
+                    </button>
+                  )}
+                </div>
+              )}
 
               <input ref={uploadInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoFileChange} />
 
@@ -520,7 +607,7 @@ function EmployeeAttendanceView() {
                   {uploadSaving ? 'Saving…' : 'Save Photo'}
                 </button>
                 <button
-                  onClick={() => setClockState('idle')}
+                  onClick={() => { stopUploadCamera(); setPhotoSource('file'); setClockState('idle'); }}
                   className="flex-1 py-4 bg-white/5 border border-white/10 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white/8 transition-all"
                 >
                   Cancel
@@ -679,7 +766,7 @@ function EmployeeAttendanceView() {
                   Try Again
                 </button>
                 <button
-                  onClick={() => { retry(); setClockState('upload_photo'); setUploadPreview(null); setUploadError(null); }}
+                  onClick={() => { retry(); setPhotoSource('file'); setClockState('upload_photo'); setUploadPreview(null); setUploadError(null); }}
                   className="px-8 py-4 bg-white/5 border border-white/10 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white/8 transition-all"
                 >
                   Update Photo
@@ -690,6 +777,7 @@ function EmployeeAttendanceView() {
 
           {/* Off-screen canvas for capture */}
           <canvas ref={canvasRef} style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: 0, height: 0 }} />
+          <canvas ref={uploadCanvasRef} style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: 0, height: 0 }} />
         </div>
       </div>
 

@@ -27,9 +27,11 @@ async function main() {
     { code: 'claims:view', name: 'View Claims', description: 'View expense claims', module: 'CLAIMS' },
     { code: 'claims:approve', name: 'Approve Claims', description: 'Approve or reject expense claims', module: 'CLAIMS' },
     
-    // Attendance
+    // Attendance & Roster
     { code: 'attendance:view', name: 'View Attendance', description: 'View clock-in/out records', module: 'ATTENDANCE' },
     { code: 'attendance:manage', name: 'Manage Shifts', description: 'Manage employee shifts and overtime', module: 'ATTENDANCE' },
+    { code: 'roster:view', name: 'View Roster', description: 'View daily roster and shift schedules', module: 'ATTENDANCE' },
+    { code: 'roster:manage', name: 'Manage Roster', description: 'Create and edit shift schedules for team members', module: 'ATTENDANCE' },
     
     // Recruitment
     { code: 'recruitment:manage', name: 'Manage Recruitment', description: 'Manage job postings and candidates', module: 'RECRUITMENT' },
@@ -51,9 +53,12 @@ async function main() {
   // 2. Create System Roles
   const roles = [
     { name: 'SUPER_ADMIN', description: 'System owner with full access', isSystem: true, perms: permissions.map(p => p.code) },
-    { name: 'ADMIN', description: 'General administrative access', isSystem: true, perms: ['employee:view', 'employee:manage', 'leave:view', 'leave:approve', 'attendance:view', 'claims:view', 'report:view'] },
-    { name: 'HR_ADMIN', description: 'Full HR management access', isSystem: true, perms: ['employee:view', 'employee:manage', 'employee:sensitive', 'leave:view', 'leave:approve', 'attendance:view', 'attendance:manage', 'report:view'] },
-    { name: 'PAYROLL_OFFICER', description: 'Payroll processing access', isSystem: true, perms: ['employee:view', 'employee:sensitive', 'payroll:view', 'payroll:run', 'report:financial'] },
+    { name: 'ADMIN', description: 'General administrative access', isSystem: true, perms: ['employee:view', 'employee:manage', 'leave:view', 'leave:approve', 'attendance:view', 'claims:view', 'report:view', 'roster:view', 'roster:manage'] },
+    { name: 'HR_ADMIN', description: 'Full HR management access', isSystem: true, perms: ['employee:view', 'employee:manage', 'employee:sensitive', 'leave:view', 'leave:approve', 'attendance:view', 'attendance:manage', 'roster:view', 'roster:manage', 'report:view'] },
+    { name: 'HR_MANAGER', description: 'HR operations management', isSystem: true, perms: ['employee:view', 'employee:manage', 'leave:view', 'leave:approve', 'attendance:view', 'attendance:manage', 'roster:view', 'roster:manage', 'claims:view', 'claims:approve', 'report:view'] },
+    { name: 'PAYROLL_OFFICER', description: 'Payroll processing access', isSystem: true, perms: ['employee:view', 'employee:sensitive', 'payroll:view', 'payroll:run', 'attendance:view', 'roster:view', 'report:financial'] },
+    { name: 'LINE_MANAGER', description: 'Team lead with scheduling and approval rights', isSystem: true, perms: ['employee:view', 'leave:view', 'leave:approve', 'claims:view', 'claims:approve', 'attendance:view', 'roster:view', 'roster:manage'] },
+    { name: 'RECRUITER', description: 'Recruitment access', isSystem: true, perms: ['employee:view', 'recruitment:manage'] },
     { name: 'EMPLOYEE', description: 'Standard employee access', isSystem: true, perms: ['employee:view', 'leave:view', 'claims:view', 'attendance:view'] },
   ];
 

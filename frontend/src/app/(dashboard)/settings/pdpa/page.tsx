@@ -2,23 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-
-function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  const c = document.cookie.split('; ').find(r => r.startsWith('vorkhive_token='));
-  return c ? c.split('=').slice(1).join('=') : null;
-}
-function apiBase(): string {
-  return process.env.NEXT_PUBLIC_API_URL ?? `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:4000/api`;
-}
-async function apiFetch(path: string, opts: RequestInit = {}) {
-  const token = getToken();
-  const h: Record<string, string> = { 'Content-Type': 'application/json', ...(opts.headers as Record<string, string> ?? {}) };
-  if (token) h['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${apiBase()}${path}`, { ...opts, headers: h });
-  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`); }
-  return res.json();
-}
+import { apiFetch } from '@/lib/api';
 
 const ALL_ROLES = [
   { id: 'SUPER_ADMIN',     label: 'Super Admin',     color: 'bg-indigo-100 text-indigo-700' },
@@ -118,6 +102,10 @@ export default function PdpaPage() {
   const [access, setAccess] = useState<AccessMap>(defaultAccessMap());
   const [activeTab, setActiveTab] = useState<'access' | 'encryption' | 'retention'>('access');
   const [retention, setRetention] = useState({ employeeRecords: '7', payrollRecords: '5', leaveRecords: '3', recruitmentRecords: '2', auditLogs: '7' });
+  const [purgeLog, setPurgeLog] = useState<any[]>([]);
+  const [purgeScheduleEnabled, setPurgeScheduleEnabled] = useState(false);
+  const [nextScheduledRun, setNextScheduledRun] = useState<string | null>(null);
+  const [purgeRunning, setPurgeRunning] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [saving, setSaving] = useState(false);
   const [encryptionStatus, setEncryptionStatus] = useState<'checking' | 'ok' | 'partial'>('checking');
@@ -141,6 +129,20 @@ export default function PdpaPage() {
         if (s.retention) setRetention(s.retention);
       }
     } catch {}
+
+    // Load purge status from server
+    apiFetch('/auth/purge/status').then(d => {
+      setPurgeLog(d.log || []);
+      setPurgeScheduleEnabled(d.scheduleEnabled ?? false);
+      setNextScheduledRun(d.nextScheduledRun ?? null);
+      if (d.retention) setRetention({
+        employeeRecords: String(d.retention.employeeRecords || 7),
+        payrollRecords: String(d.retention.payrollRecords || 5),
+        leaveRecords: String(d.retention.leaveRecords || 3),
+        recruitmentRecords: String(d.retention.recruitmentRecords || 2),
+        auditLogs: String(d.retention.auditLogs || 7),
+      });
+    }).catch(() => {});
 
     // Load roles from server
     apiFetch('/roles').then(d => {
@@ -168,9 +170,36 @@ export default function PdpaPage() {
   const handleSave = async () => {
     setSaving(true);
     localStorage.setItem('vorkhive_pdpa_settings', JSON.stringify({ access, retention }));
-    await new Promise(r => setTimeout(r, 400));
+    // Persist retention periods to server so the purge scheduler uses live values
+    const retentionNums = {
+      employeeRecords: Number(retention.employeeRecords),
+      payrollRecords: Number(retention.payrollRecords),
+      leaveRecords: Number(retention.leaveRecords),
+      recruitmentRecords: Number(retention.recruitmentRecords),
+      auditLogs: Number(retention.auditLogs),
+    };
+    await apiFetch('/auth/org-settings/general', { method: 'PUT', body: JSON.stringify({ retentionPeriods: retentionNums }) }).catch(() => {});
     setSaving(false);
     showToast('PDPA settings saved');
+  };
+
+  const handleRunPurgeNow = async () => {
+    if (!window.confirm('This will permanently and irrecoverably delete all records that have exceeded their retention period. This cannot be undone. Continue?')) return;
+    setPurgeRunning(true);
+    try {
+      const result = await apiFetch('/auth/purge/run', { method: 'POST' });
+      setPurgeLog(prev => [result, ...prev].slice(0, 30));
+      const total = Object.values(result.results || {}).reduce((sum: number, r: any) => sum + (r.purged ?? 0), 0);
+      showToast(`Purge complete — ${total} records permanently deleted`);
+    } catch (e: any) {
+      showToast(`Purge failed: ${e.message}`, 'error');
+    } finally { setPurgeRunning(false); }
+  };
+
+  const handleTogglePurgeSchedule = async (enabled: boolean) => {
+    setPurgeScheduleEnabled(enabled);
+    await apiFetch('/auth/purge/schedule', { method: 'PUT', body: JSON.stringify({ enabled }) }).catch(() => {});
+    showToast(enabled ? 'Scheduled purge enabled — runs at midnight UTC daily' : 'Scheduled purge disabled');
   };
 
   const TABS = [
@@ -393,56 +422,182 @@ export default function PdpaPage() {
 
       {/* ── Tab: Data Retention ── */}
       {activeTab === 'retention' && (
-        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 overflow-hidden">
-          <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
-            <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Data Retention Periods</h2>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">PDPA requires retention only as long as necessary for business or legal purposes</p>
-          </div>
-          <div className="p-8 flex flex-col gap-5">
-            {[
-              { key: 'employeeRecords', label: 'Employee Records', desc: 'Personal data, contracts, appraisals — MOM recommends min. 5 years after cessation', min: 5, rec: 7 },
-              { key: 'payrollRecords',  label: 'Payroll & CPF Records', desc: 'Payslips, CPF submissions — CPF Act requires 5 years', min: 5, rec: 5 },
-              { key: 'leaveRecords',   label: 'Leave & Attendance',     desc: 'Leave applications, attendance logs — min. 2 years (EA)', min: 2, rec: 3 },
-              { key: 'recruitmentRecords', label: 'Recruitment Data',   desc: 'CVs, interview notes — PDPA: dispose when no longer needed', min: 1, rec: 2 },
-              { key: 'auditLogs',      label: 'System Audit Logs',      desc: 'Security and access logs — PDPA / cyber hygiene best practice', min: 1, rec: 7 },
-            ].map(item => {
-              const val = Number(retention[item.key as keyof typeof retention]);
-              const isLow = val < item.min;
-              return (
-                <div key={item.key} className="flex items-center gap-6 p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{item.label}</p>
-                    <p className="text-[10px] font-bold text-slate-400 mt-0.5">{item.desc}</p>
-                    {isLow && (
-                      <p className="text-[9px] font-black text-red-500 mt-1 uppercase tracking-widest">⚠ Below minimum — may violate statutory requirement</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <select
-                      value={retention[item.key as keyof typeof retention]}
-                      onChange={e => setRetention(prev => ({ ...prev, [item.key]: e.target.value }))}
-                      disabled={!canEdit}
-                      className={`px-4 py-2.5 rounded-xl border text-sm font-black text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 transition-all appearance-none disabled:opacity-60 ${isLow ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}
-                    >
-                      {[1,2,3,4,5,6,7,8,10,12,15,20].map(y => (
-                        <option key={y} value={y}>{y} year{y !== 1 ? 's' : ''}</option>
-                      ))}
-                    </select>
-                    <div className="text-right">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Recommended</p>
-                      <p className="text-[11px] font-black text-slate-600">{item.rec} yr{item.rec !== 1 ? 's' : ''}</p>
+        <div className="flex flex-col gap-6">
+
+          {/* Retention periods */}
+          <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 overflow-hidden">
+            <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
+              <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Data Retention Periods</h2>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">PDPA requires retention only as long as necessary for business or legal purposes · Save settings to apply to automated purge</p>
+            </div>
+            <div className="p-8 flex flex-col gap-5">
+              {[
+                { key: 'employeeRecords',    label: 'Employee Records',      desc: 'Personal data, contracts, appraisals — MOM min. 5 yrs after cessation', min: 5, rec: 7,
+                  detail: 'Purge anchor: employee termination date (endDate)' },
+                { key: 'payrollRecords',     label: 'Payroll & CPF Records', desc: 'Payslips, CPF submissions — CPF Act requires 5 years', min: 5, rec: 5,
+                  detail: 'Purge anchor: last day of payroll period (period + 1 month - 1 day)' },
+                { key: 'leaveRecords',       label: 'Leave & Attendance',    desc: 'Leave applications, attendance logs — min. 2 years (Employment Act)', min: 2, rec: 3,
+                  detail: 'Purge anchor: leave end date' },
+                { key: 'recruitmentRecords', label: 'Recruitment Data',      desc: 'CVs, interview notes — PDPA: dispose when no longer needed', min: 1, rec: 2,
+                  detail: 'Purge anchor: application creation date' },
+                { key: 'auditLogs',          label: 'System Audit Logs',     desc: 'Security and access logs — PDPA / cyber hygiene best practice', min: 1, rec: 7,
+                  detail: 'Purge anchor: log creation date' },
+              ].map(item => {
+                const val = Number(retention[item.key as keyof typeof retention]);
+                const isLow = val < item.min;
+                const cutoff = new Date();
+                cutoff.setUTCFullYear(cutoff.getUTCFullYear() - val);
+                return (
+                  <div key={item.key} className={`p-5 rounded-2xl border ${isLow ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-100'}`}>
+                    <div className="flex items-start gap-4">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{item.label}</p>
+                        <p className="text-[10px] font-bold text-slate-400 mt-0.5">{item.desc}</p>
+                        <p className="text-[9px] font-bold text-slate-300 mt-0.5 font-mono">{item.detail}</p>
+                        {isLow && (
+                          <p className="text-[9px] font-black text-red-600 mt-1 uppercase tracking-widest">⚠ Below statutory minimum — may violate legal requirement</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <select
+                          value={retention[item.key as keyof typeof retention]}
+                          onChange={e => setRetention(prev => ({ ...prev, [item.key]: e.target.value }))}
+                          disabled={!canEdit}
+                          className={`px-4 py-2.5 rounded-xl border text-sm font-black text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 transition-all appearance-none disabled:opacity-60 ${isLow ? 'bg-white border-red-300' : 'bg-white border-slate-200'}`}
+                        >
+                          {[1,2,3,4,5,6,7,8,10,12,15,20].map(y => (
+                            <option key={y} value={y}>{y} year{y !== 1 ? 's' : ''}</option>
+                          ))}
+                        </select>
+                        <div className="text-right min-w-[72px]">
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Purge records before</p>
+                          <p className="text-[10px] font-black text-slate-600 font-mono">{cutoff.toISOString().slice(0, 10)}</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Automated purge schedule */}
+          <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 overflow-hidden">
+            <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Automated Purge Schedule</h2>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                  Runs at midnight UTC · Exact-day precision · Hard DELETE + VACUUM (non-recoverable)
+                </p>
+              </div>
+              {canEdit && (
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    {purgeScheduleEnabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                  <button
+                    onClick={() => handleTogglePurgeSchedule(!purgeScheduleEnabled)}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${purgeScheduleEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${purgeScheduleEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
+                  </button>
                 </div>
-              );
-            })}
+              )}
+            </div>
+
+            <div className="p-8 flex flex-col gap-6">
+              {/* Status cards */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Schedule Status</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className={`w-2 h-2 rounded-full ${purgeScheduleEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                    <p className="text-sm font-black text-slate-900">{purgeScheduleEnabled ? 'Active' : 'Off'}</p>
+                  </div>
+                </div>
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Next Scheduled Run</p>
+                  <p className="text-sm font-black text-slate-900 mt-2 font-mono">
+                    {nextScheduledRun ? new Date(nextScheduledRun).toLocaleString() : 'midnight UTC'}
+                  </p>
+                </div>
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Last Run</p>
+                  <p className="text-sm font-black text-slate-900 mt-2">
+                    {purgeLog[0] ? new Date(purgeLog[0].runAt).toLocaleDateString() : 'Never run'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Security note */}
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3">
+                <span className="text-lg shrink-0">⚠️</span>
+                <div>
+                  <p className="text-xs font-black text-red-800 uppercase tracking-widest">Non-Recoverable Deletion</p>
+                  <p className="text-xs text-red-700 mt-1 leading-relaxed">
+                    Purged records are permanently deleted using hard <code className="bg-red-100 px-1 rounded font-mono">DELETE</code> followed by <code className="bg-red-100 px-1 rounded font-mono">VACUUM ANALYZE</code> to remove dead tuples from heap pages.
+                    For full non-recoverability, ensure PostgreSQL WAL archiving is disabled or WAL files are purged on the same schedule.
+                    Data purged exactly on the anniversary of the cease date — not a day later.
+                  </p>
+                </div>
+              </div>
+
+              {/* Manual trigger */}
+              {canEdit && (
+                <div className="flex items-center justify-between p-5 bg-slate-900 rounded-2xl">
+                  <div>
+                    <p className="text-sm font-black text-white">Manual Purge</p>
+                    <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-widest">Immediately purge all records that have exceeded their retention period</p>
+                  </div>
+                  <button
+                    onClick={handleRunPurgeNow}
+                    disabled={purgeRunning}
+                    className="px-5 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all flex items-center gap-2"
+                  >
+                    {purgeRunning && <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>}
+                    {purgeRunning ? 'Purging…' : 'Run Purge Now'}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="px-8 py-5 bg-violet-50 border-t border-violet-100 flex items-start gap-3">
-            <svg className="w-4 h-4 text-violet-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            <p className="text-[10px] font-bold text-violet-700 leading-relaxed">
-              These periods define your organisation's data retention policy under PDPA 2012. Actual automated purging requires scheduled jobs — contact your system administrator to configure database archival tasks. Statutory minimums per MOM, CPF Act, and Employment Act (Singapore) are indicated above.
-            </p>
-          </div>
+
+          {/* Purge log */}
+          {purgeLog.length > 0 && (
+            <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 overflow-hidden">
+              <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
+                <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Purge History</h2>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Last {purgeLog.length} purge run{purgeLog.length !== 1 ? 's' : ''} · Stored in org_settings</p>
+              </div>
+              <div className="divide-y divide-slate-50">
+                {purgeLog.slice(0, 10).map((run, i) => {
+                  const total = Object.values(run.results || {}).reduce((s: number, r: any) => s + (r.purged ?? 0), 0);
+                  return (
+                    <div key={i} className="px-8 py-4 flex items-center gap-6">
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${run.status === 'clean' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                      <div className="flex-1">
+                        <p className="text-[11px] font-black text-slate-900">{new Date(run.runAt).toLocaleString()}</p>
+                        {run.errors?.length > 0 && (
+                          <p className="text-[9px] font-bold text-amber-600 mt-0.5">{run.errors.join(' · ')}</p>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-[11px] font-black text-slate-900">{total} records purged</p>
+                        <div className="flex gap-2 justify-end mt-0.5">
+                          {Object.entries(run.results || {}).map(([cat, r]: [string, any]) => r.purged > 0 && (
+                            <span key={cat} className="text-[9px] font-bold text-slate-400">{cat}: {r.purged}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <span className={`shrink-0 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest rounded-lg ${run.status === 'clean' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
+                        {run.status}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

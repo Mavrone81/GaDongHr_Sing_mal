@@ -1,10 +1,26 @@
 'use strict';
 
 const router = require('express').Router();
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, authorizeSelfOrRole, ROLES } = require('/app/shared/auth-middleware');
 const { encryptFields, decrypt } = require('/app/shared/crypto');
+
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:4000';
+const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY || '';
+
+function decryptFormPayload(iv, data, rawToken) {
+  // IKM: hex string as UTF-8 bytes (matches browser's TextEncoder(rawTokenHex))
+  const key = crypto.hkdfSync('sha256', Buffer.from(rawToken, 'utf8'), Buffer.from('vorkhive-onboard-v1'), Buffer.from('form-encryption'), 32);
+  const ivBuf = Buffer.from(iv, 'base64');
+  const dataBuf = Buffer.from(data, 'base64');
+  const authTag = dataBuf.slice(dataBuf.length - 16);
+  const ciphertext = dataBuf.slice(0, dataBuf.length - 16);
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, ivBuf);
+  decipher.setAuthTag(authTag);
+  return JSON.parse(Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8'));
+}
 
 const prisma = new PrismaClient();
 
@@ -251,6 +267,92 @@ router.get('/payroll-data', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_
   } catch (err) { next(err); }
 });
 
+// ── GET /me/photo — must be before /:id to avoid shadowing ───────────────────
+router.get('/me/photo', authenticate, async (req, res, next) => {
+  try {
+    const employeeId = req.user.employeeId;
+    if (!employeeId) return res.status(400).json({ error: 'No employee profile linked to this account' });
+    const emp = await prisma.employee.findUnique({ where: { id: employeeId }, select: { profilePhotoUrl: true } });
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    res.json({ profilePhotoUrl: emp.profilePhotoUrl || null });
+  } catch (err) { next(err); }
+});
+
+// ── HR: list pending applications ─────────────────────────────────────────────
+router.get('/applications', authenticate, authorize('employee:manage', ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER), async (req, res, next) => {
+  try {
+    const { status = 'PENDING' } = req.query;
+    const applications = await prisma.employeeApplication.findMany({
+      where: { status: status.toUpperCase() },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(applications);
+  } catch (err) { next(err); }
+});
+
+// ── HR: approve application → create employee record ─────────────────────────
+router.post('/applications/:id/approve', authenticate, authorize('employee:manage', ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const app = await prisma.employeeApplication.findUnique({ where: { id: req.params.id } });
+    if (!app) return res.status(404).json({ error: 'Application not found' });
+    if (app.status !== 'PENDING') return res.status(400).json({ error: 'Application already processed' });
+
+    const count = await prisma.employee.count();
+    const employeeCode = `EMP-${String(count + 1).padStart(4, '0')}`;
+
+    const encFields = encryptFields({
+      nricEncrypted: app.nricFin || '',
+      homeAddressEncrypted: app.homeAddress || '',
+      basicSalaryEncrypted: '',
+      bankAccountEncrypted: app.bankAccount || '',
+    }, ['nricEncrypted', 'homeAddressEncrypted', 'basicSalaryEncrypted', 'bankAccountEncrypted']);
+
+    const employee = await prisma.employee.create({
+      data: {
+        id: uuidv4(), employeeCode, fullName: app.fullName, preferredName: app.preferredName,
+        nricEncrypted: encFields.nricEncrypted,
+        nationality: app.nationality || 'Singaporean',
+        dateOfBirth: app.dateOfBirth ? new Date(app.dateOfBirth) : new Date('1990-01-01'),
+        gender: app.gender?.toUpperCase() === 'FEMALE' ? 'FEMALE' : app.gender?.toUpperCase() === 'PREFER_NOT_TO_SAY' ? 'PREFER_NOT_TO_SAY' : 'MALE',
+        department: app.department || 'General',
+        designation: app.designation || 'Employee',
+        employmentType: app.employmentType?.toUpperCase() === 'PART_TIME' ? 'PART_TIME' : app.employmentType?.toUpperCase() === 'CONTRACT' ? 'CONTRACT' : 'FULL_TIME',
+        startDate: app.startDate ? new Date(app.startDate) : new Date(),
+        workEmail: app.email, personalPhone: app.personalPhone,
+        homeAddressEncrypted: encFields.homeAddressEncrypted,
+        basicSalaryEncrypted: encFields.basicSalaryEncrypted,
+        bankName: app.bankName, bankAccountEncrypted: encFields.bankAccountEncrypted,
+      },
+    });
+
+    try {
+      await fetch(`${AUTH_SERVICE_URL}/users/${app.userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-internal-service-key': INTERNAL_KEY },
+        body: JSON.stringify({ employeeId: employee.id }),
+      });
+    } catch (linkErr) { console.error('[approve] user link failed:', linkErr.message); }
+
+    await prisma.employeeApplication.update({
+      where: { id: app.id },
+      data: { status: 'APPROVED', reviewedBy: req.user?.sub, reviewedAt: new Date() },
+    });
+
+    res.json({ message: 'Application approved. Employee record created.', employee });
+  } catch (err) { next(err); }
+});
+
+// ── HR: reject application ────────────────────────────────────────────────────
+router.patch('/applications/:id/reject', authenticate, authorize('employee:manage', ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const app = await prisma.employeeApplication.update({
+      where: { id: req.params.id },
+      data: { status: 'REJECTED', reviewedBy: req.user?.sub, reviewedAt: new Date() },
+    });
+    res.json(app);
+  } catch (err) { next(err); }
+});
+
 // ── GET /:id ──────────────────────────────────────────────────────────────────
 router.get('/:id', authenticate, authorizeSelfOrRole('id', 'employee:view', ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
   try {
@@ -449,17 +551,6 @@ router.delete('/:id', authenticate, authorize('employee:manage', ROLES.SUPER_ADM
   } catch (err) { next(err); }
 });
 
-// ── GET /me/photo — employee fetches their own profile photo ─────────────────
-router.get('/me/photo', authenticate, async (req, res, next) => {
-  try {
-    const employeeId = req.user.employeeId;
-    if (!employeeId) return res.status(400).json({ error: 'No employee profile linked to this account' });
-    const emp = await prisma.employee.findUnique({ where: { id: employeeId }, select: { profilePhotoUrl: true } });
-    if (!emp) return res.status(404).json({ error: 'Employee not found' });
-    res.json({ profilePhotoUrl: emp.profilePhotoUrl || null });
-  } catch (err) { next(err); }
-});
-
 // ── POST /me/photo — employee uploads their own profile photo ────────────────
 router.post('/me/photo', authenticate, async (req, res, next) => {
   try {
@@ -493,6 +584,116 @@ router.get('/:id/salary-history', authenticate, authorize(ROLES.SUPER_ADMIN, ROL
       basicSalary: (() => { try { return decrypt(h.basicSalaryEnc); } catch { return null; } })(),
     }));
     res.json(decrypted);
+  } catch (err) { next(err); }
+});
+
+// POST /employees/purge — PDPA data retention purge (internal, SUPER_ADMIN only)
+// Deletes terminated employees whose endDate + retentionYears <= today (exact-day precision)
+router.post('/purge', authenticate, authorize(ROLES.SUPER_ADMIN), async (req, res, next) => {
+  try {
+    const retentionYears = parseInt(req.body.retentionYears) || 7;
+
+    // cutoff = today - retentionYears (midnight UTC, exact)
+    const cutoff = new Date();
+    cutoff.setUTCHours(0, 0, 0, 0);
+    cutoff.setUTCFullYear(cutoff.getUTCFullYear() - retentionYears);
+
+    // Find terminated employees whose retention window has closed (endDate <= cutoff)
+    const targets = await prisma.$queryRaw`
+      SELECT id FROM employees
+      WHERE "endDate" IS NOT NULL
+        AND "isActive" = false
+        AND "endDate" <= ${cutoff}
+    `;
+
+    if (targets.length === 0) {
+      return res.json({ purged: 0, cutoff: cutoff.toISOString().slice(0, 10) });
+    }
+
+    const ids = targets.map(t => t.id);
+
+    // Delete children first, then the employee record (hard DELETE — non-recoverable)
+    await prisma.$executeRaw`DELETE FROM emergency_contacts WHERE "employeeId" = ANY(${ids}::uuid[])`;
+    await prisma.$executeRaw`DELETE FROM documents WHERE "employeeId" = ANY(${ids}::uuid[])`;
+    await prisma.$executeRaw`DELETE FROM salary_history WHERE "employeeId" = ANY(${ids}::uuid[])`;
+    const purged = await prisma.$executeRaw`DELETE FROM employees WHERE id = ANY(${ids}::uuid[])`;
+
+    // VACUUM removes dead tuples from heap pages — prevents recovery at storage level
+    for (const tbl of ['employees', 'salary_history', 'documents', 'emergency_contacts']) {
+      await prisma.$executeRawUnsafe(`VACUUM ANALYZE ${tbl}`).catch(() => {});
+    }
+
+    res.json({ purged: Number(purged), cutoff: cutoff.toISOString().slice(0, 10) });
+  } catch (err) { next(err); }
+});
+
+// ── Employee self-service application (public, invite-token gated) ─────────────
+router.post('/apply', async (req, res, next) => {
+  try {
+    const { inviteToken, encrypted, iv, data: encData } = req.body;
+    if (!inviteToken) return res.status(400).json({ error: 'inviteToken is required' });
+
+    // Step 1: Verify token (non-destructive) to get user info + rawToken for decryption
+    const verifyRes = await fetch(`${AUTH_SERVICE_URL}/users/invite/${encodeURIComponent(inviteToken)}`);
+    if (!verifyRes.ok) {
+      return res.status(400).json({ error: 'Invalid or expired invite link — please contact HR for a new invite.' });
+    }
+    const { id: userId, email } = await verifyRes.json();
+
+    // Step 2: Decode JWT locally to extract rawToken for key derivation
+    let rawToken;
+    try {
+      const [, payload] = inviteToken.split('.');
+      const decoded = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
+      rawToken = decoded.jti;
+      if (!rawToken) throw new Error('no jti');
+    } catch {
+      return res.status(400).json({ error: 'Malformed invite token' });
+    }
+
+    // Step 3: Decrypt before consuming the token (so failures don't burn the token)
+    let fields;
+    if (encrypted && iv && encData) {
+      try {
+        fields = decryptFormPayload(iv, encData, rawToken);
+      } catch {
+        return res.status(400).json({ error: 'Failed to decrypt your submission — please try again or request a new invite link.' });
+      }
+    } else {
+      const { fullName, preferredName, gender, dateOfBirth, nationality, nricFin,
+        personalPhone, homeAddress, department, designation, employmentType, startDate, bankName, bankAccount, notes } = req.body;
+      fields = { fullName, preferredName, gender, dateOfBirth, nationality, nricFin, personalPhone, homeAddress, department, designation, employmentType, startDate, bankName, bankAccount, notes };
+    }
+
+    if (!fields.fullName) return res.status(400).json({ error: 'fullName is required' });
+
+    const existing = await prisma.employeeApplication.findUnique({ where: { userId } });
+    if (existing) return res.status(409).json({ error: 'Your profile has already been submitted. HR will review it shortly.' });
+
+    // Step 4: Consume token only after we know the payload is valid
+    const consumeRes = await fetch(`${AUTH_SERVICE_URL}/users/consume-invite`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-internal-service-key': INTERNAL_KEY },
+      body: JSON.stringify({ token: inviteToken }),
+    });
+    if (!consumeRes.ok) {
+      const err = await consumeRes.json().catch(() => ({}));
+      return res.status(400).json({ error: err.error || 'Invalid or expired invite link' });
+    }
+
+    // Step 5: Save application
+    const application = await prisma.employeeApplication.create({
+      data: {
+        id: uuidv4(), userId, email,
+        fullName: fields.fullName, preferredName: fields.preferredName, gender: fields.gender,
+        dateOfBirth: fields.dateOfBirth, nationality: fields.nationality, nricFin: fields.nricFin,
+        personalPhone: fields.personalPhone, homeAddress: fields.homeAddress,
+        department: fields.department, designation: fields.designation,
+        employmentType: fields.employmentType, startDate: fields.startDate,
+        bankName: fields.bankName, bankAccount: fields.bankAccount, notes: fields.notes,
+      },
+    });
+    res.status(201).json({ message: 'Application submitted. HR will review and activate your profile soon.', applicationId: application.id });
   } catch (err) { next(err); }
 });
 

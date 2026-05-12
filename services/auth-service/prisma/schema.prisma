@@ -23,6 +23,8 @@ model User {
   failedLogins  Int       @default(0)
   lockedUntil   DateTime?
   lastLoginAt   DateTime?
+  inviteToken   String?   @unique
+  inviteExpiry  DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

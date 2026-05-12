@@ -140,4 +140,22 @@ router.post('/public-holidays', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES
   } catch (err) { next(err); }
 });
 
+// POST /leave/purge — PDPA data retention purge (internal, SUPER_ADMIN only)
+router.post('/purge', authenticate, authorize(ROLES.SUPER_ADMIN), async (req, res, next) => {
+  try {
+    const retentionYears = parseInt(req.body.retentionYears) || 3;
+    const cutoff = new Date();
+    cutoff.setUTCHours(0, 0, 0, 0);
+    cutoff.setUTCFullYear(cutoff.getUTCFullYear() - retentionYears);
+
+    // Purge leave applications where endDate + retentionYears <= today
+    const purged = await prisma.$executeRaw`
+      DELETE FROM leave_applications WHERE "endDate" <= ${cutoff}
+    `;
+    await prisma.$executeRawUnsafe('VACUUM ANALYZE leave_applications').catch(() => {});
+
+    res.json({ purged: Number(purged), cutoff: cutoff.toISOString().slice(0, 10) });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;

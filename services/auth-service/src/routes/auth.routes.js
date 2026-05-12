@@ -144,7 +144,8 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     // - org requires MFA for all AND user is not individually exempt
     const [orgMfaRequired, orgMethod] = await Promise.all([getOrgMfaRequired(), getOrgMfaMethod()]);
     const mfaExempt = user.mfaExempt ?? false;
-    const needsMfa = user.mfaEnabled || (orgMfaRequired && !mfaExempt);
+    // Exempt overrides everything — if admin marks a user exempt, they skip MFA even if mfaEnabled=true
+    const needsMfa = !mfaExempt && (user.mfaEnabled || orgMfaRequired);
 
     if (needsMfa) {
       // If user doesn't have an enrolled secret yet, tell frontend to run setup flow
@@ -458,7 +459,7 @@ router.post('/mfa/enable', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.IT_A
 // GET /auth/org-settings/general — read general org settings (admin only)
 router.get('/org-settings/general', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN), async (req, res, next) => {
   try {
-    const rows = await prisma.$queryRaw`SELECT key, value FROM org_settings WHERE key IN ('smtpFrom', 'orgName', 'apiKeys', 'webhooks')`;
+    const rows = await prisma.$queryRaw`SELECT key, value FROM org_settings WHERE key IN ('smtpFrom', 'orgName', 'apiKeys', 'webhooks', 'retentionPeriods', 'ssoConfig')`;
     const map = {};
     for (const r of rows) {
       try { map[r.key] = JSON.parse(r.value); } catch { map[r.key] = r.value; }
@@ -468,6 +469,7 @@ router.get('/org-settings/general', authenticate, authorize(ROLES.SUPER_ADMIN, R
       orgName: map.orgName || 'Vorkhive',
       apiKeys: map.apiKeys || [],
       webhooks: map.webhooks || [],
+      retentionPeriods: map.retentionPeriods || null,
     });
   } catch (err) { next(err); }
 });
@@ -475,7 +477,7 @@ router.get('/org-settings/general', authenticate, authorize(ROLES.SUPER_ADMIN, R
 // PUT /auth/org-settings/general — update general org settings (SUPER_ADMIN only)
 router.put('/org-settings/general', authenticate, authorize(ROLES.SUPER_ADMIN), async (req, res, next) => {
   try {
-    const { smtpFrom, orgName, apiKeys, webhooks } = req.body;
+    const { smtpFrom, orgName, apiKeys, webhooks, retentionPeriods, ssoConfig } = req.body;
     const upsert = async (key, value) => {
       const val = typeof value === 'string' ? value : JSON.stringify(value);
       await prisma.$executeRaw`
@@ -487,8 +489,280 @@ router.put('/org-settings/general', authenticate, authorize(ROLES.SUPER_ADMIN), 
     if (orgName !== undefined) await upsert('orgName', orgName);
     if (apiKeys !== undefined) await upsert('apiKeys', apiKeys);
     if (webhooks !== undefined) await upsert('webhooks', webhooks);
+    if (retentionPeriods !== undefined) await upsert('retentionPeriods', retentionPeriods);
+    if (ssoConfig !== undefined) await upsert('ssoConfig', ssoConfig);
     await logAudit(prisma, { userId: req.user.sub, action: 'ORG_SETTING_CHANGED', resource: 'org_settings', req, after: req.body });
     res.json({ message: 'Settings updated' });
+  } catch (err) { next(err); }
+});
+
+// ── Google SSO ────────────────────────────────────────────────────────────────
+
+// GET /auth/sso/google/config — public, returns clientId so the login page can build the OAuth URL
+router.get('/sso/google/config', async (req, res, next) => {
+  try {
+    const rows = await prisma.$queryRaw`SELECT value FROM org_settings WHERE key = 'ssoConfig' LIMIT 1`;
+    let config = {};
+    try { config = JSON.parse(rows[0]?.value ?? '{}'); } catch {}
+    const googleCfg = config.google ?? {};
+    res.json({
+      clientId: googleCfg.clientId || process.env.GOOGLE_CLIENT_ID || '',
+      domain: googleCfg.domain || '',
+      enabled: !!(googleCfg.clientId || process.env.GOOGLE_CLIENT_ID),
+    });
+  } catch (err) { next(err); }
+});
+
+// ── SSO MFA helper ────────────────────────────────────────────────────────────
+// Returns a pending-token response if MFA is required, or null if not needed.
+async function checkSsoMfa(user, req) {
+  const mfaExempt = user.mfaExempt ?? false;
+  const [orgMfaRequired, orgMethod] = await Promise.all([getOrgMfaRequired(), getOrgMfaMethod()]);
+  const needsMfa = !mfaExempt && (user.mfaEnabled || orgMfaRequired);
+  if (!needsMfa) return null;
+
+  // Issue a 5-minute pending token (not a full session token)
+  const pendingToken = signAccessToken({ sub: user.id, sso_pending: true, expiresIn: '5m' });
+
+  if (!user.mfaSecret && orgMfaRequired && !user.mfaEnabled) {
+    return { ssoMfaPending: true, pendingToken, mfaSetupRequired: true, mfaMethod: orgMethod };
+  }
+
+  if (orgMethod === 'EMAIL_OTP' || orgMethod === 'EITHER') {
+    await sendEmailOtp(user);
+  }
+  return { ssoMfaPending: true, pendingToken, mfaMethod: orgMethod };
+}
+
+// POST /auth/sso/mfa-verify — public, verifies MFA after SSO identity check
+router.post('/sso/mfa-verify', async (req, res, next) => {
+  try {
+    const { pendingToken, mfaCode } = req.body;
+    if (!pendingToken || !mfaCode) return res.status(400).json({ error: 'pendingToken and mfaCode required' });
+
+    let payload;
+    try { payload = verifyToken(pendingToken); } catch { return res.status(401).json({ error: 'Pending token invalid or expired. Please sign in again.' }); }
+    if (!payload.sso_pending) return res.status(401).json({ error: 'Invalid pending token' });
+
+    const user = await prisma.user.findUnique({
+      where: { id: payload.sub },
+      include: { role: { include: { permissions: { include: { permission: true } } } } },
+    });
+    if (!user || !user.isActive) return res.status(401).json({ error: 'Account not found or deactivated' });
+
+    const orgMethod = await getOrgMfaMethod();
+
+    // Verify MFA code
+    let verified = false;
+    if (orgMethod === 'TOTP' || orgMethod === 'EITHER') {
+      const secret = user.mfaSecret ? decrypt(user.mfaSecret) : null;
+      if (secret && authenticator.verify({ token: mfaCode, secret })) verified = true;
+    }
+    if (!verified && (orgMethod === 'EMAIL_OTP' || orgMethod === 'EITHER')) {
+      verified = await verifyEmailOtp(user.id, mfaCode);
+    }
+    if (!verified) {
+      await logAudit(prisma, { userId: user.id, action: 'MFA_FAILED', resource: 'auth', req, success: false });
+      return res.status(401).json({ error: 'Invalid MFA code' });
+    }
+
+    // Issue full JWT
+    const permissions = user.role?.permissions.map(p => p.permission.code) || [];
+    const tokenPayload = {
+      sub: user.id, email: user.email, role: (user.role?.name || 'EMPLOYEE').toUpperCase(),
+      permissions, employeeId: user.employeeId, name: user.name,
+    };
+    const accessToken = signAccessToken(tokenPayload);
+    const refreshTokenStr = signRefreshToken({ sub: user.id });
+    const refreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await prisma.refreshToken.create({ data: { id: uuidv4(), token: refreshTokenStr, userId: user.id, expiresAt: refreshExpiresAt } });
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date(), failedLogins: 0, lockedUntil: null } });
+    await logAudit(prisma, { userId: user.id, action: 'SSO_LOGIN_SUCCESS', resource: 'auth', req, after: { sso_mfa: true } });
+
+    res.json({
+      accessToken, refreshToken: refreshTokenStr,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role?.name, employeeId: user.employeeId, permissions },
+    });
+  } catch (err) { next(err); }
+});
+
+// POST /auth/sso/google/callback — public, exchanges OAuth code for Vorkhive JWT
+router.post('/sso/google/callback', async (req, res, next) => {
+  try {
+    const { code, redirectUri } = req.body;
+    if (!code || !redirectUri) return res.status(400).json({ error: 'code and redirectUri required' });
+
+    // Read clientId from org_settings (fallback to env)
+    const cfgRows = await prisma.$queryRaw`SELECT value FROM org_settings WHERE key = 'ssoConfig' LIMIT 1`;
+    let ssoConfig = {};
+    try { ssoConfig = JSON.parse(cfgRows[0]?.value ?? '{}'); } catch {}
+    const clientId = ssoConfig.google?.clientId || process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+    if (!clientId) return res.status(503).json({ error: 'Google SSO not configured — clientId missing' });
+    if (!clientSecret) return res.status(503).json({ error: 'Google SSO not configured — GOOGLE_CLIENT_SECRET env var not set' });
+
+    // Exchange authorization code for tokens
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, grant_type: 'authorization_code' }),
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenRes.ok || !tokenData.id_token) {
+      console.error('[sso/google] Token exchange failed:', tokenData);
+      return res.status(401).json({ error: tokenData.error_description || 'Google token exchange failed' });
+    }
+
+    // Decode the id_token (JWT) — verify with Google's certs for production; for now decode payload only
+    const [, payloadB64] = tokenData.id_token.split('.');
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    const { email, name, email_verified } = payload;
+
+    if (!email_verified) return res.status(401).json({ error: 'Google email not verified' });
+
+    // Find the matching user in Vorkhive
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      include: { role: { include: { permissions: { include: { permission: true } } } } },
+    });
+
+    if (!user) return res.status(401).json({ error: 'No Vorkhive account found for this Google account. Contact your administrator.' });
+    if (!user.isActive) return res.status(403).json({ error: 'Account deactivated' });
+
+    // Check domain restriction if configured
+    const allowedDomain = ssoConfig.google?.domain;
+    if (allowedDomain && !email.toLowerCase().endsWith(`@${allowedDomain.toLowerCase()}`)) {
+      return res.status(401).json({ error: `Only @${allowedDomain} accounts are permitted` });
+    }
+
+    // MFA check — same rules as regular login
+    const mfaResult = await checkSsoMfa(user, req);
+    if (mfaResult) return res.json(mfaResult);
+
+    // Issue Vorkhive JWT
+    const permissions = user.role?.permissions.map(p => p.permission.code) || [];
+    const tokenPayload = {
+      sub: user.id, email: user.email, role: (user.role?.name || 'EMPLOYEE').toUpperCase(),
+      permissions, employeeId: user.employeeId, name: user.name,
+    };
+    const accessToken = signAccessToken(tokenPayload);
+    const refreshTokenStr = signRefreshToken({ sub: user.id });
+    const refreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await prisma.refreshToken.create({ data: { id: uuidv4(), token: refreshTokenStr, userId: user.id, expiresAt: refreshExpiresAt } });
+
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date(), failedLogins: 0, lockedUntil: null } });
+    await logAudit(prisma, { userId: user.id, action: 'SSO_LOGIN_SUCCESS', resource: 'auth', req, after: { provider: 'google' } });
+
+    res.json({
+      accessToken, refreshToken: refreshTokenStr,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role?.name, employeeId: user.employeeId, permissions },
+    });
+  } catch (err) { next(err); }
+});
+
+// ── Microsoft Entra ID SSO ────────────────────────────────────────────────────
+
+// GET /auth/sso/microsoft/config — public, returns client config so login page can build OAuth URL
+router.get('/sso/microsoft/config', async (req, res, next) => {
+  try {
+    const cfgRows = await prisma.$queryRaw`SELECT value FROM org_settings WHERE key = 'ssoConfig' LIMIT 1`;
+    let ssoConfig = {};
+    try { ssoConfig = JSON.parse(cfgRows[0]?.value ?? '{}'); } catch {}
+    const msCfg = ssoConfig.microsoft ?? {};
+    const clientId = msCfg.clientId || process.env.MICROSOFT_CLIENT_ID || '';
+    const tenant = msCfg.tenantId || process.env.MICROSOFT_TENANT_ID || 'common';
+    res.json({ clientId, tenantId: tenant, domain: msCfg.domain || '', enabled: !!clientId });
+  } catch (err) { next(err); }
+});
+
+// POST /auth/sso/microsoft/callback — public, exchanges code for Vorkhive JWT
+router.post('/sso/microsoft/callback', async (req, res, next) => {
+  try {
+    const { code, redirectUri } = req.body;
+    if (!code || !redirectUri) return res.status(400).json({ error: 'code and redirectUri required' });
+
+    const cfgRows = await prisma.$queryRaw`SELECT value FROM org_settings WHERE key = 'ssoConfig' LIMIT 1`;
+    let ssoConfig = {};
+    try { ssoConfig = JSON.parse(cfgRows[0]?.value ?? '{}'); } catch {}
+    const msCfg = ssoConfig.microsoft ?? {};
+
+    const clientId = msCfg.clientId || process.env.MICROSOFT_CLIENT_ID;
+    const clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
+    const tenant = msCfg.tenantId || process.env.MICROSOFT_TENANT_ID || 'common';
+
+    if (!clientId) return res.status(503).json({ error: 'Microsoft SSO not configured — clientId missing' });
+    if (!clientSecret) return res.status(503).json({ error: 'Microsoft SSO not configured — MICROSOFT_CLIENT_SECRET env var not set' });
+
+    // Exchange authorization code for tokens
+    const tokenRes = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId, client_secret: clientSecret,
+        code, redirect_uri: redirectUri,
+        grant_type: 'authorization_code', scope: 'openid email profile',
+      }),
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenRes.ok || !tokenData.id_token) {
+      console.error('[sso/microsoft] Token exchange failed:', tokenData);
+      return res.status(401).json({ error: tokenData.error_description || tokenData.error || 'Microsoft token exchange failed' });
+    }
+
+    // Decode the id_token payload
+    const [, payloadB64] = tokenData.id_token.split('.');
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    const email = (payload.email || payload.preferred_username || '').toLowerCase();
+    const name = payload.name || email;
+
+    if (!email) return res.status(401).json({ error: 'Microsoft account has no email address' });
+
+    // Find matching Vorkhive user — also try Gmail dot-stripped variant
+    let user = await prisma.user.findUnique({
+      where: { email },
+      include: { role: { include: { permissions: { include: { permission: true } } } } },
+    });
+    if (!user && email.endsWith('@gmail.com')) {
+      const [local] = email.split('@');
+      const stripped = local.replace(/\./g, '') + '@gmail.com';
+      const withDots = await prisma.user.findMany({
+        where: { email: { contains: '@gmail.com' } },
+        include: { role: { include: { permissions: { include: { permission: true } } } } },
+      });
+      user = withDots.find(u => u.email.split('@')[0].replace(/\./g, '') === local.replace(/\./g, '')) || null;
+    }
+
+    if (!user) return res.status(401).json({ error: 'No Vorkhive account found for this Microsoft account. Contact your administrator.' });
+    if (!user.isActive) return res.status(403).json({ error: 'Account deactivated' });
+
+    // Domain restriction
+    const allowedDomain = msCfg.domain;
+    if (allowedDomain && !email.endsWith(`@${allowedDomain.toLowerCase()}`)) {
+      return res.status(401).json({ error: `Only @${allowedDomain} accounts are permitted` });
+    }
+
+    // MFA check — same rules as regular login
+    const mfaResult = await checkSsoMfa(user, req);
+    if (mfaResult) return res.json(mfaResult);
+
+    // Issue Vorkhive JWT
+    const permissions = user.role?.permissions.map(p => p.permission.code) || [];
+    const tokenPayload = {
+      sub: user.id, email: user.email, role: (user.role?.name || 'EMPLOYEE').toUpperCase(),
+      permissions, employeeId: user.employeeId, name: user.name,
+    };
+    const accessToken = signAccessToken(tokenPayload);
+    const refreshTokenStr = signRefreshToken({ sub: user.id });
+    const refreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await prisma.refreshToken.create({ data: { id: uuidv4(), token: refreshTokenStr, userId: user.id, expiresAt: refreshExpiresAt } });
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date(), failedLogins: 0, lockedUntil: null } });
+    await logAudit(prisma, { userId: user.id, action: 'SSO_LOGIN_SUCCESS', resource: 'auth', req, after: { provider: 'microsoft' } });
+
+    res.json({
+      accessToken, refreshToken: refreshTokenStr,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role?.name, employeeId: user.employeeId, permissions },
+    });
   } catch (err) { next(err); }
 });
 

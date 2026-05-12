@@ -3,25 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
+import { apiFetch } from '@/lib/api';
 
 const ALLOWED_ROLES = ['SUPER_ADMIN', 'HR_ADMIN', 'HR_MANAGER', 'FINANCE_ADMIN', 'PAYROLL_OFFICER'];
-
-function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  const c = document.cookie.split('; ').find(r => r.startsWith('vorkhive_token='));
-  return c ? c.split('=').slice(1).join('=') : null;
-}
-function apiBase(): string {
-  return process.env.NEXT_PUBLIC_API_URL ?? `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:4000/api`;
-}
-async function apiFetch(path: string, opts: RequestInit = {}) {
-  const token = getToken();
-  const h: Record<string, string> = { 'Content-Type': 'application/json', ...(opts.headers as Record<string, string> ?? {}) };
-  if (token) h['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${apiBase()}${path}`, { ...opts, headers: h });
-  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`); }
-  return res.json();
-}
 
 function fmtSGD(n: number) {
   return n.toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

@@ -2,9 +2,25 @@
 
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const prisma = require('../utils/prisma');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
+
+const INVITE_SECRET = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
+
+function signInviteJwt(userId, rawToken) {
+  return jwt.sign(
+    { sub: userId, jti: rawToken, purpose: 'onboard' },
+    INVITE_SECRET,
+    { algorithm: 'HS256', expiresIn: '30d' }
+  );
+}
+
+function verifyInviteJwt(token) {
+  return jwt.verify(token, INVITE_SECRET, { algorithms: ['HS256'] });
+}
 
 // GET /users  (admin: list all users)
 router.get('/', authenticate, authorize('user:manage'), async (req, res, next) => {
@@ -143,6 +159,111 @@ router.patch('/:id/toggle-active', authenticate, authorize('user:manage'), async
       await prisma.refreshToken.updateMany({ where: { userId: req.params.id }, data: { isRevoked: true } });
     }
     res.json({ ...user, role: user.role?.name });
+  } catch (err) { next(err); }
+});
+
+// POST /users/:id/send-invite — generate invite token and send onboarding email
+router.post('/:id/send-invite', authenticate, authorize('user:manage'), async (req, res, next) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const expiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
+    await prisma.user.update({ where: { id: req.params.id }, data: { inviteToken: rawToken, inviteExpiry: expiry } });
+
+    // Sign raw token as a JWT — URL carries a tamper-evident, signed token (30d JWT expiry)
+    const signedToken = signInviteJwt(user.id, rawToken);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8081';
+    const inviteUrl = `${frontendUrl}/onboard?token=${signedToken}`;
+    const notifUrl = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:4009';
+
+    try {
+      await fetch(`${notifUrl}/notifications/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': req.headers.authorization },
+        body: JSON.stringify({
+          to: user.email,
+          subject: 'Complete Your Employee Profile — Action Required',
+          html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto">
+            <div style="background:#4f46e5;padding:32px;border-radius:16px 16px 0 0;text-align:center">
+              <h1 style="color:white;margin:0;font-size:20px;font-weight:900;letter-spacing:-0.5px">Complete Your Profile</h1>
+              <p style="color:#c7d2fe;font-size:11px;margin:8px 0 0;text-transform:uppercase;letter-spacing:2px">Onboarding Invitation</p>
+            </div>
+            <div style="background:white;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;padding:32px">
+              <p style="color:#1e293b;font-size:14px">Hi ${user.name},</p>
+              <p style="color:#475569;font-size:13px;line-height:1.6">Your account has been created. Please complete your employee profile by filling in your personal details. Once submitted, HR will review and activate your profile.</p>
+              <div style="text-align:center;margin:28px 0">
+                <a href="${inviteUrl}" style="background:#4f46e5;color:white;text-decoration:none;padding:14px 32px;border-radius:10px;font-size:12px;font-weight:900;letter-spacing:1px;text-transform:uppercase">Complete Profile</a>
+              </div>
+              <p style="color:#94a3b8;font-size:11px;margin-top:24px">This link expires in 30 days. If you have questions, contact HR.</p>
+            </div>
+          </div>`,
+        }),
+      });
+    } catch (emailErr) {
+      console.error('[user-routes] invite email send failed:', emailErr.message);
+    }
+
+    res.json({ message: 'Invite sent', inviteExpiry: expiry });
+  } catch (err) { next(err); }
+});
+
+// GET /users/pending-invites — users who have been invited but not yet submitted their profile
+router.get('/pending-invites', authenticate, authorize('user:manage'), async (req, res, next) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: { inviteToken: { not: null } },
+      select: { id: true, name: true, email: true, inviteExpiry: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(users);
+  } catch (err) { next(err); }
+});
+
+// GET /users/invite/:token — validate signed JWT invite token (public)
+router.get('/invite/:token', async (req, res, next) => {
+  try {
+    let rawToken;
+    try {
+      const payload = verifyInviteJwt(req.params.token);
+      if (payload.purpose !== 'onboard') throw new Error('wrong purpose');
+      rawToken = payload.jti;
+    } catch {
+      return res.status(404).json({ error: 'Invalid or expired invite link' });
+    }
+    const user = await prisma.user.findFirst({
+      where: { inviteToken: rawToken, inviteExpiry: { gt: new Date() } },
+      select: { id: true, name: true, email: true },
+    });
+    if (!user) return res.status(404).json({ error: 'Invalid or expired invite link' });
+    res.json(user);
+  } catch (err) { next(err); }
+});
+
+// POST /users/consume-invite — internal: validate JWT + consume raw token
+router.post('/consume-invite', async (req, res, next) => {
+  const key = req.headers['x-internal-service-key'];
+  if (!key || key !== process.env.INTERNAL_SERVICE_KEY) return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { token } = req.body;
+    let rawToken;
+    try {
+      const payload = verifyInviteJwt(token);
+      if (payload.purpose !== 'onboard') throw new Error('wrong purpose');
+      rawToken = payload.jti;
+    } catch {
+      return res.status(404).json({ error: 'Invalid or expired invite token' });
+    }
+    const user = await prisma.user.findFirst({
+      where: { inviteToken: rawToken, inviteExpiry: { gt: new Date() } },
+      select: { id: true, name: true, email: true },
+    });
+    if (!user) return res.status(404).json({ error: 'Invalid or expired invite token' });
+    await prisma.user.update({ where: { id: user.id }, data: { inviteToken: null, inviteExpiry: null } });
+    // Include rawToken so employee service can derive the decryption key
+    res.json({ ...user, rawToken });
   } catch (err) { next(err); }
 });
 

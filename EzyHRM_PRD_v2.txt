@@ -112,7 +112,7 @@ Payroll computation, CPF/SDL/FWL filing, bank GIRO, tax form generation
 Payroll + finance
 Payroll, Claims, Reports
 Recruiter
-Job postings, ATS management, FCF compliance, onboarding workflow
+Job postings, ATS management, candidate pool management, resume review, FCF compliance, onboarding workflow
 Recruitment module
 Recruitment, Onboarding
 Training Manager
@@ -120,9 +120,9 @@ LMS administration, course management, SDL tracking, grant applications
 Training module
 Training, Reports
 Line Manager
-Leave approvals, performance reviews, team oversight, attendance anomaly review
+Leave and claims approvals, team shift scheduling and roster management, attendance anomaly review, performance reviews
 Team-level access
-Leave, T&A, Performance
+Leave, Claims, T&A Roster Scheduling, Performance
 Employee
 Leave/claims submission, payslip view, personal profile update, self-service
 Own records only
@@ -1194,9 +1194,13 @@ Requirement (Full Detail)
 Priority
 Compliance
 REC-001
-Applicant Tracking System (ATS)
+Applicant Tracking System (ATS) with Lifecycle Tracking
 End-to-end recruitment pipeline: Job Requisition (JR) submitted by Line Manager (position, headcount, budget, target start date) > HR Manager and Finance approve JR > HR creates job posting > applications received and tracked.
 Pipeline stages (configurable per job type): Applied > Screening > Phone Interview > Technical/Panel Interview > Assessment > Offer > Hired / Rejected. Rejection at any stage auto-notifies candidate with configurable rejection email template.
+Job lifecycle stages: DRAFT > OPEN > FILLED > CANCELLED. Each job displays a visual stage tracker showing current status and transition history. Funnel chart shows candidate volume at each pipeline stage per job (e.g., 40 Applied, 15 Screened, 8 Interviewed, 3 Offered, 1 Hired).
+Candidate Pool (independent of jobs): candidates can be created and maintained in a standalone pool without being attached to a specific job opening. Recruiters can tag pool candidates to one or more active job postings at any time. Unassigned candidates remain searchable and accessible in the Candidate Pool tab.
+Candidate lifecycle tracking: every stage change is recorded with timestamp, actor, and optional note, creating an immutable audit trail (e.g., "Moved from Screening to Phone Interview by recruiter@company.com on 2026-04-15"). Vertical stage timeline visible in candidate detail panel.
+Resume management: each candidate record supports upload, download, and replacement of a single resume document (PDF, DOC, DOCX; max 10 MB). Resume stored securely on server with original filename preserved for download.
 Interview scheduling: calendar integration sends interview invites to interviewers and candidates. Interview feedback forms completed by each interviewer within HRMS. Aggregated panel score visible to HR.
 Offer letter generation: system auto-populates offer letter from approved template with: position, grade, salary, start date, probation period, benefits. Candidate e-signs via portal or email link. Signed offer archived. Accepted offer triggers onboarding workflow.
 Must Have
@@ -1253,9 +1257,10 @@ Must Have
 TAT-002
 Work Schedule & Shift Configuration
 HR Admin defines work schedules: days of work, contracted start/end time, break duration, contracted weekly hours, OT eligibility flag, shift differential pay rate. Schedule assigned to employee or department.
-Shift patterns: shift name, start time, end time, break duration, days in rotation, shift premium rate (e.g., morning 1.0x, afternoon 1.05x, night 1.1x). System assigns shift to employee for each day.
+Shift patterns: shift name, start time, end time, break duration, days in rotation, shift premium rate (e.g., morning 1.0x, afternoon 1.05x, night 1.1x). System assigns shift to employee for each day. Each shift template has a configurable colour for visual distinction in the roster grid.
 Flexible work arrangements: flexi-hours (core hours 10am–3pm; employee works contracted hours around core window). Compressed work week (e.g., 5 days in 4 with 10-hour days). WFH flag on clock-in. WFH count tracked monthly against company WFH policy cap (configurable). Manager notified when employee exceeds WFH cap.
 Singapore PH Calendar: pre-loaded with all 11 gazetted public holidays per year. Updated annually by vendor by 1 November for the following year. Configurable additional company-declared holidays. Multi-entity support (different entities may observe different holidays, e.g., regional offices).
+Shift Scheduler / Roster Management: HR Admin, HR Manager, and Line Manager can access a weekly shift scheduler for their team. Scheduler displays a 7-column grid (Mon–Sun) with one row per employee. Each cell shows the assigned shift (colour-coded) or is blank. Clicking a cell opens a popover to assign or clear a shift. Bulk assignment: select multiple employees and/or days, then assign a shift to all selected cells in one action. Copy-week: copy the current week's roster to any target week. Published roster is visible to all employees in the team as read-only. Line Managers may only schedule employees they manage; HR Admin and HR Manager may schedule across all departments. Shift templates are created and managed within the scheduler panel (name, start time, end time, break minutes, colour).
 Must Have
 EA / MOM FWA
 TAT-003

@@ -36,28 +36,45 @@ model JobPosting {
 
 model Candidate {
   id              String     @id @default(uuid())
-  jobId           String
+  jobId           String?
   firstName       String
   lastName        String
   email           String
   phone           String?
   currentEmployer String?
   currentTitle    String?
-  noticePeriod    Int?       // days
+  noticePeriod    Int?
   expectedSalary  Float?
   resumePath      String?
+  resumeName      String?
   stage           PipelineStage @default(APPLIED)
   isOfferMade     Boolean    @default(false)
   isHired         Boolean    @default(false)
-  employeeId      String?    // set when converted to employee
+  employeeId      String?
   notes           String?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
-  job              JobPosting     @relation(fields: [jobId], references: [id])
+  job              JobPosting?    @relation(fields: [jobId], references: [id])
   interviewRounds  InterviewRound[]
+  stageEvents      CandidateStageEvent[]
 
   @@map("candidates")
+}
+
+model CandidateStageEvent {
+  id          String   @id @default(uuid())
+  candidateId String
+  fromStage   String?
+  toStage     String
+  note        String?
+  changedBy   String?
+  createdAt   DateTime @default(now())
+
+  candidate   Candidate @relation(fields: [candidateId], references: [id])
+
+  @@index([candidateId])
+  @@map("candidate_stage_events")
 }
 
 model InterviewRound {

@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { storeTokens, clearTokens, getAccessToken, getRefreshToken } from '@/lib/api';
 
 interface User {
   id: string;
@@ -17,7 +18,7 @@ interface AuthContextType {
   loading: boolean;
   hasPermission: (permission: string) => boolean;
   hasRole: (role: string) => boolean;
-  login: (token: string) => Promise<void>;
+  login: (token: string, refreshToken?: string | null) => Promise<void>;
   logout: () => void;
 }
 
@@ -67,13 +68,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const bootstrap = async () => {
       try {
-        const tokenCookie = document.cookie
-          .split('; ')
-          .find(row => row.startsWith('vorkhive_token='));
-        const token = tokenCookie ? tokenCookie.split('=').slice(1).join('=') : undefined;
-
+        const token = getAccessToken();
         if (!token) return;
-
         const ok = await fetchUserWithToken(token);
         if (!ok) logout();
       } catch (error) {
@@ -86,8 +82,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     bootstrap();
   }, []);
 
-  const login = async (token: string): Promise<void> => {
-    document.cookie = `vorkhive_token=${token}; path=/; max-age=3600; SameSite=Lax`;
+  const login = async (token: string, refreshToken?: string | null): Promise<void> => {
+    storeTokens(token, refreshToken);
     try {
       const ok = await fetchUserWithToken(token);
       if (!ok) throw new Error('Identity fetch failed');
@@ -106,7 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
-    document.cookie = 'vorkhive_token=; Max-Age=0; path=/';
+    clearTokens();
     setUser(null);
     router.push('/login');
   };

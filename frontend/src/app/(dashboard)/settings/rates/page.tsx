@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { apiFetch } from '@/lib/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,16 +39,6 @@ interface FwlRate {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function apiBase() {
-  const h = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-  return `http://${h}:4000/api`;
-}
-
-function getToken(): string {
-  if (typeof document === 'undefined') return '';
-  return document.cookie.split('vorkhive_token=')[1]?.split(';')[0] ?? '';
-}
 
 function pct(v: number) { return `${(v * 100).toFixed(2).replace(/\.00$/, '')}%`; }
 
@@ -135,19 +126,17 @@ export default function RatesPage() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  const authHeader = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` });
-
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [cpfRes, sdlRes, fwlRes] = await Promise.all([
-        fetch(`${apiBase()}/components/cpf-rates`, { headers: authHeader() }),
-        fetch(`${apiBase()}/components/sdl-config`, { headers: authHeader() }),
-        fetch(`${apiBase()}/components/fwl-rates`, { headers: authHeader() }),
+      const [cpfData, sdlData, fwlData] = await Promise.all([
+        apiFetch('/components/cpf-rates'),
+        apiFetch('/components/sdl-config'),
+        apiFetch('/components/fwl-rates'),
       ]);
-      if (cpfRes.ok) setCpfRates(await cpfRes.json());
-      if (sdlRes.ok) { const d = await sdlRes.json(); setSdlConfig(Object.keys(d).length ? d : null); }
-      if (fwlRes.ok) setFwlRates(await fwlRes.json());
+      setCpfRates(cpfData);
+      setSdlConfig(Object.keys(sdlData).length ? sdlData : null);
+      setFwlRates(fwlData);
     } catch { showToast('Failed to load statutory tables', false); }
     finally { setLoading(false); }
   }, []); // eslint-disable-line
@@ -157,9 +146,7 @@ export default function RatesPage() {
   const seedDefaults = async () => {
     setSeeding(true);
     try {
-      const res = await fetch(`${apiBase()}/components/seed-defaults`, { method: 'POST', headers: authHeader() });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      const data = await apiFetch('/components/seed-defaults', { method: 'POST' });
       showToast(`Defaults loaded — CPF: ${data.created.cpfRates}, SDL: ${data.created.sdlConfig}, FWL: ${data.created.fwlRates} records created`);
       await load();
     } catch (e: any) { showToast(e.message || 'Seed failed', false); }
@@ -174,9 +161,7 @@ export default function RatesPage() {
     else if (field === 'employerRate') body.employerRate = val / 100;
     else if (field === 'owCeiling') body.owCeiling = val;
     else if (field === 'awCeiling') body.awCeiling = val;
-    const res = await fetch(`${apiBase()}/components/cpf-rates/${id}`, { method: 'PUT', headers: authHeader(), body: JSON.stringify(body) });
-    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`); }
-    const updated = await res.json();
+    const updated = await apiFetch(`/components/cpf-rates/${id}`, { method: 'PUT', body: JSON.stringify(body) });
     setCpfRates(r => r.map(x => x.id === id ? updated : x));
     showToast('CPF rate updated');
   };
@@ -187,18 +172,14 @@ export default function RatesPage() {
     const body: any = {};
     if (field === 'rate') body.rate = val / 100;
     else body[field] = val;
-    const res = await fetch(`${apiBase()}/components/sdl-config`, { method: 'PUT', headers: authHeader(), body: JSON.stringify(body) });
-    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`); }
-    setSdlConfig(await res.json());
+    setSdlConfig(await apiFetch('/components/sdl-config', { method: 'PUT', body: JSON.stringify(body) }));
     showToast('SDL config updated');
   };
 
   const saveFwl = async (id: string, rawVal: string) => {
     const val = parseFloat(rawVal);
     if (isNaN(val)) { showToast('Invalid number', false); return; }
-    const res = await fetch(`${apiBase()}/components/fwl-rates/${id}`, { method: 'PUT', headers: authHeader(), body: JSON.stringify({ dailyRate: val }) });
-    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`); }
-    const updated = await res.json();
+    const updated = await apiFetch(`/components/fwl-rates/${id}`, { method: 'PUT', body: JSON.stringify({ dailyRate: val }) });
     setFwlRates(r => r.map(x => x.id === id ? updated : x));
     showToast('FWL rate updated');
   };

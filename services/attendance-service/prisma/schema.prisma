@@ -10,32 +10,71 @@ datasource db {
 }
 
 model AttendanceRecord {
-  id          String    @id @default(uuid())
-  employeeId  String
-  date        DateTime
-  clockIn     DateTime?
-  clockOut    DateTime?
-  hoursWorked Float?
-  otHours     Float     @default(0)
-  status      AttStatus @default(PRESENT)
-  notes       String?
-  createdAt   DateTime  @default(now())
+  id             String    @id @default(uuid())
+  employeeId     String
+  date           DateTime
+  clockIn        DateTime?
+  clockOut       DateTime?
+  hoursWorked    Float?
+  otHours        Float     @default(0)
+  status         AttStatus @default(PRESENT)
+  notes          String?
+  // Geolocation
+  clockInLat     Float?
+  clockInLng     Float?
+  clockOutLat    Float?
+  clockOutLng    Float?
+  withinGeofence Boolean?
+  locationName   String?   // name of the matched location
+  createdAt      DateTime  @default(now())
 
   @@unique([employeeId, date])
   @@index([employeeId])
   @@map("attendance_records")
 }
 
+model WorkLocation {
+  id             String    @id @default(uuid())
+  name           String
+  postalCode     String
+  address        String
+  latitude       Float
+  longitude      Float
+  radiusMetres   Int       @default(200)
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  employeeLocations EmployeeWorkLocation[]
+
+  @@map("work_locations")
+}
+
+model EmployeeWorkLocation {
+  id             String       @id @default(uuid())
+  employeeId     String
+  workLocationId String
+  workLocation   WorkLocation @relation(fields: [workLocationId], references: [id], onDelete: Cascade)
+  isPrimary      Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  @@unique([employeeId, workLocationId])
+  @@index([employeeId])
+  @@map("employee_work_locations")
+}
+
 model ShiftTemplate {
   id            String   @id @default(uuid())
   name          String
-  startTime     String   // HH:MM
-  endTime       String   // HH:MM
+  startTime     String   // HH:mm
+  endTime       String   // HH:mm
   breakMinutes  Int      @default(60)
   hoursPerDay   Float    @default(8)
+  color         String   @default("#6366f1") // hex colour for calendar display
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
 
+  rosterEntries RosterEntry[]
   @@map("shift_templates")
 }
 
@@ -49,6 +88,134 @@ model Schedule {
 
   @@index([employeeId])
   @@map("schedules")
+}
+
+model RosterEntry {
+  id              String    @id @default(uuid())
+  employeeId      String
+  shiftTemplateId String?
+  workingShiftId  String?
+  shiftPatternId  String?
+  date            DateTime  @db.Date
+  locationId      String?
+  note            String?
+  publishedAt     DateTime?
+  createdBy       String?
+  updatedBy       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shiftTemplate   ShiftTemplate? @relation(fields: [shiftTemplateId], references: [id])
+  workingShift    WorkingShift?  @relation(fields: [workingShiftId], references: [id], onDelete: SetNull)
+  shiftPattern    ShiftPattern?  @relation(fields: [shiftPatternId], references: [id], onDelete: SetNull)
+
+  @@unique([employeeId, date])
+  @@index([date])
+  @@map("roster_entries")
+}
+
+model ShiftProject {
+  id            String        @id @default(uuid())
+  name          String
+  description   String?
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  workingShifts WorkingShift[]
+  shiftPatterns ShiftPattern[]
+  members       ProjectMember[]
+
+  @@map("shift_projects")
+}
+
+model WorkingShift {
+  id           String    @id @default(uuid())
+  projectId    String
+  name         String
+  workMon      Boolean   @default(false)
+  workTue      Boolean   @default(false)
+  workWed      Boolean   @default(false)
+  workThu      Boolean   @default(false)
+  workFri      Boolean   @default(false)
+  workSat      Boolean   @default(false)
+  workSun      Boolean   @default(false)
+  startTime    String
+  endTime      String
+  breakMinutes Int       @default(60)
+  hoursPerDay  Float     @default(8)
+  color        String    @default("#6366f1")
+  isRecurring  Boolean   @default(true)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  project        ShiftProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignments    ShiftAssignment[]
+  rosterEntries  RosterEntry[]
+  projectMembers ProjectMember[]
+
+  @@index([projectId])
+  @@map("working_shifts")
+}
+
+model ShiftPattern {
+  id            String    @id @default(uuid())
+  projectId     String
+  name          String
+  patternType   String    @default("CUSTOM")
+  workDays      Int       @default(5)
+  offDays       Int       @default(2)
+  startTime     String
+  endTime       String
+  breakMinutes  Int       @default(60)
+  hoursPerShift Float     @default(8)
+  color         String    @default("#6366f1")
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  project        ShiftProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignments    ShiftAssignment[]
+  projectMembers ProjectMember[]
+  rosterEntries  RosterEntry[]
+
+  @@index([projectId])
+  @@map("shift_patterns")
+}
+
+model ProjectMember {
+  id             String        @id @default(uuid())
+  projectId      String
+  employeeId     String
+  workingShiftId String?
+  shiftPatternId String?
+  startDate      DateTime      @db.Date
+  createdAt      DateTime      @default(now())
+
+  project        ShiftProject  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workingShift   WorkingShift? @relation(fields: [workingShiftId], references: [id], onDelete: SetNull)
+  shiftPattern   ShiftPattern? @relation(fields: [shiftPatternId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, employeeId])
+  @@index([projectId])
+  @@map("project_members")
+}
+
+model ShiftAssignment {
+  id             String        @id @default(uuid())
+  employeeId     String
+  workingShiftId String?
+  shiftPatternId String?
+  startDate      DateTime      @db.Date
+  endDate        DateTime?     @db.Date
+  createdAt      DateTime      @default(now())
+
+  workingShift   WorkingShift? @relation(fields: [workingShiftId], references: [id], onDelete: Cascade)
+  shiftPattern   ShiftPattern? @relation(fields: [shiftPatternId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@map("shift_assignments")
 }
 
 enum AttStatus {

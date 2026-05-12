@@ -1,23 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-
-function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  const c = document.cookie.split('; ').find(r => r.startsWith('vorkhive_token='));
-  return c ? c.split('=').slice(1).join('=') : null;
-}
-function apiBase(): string {
-  return process.env.NEXT_PUBLIC_API_URL ?? `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:4000/api`;
-}
-async function apiFetch(path: string) {
-  const token = getToken();
-  const h: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) h['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${apiBase()}${path}`, { headers: h });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
+import { apiFetch } from '@/lib/api';
 
 interface Employee {
   id: string;
