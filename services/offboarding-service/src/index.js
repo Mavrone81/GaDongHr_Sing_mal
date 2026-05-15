@@ -22,10 +22,25 @@ const DEFAULT_CLEARANCE_ITEMS = [
   'Certificate of Employment issued', 'CPF final contribution filed', 'H&S acknowledgement',
 ];
 
+// GET /offboarding — list all cases
+app.get('/offboarding', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const { status } = req.query;
+    const where = {};
+    if (status) where.status = status.toUpperCase();
+    const cases = await prisma.offboardingCase.findMany({
+      where,
+      include: { clearanceItems: { select: { id: true, isDone: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(cases);
+  } catch (err) { next(err); }
+});
+
 // POST /offboarding/initiate
 app.post('/offboarding/initiate', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
   try {
-    const { employeeId, reason, lastWorkingDate, noticeGivenDate, noticePeriodDays, isForeignEmployee } = req.body;
+    const { employeeId, employeeName, department, reason, lastWorkingDate, noticeGivenDate, noticePeriodDays, isForeignEmployee } = req.body;
     if (!employeeId || !reason || !lastWorkingDate) return res.status(400).json({ error: 'employeeId, reason, lastWorkingDate required' });
 
     const existing = await prisma.offboardingCase.findUnique({ where: { employeeId } });
@@ -33,7 +48,8 @@ app.post('/offboarding/initiate', authenticate, authorize(ROLES.SUPER_ADMIN, ROL
 
     const offCase = await prisma.offboardingCase.create({
       data: {
-        id: uuidv4(), employeeId, reason: reason.toUpperCase(), lastWorkingDate: new Date(lastWorkingDate),
+        id: uuidv4(), employeeId, employeeName: employeeName || '', department: department || '',
+        reason: reason.toUpperCase(), lastWorkingDate: new Date(lastWorkingDate),
         noticeGivenDate: noticeGivenDate ? new Date(noticeGivenDate) : new Date(),
         noticePeriodDays: noticePeriodDays || 30, isForeignEmployee: !!isForeignEmployee,
         ir21Status: isForeignEmployee ? 'PENDING' : null,
@@ -45,6 +61,15 @@ app.post('/offboarding/initiate', authenticate, authorize(ROLES.SUPER_ADMIN, ROL
       include: { clearanceItems: true },
     });
     res.status(201).json(offCase);
+  } catch (err) { next(err); }
+});
+
+// GET /offboarding/:id — single case with checklist
+app.get('/offboarding/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const offCase = await prisma.offboardingCase.findUnique({ where: { id: req.params.id }, include: { clearanceItems: { orderBy: { createdAt: 'asc' } } } });
+    if (!offCase) return res.status(404).json({ error: 'Not found' });
+    res.json(offCase);
   } catch (err) { next(err); }
 });
 

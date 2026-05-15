@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Asset {
+  id            String      @id @default(uuid())
+  assetCode     String      @unique
+  name          String
+  category      String
+  serialNumber  String?
+  purchaseDate  DateTime?
+  purchaseValue Float       @default(0)
+  currentValue  Float       @default(0)
+  status        AssetStatus @default(AVAILABLE)
+  location      String?
+  notes         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  assignments AssetAssignment[]
+
+  @@map("assets")
+}
+
+model AssetAssignment {
+  id         String    @id @default(uuid())
+  assetId    String
+  employeeId String
+  assignedAt DateTime  @default(now())
+  returnedAt DateTime?
+  notes      String?
+  isActive   Boolean   @default(true)
+
+  asset Asset @relation(fields: [assetId], references: [id])
+
+  @@map("asset_assignments")
+}
+
+enum AssetStatus {
+  AVAILABLE
+  ASSIGNED
+  UNDER_REPAIR
+  RETIRED
+}

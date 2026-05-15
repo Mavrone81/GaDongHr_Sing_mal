@@ -52,7 +52,7 @@ interface Employee {
   sickLeaveBalance?: number;
 }
 
-type Tab = 'general' | 'contracts' | 'statutory' | 'documents';
+type Tab = 'general' | 'contracts' | 'statutory' | 'documents' | 'assets';
 
 // ─── Shared input styles ───────────────────────────────────────────────────────
 const IX = 'w-full bg-white border border-indigo-300 rounded-lg px-4 py-2.5 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-400 placeholder:font-normal';
@@ -176,6 +176,15 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
     { id: 5, label: 'Statutory Declaration', completed: false },
   ]);
 
+  // Employee assets
+  const [empAssets, setEmpAssets] = useState<any[]>([]);
+  const [loadingAssets, setLoadingAssets] = useState(false);
+  const [assetToast, setAssetToast] = useState('');
+  const [allAssets, setAllAssets] = useState<any[]>([]);
+  const [assignAssetId, setAssignAssetId] = useState('');
+  const [assigningAsset, setAssigningAsset] = useState(false);
+  const [returningAsset, setReturningAsset] = useState<string | null>(null);
+
   // Leave entitlements
   const [leaveEntitlements, setLeaveEntitlements] = useState<any[]>([]);
   const [loadingEntitlements, setLoadingEntitlements] = useState(false);
@@ -200,6 +209,21 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
   }, [params.id, apiBaseUrl]);
 
   useEffect(() => { fetchEmployee(); }, [fetchEmployee]);
+
+  useEffect(() => {
+    if (activeTab !== 'assets' || !params.id) return;
+    setLoadingAssets(true);
+    Promise.all([
+      apiFetch(`/assets/employee/${params.id}`),
+      apiFetch('/assets?limit=200&status=AVAILABLE'),
+    ])
+      .then(([assigned, available]) => {
+        setEmpAssets(assigned ?? []);
+        setAllAssets(available.assets ?? []);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingAssets(false));
+  }, [activeTab, params.id]);
 
   useEffect(() => {
     if (activeTab !== 'contracts' || !params.id) return;
@@ -281,6 +305,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
   const TABS: { key: Tab; label: string }[] = [
     { key: 'general', label: 'General Profile' },
     { key: 'contracts', label: 'Contracts & Entitlements' },
+    { key: 'assets', label: 'Assets' },
     { key: 'statutory', label: 'Statutory & Compliance' },
     { key: 'documents', label: 'Document Archive' },
   ];
@@ -761,6 +786,137 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                         <span className="text-[9px] font-black px-2 py-0.5 bg-slate-800 text-slate-400 rounded">AIS-2026</span>
                       </div>
                     </div>
+                  </section>
+                </div>
+              )}
+
+              {/* ══ ASSETS ═══════════════════════════════════════════════════════ */}
+              {activeTab === 'assets' && (
+                <div className="flex flex-col gap-6">
+                  {assetToast && (
+                    <div className="px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-xl">{assetToast}</div>
+                  )}
+
+                  {/* Assign new asset */}
+                  <section>
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-3">
+                      <div className="w-1.5 h-4 bg-teal-500 rounded-full shrink-0" />
+                      Assign Asset
+                    </h4>
+                    <div className="flex gap-3">
+                      <select
+                        value={assignAssetId}
+                        onChange={e => setAssignAssetId(e.target.value)}
+                        className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-teal-500"
+                      >
+                        <option value="">— Select an available asset —</option>
+                        {allAssets.map(a => (
+                          <option key={a.id} value={a.id}>{a.name} ({a.assetCode}) · {a.category}</option>
+                        ))}
+                      </select>
+                      <button
+                        disabled={!assignAssetId || assigningAsset}
+                        onClick={async () => {
+                          if (!assignAssetId) return;
+                          setAssigningAsset(true);
+                          try {
+                            await apiFetch(`/assets/${assignAssetId}/assign`, {
+                              method: 'POST',
+                              body: JSON.stringify({ employeeId: params.id }),
+                            });
+                            const [assigned, available] = await Promise.all([
+                              apiFetch(`/assets/employee/${params.id}`),
+                              apiFetch('/assets?limit=200&status=AVAILABLE'),
+                            ]);
+                            setEmpAssets(assigned ?? []);
+                            setAllAssets(available.assets ?? []);
+                            setAssignAssetId('');
+                            setAssetToast('Asset assigned successfully');
+                            setTimeout(() => setAssetToast(''), 3000);
+                          } catch (e: any) {
+                            setAssetToast(e.message);
+                            setTimeout(() => setAssetToast(''), 3000);
+                          } finally { setAssigningAsset(false); }
+                        }}
+                        className="px-5 py-2.5 text-[10px] font-black text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-xl uppercase tracking-widest transition-all"
+                      >
+                        {assigningAsset ? 'Assigning…' : 'Assign'}
+                      </button>
+                    </div>
+                    {allAssets.length === 0 && !loadingAssets && (
+                      <p className="text-xs text-slate-400 font-bold mt-2">No available assets. <a href="/assets" className="text-teal-600 hover:underline">Register assets first →</a></p>
+                    )}
+                  </section>
+
+                  {/* Assigned assets list */}
+                  <section>
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-3">
+                      <div className="w-1.5 h-4 bg-teal-500 rounded-full shrink-0" />
+                      Currently Assigned ({empAssets.length})
+                    </h4>
+                    {loadingAssets ? (
+                      <div className="flex flex-col gap-2">{[1,2].map(i => <div key={i} className="h-14 bg-slate-100 rounded-xl animate-pulse" />)}</div>
+                    ) : empAssets.length === 0 ? (
+                      <div className="py-10 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No assets assigned to this employee</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-hidden border border-slate-200 rounded-xl">
+                        <table className="w-full text-left">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                              <th className="px-5 py-3">Asset</th>
+                              <th className="px-5 py-3">Category</th>
+                              <th className="px-5 py-3">Assigned</th>
+                              <th className="px-5 py-3">Value</th>
+                              <th className="px-5 py-3 text-right">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
+                            {empAssets.map(a => (
+                              <tr key={a.id} className="hover:bg-slate-50 transition-all">
+                                <td className="px-5 py-3">
+                                  <div className="flex flex-col">
+                                    <span className="font-black text-slate-800">{a.name}</span>
+                                    <span className="text-[9px] font-black text-slate-400 uppercase">{a.assetCode}</span>
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3 text-slate-500 uppercase text-[10px]">{a.category}</td>
+                                <td className="px-5 py-3 text-slate-400 text-[10px]">
+                                  {a.assignedAt ? new Date(a.assignedAt).toLocaleDateString('en-SG') : '—'}
+                                </td>
+                                <td className="px-5 py-3">${(a.currentValue ?? 0).toLocaleString()}</td>
+                                <td className="px-5 py-3 text-right">
+                                  <button
+                                    disabled={returningAsset === a.id}
+                                    onClick={async () => {
+                                      setReturningAsset(a.id);
+                                      try {
+                                        await apiFetch(`/assets/${a.id}/return`, { method: 'POST', body: JSON.stringify({ status: 'AVAILABLE' }) });
+                                        const [assigned, available] = await Promise.all([
+                                          apiFetch(`/assets/employee/${params.id}`),
+                                          apiFetch('/assets?limit=200&status=AVAILABLE'),
+                                        ]);
+                                        setEmpAssets(assigned ?? []);
+                                        setAllAssets(available.assets ?? []);
+                                        setAssetToast('Asset returned');
+                                        setTimeout(() => setAssetToast(''), 3000);
+                                      } catch (e: any) {
+                                        setAssetToast(e.message);
+                                        setTimeout(() => setAssetToast(''), 3000);
+                                      } finally { setReturningAsset(null); }
+                                    }}
+                                    className="px-3 py-1.5 text-[9px] font-black text-red-600 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 uppercase tracking-widest disabled:opacity-50 transition-all"
+                                  >
+                                    {returningAsset === a.id ? 'Returning…' : 'Return'}
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </section>
                 </div>
               )}

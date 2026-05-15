@@ -12,6 +12,8 @@ datasource db {
 model OffboardingCase {
   id                  String     @id @default(uuid())
   employeeId          String     @unique
+  employeeName        String     @default("")
+  department          String     @default("")
   reason              OffboardReason
   lastWorkingDate     DateTime
   noticeGivenDate     DateTime
