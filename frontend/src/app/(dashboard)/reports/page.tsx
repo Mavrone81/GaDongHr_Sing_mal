@@ -1,25 +1,380 @@
 'use client';
 
-export default function ReportsPage() {
-  const reports = [
-    { name: 'CPF / SDL / FWL Statutory Report', category: 'Statutory', icon: '◆', lastRun: '2026-03-31', freq: 'Monthly', badge: 'MOM Required' },
-    { name: 'IRAS AIS / IR8A Annual Filing', category: 'Statutory', icon: '◆', lastRun: '2026-03-01', freq: 'Annual', badge: 'IRAS Required' },
-    { name: 'Bank GIRO Reconciliation', category: 'Financial', icon: '◫', lastRun: '2026-03-28', freq: 'Monthly', badge: '' },
-    { name: 'Leave Liability Report', category: 'Workforce', icon: '◌', lastRun: '2026-03-31', freq: 'Monthly', badge: '' },
-    { name: 'Executive Workforce Dashboard', category: 'Analytics', icon: '▣', lastRun: '2026-04-01', freq: 'Real-time', badge: 'SA Only' },
-    { name: 'Attrition & Workforce Analytics', category: 'Analytics', icon: '▣', lastRun: '2026-03-15', freq: 'Quarterly', badge: '' },
-    { name: 'MOM Headcount Report', category: 'Statutory', icon: '◆', lastRun: '2026-01-15', freq: 'Annual', badge: 'MOM Required' },
-    { name: 'Training & SDL Analytics', category: 'Training', icon: '◑', lastRun: '2026-03-31', freq: 'Monthly', badge: '' },
-    { name: 'Payroll Variance Report', category: 'Financial', icon: '◫', lastRun: '2026-03-28', freq: 'Per Run', badge: '' },
-    { name: 'Custom Report Builder', category: 'Analytics', icon: '▤', lastRun: '–', freq: 'On-demand', badge: 'Premium' },
-  ];
+import { useState, useEffect } from 'react';
+import { apiFetch } from '@/lib/api';
 
-  const categoryColors: Record<string, string> = {
-    Statutory: 'bg-red-50 text-red-600 border-red-100',
-    Financial: 'bg-emerald-50 text-emerald-600 border-emerald-100',
-    Workforce: 'bg-blue-50 text-blue-600 border-blue-100',
-    Analytics: 'bg-indigo-50 text-indigo-600 border-indigo-100',
-    Training: 'bg-amber-50 text-amber-600 border-amber-100',
+// ── CSV utility ───────────────────────────────────────────────────────────────
+function downloadCsv(filename: string, headers: string[], rows: (string | number | null | undefined)[][]) {
+  const escape = (v: string | number | null | undefined) => {
+    const s = v == null ? '' : String(v);
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = [headers, ...rows].map(r => r.map(escape).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function Toast({ msg, type, onClose }: { msg: string; type: 'ok' | 'err'; onClose: () => void }) {
+  useEffect(() => { const t = setTimeout(onClose, 4000); return () => clearTimeout(t); }, [onClose]);
+  return (
+    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-6 duration-300">
+      <div className={`px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 ${type === 'ok' ? 'bg-slate-900 border border-slate-700' : 'bg-red-900 border border-red-700'}`}>
+        <div className={`w-2 h-2 rounded-full ${type === 'ok' ? 'bg-emerald-400' : 'bg-red-400'}`} />
+        <span className="text-[11px] font-black text-white uppercase tracking-widest">{msg}</span>
+        <button onClick={onClose} className="ml-4 text-white/50 hover:text-white text-xs">✕</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Run selector modal (for payroll-linked reports) ───────────────────────────
+function RunSelectorModal({ title, onSelect, onClose }: { title: string; onSelect: (runId: string, period: string) => void; onClose: () => void }) {
+  const [runs, setRuns] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    apiFetch('/payroll/runs?limit=20')
+      .then(d => setRuns(d.runs ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+      <div className="w-full max-w-md bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
+          <div>
+            <h2 className="text-base font-black text-slate-900 tracking-tighter">{title}</h2>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Select a payroll run</p>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">✕</button>
+        </div>
+        <div className="p-6 flex flex-col gap-2 max-h-80 overflow-y-auto">
+          {loading ? (
+            [1,2,3].map(i => <div key={i} className="h-12 bg-slate-100 rounded-xl animate-pulse" />)
+          ) : runs.length === 0 ? (
+            <p className="text-sm text-slate-400 font-bold text-center py-8">No payroll runs found</p>
+          ) : runs.map(r => (
+            <button key={r.id} onClick={() => onSelect(r.id, r.period)}
+              className="flex items-center justify-between px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition-all text-left">
+              <div>
+                <span className="text-sm font-black text-slate-900">{r.period}</span>
+                <span className="ml-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">{r.runType}</span>
+              </div>
+              <span className={`text-[9px] font-black px-2.5 py-1 rounded-lg uppercase tracking-widest border ${
+                r.status === 'FINALISED' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                r.status === 'APPROVED' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
+                'bg-amber-50 text-amber-700 border-amber-100'
+              }`}>{r.status}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Report runners ────────────────────────────────────────────────────────────
+async function runWorkforceReport() {
+  const data = await apiFetch('/employees?limit=500');
+  const emps = data.employees ?? data ?? [];
+  downloadCsv(`workforce-headcount-${new Date().toISOString().slice(0,10)}.csv`,
+    ['Employee Code', 'Full Name', 'Department', 'Designation', 'Employment Type', 'Nationality', 'Start Date', 'Status'],
+    emps.map((e: any) => [e.employeeCode, e.fullName, e.department, e.designation, e.employmentType, e.nationality, e.startDate?.slice(0,10), e.isActive ? 'Active' : 'Inactive'])
+  );
+}
+
+async function runAttritionReport() {
+  const data = await apiFetch('/employees?limit=500');
+  const emps = data.employees ?? data ?? [];
+  const now = new Date();
+  const rows = emps.map((e: any) => {
+    const start = new Date(e.startDate);
+    const tenure = ((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25)).toFixed(1);
+    return [e.employeeCode, e.fullName, e.department, e.employmentType, e.startDate?.slice(0,10), e.endDate?.slice(0,10) ?? '—', `${tenure} yrs`, e.isActive ? 'Active' : 'Terminated'];
+  });
+  downloadCsv(`attrition-analytics-${new Date().toISOString().slice(0,10)}.csv`,
+    ['Employee Code', 'Full Name', 'Department', 'Employment Type', 'Start Date', 'End Date', 'Tenure', 'Status'],
+    rows
+  );
+}
+
+async function runMomReport() {
+  const data = await apiFetch('/employees?limit=500');
+  const emps = data.employees ?? data ?? [];
+  downloadCsv(`mom-headcount-${new Date().toISOString().slice(0,10)}.csv`,
+    ['Employee Code', 'Full Name', 'Nationality', 'Citizenship Status', 'Pass Type', 'Department', 'Employment Type', 'Gender', 'Start Date'],
+    emps.map((e: any) => [e.employeeCode, e.fullName, e.nationality, e.citizenshipStatus ?? '—', e.passType ?? '—', e.department, e.employmentType, e.gender ?? '—', e.startDate?.slice(0,10)])
+  );
+}
+
+async function runLeaveLiabilityReport() {
+  const data = await apiFetch('/employees?limit=500');
+  const emps = (data.employees ?? data ?? []).filter((e: any) => e.isActive);
+  const year = new Date().getFullYear();
+  const rows: any[][] = [];
+  for (const emp of emps.slice(0, 100)) {
+    try {
+      const ents = await apiFetch(`/leave/entitlements/${emp.id}?year=${year}`);
+      for (const e of ents) {
+        const balance = Math.max(0, e.entitledDays + e.carryForward - e.usedDays - e.pendingDays);
+        rows.push([emp.employeeCode, emp.fullName, emp.department, e.name, e.entitledDays, e.usedDays, e.pendingDays, balance]);
+      }
+    } catch {}
+  }
+  downloadCsv(`leave-liability-${year}.csv`,
+    ['Employee Code', 'Full Name', 'Department', 'Leave Type', 'Entitled Days', 'Used Days', 'Pending Days', 'Balance Days'],
+    rows
+  );
+}
+
+async function runPayrollVarianceReport() {
+  const data = await apiFetch('/payroll/runs?limit=2&status=FINALISED');
+  const runs = data.runs ?? [];
+  if (runs.length < 2) throw new Error('Need at least 2 finalised payroll runs to compare');
+  const [r1, r2] = await Promise.all([
+    apiFetch(`/payroll/runs/${runs[0].id}/payslips`),
+    apiFetch(`/payroll/runs/${runs[1].id}/payslips`),
+  ]);
+  const ps1Map: Record<string, any> = {};
+  for (const p of (r1.payslips ?? r1 ?? [])) ps1Map[p.employeeId] = p;
+  const rows: any[][] = [];
+  for (const p of (r2.payslips ?? r2 ?? [])) {
+    const prev = ps1Map[p.employeeId];
+    const diff = prev ? (Number(p.netPay ?? 0) - Number(prev.netPay ?? 0)).toFixed(2) : '—';
+    rows.push([p.employeeId, runs[1].period, p.grossPay ?? '—', p.netPay ?? '—', runs[0].period, prev?.netPay ?? '—', diff]);
+  }
+  downloadCsv(`payroll-variance-${runs[1].period}-vs-${runs[0].period}.csv`,
+    ['Employee ID', 'Current Period', 'Gross Pay', 'Net Pay', 'Prior Period', 'Prior Net Pay', 'Variance'],
+    rows
+  );
+}
+
+async function runIRASReport() {
+  const data = await apiFetch('/employees?limit=500');
+  const emps = (data.employees ?? data ?? []).filter((e: any) => e.isActive);
+  const year = new Date().getFullYear();
+  const rows: any[][] = [];
+  for (const emp of emps.slice(0, 200)) {
+    rows.push([emp.employeeCode, emp.fullName, emp.workEmail, emp.nationality, emp.startDate?.slice(0,10), emp.department, emp.designation, `${year}`, '—']);
+  }
+  downloadCsv(`iras-ir8a-${year}.csv`,
+    ['Employee Code', 'Full Name', 'Email', 'Nationality', 'Start Date', 'Department', 'Designation', 'YA', 'Total Income (from payroll)'],
+    rows
+  );
+}
+
+async function runCpfReportDirect() {
+  const data = await apiFetch('/payroll/runs?limit=1&status=FINALISED');
+  const runs = data.runs ?? [];
+  if (runs.length === 0) throw new Error('No finalised payroll runs found');
+  const runId = runs[0].id;
+  const token = document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+  const res = await fetch(`${apiBase}/payroll/cpf-file/${runId}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'CPF file generation failed'); }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = `cpf-esubmit-${runs[0].period}.txt`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function runBankGiroForRun(runId: string, period: string) {
+  const token = document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+  const res = await fetch(`${apiBase}/payroll/bank-giro/${runId}?bank=uob`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Bank GIRO generation failed'); }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = `bank-giro-${period}.txt`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function runCpfForRun(runId: string, period: string) {
+  const token = document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+  const res = await fetch(`${apiBase}/payroll/cpf-file/${runId}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'CPF file failed'); }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = `cpf-esubmit-${period}.txt`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function runSdlReport() {
+  const data = await apiFetch('/payroll/runs?limit=10&status=FINALISED');
+  const runs = data.runs ?? [];
+  if (runs.length === 0) throw new Error('No finalised payroll runs found');
+  const rows: any[][] = [];
+  for (const r of runs.slice(0, 3)) {
+    try {
+      const ps = await apiFetch(`/payroll/runs/${r.id}/payslips`);
+      for (const p of (ps.payslips ?? ps ?? [])) {
+        rows.push([r.period, p.employeeId, p.grossPay ?? '—', p.sdl ?? '—', p.fwl ?? '—']);
+      }
+    } catch {}
+  }
+  downloadCsv(`sdl-analytics-${new Date().toISOString().slice(0,10)}.csv`,
+    ['Period', 'Employee ID', 'Gross Pay', 'SDL', 'FWL'],
+    rows
+  );
+}
+
+// ── Report definitions ────────────────────────────────────────────────────────
+type ReportKey = 'cpf' | 'iras' | 'giro' | 'leave' | 'workforce' | 'attrition' | 'mom' | 'sdl' | 'variance' | 'custom';
+
+interface ReportDef {
+  key: ReportKey;
+  name: string;
+  category: string;
+  icon: string;
+  freq: string;
+  badge: string;
+  needsRunSelector?: boolean;
+  runSelectorTitle?: string;
+}
+
+const REPORTS: ReportDef[] = [
+  { key: 'cpf',       name: 'CPF / SDL / FWL Statutory Report',  category: 'Statutory',  icon: '◆', freq: 'Monthly',    badge: 'MOM Required',  needsRunSelector: true, runSelectorTitle: 'Select Payroll Run — CPF e-Submit' },
+  { key: 'iras',      name: 'IRAS AIS / IR8A Annual Filing',      category: 'Statutory',  icon: '◆', freq: 'Annual',     badge: 'IRAS Required' },
+  { key: 'giro',      name: 'Bank GIRO Reconciliation',           category: 'Financial',  icon: '◫', freq: 'Monthly',    badge: '',              needsRunSelector: true, runSelectorTitle: 'Select Payroll Run — Bank GIRO' },
+  { key: 'leave',     name: 'Leave Liability Report',             category: 'Workforce',  icon: '◌', freq: 'Monthly',    badge: '' },
+  { key: 'workforce', name: 'Executive Workforce Dashboard',      category: 'Analytics',  icon: '▣', freq: 'Real-time',  badge: 'SA Only' },
+  { key: 'attrition', name: 'Attrition & Workforce Analytics',    category: 'Analytics',  icon: '▣', freq: 'Quarterly',  badge: '' },
+  { key: 'mom',       name: 'MOM Headcount Report',               category: 'Statutory',  icon: '◆', freq: 'Annual',     badge: 'MOM Required' },
+  { key: 'sdl',       name: 'Training & SDL Analytics',           category: 'Training',   icon: '◑', freq: 'Monthly',    badge: '' },
+  { key: 'variance',  name: 'Payroll Variance Report',            category: 'Financial',  icon: '◫', freq: 'Per Run',    badge: '' },
+  { key: 'custom',    name: 'Custom Report Builder',              category: 'Analytics',  icon: '▤', freq: 'On-demand',  badge: 'Premium' },
+];
+
+const CATEGORY_COLORS: Record<string, string> = {
+  Statutory: 'bg-red-50 text-red-600 border-red-100',
+  Financial:  'bg-emerald-50 text-emerald-600 border-emerald-100',
+  Workforce:  'bg-blue-50 text-blue-600 border-blue-100',
+  Analytics:  'bg-indigo-50 text-indigo-600 border-indigo-100',
+  Training:   'bg-amber-50 text-amber-600 border-amber-100',
+};
+
+// ── Custom report builder modal ───────────────────────────────────────────────
+function CustomReportModal({ onClose, onToast }: { onClose: () => void; onToast: (m: string, t: 'ok'|'err') => void }) {
+  const [dataset, setDataset] = useState('employees');
+  const [fields, setFields] = useState<string[]>(['fullName', 'department', 'designation', 'employmentType', 'startDate']);
+  const [running, setRunning] = useState(false);
+
+  const DATASETS: Record<string, string[]> = {
+    employees: ['employeeCode', 'fullName', 'department', 'designation', 'employmentType', 'nationality', 'gender', 'startDate', 'endDate', 'workEmail', 'isActive', 'costCentre', 'reportingManager'],
+    leave:     ['employeeName', 'leaveType', 'startDate', 'endDate', 'totalDays', 'status', 'reason'],
+  };
+
+  const toggle = (f: string) => setFields(p => p.includes(f) ? p.filter(x => x !== f) : [...p, f]);
+
+  const handleRun = async () => {
+    if (fields.length === 0) return onToast('Select at least one field', 'err');
+    setRunning(true);
+    try {
+      let rows: any[][] = [];
+      if (dataset === 'employees') {
+        const data = await apiFetch('/employees?limit=500');
+        const emps = data.employees ?? data ?? [];
+        rows = emps.map((e: any) => fields.map(f => e[f] ?? ''));
+      } else {
+        const data = await apiFetch('/leave/applications?limit=500');
+        const apps = data.applications ?? [];
+        rows = apps.map((a: any) => fields.map(f => {
+          if (f === 'employeeName') return a.employee?.fullName ?? a.employeeId;
+          if (f === 'leaveType') return a.leaveType?.name ?? a.leaveTypeId;
+          return a[f] ?? '';
+        }));
+      }
+      downloadCsv(`custom-report-${dataset}-${new Date().toISOString().slice(0,10)}.csv`, fields, rows);
+      onToast('Custom report downloaded', 'ok');
+      onClose();
+    } catch (e: any) { onToast(e.message, 'err'); }
+    finally { setRunning(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+      <div className="w-full max-w-lg bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
+          <div>
+            <h2 className="text-base font-black text-slate-900 tracking-tighter">Custom Report Builder</h2>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Pick dataset and fields → download CSV</p>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">✕</button>
+        </div>
+        <div className="p-8 flex flex-col gap-6">
+          <div className="flex flex-col gap-2">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Dataset</label>
+            <select value={dataset} onChange={e => { setDataset(e.target.value); setFields([]); }}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500">
+              <option value="employees">Employees</option>
+              <option value="leave">Leave Applications</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Fields to Include</label>
+            <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto">
+              {DATASETS[dataset].map(f => (
+                <label key={f} className={`flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer border transition-all ${fields.includes(f) ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                  <input type="checkbox" checked={fields.includes(f)} onChange={() => toggle(f)} className="w-3.5 h-3.5 accent-indigo-600" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">{f}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-3 px-8 py-5 border-t border-slate-100 bg-slate-50/50">
+          <button onClick={onClose} className="flex-1 py-3 text-[10px] font-black text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-100 uppercase tracking-widest">Cancel</button>
+          <button onClick={handleRun} disabled={running || fields.length === 0}
+            className="flex-1 py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl uppercase tracking-widest transition-all">
+            {running ? 'Generating…' : `Download CSV (${fields.length} fields)`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+export default function ReportsPage() {
+  const [running, setRunning] = useState<ReportKey | null>(null);
+  const [lastRun, setLastRun] = useState<Record<string, string>>({});
+  const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  const [runSelector, setRunSelector] = useState<{ key: ReportKey; title: string } | null>(null);
+  const [customOpen, setCustomOpen] = useState(false);
+
+  const showToast = (msg: string, type: 'ok' | 'err') => setToast({ msg, type });
+
+  const execute = async (key: ReportKey, runId?: string, period?: string) => {
+    setRunning(key);
+    try {
+      switch (key) {
+        case 'cpf':       await runCpfForRun(runId!, period!); break;
+        case 'iras':      await runIRASReport(); break;
+        case 'giro':      await runBankGiroForRun(runId!, period!); break;
+        case 'leave':     await runLeaveLiabilityReport(); break;
+        case 'workforce': await runWorkforceReport(); break;
+        case 'attrition': await runAttritionReport(); break;
+        case 'mom':       await runMomReport(); break;
+        case 'sdl':       await runSdlReport(); break;
+        case 'variance':  await runPayrollVarianceReport(); break;
+        case 'custom':    setCustomOpen(true); setRunning(null); return;
+      }
+      setLastRun(p => ({ ...p, [key]: new Date().toLocaleDateString('en-SG') }));
+      showToast('Report generated — check your downloads', 'ok');
+    } catch (e: any) {
+      showToast(e.message || 'Report generation failed', 'err');
+    } finally {
+      setRunning(null);
+    }
+  };
+
+  const handleRun = (r: ReportDef) => {
+    if (r.key === 'custom') { setCustomOpen(true); return; }
+    if (r.needsRunSelector) { setRunSelector({ key: r.key, title: r.runSelectorTitle! }); return; }
+    execute(r.key);
   };
 
   return (
@@ -27,22 +382,20 @@ export default function ReportsPage() {
 
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/5 rounded-full blur-3xl"></div>
+        <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/5 rounded-full blur-3xl" />
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-2 h-2 bg-emerald-600 rounded-full"></div>
+            <div className="w-2 h-2 bg-emerald-600 rounded-full" />
             <span className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.4em]">Compliance Intelligence Layer</span>
           </div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tighter">Reports <span className="text-emerald-600">& Analytics</span></h1>
+          <h1 className="text-4xl font-black text-slate-900 tracking-tighter">Reports <span className="text-emerald-600">&amp; Analytics</span></h1>
           <p className="text-sm font-bold text-slate-400 mt-2 uppercase tracking-widest max-w-xl">
             Statutory filings, workforce analytics, and custom report generation for MOM, IRAS, and CPF Board compliance.
           </p>
         </div>
         <div className="flex gap-4 relative z-10">
-          <button className="px-8 py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 shadow-xl shadow-slate-900/10 transition-all active:scale-95">
-            Schedule Delivery
-          </button>
-          <button className="px-8 py-4 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 shadow-xl shadow-emerald-500/20 transition-all active:scale-95">
+          <button onClick={() => setCustomOpen(true)}
+            className="px-8 py-4 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 shadow-xl shadow-emerald-500/20 transition-all active:scale-95">
             + Custom Report
           </button>
         </div>
@@ -51,11 +404,11 @@ export default function ReportsPage() {
       {/* Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: 'Statutory Due This Month', value: '3', status: 'text-red-600', bg: 'bg-red-50 border-red-100' },
-          { label: 'Reports Generated (MTD)', value: '47', status: 'text-slate-900', bg: 'bg-white border-slate-100' },
-          { label: 'Scheduled Deliveries', value: '12', status: 'text-indigo-600', bg: 'bg-indigo-50 border-indigo-100' },
-          { label: 'Audit Trail Events', value: '1,284', status: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
-        ].map((s) => (
+          { label: 'Reports Available', value: String(REPORTS.length), status: 'text-slate-900', bg: 'bg-white border-slate-100' },
+          { label: 'Statutory Reports', value: String(REPORTS.filter(r => r.category === 'Statutory').length), status: 'text-red-600', bg: 'bg-red-50 border-red-100' },
+          { label: 'Financial Reports', value: String(REPORTS.filter(r => r.category === 'Financial').length), status: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
+          { label: 'Runs This Session', value: String(Object.keys(lastRun).length), status: 'text-indigo-600', bg: 'bg-indigo-50 border-indigo-100' },
+        ].map(s => (
           <div key={s.label} className={`p-8 rounded-[2rem] border shadow-2xl shadow-indigo-500/5 ${s.bg}`}>
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">{s.label}</p>
             <h3 className={`text-3xl font-black tracking-tighter ${s.status}`}>{s.value}</h3>
@@ -66,7 +419,7 @@ export default function ReportsPage() {
       {/* Reports Matrix */}
       <section className="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 overflow-hidden">
         <div className="p-8 border-b border-slate-50 flex items-center gap-4">
-          <div className="w-2 h-8 bg-emerald-600 rounded-full"></div>
+          <div className="w-2 h-8 bg-emerald-600 rounded-full" />
           <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest">Report Registry</h3>
         </div>
         <div className="overflow-x-auto">
@@ -81,8 +434,8 @@ export default function ReportsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {reports.map((r) => (
-                <tr key={r.name} className="group hover:bg-slate-50/50 transition-all duration-300">
+              {REPORTS.map(r => (
+                <tr key={r.key} className="group hover:bg-slate-50/50 transition-all duration-300">
                   <td className="px-8 py-5">
                     <div className="flex items-center gap-4">
                       <span className="text-lg text-slate-400 group-hover:text-indigo-500 transition-colors">{r.icon}</span>
@@ -95,17 +448,28 @@ export default function ReportsPage() {
                     </div>
                   </td>
                   <td className="px-8 py-5">
-                    <span className={`text-[9px] font-black px-3 py-1.5 rounded-full border uppercase tracking-widest ${categoryColors[r.category]}`}>{r.category}</span>
+                    <span className={`text-[9px] font-black px-3 py-1.5 rounded-full border uppercase tracking-widest ${CATEGORY_COLORS[r.category]}`}>{r.category}</span>
                   </td>
                   <td className="px-8 py-5">
                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{r.freq}</span>
                   </td>
                   <td className="px-8 py-5">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{r.lastRun}</span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      {lastRun[r.key] ?? '—'}
+                    </span>
                   </td>
                   <td className="px-8 py-5 text-center">
-                    <button className="px-6 py-2 bg-white border border-slate-200 rounded-xl text-[9px] font-black text-slate-500 uppercase tracking-widest hover:border-emerald-600 hover:text-emerald-600 hover:bg-emerald-50 shadow-sm transition-all active:scale-95">
-                      Run Now
+                    <button
+                      onClick={() => handleRun(r)}
+                      disabled={running === r.key}
+                      className="px-6 py-2 bg-white border border-slate-200 rounded-xl text-[9px] font-black text-slate-500 uppercase tracking-widest hover:border-emerald-600 hover:text-emerald-600 hover:bg-emerald-50 shadow-sm transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
+                    >
+                      {running === r.key ? (
+                        <>
+                          <span className="w-3 h-3 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+                          Generating…
+                        </>
+                      ) : 'Run Now'}
                     </button>
                   </td>
                 </tr>
@@ -114,6 +478,25 @@ export default function ReportsPage() {
           </table>
         </div>
       </section>
+
+      {/* Run Selector Modal */}
+      {runSelector && (
+        <RunSelectorModal
+          title={runSelector.title}
+          onSelect={(runId, period) => { setRunSelector(null); execute(runSelector.key, runId, period); }}
+          onClose={() => setRunSelector(null)}
+        />
+      )}
+
+      {/* Custom Report Modal */}
+      {customOpen && (
+        <CustomReportModal
+          onClose={() => setCustomOpen(false)}
+          onToast={showToast}
+        />
+      )}
+
+      {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }
