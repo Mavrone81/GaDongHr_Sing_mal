@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import { apiFetch } from '@/lib/api';
 import { CountrySelect } from '@/components/employee/CountrySelect';
 import { DatePicker } from '@/components/employee/DatePicker';
 import { PostalLookup } from '@/components/employee/PostalLookup';
@@ -175,6 +176,13 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
     { id: 5, label: 'Statutory Declaration', completed: false },
   ]);
 
+  // Leave entitlements
+  const [leaveEntitlements, setLeaveEntitlements] = useState<any[]>([]);
+  const [loadingEntitlements, setLoadingEntitlements] = useState(false);
+  const [entitlementEdits, setEntitlementEdits] = useState<Record<string, string>>({});
+  const [savingEntitlements, setSavingEntitlements] = useState(false);
+  const [entitlementToast, setEntitlementToast] = useState('');
+
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
   const fetchEmployee = useCallback(async () => {
@@ -192,6 +200,15 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
   }, [params.id, apiBaseUrl]);
 
   useEffect(() => { fetchEmployee(); }, [fetchEmployee]);
+
+  useEffect(() => {
+    if (activeTab !== 'contracts' || !params.id) return;
+    setLoadingEntitlements(true);
+    apiFetch(`/leave/entitlements/${params.id}`)
+      .then(d => { setLeaveEntitlements(d); setEntitlementEdits({}); })
+      .catch(() => {})
+      .finally(() => setLoadingEntitlements(false));
+  }, [activeTab, params.id]);
 
   const startEditing = () => {
     if (!employee) return;
@@ -534,71 +551,128 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                     </Field>
                   </Section>
 
-                  <Section title="Leave Entitlements" accent="bg-emerald-500">
-                    <Field label="Annual Leave (days/year)" value={`${alTotal} days`} editing={isEditing}>
-                      <input type="number" min={0} max={60} value={editData.annualLeaveEntitlement ?? ''} onChange={e => set('annualLeaveEntitlement', Number(e.target.value))} className={IX} placeholder="14" />
-                    </Field>
-                    <Field label="Sick Leave (days/year)" value={`${slTotal} days`} editing={isEditing}>
-                      <input type="number" min={0} max={60} value={editData.sickLeaveEntitlement ?? ''} onChange={e => set('sickLeaveEntitlement', Number(e.target.value))} className={IX} placeholder="14" />
-                    </Field>
-                    <Field label="Childcare Leave (days/year)" value={`${clTotal} days`} editing={isEditing}>
-                      <Sel value={String(editData.childcareLeaveEntitlement ?? emp.childcareLeaveEntitlement ?? '')} onChange={v => set('childcareLeaveEntitlement', Number(v))} options={['6', '2']} />
-                    </Field>
-                  </Section>
-
-                  {/* Leave balance bars */}
+                  {/* ── Leave Entitlements (dynamic) ── */}
                   <section>
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-5 flex items-center gap-3">
-                      <div className="w-1.5 h-4 bg-emerald-500 rounded-full shrink-0" />
-                      Leave Balance — 2026
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                      <EntitlementRow label="Annual Leave" total={alTotal} used={alUsed} color="bg-indigo-600" />
-                      <EntitlementRow label="Medical / Sick Leave" total={slTotal} used={slUsed} color="bg-emerald-500" />
-                      <EntitlementRow label="Childcare Leave" total={clTotal} used={0} color="bg-amber-500" />
-                      <EntitlementRow label="Hospitalisation Leave" total={60} used={0} color="bg-sky-500" />
+                    <div className="flex items-center justify-between mb-5">
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-3">
+                        <div className="w-1.5 h-4 bg-emerald-500 rounded-full shrink-0" />
+                        Leave Entitlements — {new Date().getFullYear()}
+                      </h4>
+                      {Object.keys(entitlementEdits).length > 0 && (
+                        <button
+                          disabled={savingEntitlements}
+                          onClick={async () => {
+                            setSavingEntitlements(true);
+                            try {
+                              const payload = leaveEntitlements
+                                .filter(e => entitlementEdits[e.leaveTypeId] !== undefined)
+                                .map(e => ({ leaveTypeId: e.leaveTypeId, entitledDays: parseFloat(entitlementEdits[e.leaveTypeId] ?? e.entitledDays) || 0, carryForward: e.carryForward }));
+                              await apiFetch(`/leave/entitlements/${params.id}`, {
+                                method: 'PUT',
+                                body: JSON.stringify({ year: new Date().getFullYear(), entitlements: payload }),
+                              });
+                              const updated = await apiFetch(`/leave/entitlements/${params.id}`);
+                              setLeaveEntitlements(updated);
+                              setEntitlementEdits({});
+                              setEntitlementToast('Entitlements saved');
+                              setTimeout(() => setEntitlementToast(''), 3000);
+                            } catch (e: any) {
+                              setEntitlementToast(e.message);
+                              setTimeout(() => setEntitlementToast(''), 3000);
+                            } finally { setSavingEntitlements(false); }
+                          }}
+                          className="px-4 py-2 text-[9px] font-black text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl uppercase tracking-widest transition-all"
+                        >
+                          {savingEntitlements ? 'Saving…' : 'Save Entitlements'}
+                        </button>
+                      )}
                     </div>
-
-                    {/* Statutory table */}
-                    <div className="overflow-hidden border border-slate-200 rounded-xl">
-                      <table className="w-full text-left">
-                        <thead>
-                          <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                            <th className="px-5 py-3">Leave Type</th>
-                            <th className="px-5 py-3">Entitlement</th>
-                            <th className="px-5 py-3">Used</th>
-                            <th className="px-5 py-3">Balance</th>
-                            <th className="px-5 py-3">Basis</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
-                          {[
-                            { type: 'Annual Leave', ent: alTotal, used: alUsed, basis: 'EA s.88A' },
-                            { type: 'Sick Leave (Outpatient)', ent: slTotal, used: slUsed, basis: 'EA s.89' },
-                            { type: 'Hospitalisation Leave', ent: 60, used: 0, basis: 'EA s.89' },
-                            { type: 'Childcare Leave', ent: clTotal, used: 0, basis: 'CDCSA' },
-                            { type: 'Extended Childcare Leave', ent: 2, used: 0, basis: 'CDCSA s.12A' },
-                            { type: 'Maternity Leave', ent: 16, used: 0, basis: 'CDCSA s.9' },
-                            { type: 'Paternity Leave', ent: 4, used: 0, basis: 'CDCSA s.12H' },
-                            { type: 'NS / Reservist Leave', ent: 0, used: 0, basis: 'NS Pay' },
-                          ].map(row => (
-                            <tr key={row.type} className="hover:bg-slate-50 transition-all">
-                              <td className="px-5 py-3 font-black text-slate-800">{row.type}</td>
-                              <td className="px-5 py-3">{row.ent > 0 ? `${row.ent} days` : 'As req.'}</td>
-                              <td className="px-5 py-3">{row.used} days</td>
-                              <td className="px-5 py-3">
-                                <span className={`font-black ${row.ent - row.used > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                                  {row.ent > 0 ? `${row.ent - row.used} days` : '—'}
-                                </span>
-                              </td>
-                              <td className="px-5 py-3">
-                                <span className="text-[9px] font-black px-2 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded uppercase">{row.basis}</span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    {entitlementToast && (
+                      <div className="mb-4 px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-xl">{entitlementToast}</div>
+                    )}
+                    {loadingEntitlements ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {[1,2,3,4].map(i => <div key={i} className="h-24 bg-slate-100 rounded-xl animate-pulse" />)}
+                      </div>
+                    ) : leaveEntitlements.length === 0 ? (
+                      <div className="py-10 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No leave types configured</p>
+                        <Link href="/leave/registry" className="mt-2 inline-block text-[10px] font-black text-indigo-600 hover:underline uppercase tracking-widest">Set up leave types →</Link>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                          {leaveEntitlements.map(e => {
+                            const total = parseFloat(entitlementEdits[e.leaveTypeId] ?? e.entitledDays) || 0;
+                            const used = e.usedDays ?? 0;
+                            const colors = ['bg-indigo-600','bg-emerald-500','bg-amber-500','bg-sky-500','bg-violet-500','bg-rose-500'];
+                            const color = colors[leaveEntitlements.indexOf(e) % colors.length];
+                            return (
+                              <div key={e.leaveTypeId} className="flex flex-col gap-2 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">{e.name}</span>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="number" min={0} max={365} step={0.5}
+                                      value={entitlementEdits[e.leaveTypeId] ?? e.entitledDays}
+                                      onChange={ev => setEntitlementEdits(p => ({ ...p, [e.leaveTypeId]: ev.target.value }))}
+                                      className="w-16 text-center text-xs font-black text-slate-800 bg-white border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:border-indigo-400"
+                                    />
+                                    <span className="text-[9px] font-black text-slate-400">days</span>
+                                  </div>
+                                </div>
+                                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full ${color}`} style={{ width: total > 0 ? `${Math.min(100, Math.round((used / total) * 100))}%` : '0%' }} />
+                                </div>
+                                <div className="flex justify-between text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                                  <span>Used: {used} days</span>
+                                  <span>Balance: {Math.max(0, total - used - (e.pendingDays ?? 0))} days</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="overflow-hidden border border-slate-200 rounded-xl">
+                          <table className="w-full text-left">
+                            <thead>
+                              <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                <th className="px-5 py-3">Leave Type</th>
+                                <th className="px-5 py-3">Entitlement</th>
+                                <th className="px-5 py-3">Used</th>
+                                <th className="px-5 py-3">Pending</th>
+                                <th className="px-5 py-3">Carry Fwd</th>
+                                <th className="px-5 py-3">Balance</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
+                              {leaveEntitlements.map(e => {
+                                const ent = parseFloat(entitlementEdits[e.leaveTypeId] ?? e.entitledDays) || 0;
+                                const balance = Math.max(0, ent + (e.carryForward ?? 0) - (e.usedDays ?? 0) - (e.pendingDays ?? 0));
+                                return (
+                                  <tr key={e.leaveTypeId} className="hover:bg-slate-50 transition-all">
+                                    <td className="px-5 py-3">
+                                      <div className="flex flex-col gap-0.5">
+                                        <span className="font-black text-slate-800">{e.name}</span>
+                                        <span className="text-[9px] font-black text-slate-400 uppercase">{e.code} · {e.isPaid ? 'Paid' : 'Unpaid'}</span>
+                                      </div>
+                                    </td>
+                                    <td className="px-5 py-3">{ent > 0 ? `${ent} days` : 'As req.'}</td>
+                                    <td className="px-5 py-3">{e.usedDays ?? 0} days</td>
+                                    <td className="px-5 py-3 text-amber-600">{e.pendingDays ?? 0} days</td>
+                                    <td className="px-5 py-3">{e.carryForward ?? 0} days</td>
+                                    <td className="px-5 py-3">
+                                      <span className={`font-black ${balance > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                        {ent > 0 ? `${balance} days` : '—'}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    )}
                   </section>
 
                   <Section title="Compensation" accent="bg-violet-500">

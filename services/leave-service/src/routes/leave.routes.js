@@ -10,8 +10,107 @@ const prisma = new PrismaClient();
 // ── GET /leave/types ──────────────────────────────────────────────────────────
 router.get('/types', authenticate, async (req, res, next) => {
   try {
-    const types = await prisma.leaveType.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } });
+    const all = req.query.all === 'true';
+    const types = await prisma.leaveType.findMany({ where: all ? {} : { isActive: true }, orderBy: { name: 'asc' } });
     res.json(types);
+  } catch (err) { next(err); }
+});
+
+// ── POST /leave/types ─────────────────────────────────────────────────────────
+router.post('/types', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const { code, name, isPaid, isStatutory, annualEntitlement, maxCarryForward, isGovtPaid, requiresDocument, minNoticeDays } = req.body;
+    if (!code || !name) return res.status(400).json({ error: 'code and name are required' });
+    const type = await prisma.leaveType.create({
+      data: {
+        id: uuidv4(), code: code.toUpperCase().trim(), name: name.trim(),
+        isPaid: isPaid ?? true, isStatutory: isStatutory ?? false,
+        annualEntitlement: parseFloat(annualEntitlement) || 0,
+        maxCarryForward: parseFloat(maxCarryForward) || 0,
+        isGovtPaid: isGovtPaid ?? false,
+        requiresDocument: requiresDocument ?? false,
+        minNoticeDays: parseInt(minNoticeDays) || 0,
+      },
+    });
+    res.status(201).json(type);
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'A leave type with this code already exists' });
+    next(err);
+  }
+});
+
+// ── PUT /leave/types/:id ──────────────────────────────────────────────────────
+router.put('/types/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const { name, isPaid, isStatutory, annualEntitlement, maxCarryForward, isGovtPaid, requiresDocument, minNoticeDays, isActive } = req.body;
+    const type = await prisma.leaveType.update({
+      where: { id: req.params.id },
+      data: {
+        ...(name !== undefined && { name: name.trim() }),
+        ...(isPaid !== undefined && { isPaid }),
+        ...(isStatutory !== undefined && { isStatutory }),
+        ...(annualEntitlement !== undefined && { annualEntitlement: parseFloat(annualEntitlement) }),
+        ...(maxCarryForward !== undefined && { maxCarryForward: parseFloat(maxCarryForward) }),
+        ...(isGovtPaid !== undefined && { isGovtPaid }),
+        ...(requiresDocument !== undefined && { requiresDocument }),
+        ...(minNoticeDays !== undefined && { minNoticeDays: parseInt(minNoticeDays) }),
+        ...(isActive !== undefined && { isActive }),
+      },
+    });
+    res.json(type);
+  } catch (err) { next(err); }
+});
+
+// ── DELETE /leave/types/:id — soft delete ─────────────────────────────────────
+router.delete('/types/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    await prisma.leaveType.update({ where: { id: req.params.id }, data: { isActive: false } });
+    res.json({ message: 'Leave type deactivated' });
+  } catch (err) { next(err); }
+});
+
+// ── GET /leave/entitlements/:employeeId ───────────────────────────────────────
+router.get('/entitlements/:employeeId', authenticate, authorizeSelfOrRole('employeeId', ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.LINE_MANAGER), async (req, res, next) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const [types, entitlements] = await Promise.all([
+      prisma.leaveType.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
+      prisma.leaveEntitlement.findMany({
+        where: { employeeId: req.params.employeeId, year },
+        include: { leaveType: { select: { code: true, name: true, isPaid: true } } },
+      }),
+    ]);
+    // Merge: return all active types with their entitlement data (or nulls)
+    const map = Object.fromEntries(entitlements.map(e => [e.leaveTypeId, e]));
+    const result = types.map(t => ({
+      leaveTypeId: t.id, code: t.code, name: t.name, isPaid: t.isPaid,
+      annualEntitlement: t.annualEntitlement,
+      entitledDays: map[t.id]?.entitledDays ?? t.annualEntitlement,
+      usedDays: map[t.id]?.usedDays ?? 0,
+      pendingDays: map[t.id]?.pendingDays ?? 0,
+      carryForward: map[t.id]?.carryForward ?? 0,
+      entitlementId: map[t.id]?.id ?? null,
+    }));
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// ── PUT /leave/entitlements/:employeeId ───────────────────────────────────────
+router.put('/entitlements/:employeeId', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER), async (req, res, next) => {
+  try {
+    const { employeeId } = req.params;
+    const year = parseInt(req.body.year) || new Date().getFullYear();
+    const { entitlements } = req.body; // [{ leaveTypeId, entitledDays, carryForward }]
+    if (!Array.isArray(entitlements)) return res.status(400).json({ error: 'entitlements array required' });
+
+    const results = await Promise.all(entitlements.map(e =>
+      prisma.leaveEntitlement.upsert({
+        where: { employeeId_leaveTypeId_year: { employeeId, leaveTypeId: e.leaveTypeId, year } },
+        create: { id: uuidv4(), employeeId, leaveTypeId: e.leaveTypeId, year, entitledDays: parseFloat(e.entitledDays) || 0, carryForward: parseFloat(e.carryForward) || 0 },
+        update: { entitledDays: parseFloat(e.entitledDays) || 0, carryForward: parseFloat(e.carryForward) || 0 },
+      })
+    ));
+    res.json(results);
   } catch (err) { next(err); }
 });
 
