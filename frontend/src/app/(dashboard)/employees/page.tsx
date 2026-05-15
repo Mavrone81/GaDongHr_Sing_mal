@@ -90,6 +90,7 @@ export default function EmployeeDirectoryPage() {
   const [provisionEmail, setProvisionEmail] = useState('');
   const [provisionName, setProvisionName] = useState('');
   const [provisionPassword, setProvisionPassword] = useState('');
+  const [provisionShowPass, setProvisionShowPass] = useState(false);
   const [provisionRole, setProvisionRole] = useState('EMPLOYEE');
   const [provisioning, setProvisioning] = useState(false);
   const [provisionResult, setProvisionResult] = useState<{ ok: boolean; message: string; userId?: string } | null>(null);
@@ -196,6 +197,7 @@ export default function EmployeeDirectoryPage() {
     setProvisionEmail('');
     setProvisionName('');
     setProvisionPassword('');
+    setProvisionShowPass(false);
     setProvisionRole('EMPLOYEE');
     setProvisionResult(null);
   };
@@ -635,13 +637,22 @@ export default function EmployeeDirectoryPage() {
               {/* Temporary password */}
               <div className="flex flex-col gap-2">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Temporary Password</label>
-                <input
-                  type="text"
-                  value={provisionPassword}
-                  onChange={e => setProvisionPassword(e.target.value)}
-                  placeholder="Min 8 characters"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all placeholder:font-normal placeholder:text-slate-300"
-                />
+                <div className="relative">
+                  <input
+                    type={provisionShowPass ? 'text' : 'password'}
+                    value={provisionPassword}
+                    onChange={e => setProvisionPassword(e.target.value)}
+                    placeholder="Min 8 characters"
+                    className="w-full px-4 py-3 pr-12 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all placeholder:font-normal placeholder:text-slate-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setProvisionShowPass(s => !s)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors text-xs font-black uppercase tracking-widest px-1"
+                  >
+                    {provisionShowPass ? 'Hide' : 'Show'}
+                  </button>
+                </div>
               </div>
 
               {/* Role */}
