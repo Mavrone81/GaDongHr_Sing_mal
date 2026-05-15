@@ -87,6 +87,38 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
     const sdlConfig = await prisma.sdlConfig.findFirst({ where: { isActive: true } });
     const savedLineItems = await prisma.payrollLineItem.findMany({ where: { runId: run.id } });
 
+    // ── Auto-fetch leave data for this pay period ─────────────────────────────
+    const [periodYear, periodMonth] = run.period.split('-').map(Number);
+    const periodStart = new Date(periodYear, periodMonth - 1, 1);
+    const periodEnd   = new Date(periodYear, periodMonth, 0); // last day of month
+    const daysInMonth = periodEnd.getDate();
+
+    // Fetch all approved leave applications in the period from leave service
+    const LEAVE_SERVICE_URL = process.env.LEAVE_SERVICE_URL || 'http://leave-service:4004';
+    let approvedLeaves = [];
+    try {
+      const leaveRes = await fetch(
+        `${LEAVE_SERVICE_URL}/leave/applications?status=APPROVED&limit=2000&startDateFrom=${periodStart.toISOString().slice(0,10)}&startDateTo=${periodEnd.toISOString().slice(0,10)}`,
+        { headers: { 'Authorization': req.headers.authorization || '' } }
+      );
+      if (leaveRes.ok) {
+        const leaveData = await leaveRes.json();
+        approvedLeaves = leaveData.applications || [];
+      }
+    } catch (e) {
+      console.warn('[payroll] Could not fetch leave data:', e.message);
+    }
+
+    // Build per-employee leave summary: { employeeId -> { nplDays, govtPaidDays } }
+    const leaveSummary = {};
+    for (const app of approvedLeaves) {
+      const lt = app.leaveType;
+      if (!lt) continue;
+      if (!leaveSummary[app.employeeId]) leaveSummary[app.employeeId] = { nplDays: 0, govtPaidDays: 0 };
+      if (!lt.isPaid)     leaveSummary[app.employeeId].nplDays      += app.totalDays;
+      if (lt.isGovtPaid)  leaveSummary[app.employeeId].govtPaidDays += app.totalDays;
+    }
+
     let totalGross = 0, totalNet = 0, totalEmployee = 0, totalEmployer = 0, totalSdl = 0;
 
     for (const emp of employees) {
@@ -106,10 +138,16 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
       const effectiveAw    = (emp.aw || 0) + awAdj;
       const effectiveGross = (emp.grossPay || emp.ow || 0) + owAdj + awAdj + nonCpfAdj;
 
+      // ── NPL auto-deduction (EA formula: monthly gross / days in month × NPL days) ──
+      const leave = leaveSummary[emp.employeeId] || { nplDays: 0, govtPaidDays: 0 };
+      const dailyRate   = daysInMonth > 0 ? effectiveGross / daysInMonth : 0;
+      const autoNpl     = Math.round(dailyRate * leave.nplDays * 100) / 100;
+      const govtPaidAmt = Math.round(dailyRate * leave.govtPaidDays * 100) / 100;
+
       const rate = findCpfRate(cpfRates, emp.citizenStatus, emp.age);
       const cpf  = computeCpf({ ow: effectiveOw, aw: effectiveAw, ytdOw: emp.ytdOw || 0, ytdAw: emp.ytdAw || 0, citizenStatus: emp.citizenStatus, age: emp.age, rates: rate });
       const sdl  = computeSdl(effectiveGross, sdlConfig);
-      const net  = computeNetPay({ grossPay: effectiveGross, employeeCpf: cpf.totalEmployee, nplDeduction: (emp.nplDeduction || 0) + deductions, reimbursements: (emp.reimbursements || 0) + reimbursements });
+      const net  = computeNetPay({ grossPay: effectiveGross, employeeCpf: cpf.totalEmployee, nplDeduction: (emp.nplDeduction || 0) + deductions + autoNpl, reimbursements: (emp.reimbursements || 0) + reimbursements });
 
       totalGross += effectiveGross; totalNet += net;
       totalEmployee += cpf.totalEmployee; totalEmployer += cpf.totalEmployer; totalSdl += sdl;
@@ -125,6 +163,10 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
         ytdGrossEnc: encrypt(String((emp.ytdGross || 0) + effectiveGross)),
         ytdEmployeeCpfEnc: encrypt(String((emp.ytdEmployeeCpf || 0) + cpf.totalEmployee)),
         ytdEmployerCpfEnc: encrypt(String((emp.ytdEmployerCpf || 0) + cpf.totalEmployer)),
+        nplDays: leave.nplDays || null,
+        nplDeductionEnc: autoNpl > 0 ? encrypt(String(autoNpl)) : null,
+        govtPaidDays: leave.govtPaidDays || null,
+        govtPaidAmountEnc: govtPaidAmt > 0 ? encrypt(String(govtPaidAmt)) : null,
       };
 
       await prisma.payslip.upsert({
@@ -267,6 +309,7 @@ router.get('/payslips/me', authenticate, async (req, res, next) => {
         id: true, period: true, isPublished: true, createdAt: true,
         netPayEnc: true, grossPayEnc: true, employeeCpfEnc: true, basicSalaryEnc: true,
         ytdGrossEnc: true, ytdEmployeeCpfEnc: true,
+        nplDays: true, nplDeductionEnc: true, govtPaidDays: true, govtPaidAmountEnc: true,
       },
     });
 
@@ -281,6 +324,10 @@ router.get('/payslips/me', authenticate, async (req, res, next) => {
       employeeCpf: parseFloat(decrypt(ps.employeeCpfEnc)) || 0,
       ytdGross: ps.ytdGrossEnc ? (parseFloat(decrypt(ps.ytdGrossEnc)) || 0) : null,
       ytdEmployeeCpf: ps.ytdEmployeeCpfEnc ? (parseFloat(decrypt(ps.ytdEmployeeCpfEnc)) || 0) : null,
+      nplDays: ps.nplDays || 0,
+      nplDeduction: ps.nplDeductionEnc ? (parseFloat(decrypt(ps.nplDeductionEnc)) || 0) : 0,
+      govtPaidDays: ps.govtPaidDays || 0,
+      govtPaidAmount: ps.govtPaidAmountEnc ? (parseFloat(decrypt(ps.govtPaidAmountEnc)) || 0) : 0,
     }));
 
     res.json({ payslips: result, total: result.length, employeeId });
@@ -308,6 +355,10 @@ router.get('/payslips/me/:period', authenticate, async (req, res, next) => {
       sdl: payslip.sdlAmountEnc ? decrypt(payslip.sdlAmountEnc) : 0,
       ytdGross: payslip.ytdGrossEnc ? decrypt(payslip.ytdGrossEnc) : null,
       ytdEmployeeCpf: payslip.ytdEmployeeCpfEnc ? decrypt(payslip.ytdEmployeeCpfEnc) : null,
+      nplDays: payslip.nplDays || 0,
+      nplDeduction: payslip.nplDeductionEnc ? decrypt(payslip.nplDeductionEnc) : 0,
+      govtPaidDays: payslip.govtPaidDays || 0,
+      govtPaidAmount: payslip.govtPaidAmountEnc ? decrypt(payslip.govtPaidAmountEnc) : 0,
     };
 
     const doc = new PDFDocument({ size: 'A4', margin: 50 });

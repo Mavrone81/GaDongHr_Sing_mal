@@ -103,6 +103,23 @@ router.put('/entitlements/:employeeId', authenticate, authorize(ROLES.SUPER_ADMI
     const { entitlements } = req.body; // [{ leaveTypeId, entitledDays, carryForward }]
     if (!Array.isArray(entitlements)) return res.status(400).json({ error: 'entitlements array required' });
 
+    // Load leave types for statutory minimum enforcement
+    const typeIds = [...new Set(entitlements.map(e => e.leaveTypeId))];
+    const types = await prisma.leaveType.findMany({ where: { id: { in: typeIds } } });
+    const typeMap = Object.fromEntries(types.map(t => [t.id, t]));
+
+    // Enforce statutory minimums — block if entitledDays is below the type's annualEntitlement
+    const violations = entitlements
+      .filter(e => {
+        const t = typeMap[e.leaveTypeId];
+        return t?.isStatutory && t.annualEntitlement > 0 && (parseFloat(e.entitledDays) || 0) < t.annualEntitlement;
+      })
+      .map(e => `${typeMap[e.leaveTypeId].name}: minimum is ${typeMap[e.leaveTypeId].annualEntitlement} days`);
+
+    if (violations.length) {
+      return res.status(400).json({ error: 'Statutory minimum violation', violations });
+    }
+
     const results = await Promise.all(entitlements.map(e =>
       prisma.leaveEntitlement.upsert({
         where: { employeeId_leaveTypeId_year: { employeeId, leaveTypeId: e.leaveTypeId, year } },
@@ -129,12 +146,17 @@ router.get('/balances/:employeeId', authenticate, authorizeSelfOrRole('employeeI
 // ── GET /leave/applications ───────────────────────────────────────────────────
 router.get('/applications', authenticate, async (req, res, next) => {
   try {
-    const { employeeId, status, page = 1, limit = 20 } = req.query;
+    const { employeeId, status, page = 1, limit = 20, startDateFrom, startDateTo } = req.query;
     const where = {};
     // Employees see only their own; managers see their team
     if (req.user.role === 'employee') where.employeeId = req.user.employeeId;
     else if (employeeId) where.employeeId = employeeId;
     if (status) where.status = status.toUpperCase();
+    if (startDateFrom || startDateTo) {
+      where.startDate = {};
+      if (startDateFrom) where.startDate.gte = new Date(startDateFrom);
+      if (startDateTo)   where.startDate.lte = new Date(startDateTo);
+    }
 
     const [apps, total] = await Promise.all([
       prisma.leaveApplication.findMany({

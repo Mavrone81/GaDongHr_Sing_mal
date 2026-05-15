@@ -73,6 +73,12 @@ model Payslip {
   ytdEmployerCpfEnc   String?
   pdfPath             String?
   isPublished         Boolean  @default(false)
+  // No-Pay Leave auto-computed fields
+  nplDays             Float?   // NPL days in this pay period (auto from leave service)
+  nplDeductionEnc     String?  // encrypted NPL deduction amount
+  // Government-paid leave auto-computed fields
+  govtPaidDays        Float?   // govt-reimbursable leave days in period
+  govtPaidAmountEnc   String?  // encrypted govt-paid amount (for employer claim)
   createdAt           DateTime @default(now())
 
   run PayrollRun @relation(fields: [runId], references: [id])
