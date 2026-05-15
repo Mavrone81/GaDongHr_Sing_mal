@@ -20,9 +20,9 @@ app.get('/health', (req, res) => res.json({ service: 'notification-service', sta
 let smtpConfig = {
   host: process.env.SMTP_HOST || 'smtp.titan.email',
   port: parseInt(process.env.SMTP_PORT) || 587,
-  user: process.env.SMTP_USER || '',
+  user: process.env.SMTP_USER || 'enquires@vorkhive.com',
   pass: process.env.SMTP_PASS || '',
-  from: process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@vorkhive.com',
+  from: process.env.SMTP_FROM || process.env.SMTP_USER || 'enquires@vorkhive.com',
 };
 
 function buildTransporter() {
