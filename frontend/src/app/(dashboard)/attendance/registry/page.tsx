@@ -1626,15 +1626,18 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
                   )}
                 </select>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Start Date</label>
+              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-3 flex flex-col gap-2">
+                <label className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Effective Start Date *</label>
                 <input type="date" value={memberForm.startDate} onChange={e => setMemberForm(f => ({ ...f, startDate: e.target.value }))}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 transition-all" />
+                  className="w-full px-4 py-2.5 bg-white border border-indigo-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 transition-all" />
+                <p className="text-[9px] font-bold text-indigo-400">
+                  Roster entries before this date are preserved. If re-assigning, the previous shift closes the day before.
+                </p>
               </div>
               {memberForm.shiftType === 'working' && (
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input type="checkbox" checked={memberForm.autoPopulate} onChange={e => setMemberForm(f => ({ ...f, autoPopulate: e.target.checked }))} className="w-4 h-4 accent-indigo-600" />
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Auto-fill roster for next 4 weeks</span>
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Auto-fill roster for next 4 weeks from start date</span>
                 </label>
               )}
             </div>
@@ -1835,6 +1838,19 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
               <button onClick={() => setAssignTarget(null)} className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 transition-all">✕</button>
             </div>
             <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-4">
+              {/* Start Date — top of form so it's set before selecting employees */}
+              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl px-5 py-4 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Effective Start Date *</span>
+                </div>
+                <input type="date" value={assignDate} onChange={e => setAssignDate(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-white border border-indigo-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 transition-all" />
+                <p className="text-[9px] font-bold text-indigo-400">
+                  Roster from this date onwards will be set to this shift.
+                  All entries <span className="font-black">before</span> this date are kept as-is. Previous shift assignments will be automatically closed on the day before.
+                </p>
+              </div>
+
               {existingAssignments.length > 0 && (
                 <div className="flex flex-col gap-2">
                   <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Currently Assigned ({existingAssignments.length})</p>
@@ -1846,7 +1862,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
                           <div className="w-6 h-6 bg-slate-800 rounded-lg flex items-center justify-center text-[8px] font-black text-indigo-400">{getInitials(emp?.fullName || '?')}</div>
                           <div>
                             <p className="text-[11px] font-black text-slate-800">{emp?.fullName ?? a.employeeId}</p>
-                            <p className="text-[9px] font-bold text-slate-400 uppercase">{emp?.department}</p>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase">{emp?.department} · Since {new Date(a.startDate).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                           </div>
                         </div>
                         <button onClick={() => removeAssignment(a.id)} className="text-[9px] font-black uppercase text-red-400 hover:text-red-600 tracking-widest transition-all">Remove</button>
@@ -1856,7 +1872,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
                 </div>
               )}
               <div className="flex flex-col gap-3 pt-2 border-t border-slate-100">
-                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Add Employees</p>
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Select Employees to Assign</p>
                 <input value={assignSearch} onChange={e => setAssignSearch(e.target.value)} placeholder="Search by name…"
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-indigo-500 transition-all" />
                 <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
@@ -1873,17 +1889,12 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
                     </label>
                   ))}
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Start Date</label>
-                  <input type="date" value={assignDate} onChange={e => setAssignDate(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 transition-all" />
-                </div>
               </div>
             </div>
             <div className="shrink-0 px-8 py-5 border-t border-slate-100">
-              <button onClick={saveAssignments} disabled={assignSaving || !assignSelected.size}
+              <button onClick={saveAssignments} disabled={assignSaving || !assignSelected.size || !assignDate}
                 className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
-                {assignSaving ? 'Assigning…' : `Assign ${assignSelected.size > 0 ? assignSelected.size + ' ' : ''}Employee${assignSelected.size !== 1 ? 's' : ''}`}
+                {assignSaving ? 'Assigning…' : `Assign ${assignSelected.size > 0 ? assignSelected.size + ' ' : ''}Employee${assignSelected.size !== 1 ? 's' : ''} from ${assignDate || '—'}`}
               </button>
             </div>
           </div>

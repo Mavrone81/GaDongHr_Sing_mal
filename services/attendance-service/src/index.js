@@ -606,14 +606,23 @@ app.post('/attendance/shifts/working/:id/assign', authenticate, authorize(...ROS
     const dayMap = [ws.workSun, ws.workMon, ws.workTue, ws.workWed, ws.workThu, ws.workFri, ws.workSat];
     const created = [];
     for (const employeeId of employeeIds) {
+      const sd = new Date(startDate); sd.setUTCHours(0, 0, 0, 0);
+      // End-date any open assignments for other shifts so history is preserved
+      const dayBefore = new Date(sd); dayBefore.setUTCDate(sd.getUTCDate() - 1);
+      await prisma.shiftAssignment.updateMany({
+        where: { employeeId, endDate: null, NOT: { workingShiftId: req.params.id } },
+        data: { endDate: dayBefore },
+      });
+      // Create or update this shift's assignment
       const existing = await prisma.shiftAssignment.findFirst({ where: { employeeId, workingShiftId: req.params.id } });
       if (!existing) {
         created.push(await prisma.shiftAssignment.create({
-          data: { id: uuidv4(), employeeId, workingShiftId: req.params.id, startDate: new Date(startDate), endDate: endDate ? new Date(endDate) : null },
+          data: { id: uuidv4(), employeeId, workingShiftId: req.params.id, startDate: sd, endDate: endDate ? new Date(endDate) : null },
         }));
+      } else {
+        await prisma.shiftAssignment.update({ where: { id: existing.id }, data: { startDate: sd, endDate: endDate ? new Date(endDate) : null } });
       }
-      // Auto-populate 28 days of roster entries respecting the shift's work days
-      const sd = new Date(startDate); sd.setUTCHours(0, 0, 0, 0);
+      // Auto-populate roster entries from startDate onwards only — entries before startDate are untouched
       const end = new Date(sd); end.setDate(end.getDate() + 28);
       const cur = new Date(sd);
       while (cur <= end) {
@@ -647,19 +656,26 @@ app.post('/attendance/shifts/patterns/:id/assign', authenticate, authorize(...RO
     const created = [];
     const cycleLen = pattern.workDays + pattern.offDays;
     for (const employeeId of employeeIds) {
+      const sd = new Date(startDate); sd.setUTCHours(0, 0, 0, 0);
+      // End-date any open assignments for other patterns/shifts so history is preserved
+      const dayBefore = new Date(sd); dayBefore.setUTCDate(sd.getUTCDate() - 1);
+      await prisma.shiftAssignment.updateMany({
+        where: { employeeId, endDate: null, NOT: { shiftPatternId: req.params.id } },
+        data: { endDate: dayBefore },
+      });
+      // Create or update this pattern's assignment
       const existing = await prisma.shiftAssignment.findFirst({ where: { employeeId, shiftPatternId: req.params.id } });
       if (!existing) {
         created.push(await prisma.shiftAssignment.create({
-          data: { id: uuidv4(), employeeId, shiftPatternId: req.params.id, startDate: new Date(startDate), endDate: endDate ? new Date(endDate) : null },
+          data: { id: uuidv4(), employeeId, shiftPatternId: req.params.id, startDate: sd, endDate: endDate ? new Date(endDate) : null },
         }));
+      } else {
+        await prisma.shiftAssignment.update({ where: { id: existing.id }, data: { startDate: sd, endDate: endDate ? new Date(endDate) : null } });
       }
-      // Auto-populate 28 days of roster entries using work/off cycle
-      const sd = new Date(startDate); sd.setUTCHours(0, 0, 0, 0);
-      const lookAheadDays = 28;
-      for (let i = 0; i < lookAheadDays; i++) {
+      // Auto-populate roster entries from startDate onwards only — entries before startDate are untouched
+      for (let i = 0; i < 28; i++) {
         const cur = new Date(sd); cur.setUTCDate(sd.getUTCDate() + i);
-        const posInCycle = i % cycleLen;
-        if (posInCycle < pattern.workDays) {
+        if (i % cycleLen < pattern.workDays) {
           await prisma.rosterEntry.upsert({
             where: { employeeId_date: { employeeId, date: cur } },
             create: { id: uuidv4(), employeeId, date: cur, shiftPatternId: pattern.id, shiftTemplateId: null, workingShiftId: null, createdBy: req.user?.sub },
@@ -720,18 +736,34 @@ app.post('/attendance/shifts/projects/:id/members', authenticate, authorize(...R
     const { employeeId, workingShiftId, shiftPatternId, startDate, autoPopulate } = req.body;
     if (!employeeId || !startDate) return res.status(400).json({ error: 'employeeId and startDate required' });
     const sd = new Date(startDate); sd.setUTCHours(0, 0, 0, 0);
+    const dayBefore = new Date(sd); dayBefore.setUTCDate(sd.getUTCDate() - 1);
+
+    // If the employee's shift is changing, end-date their current open assignments before startDate
+    const existing = await prisma.projectMember.findUnique({
+      where: { projectId_employeeId: { projectId: req.params.id, employeeId } },
+    });
+    const shiftChanging = existing && (existing.workingShiftId !== (workingShiftId || null) || existing.shiftPatternId !== (shiftPatternId || null));
+    if (shiftChanging) {
+      await prisma.shiftAssignment.updateMany({
+        where: { employeeId, endDate: null },
+        data: { endDate: dayBefore },
+      });
+    }
+
     const member = await prisma.projectMember.upsert({
       where: { projectId_employeeId: { projectId: req.params.id, employeeId } },
       create: { id: uuidv4(), projectId: req.params.id, employeeId, workingShiftId: workingShiftId || null, shiftPatternId: shiftPatternId || null, startDate: sd },
       update: { workingShiftId: workingShiftId || null, shiftPatternId: shiftPatternId || null, startDate: sd },
       include: { workingShift: true, shiftPattern: true },
     });
+
     if (autoPopulate && workingShiftId) {
       const ws = await prisma.workingShift.findUnique({ where: { id: workingShiftId } });
       if (ws) {
         const dayMap = [ws.workSun, ws.workMon, ws.workTue, ws.workWed, ws.workThu, ws.workFri, ws.workSat];
         const end = new Date(sd); end.setDate(end.getDate() + 28);
         const cur = new Date(sd);
+        // Only populate from startDate onwards — roster before startDate is untouched
         while (cur <= end) {
           if (dayMap[cur.getDay()]) {
             const d = new Date(cur); d.setUTCHours(0, 0, 0, 0);
