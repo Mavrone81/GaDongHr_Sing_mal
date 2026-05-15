@@ -218,6 +218,24 @@ model ShiftAssignment {
   @@map("shift_assignments")
 }
 
+model AuditLog {
+  id            String   @id @default(uuid())
+  entityType    String
+  entityId      String?
+  entityName    String?
+  action        String
+  actorId       String?
+  actorEmail    String?
+  actorRole     String?
+  changedFields Json?
+  ipAddress     String?
+  createdAt     DateTime @default(now())
+
+  @@index([entityType])
+  @@index([createdAt])
+  @@map("attendance_audit_logs")
+}
+
 enum AttStatus {
   PRESENT
   ABSENT

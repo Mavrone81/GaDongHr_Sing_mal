@@ -273,7 +273,7 @@ export default function LoginPage() {
         <div className="relative z-10 space-y-10">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center shadow-2xl shadow-indigo-500/40">
-              <img src="/logo.png" alt="Vorkhive" className="w-8 h-8 object-contain brightness-0 invert" />
+              <span className="font-black text-white text-lg italic">V</span>
             </div>
             <span className="text-2xl font-black text-white tracking-[0.2em] uppercase">Vorkhive</span>
           </div>

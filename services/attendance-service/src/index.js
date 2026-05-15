@@ -15,6 +15,28 @@ const PORT = process.env.PORT || 4007;
 app.use(helmet()); app.use(cors()); app.use(express.json({ limit: '10kb' })); app.use(morgan('combined'));
 app.get('/health', (req, res) => res.json({ service: 'attendance-service', status: 'ok', ts: new Date() }));
 
+// ── Audit helper ──────────────────────────────────────────────────────────────
+async function writeAudit({ entityType, entityId, entityName, action, actor, changedFields, req }) {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        id: uuidv4(),
+        entityType,
+        entityId: entityId || null,
+        entityName: entityName || null,
+        action,
+        actorId:    actor?.sub   || actor?.id    || null,
+        actorEmail: actor?.email                  || null,
+        actorRole:  actor?.role                   || null,
+        changedFields: changedFields               || null,
+        ipAddress: req?.ip || req?.headers?.['x-forwarded-for'] || null,
+      },
+    });
+  } catch (err) {
+    console.error('[AUDIT] write failed:', err.message);
+  }
+}
+
 // ── Haversine distance (metres) ───────────────────────────────────────────────
 function haversineMetres(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -235,11 +257,23 @@ app.put('/attendance/roster/entry', authenticate, authorize(...ROSTER_ROLES), as
     const { employeeId, date, shiftTemplateId, workingShiftId, locationId, note } = req.body;
     if (!employeeId || !date) return res.status(400).json({ error: 'employeeId and date required' });
     const d = new Date(date); d.setUTCHours(0, 0, 0, 0);
+    const existing = await prisma.rosterEntry.findUnique({ where: { employeeId_date: { employeeId, date: d } } });
     const entry = await prisma.rosterEntry.upsert({
       where: { employeeId_date: { employeeId, date: d } },
       create: { id: uuidv4(), employeeId, date: d, shiftTemplateId: shiftTemplateId || null, workingShiftId: workingShiftId || null, locationId: locationId || null, note: note || null, createdBy: req.user?.sub },
       update: { shiftTemplateId: shiftTemplateId || null, workingShiftId: workingShiftId || null, locationId: locationId || null, note: note || null, updatedBy: req.user?.sub },
       include: { shiftTemplate: true, workingShift: true, shiftPattern: true },
+    });
+    await writeAudit({
+      entityType: 'RosterEntry', entityId: employeeId, entityName: `${employeeId} / ${date}`,
+      action: existing ? 'ROSTER_UPDATE' : 'ROSTER_CREATE',
+      actor: req.user, req,
+      changedFields: {
+        date, employeeId,
+        shiftTemplateId: { from: existing?.shiftTemplateId ?? null, to: shiftTemplateId ?? null },
+        workingShiftId:  { from: existing?.workingShiftId  ?? null, to: workingShiftId  ?? null },
+        note:            { from: existing?.note             ?? null, to: note            ?? null },
+      },
     });
     res.json(entry);
   } catch (err) { next(err); }
@@ -262,6 +296,12 @@ app.post('/attendance/roster/bulk', authenticate, authorize(...ROSTER_ROLES), as
         count++;
       }
     }
+    await writeAudit({
+      entityType: 'RosterEntry', entityId: null,
+      entityName: `Bulk assign – ${employeeIds.length} employees, ${dates.length} dates`,
+      action: 'ROSTER_BULK_UPDATE', actor: req.user, req,
+      changedFields: { employeeIds, dates, shiftTemplateId: shiftTemplateId || null, workingShiftId: workingShiftId || null, count },
+    });
     res.json({ ok: true, count });
   } catch (err) { next(err); }
 });
@@ -290,6 +330,12 @@ app.post('/attendance/roster/copy-week', authenticate, authorize(...ROSTER_ROLES
       });
       count++;
     }
+    await writeAudit({
+      entityType: 'RosterEntry', entityId: null,
+      entityName: `Copy week ${fromWeekStart} → ${toWeekStart}`,
+      action: 'ROSTER_COPY_WEEK', actor: req.user, req,
+      changedFields: { fromWeekStart, toWeekStart, count },
+    });
     res.json({ ok: true, count });
   } catch (err) { next(err); }
 });
@@ -300,7 +346,33 @@ app.delete('/attendance/roster/entry', authenticate, authorize(...ROSTER_ROLES),
     const { employeeId, date } = req.body;
     const d = new Date(date); d.setUTCHours(0, 0, 0, 0);
     await prisma.rosterEntry.deleteMany({ where: { employeeId, date: d } });
+    await writeAudit({
+      entityType: 'RosterEntry', entityId: employeeId, entityName: `${employeeId} / ${date}`,
+      action: 'ROSTER_DELETE', actor: req.user, req,
+      changedFields: { employeeId, date },
+    });
     res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// DELETE /roster/employee/:empId?from=YYYY-MM-DD&to=YYYY-MM-DD — clear all entries for one employee
+app.delete('/attendance/roster/employee/:empId', authenticate, authorize(...ROSTER_ROLES), async (req, res, next) => {
+  try {
+    const { empId } = req.params;
+    const { from, to } = req.query;
+    const where = { employeeId: empId };
+    if (from || to) {
+      where.date = {};
+      if (from) where.date.gte = new Date(from + 'T00:00:00Z');
+      if (to)   where.date.lte = new Date(to   + 'T23:59:59Z');
+    }
+    const result = await prisma.rosterEntry.deleteMany({ where });
+    await writeAudit({
+      entityType: 'RosterEntry', entityId: empId, entityName: empId,
+      action: 'ROSTER_CLEAR_EMPLOYEE', actor: req.user, req,
+      changedFields: { employeeId: empId, from: from || null, to: to || null, deleted: result.count },
+    });
+    res.json({ deleted: result.count });
   } catch (err) { next(err); }
 });
 
@@ -529,6 +601,9 @@ app.post('/attendance/shifts/working/:id/assign', authenticate, authorize(...ROS
   try {
     const { employeeIds, startDate, endDate } = req.body;
     if (!employeeIds?.length || !startDate) return res.status(400).json({ error: 'employeeIds and startDate required' });
+    const ws = await prisma.workingShift.findUnique({ where: { id: req.params.id } });
+    if (!ws) return res.status(404).json({ error: 'Working shift not found' });
+    const dayMap = [ws.workSun, ws.workMon, ws.workTue, ws.workWed, ws.workThu, ws.workFri, ws.workSat];
     const created = [];
     for (const employeeId of employeeIds) {
       const existing = await prisma.shiftAssignment.findFirst({ where: { employeeId, workingShiftId: req.params.id } });
@@ -536,6 +611,21 @@ app.post('/attendance/shifts/working/:id/assign', authenticate, authorize(...ROS
         created.push(await prisma.shiftAssignment.create({
           data: { id: uuidv4(), employeeId, workingShiftId: req.params.id, startDate: new Date(startDate), endDate: endDate ? new Date(endDate) : null },
         }));
+      }
+      // Auto-populate 28 days of roster entries respecting the shift's work days
+      const sd = new Date(startDate); sd.setUTCHours(0, 0, 0, 0);
+      const end = new Date(sd); end.setDate(end.getDate() + 28);
+      const cur = new Date(sd);
+      while (cur <= end) {
+        if (dayMap[cur.getDay()]) {
+          const d = new Date(cur); d.setUTCHours(0, 0, 0, 0);
+          await prisma.rosterEntry.upsert({
+            where:  { employeeId_date: { employeeId, date: d } },
+            create: { id: uuidv4(), employeeId, date: d, workingShiftId: ws.id, shiftTemplateId: null, createdBy: req.user?.sub },
+            update: { workingShiftId: ws.id, shiftTemplateId: null, shiftPatternId: null, updatedBy: req.user?.sub },
+          });
+        }
+        cur.setDate(cur.getDate() + 1);
       }
     }
     res.status(201).json({ ok: true, count: created.length });
@@ -584,6 +674,16 @@ app.post('/attendance/shifts/patterns/:id/assign', authenticate, authorize(...RO
 
 app.delete('/attendance/shifts/assignments/:id', authenticate, authorize(...ROSTER_ROLES), async (req, res, next) => {
   try {
+    const assignment = await prisma.shiftAssignment.findUnique({ where: { id: req.params.id } });
+    if (!assignment) return res.status(404).json({ error: 'Assignment not found' });
+
+    // Clear roster entries tied to this employee+shift within the assignment's date range
+    const rosterWhere = { employeeId: assignment.employeeId, date: { gte: assignment.startDate } };
+    if (assignment.endDate) rosterWhere.date.lte = assignment.endDate;
+    if (assignment.workingShiftId) rosterWhere.workingShiftId = assignment.workingShiftId;
+    if (assignment.shiftPatternId) rosterWhere.shiftPatternId = assignment.shiftPatternId;
+    await prisma.rosterEntry.deleteMany({ where: rosterWhere });
+
     await prisma.shiftAssignment.delete({ where: { id: req.params.id } });
     res.json({ ok: true });
   } catch (err) { next(err); }

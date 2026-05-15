@@ -541,6 +541,8 @@ const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: 
   const [showShiftPanel, setShowShiftPanel] = useState(false);
   const [cellPopover, setCellPopover] = useState<{ empId: string; date: string; x: number; y: number } | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const [resettingEmpId, setResettingEmpId] = useState<string | null>(null);
+  const [resetConfirm, setResetConfirm] = useState<{ empId: string; empName: string } | null>(null);
 
   const viewDays = getViewDays(periodStart, viewMode);
   const periodLabel = viewMode === 'monthly'
@@ -689,6 +691,21 @@ const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: 
     } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
   };
 
+  const resetEmployeeSchedule = async (empId: string) => {
+    const from = isoDate(viewDays[0]);
+    const to   = isoDate(viewDays[viewDays.length - 1]);
+    setResettingEmpId(empId);
+    try {
+      await apiFetch(`/attendance/roster/employee/${empId}?from=${from}&to=${to}`, { method: 'DELETE' });
+      setRosterMap(prev => {
+        const m = new Map(prev);
+        viewDays.forEach(d => m.delete(`${empId}|${isoDate(d)}`));
+        return m;
+      });
+    } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
+    finally { setResettingEmpId(null); setResetConfirm(null); }
+  };
+
   const openShiftEdit = (s: ShiftTemplate) => {
     setEditShift(s);
     setShiftForm({ name: s.name, startTime: s.startTime, endTime: s.endTime, breakMinutes: String(s.breakMinutes), color: s.color });
@@ -833,12 +850,23 @@ const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: 
                           <input type="checkbox" checked={selectedEmps.has(emp.id)} onChange={e => setSelectedEmps(prev => { const s = new Set(prev); e.target.checked ? s.add(emp.id) : s.delete(emp.id); return s; })} className="w-3.5 h-3.5 accent-indigo-600" />
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-2.5">
+                          <div className="flex items-center gap-2.5 group/emprow">
                             <div className="w-7 h-7 bg-slate-900 rounded-lg flex items-center justify-center text-[9px] font-black text-indigo-400 shrink-0">{getInitials(emp.fullName)}</div>
-                            <div>
+                            <div className="flex-1 min-w-0">
                               <p className="text-[11px] font-black text-slate-900 tracking-tight">{emp.fullName}</p>
                               <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{emp.department}</p>
                             </div>
+                            <button
+                              onClick={() => setResetConfirm({ empId: emp.id, empName: emp.fullName })}
+                              disabled={resettingEmpId === emp.id}
+                              title="Reset schedule for this period"
+                              className="opacity-0 group-hover/emprow:opacity-100 transition-opacity w-6 h-6 flex items-center justify-center rounded-lg border border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600 shrink-0 disabled:opacity-30"
+                            >
+                              {resettingEmpId === emp.id
+                                ? <div className="w-3 h-3 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" />
+                                : <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+                              }
+                            </button>
                           </div>
                         </td>
                         {viewDays.map((d, i) => {
@@ -995,6 +1023,38 @@ const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: 
         </div>
       )}
 
+      {/* Reset Schedule Confirmation Modal */}
+      {resetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-white rounded-[2rem] shadow-2xl p-8">
+            <div className="w-12 h-12 bg-red-50 border border-red-100 rounded-2xl flex items-center justify-center mb-5">
+              <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+            </div>
+            <h3 className="text-base font-black text-slate-900 tracking-tighter mb-1">Reset Schedule</h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{resetConfirm.empName}</p>
+            <p className="text-xs font-bold text-slate-500 mb-6">
+              This will clear all {viewDays.length} shift assignments for <span className="text-slate-900">{periodLabel}</span>. The employee will show as unscheduled for this period.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setResetConfirm(null)}
+                className="flex-1 py-3 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => resetEmployeeSchedule(resetConfirm.empId)}
+                disabled={resettingEmpId === resetConfirm.empId}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+              >
+                {resettingEmpId === resetConfirm.empId && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Shift Template Modal */}
       {shiftModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
@@ -1064,14 +1124,16 @@ type WShiftForm = {
   name: string; workMon: boolean; workTue: boolean; workWed: boolean; workThu: boolean;
   workFri: boolean; workSat: boolean; workSun: boolean;
   startTime: string; endTime: string; breakMinutes: string; color: string; isRecurring: boolean;
+  scheduleStartDate: string;
 };
 const defaultWShift: WShiftForm = {
   name: '', workMon: true, workTue: true, workWed: true, workThu: true, workFri: true, workSat: false, workSun: false,
   startTime: '09:00', endTime: '18:00', breakMinutes: '60', color: SHIFT_COLORS[0], isRecurring: true,
+  scheduleStartDate: new Date().toISOString().slice(0, 10),
 };
 
-type PatternForm = { name: string; patternType: string; workDays: string; offDays: string; startTime: string; endTime: string; breakMinutes: string; color: string; };
-const defaultPattern: PatternForm = { name: '', patternType: 'CUSTOM', workDays: '5', offDays: '2', startTime: '09:00', endTime: '18:00', breakMinutes: '60', color: SHIFT_COLORS[0] };
+type PatternForm = { name: string; patternType: string; workDays: string; offDays: string; startTime: string; endTime: string; breakMinutes: string; color: string; scheduleStartDate: string; };
+const defaultPattern: PatternForm = { name: '', patternType: 'CUSTOM', workDays: '5', offDays: '2', startTime: '09:00', endTime: '18:00', breakMinutes: '60', color: SHIFT_COLORS[0], scheduleStartDate: new Date().toISOString().slice(0, 10) };
 
 function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
   const [projects, setProjects] = useState<ShiftProject[]>([]);
@@ -1166,7 +1228,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
   const openAddWs = () => { setEditWs(null); setWsForm(defaultWShift); setWsModal('add'); };
   const openEditWs = (s: WorkingShift) => {
     setEditWs(s);
-    setWsForm({ name: s.name, workMon: s.workMon, workTue: s.workTue, workWed: s.workWed, workThu: s.workThu, workFri: s.workFri, workSat: s.workSat, workSun: s.workSun, startTime: s.startTime, endTime: s.endTime, breakMinutes: String(s.breakMinutes), color: s.color, isRecurring: s.isRecurring });
+    setWsForm({ name: s.name, workMon: s.workMon, workTue: s.workTue, workWed: s.workWed, workThu: s.workThu, workFri: s.workFri, workSat: s.workSat, workSun: s.workSun, startTime: s.startTime, endTime: s.endTime, breakMinutes: String(s.breakMinutes), color: s.color, isRecurring: s.isRecurring, scheduleStartDate: '' });
     setWsModal('edit');
   };
   const saveWs = async () => {
@@ -1174,10 +1236,17 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
     setWsSaving(true);
     try {
       const hrs = calcHours(wsForm.startTime, wsForm.endTime, Number(wsForm.breakMinutes));
-      const body = { ...wsForm, breakMinutes: Number(wsForm.breakMinutes), hoursPerDay: hrs };
-      if (wsModal === 'add') await apiFetch(`/attendance/shifts/projects/${selProject.id}/working`, { method: 'POST', body: JSON.stringify(body) });
-      else if (editWs) await apiFetch(`/attendance/shifts/working/${editWs.id}`, { method: 'PUT', body: JSON.stringify(body) });
-      setWsModal(null); loadWorkingShifts(selProject.id);
+      const { scheduleStartDate, ...rest } = wsForm;
+      const body = { ...rest, breakMinutes: Number(wsForm.breakMinutes), hoursPerDay: hrs };
+      if (wsModal === 'add') {
+        const newShift = await apiFetch(`/attendance/shifts/projects/${selProject.id}/working`, { method: 'POST', body: JSON.stringify(body) });
+        setWsModal(null);
+        loadWorkingShifts(selProject.id);
+        openAssign('working', newShift.id, newShift.name, scheduleStartDate || undefined);
+      } else if (editWs) {
+        await apiFetch(`/attendance/shifts/working/${editWs.id}`, { method: 'PUT', body: JSON.stringify(body) });
+        setWsModal(null); loadWorkingShifts(selProject.id);
+      }
     } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
     finally { setWsSaving(false); }
   };
@@ -1191,7 +1260,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
   const openAddPat = () => { setEditPat(null); setPatForm(defaultPattern); setPatModal('add'); };
   const openEditPat = (p: ShiftPattern) => {
     setEditPat(p);
-    setPatForm({ name: p.name, patternType: p.patternType, workDays: String(p.workDays), offDays: String(p.offDays), startTime: p.startTime, endTime: p.endTime, breakMinutes: String(p.breakMinutes), color: p.color });
+    setPatForm({ name: p.name, patternType: p.patternType, workDays: String(p.workDays), offDays: String(p.offDays), startTime: p.startTime, endTime: p.endTime, breakMinutes: String(p.breakMinutes), color: p.color, scheduleStartDate: '' });
     setPatModal('edit');
   };
   const savePat = async () => {
@@ -1199,10 +1268,17 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
     setPatSaving(true);
     try {
       const hrs = calcHours(patForm.startTime, patForm.endTime, Number(patForm.breakMinutes));
-      const body = { ...patForm, workDays: Number(patForm.workDays), offDays: Number(patForm.offDays), breakMinutes: Number(patForm.breakMinutes), hoursPerShift: hrs };
-      if (patModal === 'add') await apiFetch(`/attendance/shifts/projects/${selProject.id}/patterns`, { method: 'POST', body: JSON.stringify(body) });
-      else if (editPat) await apiFetch(`/attendance/shifts/patterns/${editPat.id}`, { method: 'PUT', body: JSON.stringify(body) });
-      setPatModal(null); loadPatterns(selProject.id);
+      const { scheduleStartDate, ...rest } = patForm;
+      const body = { ...rest, workDays: Number(patForm.workDays), offDays: Number(patForm.offDays), breakMinutes: Number(patForm.breakMinutes), hoursPerShift: hrs };
+      if (patModal === 'add') {
+        const newPat = await apiFetch(`/attendance/shifts/projects/${selProject.id}/patterns`, { method: 'POST', body: JSON.stringify(body) });
+        setPatModal(null);
+        loadPatterns(selProject.id);
+        openAssign('pattern', newPat.id, newPat.name, scheduleStartDate || undefined);
+      } else if (editPat) {
+        await apiFetch(`/attendance/shifts/patterns/${editPat.id}`, { method: 'PUT', body: JSON.stringify(body) });
+        setPatModal(null); loadPatterns(selProject.id);
+      }
     } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
     finally { setPatSaving(false); }
   };
@@ -1242,9 +1318,9 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
   };
 
   // Assignments
-  const openAssign = async (type: 'working' | 'pattern', id: string, name: string) => {
+  const openAssign = async (type: 'working' | 'pattern', id: string, name: string, defaultDate?: string) => {
     setAssignTarget({ type, id, name });
-    setAssignSearch(''); setAssignSelected(new Set()); setAssignDate(new Date().toISOString().slice(0, 10));
+    setAssignSearch(''); setAssignSelected(new Set()); setAssignDate(defaultDate ?? new Date().toISOString().slice(0, 10));
     try {
       const data = await apiFetch(`/attendance/shifts/${type === 'working' ? 'working' : 'patterns'}/${id}/assignments`);
       setExistingAssignments(data);
@@ -1633,9 +1709,17 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
                   <p className="text-xs font-bold text-slate-700 mt-1">{workDayLabel(wsForm as unknown as WorkingShift)} · {wsForm.startTime}–{wsForm.endTime} · {calcHours(wsForm.startTime, wsForm.endTime, Number(wsForm.breakMinutes)).toFixed(1)}h/day</p>
                 </div>
               )}
+              {wsModal === 'add' && (
+                <div className="flex flex-col gap-1.5 pt-1 border-t border-slate-100">
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Schedule Start Date *</label>
+                  <input type="date" value={wsForm.scheduleStartDate} onChange={e => setWsForm(f => ({ ...f, scheduleStartDate: e.target.value }))}
+                    className="w-full px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 transition-all" />
+                  <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest">The schedule becomes effective from this date</p>
+                </div>
+              )}
               <div className="flex gap-3 pt-1">
                 <button onClick={() => setWsModal(null)} className="flex-1 py-3 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50">Cancel</button>
-                <button onClick={saveWs} disabled={wsSaving || !wsForm.name}
+                <button onClick={saveWs} disabled={wsSaving || !wsForm.name || (wsModal === 'add' && !wsForm.scheduleStartDate)}
                   className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
                   {wsSaving ? 'Saving…' : 'Save'}
                 </button>
@@ -1719,9 +1803,17 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
                   </p>
                 </div>
               )}
+              {patModal === 'add' && (
+                <div className="flex flex-col gap-1.5 pt-1 border-t border-slate-100">
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Schedule Start Date *</label>
+                  <input type="date" value={patForm.scheduleStartDate} onChange={e => setPatForm(f => ({ ...f, scheduleStartDate: e.target.value }))}
+                    className="w-full px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 transition-all" />
+                  <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest">The schedule becomes effective from this date</p>
+                </div>
+              )}
               <div className="flex gap-3 pt-1">
                 <button onClick={() => setPatModal(null)} className="flex-1 py-3 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50">Cancel</button>
-                <button onClick={savePat} disabled={patSaving || !patForm.name}
+                <button onClick={savePat} disabled={patSaving || !patForm.name || (patModal === 'add' && !patForm.scheduleStartDate)}
                   className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
                   {patSaving ? 'Saving…' : 'Save'}
                 </button>
