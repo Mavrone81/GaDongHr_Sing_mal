@@ -82,15 +82,19 @@ router.get('/entitlements/:employeeId', authenticate, authorizeSelfOrRole('emplo
     ]);
     // Merge: return all active types with their entitlement data (or nulls)
     const map = Object.fromEntries(entitlements.map(e => [e.leaveTypeId, e]));
-    const result = types.map(t => ({
-      leaveTypeId: t.id, code: t.code, name: t.name, isPaid: t.isPaid,
-      annualEntitlement: t.annualEntitlement,
-      entitledDays: map[t.id]?.entitledDays ?? t.annualEntitlement,
-      usedDays: map[t.id]?.usedDays ?? 0,
-      pendingDays: map[t.id]?.pendingDays ?? 0,
-      carryForward: map[t.id]?.carryForward ?? 0,
-      entitlementId: map[t.id]?.id ?? null,
-    }));
+    const result = types.map(t => {
+      const isUnlimited = !t.isPaid || t.annualEntitlement === 0;
+      return {
+        leaveTypeId: t.id, code: t.code, name: t.name, isPaid: t.isPaid,
+        annualEntitlement: t.annualEntitlement,
+        isUnlimited,
+        entitledDays: isUnlimited ? null : (map[t.id]?.entitledDays ?? t.annualEntitlement),
+        usedDays: map[t.id]?.usedDays ?? 0,
+        pendingDays: map[t.id]?.pendingDays ?? 0,
+        carryForward: isUnlimited ? 0 : (map[t.id]?.carryForward ?? 0),
+        entitlementId: map[t.id]?.id ?? null,
+      };
+    });
     res.json(result);
   } catch (err) { next(err); }
 });
@@ -183,14 +187,35 @@ router.post('/applications', authenticate, async (req, res, next) => {
     let totalDays = Math.round((end - start) / msPerDay) + 1;
     if (isHalfDay) totalDays = 0.5;
 
-    // Check balance
+    // Fetch leave type to determine if balance check applies
+    const leaveType = await prisma.leaveType.findUnique({ where: { id: leaveTypeId } });
+    if (!leaveType) return res.status(404).json({ error: 'Leave type not found' });
+    if (!leaveType.isActive) return res.status(400).json({ error: 'This leave type is no longer active' });
+
     const year = start.getFullYear();
+    // Unpaid leave (isPaid=false) and open-ended types (annualEntitlement=0) have no balance ceiling.
+    // Still track usage via entitlement record, but skip the "available < requested" gate.
+    const isUnlimited = !leaveType.isPaid || leaveType.annualEntitlement === 0;
+
     const entitlement = await prisma.leaveEntitlement.findFirst({ where: { employeeId, leaveTypeId, year } });
+
+    if (!isUnlimited) {
+      if (entitlement) {
+        const available = entitlement.entitledDays + entitlement.carryForward - entitlement.usedDays - entitlement.pendingDays;
+        if (available < totalDays) return res.status(400).json({ error: `Insufficient leave balance. Available: ${available} days` });
+      }
+      // No entitlement record means HR hasn't allocated this type yet — block it for paid/capped types
+      if (!entitlement) return res.status(400).json({ error: `No ${leaveType.name} entitlement allocated for ${year}. Please contact HR.` });
+    }
+
+    // Track pending days (for both capped and unlimited types — useful for NPL reporting / payroll)
     if (entitlement) {
-      const available = entitlement.entitledDays + entitlement.carryForward - entitlement.usedDays - entitlement.pendingDays;
-      if (available < totalDays) return res.status(400).json({ error: `Insufficient leave balance. Available: ${available} days` });
-      // Deduct pending
       await prisma.leaveEntitlement.update({ where: { id: entitlement.id }, data: { pendingDays: { increment: totalDays } } });
+    } else {
+      // Auto-create a tracking record for unlimited/unpaid types (entitledDays=0 = no ceiling)
+      await prisma.leaveEntitlement.create({
+        data: { id: uuidv4(), employeeId, leaveTypeId, year, entitledDays: 0, pendingDays: totalDays },
+      });
     }
 
     const app = await prisma.leaveApplication.create({

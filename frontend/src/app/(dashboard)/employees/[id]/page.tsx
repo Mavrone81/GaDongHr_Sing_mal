@@ -590,7 +590,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                             setSavingEntitlements(true);
                             try {
                               const payload = leaveEntitlements
-                                .filter(e => entitlementEdits[e.leaveTypeId] !== undefined)
+                                .filter(e => !e.isUnlimited && entitlementEdits[e.leaveTypeId] !== undefined)
                                 .map(e => ({ leaveTypeId: e.leaveTypeId, entitledDays: parseFloat(entitlementEdits[e.leaveTypeId] ?? e.entitledDays) || 0, carryForward: e.carryForward }));
                               await apiFetch(`/leave/entitlements/${params.id}`, {
                                 method: 'PUT',
@@ -628,30 +628,41 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                       <>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                           {leaveEntitlements.map(e => {
-                            const total = parseFloat(entitlementEdits[e.leaveTypeId] ?? e.entitledDays) || 0;
+                            const isUnlimited = e.isUnlimited;
+                            const total = isUnlimited ? 0 : (parseFloat(entitlementEdits[e.leaveTypeId] ?? e.entitledDays) || 0);
                             const used = e.usedDays ?? 0;
                             const colors = ['bg-indigo-600','bg-emerald-500','bg-amber-500','bg-sky-500','bg-violet-500','bg-rose-500'];
                             const color = colors[leaveEntitlements.indexOf(e) % colors.length];
                             return (
-                              <div key={e.leaveTypeId} className="flex flex-col gap-2 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                              <div key={e.leaveTypeId} className={`flex flex-col gap-2 p-4 rounded-xl border ${isUnlimited ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">{e.name}</span>
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="number" min={0} max={365} step={0.5}
-                                      value={entitlementEdits[e.leaveTypeId] ?? e.entitledDays}
-                                      onChange={ev => setEntitlementEdits(p => ({ ...p, [e.leaveTypeId]: ev.target.value }))}
-                                      className="w-16 text-center text-xs font-black text-slate-800 bg-white border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:border-indigo-400"
-                                    />
-                                    <span className="text-[9px] font-black text-slate-400">days</span>
+                                  <div>
+                                    <span className={`text-[10px] font-black uppercase tracking-wider ${isUnlimited ? 'text-slate-200' : 'text-slate-700'}`}>{e.name}</span>
+                                    {isUnlimited && <span className="ml-2 text-[8px] font-black text-amber-400 uppercase tracking-widest">Unpaid · No Limit</span>}
                                   </div>
+                                  {isUnlimited ? (
+                                    <span className="text-sm font-black text-amber-400">∞</span>
+                                  ) : (
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="number" min={0} max={365} step={0.5}
+                                        value={entitlementEdits[e.leaveTypeId] ?? e.entitledDays}
+                                        onChange={ev => setEntitlementEdits(p => ({ ...p, [e.leaveTypeId]: ev.target.value }))}
+                                        className="w-16 text-center text-xs font-black text-slate-800 bg-white border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:border-indigo-400"
+                                      />
+                                      <span className="text-[9px] font-black text-slate-400">days</span>
+                                    </div>
+                                  )}
                                 </div>
-                                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                                  <div className={`h-full rounded-full ${color}`} style={{ width: total > 0 ? `${Math.min(100, Math.round((used / total) * 100))}%` : '0%' }} />
+                                <div className={`w-full h-2 rounded-full overflow-hidden ${isUnlimited ? 'bg-slate-700' : 'bg-slate-200'}`}>
+                                  {!isUnlimited && <div className={`h-full rounded-full ${color}`} style={{ width: total > 0 ? `${Math.min(100, Math.round((used / total) * 100))}%` : '0%' }} />}
                                 </div>
-                                <div className="flex justify-between text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                                <div className={`flex justify-between text-[8px] font-black uppercase tracking-widest ${isUnlimited ? 'text-slate-500' : 'text-slate-400'}`}>
                                   <span>Used: {used} days</span>
-                                  <span>Balance: {Math.max(0, total - used - (e.pendingDays ?? 0))} days</span>
+                                  {isUnlimited
+                                    ? <span className="text-amber-500">Payroll deducts automatically</span>
+                                    : <span>Balance: {Math.max(0, total - used - (e.pendingDays ?? 0))} days</span>
+                                  }
                                 </div>
                               </div>
                             );
@@ -671,8 +682,9 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                             </thead>
                             <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
                               {leaveEntitlements.map(e => {
-                                const ent = parseFloat(entitlementEdits[e.leaveTypeId] ?? e.entitledDays) || 0;
-                                const balance = Math.max(0, ent + (e.carryForward ?? 0) - (e.usedDays ?? 0) - (e.pendingDays ?? 0));
+                                const isUnlimited = e.isUnlimited;
+                                const ent = isUnlimited ? null : (parseFloat(entitlementEdits[e.leaveTypeId] ?? e.entitledDays) || 0);
+                                const balance = isUnlimited ? null : Math.max(0, (ent ?? 0) + (e.carryForward ?? 0) - (e.usedDays ?? 0) - (e.pendingDays ?? 0));
                                 return (
                                   <tr key={e.leaveTypeId} className="hover:bg-slate-50 transition-all">
                                     <td className="px-5 py-3">
@@ -681,14 +693,20 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                                         <span className="text-[9px] font-black text-slate-400 uppercase">{e.code} · {e.isPaid ? 'Paid' : 'Unpaid'}</span>
                                       </div>
                                     </td>
-                                    <td className="px-5 py-3">{ent > 0 ? `${ent} days` : 'As req.'}</td>
+                                    <td className="px-5 py-3">
+                                      {isUnlimited
+                                        ? <span className="text-[9px] font-black px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100 uppercase">No Limit</span>
+                                        : `${ent} days`
+                                      }
+                                    </td>
                                     <td className="px-5 py-3">{e.usedDays ?? 0} days</td>
                                     <td className="px-5 py-3 text-amber-600">{e.pendingDays ?? 0} days</td>
-                                    <td className="px-5 py-3">{e.carryForward ?? 0} days</td>
+                                    <td className="px-5 py-3">{isUnlimited ? '—' : `${e.carryForward ?? 0} days`}</td>
                                     <td className="px-5 py-3">
-                                      <span className={`font-black ${balance > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                                        {ent > 0 ? `${balance} days` : '—'}
-                                      </span>
+                                      {isUnlimited
+                                        ? <span className="text-[9px] font-black text-amber-600 uppercase">Unlimited</span>
+                                        : <span className={`font-black ${(balance ?? 0) > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{balance} days</span>
+                                      }
                                     </td>
                                   </tr>
                                 );

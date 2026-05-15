@@ -261,7 +261,12 @@ function AdminLeaveView() {
                         <tr key={t.id} className={`hover:bg-slate-50 transition-all ${!t.isActive ? 'opacity-50' : ''}`}>
                           <td className="px-5 py-3"><span className="font-mono text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded uppercase">{t.code}</span></td>
                           <td className="px-5 py-3 font-black text-slate-800">{t.name}</td>
-                          <td className="px-5 py-3">{t.annualEntitlement > 0 ? `${t.annualEntitlement} days` : 'As req.'}</td>
+                          <td className="px-5 py-3">
+                            {(!t.isPaid || t.annualEntitlement === 0)
+                              ? <span className="text-[9px] font-black px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100 uppercase">No Limit</span>
+                              : `${t.annualEntitlement} days`
+                            }
+                          </td>
                           <td className="px-5 py-3">{t.maxCarryForward > 0 ? `${t.maxCarryForward} days` : '—'}</td>
                           <td className="px-5 py-3">
                             <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${t.isPaid ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>
