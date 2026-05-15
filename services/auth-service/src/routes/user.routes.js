@@ -71,6 +71,11 @@ router.post('/', checkInternal, (req, res, next) => {
     const exists = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     if (exists) return res.status(409).json({ error: 'Email already registered' });
 
+    if (employeeId) {
+      const empExists = await prisma.user.findUnique({ where: { employeeId } });
+      if (empExists) return res.status(409).json({ error: 'A login account already exists for this employee' });
+    }
+
     const targetRole = await prisma.role.findFirst({
       where: { name: { equals: role || 'EMPLOYEE', mode: 'insensitive' } }
     });
@@ -88,7 +93,12 @@ router.post('/', checkInternal, (req, res, next) => {
       include: { role: true },
     });
     res.status(201).json({ ...user, role: user.role?.name });
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (err.code === 'P2002' && err.meta?.target?.includes('employeeId')) {
+      return res.status(409).json({ error: 'A login account already exists for this employee' });
+    }
+    next(err);
+  }
 });
 
 // PUT /users/:id  (update user)
