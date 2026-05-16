@@ -53,6 +53,8 @@ const mockPayslipDeleteMany = jest.fn();
 const mockPayslipCreateMany = jest.fn();
 const mockPayslipUpsert = jest.fn().mockResolvedValue({});
 const mockPayslipFindMany = jest.fn().mockResolvedValue([]);
+const mockPayslipUpdate = jest.fn().mockResolvedValue({});
+const mockPayslipUpdateMany = jest.fn().mockResolvedValue({ count: 0 });
 const mockCpfRateFindMany = jest.fn();
 const mockSdlConfigFindFirst = jest.fn();
 const mockLineItemFindMany = jest.fn();
@@ -73,7 +75,7 @@ jest.mock('@prisma/client', () => ({
       createMany: mockLineItemCreateMany,
       findMany: mockLineItemFindMany,
     },
-    payslip: { deleteMany: mockPayslipDeleteMany, createMany: mockPayslipCreateMany, upsert: mockPayslipUpsert, findMany: mockPayslipFindMany },
+    payslip: { deleteMany: mockPayslipDeleteMany, createMany: mockPayslipCreateMany, upsert: mockPayslipUpsert, findMany: mockPayslipFindMany, update: mockPayslipUpdate, updateMany: mockPayslipUpdateMany },
     cpfRate: { findMany: mockCpfRateFindMany },
     sdlConfig: { findFirst: mockSdlConfigFindFirst },
     payrollComponent: { findMany: jest.fn().mockResolvedValue([]) },
@@ -306,6 +308,119 @@ describe('D) POST /payroll/runs/:id/compute — CPF + SDL integration', () => {
     expect(res.status).toBe(200);
     // payslip.upsert should have been called once (only the eligible employee)
     expect(mockPayslipUpsert).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── F) Consolidation and variance ─────────────────────────────────────────────
+describe('F) Consolidation and variance', () => {
+  const finalisedRun = { id: 'run-fin', period: '2026-05', runType: 'MONTHLY', status: 'FINALISED' };
+  const approvedRun  = { id: 'run-apr', period: '2026-05', runType: 'ADHOC',   status: 'APPROVED' };
+  const draftRun2    = { id: 'run-drft', period: '2026-05', runType: 'BONUS',  status: 'DRAFT' };
+
+  const makeSlip = (id, empId, runId, net, gross) => ({
+    id, runId, employeeId: empId, period: '2026-05', isPublished: true,
+    basicSalaryEnc: '5000', grossPayEnc: String(gross), netPayEnc: String(net),
+    employeeCpfEnc: '1000', employerCpfEnc: '850', sdlAmountEnc: '11.25',
+    fwlAmountEnc: null, ytdGrossEnc: String(gross), ytdEmployeeCpfEnc: '1000',
+    ytdEmployerCpfEnc: '850', nplDays: null, nplDeductionEnc: null,
+    govtPaidDays: null, govtPaidAmountEnc: null,
+  });
+
+  beforeEach(() => {
+    mockPayslipUpdateMany.mockResolvedValue({ count: 1 });
+    mockPayslipUpdate.mockResolvedValue({});
+    mockRunUpdate.mockResolvedValue({});
+  });
+
+  // ── Variance: no other runs ──────────────────────────────────────────────────
+  test('GET /payroll/runs/:id/variance — no other runs → hasConflicts false', async () => {
+    mockRunFindUnique.mockResolvedValue(finalisedRun);
+    // this run's payslips
+    mockPayslipFindMany
+      .mockResolvedValueOnce([makeSlip('ps-1', 'emp-001', 'run-fin', 4000, 5000)])
+      // other runs' payslips — none
+      .mockResolvedValueOnce([]);
+
+    const res = await request(app).get('/payroll/runs/run-fin/variance');
+    expect(res.status).toBe(200);
+    expect(res.body.hasConflicts).toBe(false);
+    expect(res.body.rows).toHaveLength(1);
+    expect(res.body.rows[0].hasExisting).toBe(false);
+    expect(res.body.rows[0].delta).toBe(4000);
+  });
+
+  // ── Variance: other published payslips exist ─────────────────────────────────
+  test('GET /payroll/runs/:id/variance — other finalised run exists → hasConflicts true with delta', async () => {
+    mockRunFindUnique.mockResolvedValue(approvedRun);
+    // this run's payslips
+    mockPayslipFindMany
+      .mockResolvedValueOnce([makeSlip('ps-2', 'emp-001', 'run-apr', 2000, 2500)])
+      // other runs' published payslips for same period
+      .mockResolvedValueOnce([makeSlip('ps-1', 'emp-001', 'run-fin', 4000, 5000)]);
+
+    const res = await request(app).get('/payroll/runs/run-apr/variance');
+    expect(res.status).toBe(200);
+    expect(res.body.hasConflicts).toBe(true);
+    expect(res.body.otherRunCount).toBe(1);
+    const row = res.body.rows[0];
+    expect(row.hasExisting).toBe(true);
+    expect(row.existingNet).toBe(4000);
+    expect(row.delta).toBe(2000);
+    expect(row.combinedNet).toBe(6000);
+  });
+
+  // ── Variance: 404 run not found ──────────────────────────────────────────────
+  test('GET /payroll/runs/:id/variance — 404 when run not found', async () => {
+    mockRunFindUnique.mockResolvedValue(null);
+    const res = await request(app).get('/payroll/runs/nonexistent/variance');
+    expect(res.status).toBe(404);
+  });
+
+  // ── Consolidate: FINALISED run ───────────────────────────────────────────────
+  test('POST /payroll/runs/:id/consolidate — FINALISED run consolidates successfully', async () => {
+    mockRunFindUnique.mockResolvedValue(finalisedRun);
+    // Two payslips for same employee in same period (two different runs)
+    mockPayslipFindMany.mockResolvedValueOnce([
+      makeSlip('ps-1', 'emp-001', 'run-fin', 4000, 5000),
+      makeSlip('ps-2', 'emp-001', 'run-sec', 2000, 2500),
+    ]);
+
+    const res = await request(app).post('/payroll/runs/run-fin/consolidate');
+    expect(res.status).toBe(200);
+    expect(res.body.consolidatedEmployees).toBe(1);
+    expect(res.body.period).toBe('2026-05');
+    // Should have updated the primary payslip
+    expect(mockPayslipUpdate).toHaveBeenCalled();
+    // Should have unpublished the secondary payslip
+    expect(mockPayslipUpdateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: { isPublished: false },
+    }));
+  });
+
+  // ── Consolidate: non-FINALISED run returns 400 ───────────────────────────────
+  test('POST /payroll/runs/:id/consolidate — non-FINALISED run returns 400', async () => {
+    mockRunFindUnique.mockResolvedValue(draftRun2);
+    const res = await request(app).post('/payroll/runs/run-drft/consolidate');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/FINALISED/i);
+  });
+
+  // ── Finalise calls consolidation (payslip updates triggered) ─────────────────
+  test('POST /payroll/runs/:id/finalise — triggers consolidation when duplicate payslips exist', async () => {
+    mockRunFindUnique.mockResolvedValue({ ...finalisedRun, status: 'APPROVED', id: 'run-apr2' });
+    mockRunUpdate.mockResolvedValue({ ...finalisedRun });
+    // After publish: two payslips for same employee
+    mockPayslipUpdateMany.mockResolvedValue({ count: 1 });
+    mockPayslipFindMany.mockResolvedValueOnce([
+      makeSlip('ps-1', 'emp-001', 'run-apr2', 4000, 5000),
+      makeSlip('ps-2', 'emp-001', 'run-old', 2000, 2500),
+    ]);
+
+    const res = await request(app).post('/payroll/runs/run-apr2/finalise');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('consolidated');
+    // consolidation should have been attempted (payslipUpdate would be called)
+    expect(mockPayslipUpdateMany).toHaveBeenCalled();
   });
 });
 

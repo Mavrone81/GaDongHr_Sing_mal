@@ -445,6 +445,11 @@ function AdminPayrollDashboard() {
   const [newPcDesc, setNewPcDesc] = useState('');
   const [paycodesDirty, setPaycodesDirty] = useState(false);
   const [reviewFullscreen, setReviewFullscreen] = useState(false);
+  const [periodConflictRuns, setPeriodConflictRuns] = useState<PayrollRun[]>([]);
+  const [conflictPayslips, setConflictPayslips] = useState<any[]>([]); // existing payslips for the conflict period
+  const [conflictLoading, setConflictLoading] = useState(false);
+  const [variance, setVariance] = useState<any>(null);
+  const [varianceLoading, setVarianceLoading] = useState(false);
 
   async function loadRuns() {
     try {
@@ -486,8 +491,14 @@ function AdminPayrollDashboard() {
   }, [payslipRunId]);
 
   useEffect(() => {
-    if (!reviewRunData) { setReviewPayslips([]); setRunPaycodes({}); setAddingPaycodeFor(null); setPaycodesDirty(false); return; }
+    if (!reviewRunData) { setReviewPayslips([]); setRunPaycodes({}); setAddingPaycodeFor(null); setPaycodesDirty(false); setVariance(null); return; }
     fetchPayslipsForRun(reviewRunData.id).then(({ payslips }) => setReviewPayslips(payslips));
+    // Fetch variance for this run
+    setVarianceLoading(true);
+    apiFetch(`/payroll/runs/${reviewRunData.id}/variance`)
+      .then((v: any) => setVariance(v))
+      .catch(() => setVariance(null))
+      .finally(() => setVarianceLoading(false));
     if (reviewRunData.status !== 'DRAFT') {
       apiFetch(`/payroll/runs/${reviewRunData.id}/paycodes`).then((items: any[]) => {
         const grouped: { [k: string]: any[] } = {};
@@ -560,8 +571,10 @@ function AdminPayrollDashboard() {
     }
   };
 
-  const handleExecute = async () => {
+  const actuallyCreateRun = async () => {
     setIsProcessing(true);
+    setPeriodConflictRuns([]);
+    setConflictPayslips([]);
     try {
       await apiFetch('/payroll/runs', { method: 'POST', body: JSON.stringify({ period: selectedPeriod, runType: selectedRunType }) });
       setIsRunModalOpen(false);
@@ -575,8 +588,169 @@ function AdminPayrollDashboard() {
     }
   };
 
+  const handleExecute = async () => {
+    setIsProcessing(true);
+    try {
+      const data = await apiFetch(`/payroll/runs?period=${selectedPeriod}&limit=10`);
+      if (data.runs?.length > 0) {
+        setPeriodConflictRuns(data.runs);
+        setIsRunModalOpen(false);
+        setIsProcessing(false);
+        // Load existing payslips from all runs for this period to show diff
+        setConflictLoading(true);
+        setConflictPayslips([]);
+        try {
+          const [empData, ...runPayslipResults] = await Promise.allSettled([
+            apiFetch('/employees?limit=500&isActive=true'),
+            ...data.runs.map((r: PayrollRun) => apiFetch(`/payroll/runs/${r.id}/payslips`)),
+          ]);
+          const nameMap: Record<string, string> = {};
+          if (empData.status === 'fulfilled') {
+            for (const e of (empData.value.employees ?? [])) nameMap[e.id] = e.fullName;
+          }
+          // Merge all payslips across runs, keyed by employeeId
+          const byEmp: Record<string, any> = {};
+          for (let i = 0; i < runPayslipResults.length; i++) {
+            const r = runPayslipResults[i];
+            if (r.status !== 'fulfilled') continue;
+            const run = data.runs[i];
+            for (const ps of (r.value.payslips ?? [])) {
+              const key = ps.employeeId;
+              if (!byEmp[key]) byEmp[key] = { employeeId: key, name: nameMap[key] ?? key, runs: [] };
+              byEmp[key].runs.push({ runId: run.id, runType: run.runType, status: run.status, ...ps });
+            }
+          }
+          setConflictPayslips(Object.values(byEmp));
+        } catch {}
+        setConflictLoading(false);
+        return;
+      }
+      await actuallyCreateRun();
+    } catch (e: any) {
+      handleActionToast(e.message || 'Failed to initiate payroll run');
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-10 max-w-[1600px] mx-auto pb-20 animate-in fade-in duration-700">
+
+      {/* Period Conflict — Supplemental Run Confirmation Modal */}
+      {periodConflictRuns.length > 0 && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/50 backdrop-blur-md animate-in fade-in duration-300 p-4">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-100 animate-in slide-in-from-bottom-10">
+
+            {/* Header */}
+            <div className="bg-amber-50 border-b border-amber-200 px-8 py-6 flex justify-between items-center shrink-0">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-amber-600 text-base">⚠</span>
+                  <h3 className="text-base font-black text-amber-900 tracking-tighter uppercase">Supplemental Run — {fmtPeriod(selectedPeriod)}</h3>
+                </div>
+                <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest">
+                  {periodConflictRuns.length} existing run{periodConflictRuns.length !== 1 ? 's' : ''} found · Review differences before proceeding
+                </p>
+              </div>
+              <button onClick={() => { setPeriodConflictRuns([]); setConflictPayslips([]); }} className="w-10 h-10 flex items-center justify-center bg-white border border-amber-200 rounded-2xl text-amber-600 hover:bg-amber-100 transition-all font-black">&times;</button>
+            </div>
+
+            {/* Existing Runs Summary */}
+            <div className="px-8 py-4 border-b border-slate-100 shrink-0">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Existing Runs for This Period</p>
+              <div className="flex flex-wrap gap-3">
+                {periodConflictRuns.map(r => (
+                  <div key={r.id} className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl">
+                    <span className="text-[10px] font-black text-slate-700 uppercase">{r.runType}</span>
+                    <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest border ${
+                      r.status === 'FINALISED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                      r.status === 'APPROVED' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
+                      'bg-amber-50 text-amber-600 border-amber-100'
+                    }`}>{fmtRunStatus(r.status)}</span>
+                  </div>
+                ))}
+                <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-xl">
+                  <span className="text-[10px] font-black text-indigo-700 uppercase">+ New: {selectedRunType}</span>
+                  <span className="text-[8px] font-black px-2 py-0.5 bg-indigo-100 text-indigo-600 rounded-full uppercase">Draft</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Per-employee payslip comparison */}
+            <div className="flex-1 overflow-y-auto px-8 py-4">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                Current Payslip Totals by Employee
+                <span className="ml-2 text-slate-300">— new run will add on top of these upon finalization</span>
+              </p>
+              {conflictLoading ? (
+                <div className="flex items-center gap-3 py-8">
+                  <div className="w-4 h-4 border-2 border-slate-300 border-t-indigo-600 rounded-full animate-spin" />
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Loading employee payslip data…</span>
+                </div>
+              ) : conflictPayslips.length === 0 ? (
+                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest py-6">No computed payslips yet for this period — new run will be the first.</p>
+              ) : (
+                <div className="overflow-hidden border border-slate-100 rounded-2xl">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                      <tr>
+                        <th className="px-5 py-3">Employee</th>
+                        {periodConflictRuns.map(r => (
+                          <th key={r.id} className="px-5 py-3 text-right">{r.runType} Net</th>
+                        ))}
+                        <th className="px-5 py-3 text-right text-indigo-600">Current Total Net</th>
+                        <th className="px-5 py-3 text-right text-amber-600">+ Supplemental Adds</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {conflictPayslips.map((emp: any) => {
+                        const totalNet = emp.runs.reduce((s: number, r: any) => s + (r.netPay ?? 0), 0);
+                        return (
+                          <tr key={emp.employeeId} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="px-5 py-3 font-black text-slate-800">{emp.name}</td>
+                            {periodConflictRuns.map(r => {
+                              const ps = emp.runs.find((x: any) => x.runId === r.id);
+                              return (
+                                <td key={r.id} className="px-5 py-3 text-right font-bold text-slate-500">
+                                  {ps ? `SGD ${fmtSGD(ps.netPay ?? 0)}` : '—'}
+                                </td>
+                              );
+                            })}
+                            <td className="px-5 py-3 text-right font-black text-indigo-700">SGD {fmtSGD(totalNet)}</td>
+                            <td className="px-5 py-3 text-right font-black text-amber-600">+ computed on save</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Info banner + actions */}
+            <div className="shrink-0 border-t border-slate-100">
+              <div className="px-8 py-4 bg-amber-50/50 border-b border-amber-100">
+                <p className="text-[9px] font-black text-amber-800 uppercase tracking-widest leading-relaxed">
+                  A new <strong className="text-amber-900">{selectedRunType}</strong> run will compute additional pay items. Upon finalization, all runs for <strong>{fmtPeriod(selectedPeriod)}</strong> will be automatically consolidated — employees will see only one payslip per month.
+                </p>
+              </div>
+              <div className="px-8 py-5 flex justify-end gap-4 bg-slate-50/50">
+                <button onClick={() => { setPeriodConflictRuns([]); setConflictPayslips([]); }} className="px-6 py-3 bg-white border border-slate-200 text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-100 transition-all">Cancel</button>
+                <button
+                  onClick={actuallyCreateRun}
+                  disabled={isProcessing}
+                  className="px-8 py-3 bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-amber-600 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-60 flex items-center gap-2"
+                >
+                  {isProcessing ? (
+                    <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Creating…</>
+                  ) : (
+                    <>⚡ Confirm — Create Supplemental Run</>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 relative overflow-hidden group">
@@ -724,6 +898,15 @@ function AdminPayrollDashboard() {
                           <button onClick={() => { const ref = generateGiroRef(run.period); setGiroRunId(run.id); setGiroBank('uob'); setGiroFields({ acct: '', companyName: 'VORKHIVE PTE LTD', valueDate: new Date().toISOString().slice(0,10), ref, batchNo: '001', payDesc: `SALARY ${run.period}` }); }} className="px-4 py-2 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-slate-800 transition-all">GIRO</button>
                           <button onClick={() => handleActionToast('Opening CPF E-Submit Portal…')} className="px-4 py-2 bg-emerald-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-emerald-700 transition-all">FTP</button>
                           <button onClick={() => { setPayslipRunId(run.id); setPayslipRows([]); }} className="px-4 py-2 bg-white border border-slate-200 text-[9px] font-black text-slate-400 uppercase tracking-widest rounded-lg hover:text-indigo-600 hover:border-indigo-600 transition-all">Payslips</button>
+                          {runs.filter(r => r.period === run.period && r.id !== run.id && r.status === 'FINALISED').length > 0 && (
+                            <button onClick={async () => {
+                              try {
+                                await apiFetch(`/payroll/runs/${run.id}/consolidate`, { method: 'POST' });
+                                handleActionToast(`Payslips consolidated for ${fmtPeriod(run.period)}.`);
+                                await loadRuns();
+                              } catch (e: any) { handleActionToast(e.message || 'Consolidation failed'); }
+                            }} className="px-4 py-2 bg-amber-50 border border-amber-300 text-[9px] font-black text-amber-700 uppercase tracking-widest rounded-lg hover:bg-amber-500 hover:text-white hover:border-amber-500 transition-all">Merge</button>
+                          )}
                           <button onClick={() => { setConfirmCancelRun(false); setReviewRunData(run); }} className="px-4 py-2 bg-white border border-red-200 text-[9px] font-black text-red-400 uppercase tracking-widest rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-400 transition-all">Void</button>
                         </div>
                       )}
@@ -979,6 +1162,51 @@ function AdminPayrollDashboard() {
                 <div className="bg-emerald-50/50 p-8 rounded-[2rem] border border-emerald-100/50"><p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-3">Status</p><h4 className="text-2xl font-black text-slate-900 tracking-tighter">{fmtRunStatus(reviewRunData.status)}</h4></div>
                 <div className="bg-slate-50/50 p-8 rounded-[2rem] border border-slate-100"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Initiated</p><h4 className="text-sm font-black text-slate-700 tracking-tighter">{new Date(reviewRunData.createdAt).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}</h4></div>
               </div>
+
+              {/* Variance warning — shown when other finalised runs exist for same period */}
+              {varianceLoading && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl px-6 py-4 flex items-center gap-3">
+                  <div className="w-4 h-4 border-2 border-amber-400/30 border-t-amber-500 rounded-full animate-spin" />
+                  <span className="text-[9px] font-black text-amber-700 uppercase tracking-widest">Checking for period conflicts…</span>
+                </div>
+              )}
+              {!varianceLoading && variance?.hasConflicts && (
+                <div className="bg-amber-50 border border-amber-300 rounded-[2rem] overflow-hidden">
+                  <div className="px-8 py-5 border-b border-amber-200 flex items-center gap-3">
+                    <span className="text-amber-600 text-lg">&#9888;</span>
+                    <div>
+                      <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest">
+                        Period Conflict — {variance.otherRunCount} other run{variance.otherRunCount !== 1 ? 's' : ''} for {fmtPeriod(variance.period)} already finalised
+                      </p>
+                      <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest mt-0.5">
+                        Upon finalization, these will be consolidated into one payslip per employee.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="bg-amber-100/50 text-[9px] font-black text-amber-700 uppercase tracking-widest">
+                        <tr>
+                          <th className="px-6 py-3">Employee</th>
+                          <th className="px-6 py-3 text-right">Existing Net</th>
+                          <th className="px-6 py-3 text-right">This Run Adds</th>
+                          <th className="px-6 py-3 text-right">Combined Net</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-amber-100">
+                        {variance.rows.filter((r: any) => r.hasExisting).map((r: any, i: number) => (
+                          <tr key={i} className="hover:bg-amber-50/50">
+                            <td className="px-6 py-3 font-black text-slate-700 uppercase">{empNameMap.get(r.employeeId) ?? r.employeeId.slice(0, 8)}</td>
+                            <td className="px-6 py-3 text-right font-bold text-slate-500">SGD {fmtSGD(r.existingNet)}</td>
+                            <td className="px-6 py-3 text-right font-black text-amber-700">+ SGD {fmtSGD(r.delta)}</td>
+                            <td className="px-6 py-3 text-right font-black text-indigo-700">SGD {fmtSGD(r.combinedNet)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
               <div className="space-y-8 pb-10">
                 <div className="flex justify-between items-center border-b border-slate-100 pb-4">
                    <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em] flex items-center gap-4"><div className="w-8 h-1 bg-emerald-500 rounded-full"></div>Resource Verification Matrix</h4>

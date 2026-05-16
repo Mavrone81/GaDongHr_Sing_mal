@@ -12,6 +12,88 @@ const { computeCpf, computeSdl, computeNetPay } = require('../engines/cpf.engine
 
 const prisma = new PrismaClient();
 
+// ─── Helper: safe decrypt to float ───────────────────────────────────────────
+const decSafe = (enc) => { try { return enc ? parseFloat(decrypt(enc)) || 0 : 0; } catch { return 0; } };
+
+// ─── Helper: consolidatePeriod ────────────────────────────────────────────────
+// Merges all published payslips for a period into the primary run's payslips.
+// Returns the count of employees where consolidation was needed (>1 payslip).
+async function consolidatePeriod(period, primaryRunId) {
+  const allPublished = await prisma.payslip.findMany({
+    where: { period, isPublished: true },
+  });
+
+  // Group by employeeId
+  const byEmp = {};
+  for (const ps of allPublished) {
+    if (!byEmp[ps.employeeId]) byEmp[ps.employeeId] = [];
+    byEmp[ps.employeeId].push(ps);
+  }
+
+  let consolidated = 0;
+  for (const [employeeId, slips] of Object.entries(byEmp)) {
+    if (slips.length <= 1) continue; // nothing to merge
+
+    // Find the primary slip (belongs to primaryRunId), or use first slip
+    const primary = slips.find(s => s.runId === primaryRunId) || slips[0];
+
+    // Sum numeric fields across all slips
+    const totals = {
+      grossPay:        slips.reduce((s, p) => s + decSafe(p.grossPayEnc), 0),
+      netPay:          slips.reduce((s, p) => s + decSafe(p.netPayEnc), 0),
+      employeeCpf:     slips.reduce((s, p) => s + decSafe(p.employeeCpfEnc), 0),
+      employerCpf:     slips.reduce((s, p) => s + decSafe(p.employerCpfEnc), 0),
+      sdl:             slips.reduce((s, p) => s + decSafe(p.sdlAmountEnc), 0),
+      nplDays:         slips.reduce((s, p) => s + (p.nplDays || 0), 0),
+      nplDeduction:    slips.reduce((s, p) => s + decSafe(p.nplDeductionEnc), 0),
+      govtPaidDays:    slips.reduce((s, p) => s + (p.govtPaidDays || 0), 0),
+      govtPaidAmount:  slips.reduce((s, p) => s + decSafe(p.govtPaidAmountEnc), 0),
+    };
+
+    // MAX for YTD fields (avoid double-counting cumulative totals)
+    const ytdGross       = Math.max(...slips.map(p => decSafe(p.ytdGrossEnc)));
+    const ytdEmployeeCpf = Math.max(...slips.map(p => decSafe(p.ytdEmployeeCpfEnc)));
+    const ytdEmployerCpf = Math.max(...slips.map(p => decSafe(p.ytdEmployerCpfEnc)));
+
+    // basicSalary from primary run's payslip
+    const basicSalary = decSafe(primary.basicSalaryEnc);
+
+    // Update the primary payslip with consolidated values
+    await prisma.payslip.update({
+      where: { id: primary.id },
+      data: {
+        grossPayEnc:       encrypt(String(totals.grossPay)),
+        netPayEnc:         encrypt(String(totals.netPay)),
+        employeeCpfEnc:    encrypt(String(totals.employeeCpf)),
+        employerCpfEnc:    encrypt(String(totals.employerCpf)),
+        sdlAmountEnc:      encrypt(String(totals.sdl)),
+        nplDays:           totals.nplDays || null,
+        nplDeductionEnc:   totals.nplDeduction > 0 ? encrypt(String(totals.nplDeduction)) : null,
+        govtPaidDays:      totals.govtPaidDays || null,
+        govtPaidAmountEnc: totals.govtPaidAmount > 0 ? encrypt(String(totals.govtPaidAmount)) : null,
+        ytdGrossEnc:       encrypt(String(ytdGross)),
+        ytdEmployeeCpfEnc: encrypt(String(ytdEmployeeCpf)),
+        ytdEmployerCpfEnc: encrypt(String(ytdEmployerCpf)),
+        basicSalaryEnc:    encrypt(String(basicSalary)),
+        isPublished:       true,
+      },
+    });
+
+    // Unpublish all other payslips for this employee+period
+    const otherIds = slips.filter(s => s.id !== primary.id).map(s => s.id);
+    if (otherIds.length > 0) {
+      await prisma.payslip.updateMany({
+        where: { id: { in: otherIds } },
+        data: { isPublished: false },
+      });
+    }
+
+    consolidated++;
+  }
+
+  return consolidated;
+}
+
 // ─── GET /payroll/runs ───────────────────────────────────────────────────────
 router.get('/runs', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
   try {
@@ -38,8 +120,9 @@ router.post('/runs', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, 
     const { period, runType = 'MONTHLY', employeeGroup } = req.body;
     if (!period) return res.status(400).json({ error: 'Period is required (YYYY-MM)' });
 
+    // Only block exact duplicates (same period + same runType)
     const existing = await prisma.payrollRun.findFirst({ where: { period, runType: runType.toUpperCase() } });
-    if (existing) return res.status(409).json({ error: `A ${runType.toLowerCase()} payroll run for ${period} already exists (status: ${existing.status.toLowerCase().replace('_', ' ')}). Only one run per period is allowed.` });
+    if (existing) return res.status(409).json({ error: `A ${runType.toLowerCase()} payroll run for ${period} already exists (status: ${existing.status.toLowerCase().replace('_', ' ')}). Choose a different run type (e.g. ADHOC) to create a supplemental run.` });
 
     const run = await prisma.payrollRun.create({
       data: { id: uuidv4(), period, runType: runType.toUpperCase(), status: 'DRAFT', initiatedBy: req.user.sub, employeeGroup },
@@ -302,7 +385,70 @@ router.post('/runs/:id/finalise', authenticate, authorize(ROLES.SUPER_ADMIN, ROL
     // Publish payslips
     await prisma.payslip.updateMany({ where: { runId: run.id }, data: { isPublished: true } });
 
-    res.json({ message: 'Payroll finalised. Payslips published.' });
+    // Auto-consolidate: merge any duplicate payslips for this period across runs
+    const consolidatedCount = await consolidatePeriod(run.period, run.id);
+
+    res.json({ message: 'Payroll finalised. Payslips published.', consolidated: consolidatedCount > 0, consolidatedEmployees: consolidatedCount });
+  } catch (err) { next(err); }
+});
+
+// ─── GET /payroll/runs/:id/variance ─ Show what this run adds vs existing ────
+router.get('/runs/:id/variance', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const run = await prisma.payrollRun.findUnique({ where: { id: req.params.id } });
+    if (!run) return res.status(404).json({ error: 'Run not found' });
+
+    // Payslips for THIS run
+    const thisRunPayslips = await prisma.payslip.findMany({ where: { runId: run.id } });
+
+    // Published payslips for the same period from OTHER runs
+    const otherPayslips = await prisma.payslip.findMany({
+      where: { period: run.period, isPublished: true, runId: { not: run.id } },
+    });
+
+    // Build lookup: employeeId → existing (other runs) payslip values
+    const existingByEmp = {};
+    for (const ps of otherPayslips) {
+      existingByEmp[ps.employeeId] = {
+        existingNet: decSafe(ps.netPayEnc),
+        existingGross: decSafe(ps.grossPayEnc),
+      };
+    }
+
+    // Count distinct other runs
+    const otherRunIds = [...new Set(otherPayslips.map(p => p.runId))];
+
+    const rows = thisRunPayslips.map(ps => {
+      const existing = existingByEmp[ps.employeeId] || { existingNet: 0, existingGross: 0 };
+      const thisNet   = decSafe(ps.netPayEnc);
+      const thisGross = decSafe(ps.grossPayEnc);
+      return {
+        employeeId:    ps.employeeId,
+        existingNet:   existing.existingNet,
+        existingGross: existing.existingGross,
+        thisNet,
+        thisGross,
+        combinedNet:   existing.existingNet + thisNet,
+        combinedGross: existing.existingGross + thisGross,
+        delta:         thisNet,
+        hasExisting:   existing.existingNet > 0 || existing.existingGross > 0,
+      };
+    });
+
+    const hasConflicts = otherPayslips.length > 0;
+    res.json({ hasConflicts, period: run.period, rows, otherRunCount: otherRunIds.length });
+  } catch (err) { next(err); }
+});
+
+// ─── POST /payroll/runs/:id/consolidate ─ Manually consolidate a period ──────
+router.post('/runs/:id/consolidate', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const run = await prisma.payrollRun.findUnique({ where: { id: req.params.id } });
+    if (!run) return res.status(404).json({ error: 'Run not found' });
+    if (run.status !== 'FINALISED') return res.status(400).json({ error: 'Run must be FINALISED to consolidate' });
+
+    const count = await consolidatePeriod(run.period, run.id);
+    res.json({ message: `Consolidation complete for ${run.period}.`, period: run.period, consolidatedEmployees: count });
   } catch (err) { next(err); }
 });
 
@@ -340,7 +486,15 @@ router.get('/payslips/me', authenticate, async (req, res, next) => {
       govtPaidAmount: ps.govtPaidAmountEnc ? (parseFloat(decrypt(ps.govtPaidAmountEnc)) || 0) : 0,
     }));
 
-    res.json({ payslips: result, total: result.length, employeeId });
+    // Dedup safeguard: if multiple payslips exist for same period, keep highest netPay
+    const dedupMap = new Map();
+    for (const ps of result) {
+      const existing = dedupMap.get(ps.period);
+      if (!existing || ps.netPay > existing.netPay) dedupMap.set(ps.period, ps);
+    }
+    const deduped = Array.from(dedupMap.values()).sort((a, b) => b.period.localeCompare(a.period));
+
+    res.json({ payslips: deduped, total: deduped.length, employeeId });
   } catch (err) { next(err); }
 });
 
