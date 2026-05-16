@@ -48,29 +48,44 @@ model LeaveEntitlement {
 }
 
 model LeaveApplication {
-  id              String        @id @default(uuid())
-  employeeId      String
-  leaveTypeId     String
-  startDate       DateTime
-  endDate         DateTime
-  totalDays       Float
-  reason          String?
-  documentPath    String?
-  status          AppStatus     @default(PENDING)
-  approvedById    String?
-  approvedAt      DateTime?
-  rejectedReason  String?
-  isHalfDay       Boolean       @default(false)
-  halfDaySlot     String?       // AM | PM
-  govtClaimRef    String?       // for govt-paid leave claims
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id                   String        @id @default(uuid())
+  employeeId           String
+  leaveTypeId          String
+  startDate            DateTime
+  endDate              DateTime
+  totalDays            Float
+  reason               String?
+  documentPath         String?
+  status               AppStatus     @default(PENDING)
+  approvedById         String?
+  approvedAt           DateTime?
+  rejectedReason       String?
+  isHalfDay            Boolean       @default(false)
+  halfDaySlot          String?       // AM | PM
+  govtClaimRef         String?       // for govt-paid leave claims
+  currentApprovalStep  Int           @default(1)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
-  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+  leaveType      LeaveType          @relation(fields: [leaveTypeId], references: [id])
+  approvalSteps  LeaveApprovalStep[]
 
   @@index([employeeId])
   @@index([status])
   @@map("leave_applications")
+}
+
+model LeaveApprovalStep {
+  id                  String   @id @default(uuid())
+  applicationId       String
+  step                Int
+  approvedByEmpId     String
+  approvedAt          DateTime @default(now())
+
+  application LeaveApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@map("leave_approval_steps")
 }
 
 model PublicHoliday {

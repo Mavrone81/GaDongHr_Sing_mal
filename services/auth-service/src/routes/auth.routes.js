@@ -496,6 +496,54 @@ router.put('/org-settings/general', authenticate, authorize(ROLES.SUPER_ADMIN), 
   } catch (err) { next(err); }
 });
 
+// ── SSO secrets helpers ───────────────────────────────────────────────────────
+
+async function getSsoSecrets() {
+  try {
+    const rows = await prisma.$queryRaw`SELECT value FROM org_settings WHERE key = 'ssoSecrets' LIMIT 1`;
+    let s = {};
+    try { s = JSON.parse(rows[0]?.value ?? '{}'); } catch {}
+    return s;
+  } catch { return {}; }
+}
+
+async function getSsoClientSecret(provider) {
+  const s = await getSsoSecrets();
+  const encrypted = s[provider]?.clientSecret;
+  if (encrypted) { try { return decrypt(encrypted); } catch {} }
+  if (provider === 'google') return process.env.GOOGLE_CLIENT_SECRET || null;
+  if (provider === 'microsoft') return process.env.MICROSOFT_CLIENT_SECRET || null;
+  return null;
+}
+
+// GET /auth/org-settings/sso-secrets/status — whether each provider has a secret configured (never returns the value)
+router.get('/org-settings/sso-secrets/status', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN), async (req, res, next) => {
+  try {
+    const s = await getSsoSecrets();
+    res.json({
+      google:    { hasSecret: !!(s.google?.clientSecret    || process.env.GOOGLE_CLIENT_SECRET) },
+      microsoft: { hasSecret: !!(s.microsoft?.clientSecret || process.env.MICROSOFT_CLIENT_SECRET) },
+    });
+  } catch (err) { next(err); }
+});
+
+// PUT /auth/org-settings/sso-secrets — store encrypted SSO client secrets (SUPER_ADMIN only)
+router.put('/org-settings/sso-secrets', authenticate, authorize(ROLES.SUPER_ADMIN), async (req, res, next) => {
+  try {
+    const { google, microsoft } = req.body;
+    const secrets = await getSsoSecrets();
+    if (google?.clientSecret)    secrets.google    = { clientSecret: encrypt(google.clientSecret) };
+    if (microsoft?.clientSecret) secrets.microsoft = { clientSecret: encrypt(microsoft.clientSecret) };
+    const val = JSON.stringify(secrets);
+    await prisma.$executeRaw`
+      INSERT INTO org_settings (key, value, "updatedAt") VALUES ('ssoSecrets', ${val}, now())
+      ON CONFLICT (key) DO UPDATE SET value = ${val}, "updatedAt" = now()
+    `;
+    await logAudit(prisma, { userId: req.user.sub, action: 'SSO_SECRET_UPDATED', resource: 'org_settings', req });
+    res.json({ message: 'SSO secrets saved' });
+  } catch (err) { next(err); }
+});
+
 // ── Google SSO ────────────────────────────────────────────────────────────────
 
 // GET /auth/sso/google/config — public, returns clientId so the login page can build the OAuth URL
@@ -597,10 +645,10 @@ router.post('/sso/google/callback', async (req, res, next) => {
     let ssoConfig = {};
     try { ssoConfig = JSON.parse(cfgRows[0]?.value ?? '{}'); } catch {}
     const clientId = ssoConfig.google?.clientId || process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const clientSecret = await getSsoClientSecret('google');
 
     if (!clientId) return res.status(503).json({ error: 'Google SSO not configured — clientId missing' });
-    if (!clientSecret) return res.status(503).json({ error: 'Google SSO not configured — GOOGLE_CLIENT_SECRET env var not set' });
+    if (!clientSecret) return res.status(503).json({ error: 'Google SSO not configured — client secret not set. Configure it in Settings → Security.' });
 
     // Exchange authorization code for tokens
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -688,11 +736,11 @@ router.post('/sso/microsoft/callback', async (req, res, next) => {
     const msCfg = ssoConfig.microsoft ?? {};
 
     const clientId = msCfg.clientId || process.env.MICROSOFT_CLIENT_ID;
-    const clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
+    const clientSecret = await getSsoClientSecret('microsoft');
     const tenant = msCfg.tenantId || process.env.MICROSOFT_TENANT_ID || 'common';
 
     if (!clientId) return res.status(503).json({ error: 'Microsoft SSO not configured — clientId missing' });
-    if (!clientSecret) return res.status(503).json({ error: 'Microsoft SSO not configured — MICROSOFT_CLIENT_SECRET env var not set' });
+    if (!clientSecret) return res.status(503).json({ error: 'Microsoft SSO not configured — client secret not set. Configure it in Settings → Security.' });
 
     // Exchange authorization code for tokens
     const tokenRes = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {

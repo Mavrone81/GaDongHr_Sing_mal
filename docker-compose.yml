@@ -170,6 +170,8 @@ services:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - NOTIFICATION_SERVICE_URL=http://notification-service:4009
+      - INTERNAL_SERVICE_KEY=***REMOVED***
+      - EMPLOYEE_SERVICE_URL=http://employee-service:4002
     volumes:
       - shared_certs:/app/certs:ro
     depends_on:

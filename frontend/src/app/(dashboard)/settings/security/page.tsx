@@ -67,6 +67,8 @@ export default function SecurityPage() {
   const [ssoEnabled, setSsoEnabled] = useState<Record<string, boolean>>({});
   const [ssoConfig, setSsoConfig] = useState<Record<string, { clientId: string; domain: string }>>({});
   const [expandedSso, setExpandedSso] = useState<string | null>(null);
+  const [ssoSecrets, setSsoSecrets] = useState<Record<string, string>>({});
+  const [ssoSecretStatus, setSsoSecretStatus] = useState<Record<string, boolean>>({});
 
   // Session policy
   const [sessionTimeout, setSessionTimeout] = useState('60');
@@ -99,6 +101,11 @@ export default function SecurityPage() {
     apiFetch('/auth/org-settings/mfa').then(d => {
       if (d?.mfaMethod) setMfaMethod(d.mfaMethod as MfaMethod);
       if (d?.mfaRequired !== undefined) setMfaRequired(d.mfaRequired);
+    }).catch(() => {});
+
+    // Load SSO secret status (booleans only — never the actual secrets)
+    apiFetch('/auth/org-settings/sso-secrets/status').then(d => {
+      if (d) setSsoSecretStatus({ google: !!d.google?.hasSecret, microsoft: !!d.microsoft?.hasSecret });
     }).catch(() => {});
   }, []);
 
@@ -200,13 +207,35 @@ export default function SecurityPage() {
 
   const handleSave = async () => {
     setSaving(true);
-    const settings = { mfaRequired, ssoEnabled, ssoConfig, sessionTimeout, ipWhitelist };
-    localStorage.setItem('vorkhive_security_settings', JSON.stringify(settings));
-    // Persist SSO config to server so auth-service can read the clientId
-    apiFetch('/auth/org-settings/general', { method: 'PUT', body: JSON.stringify({ ssoConfig }) }).catch(() => {});
-    await new Promise(r => setTimeout(r, 400));
-    setSaving(false);
-    showToast('Security settings saved');
+    try {
+      const settings = { mfaRequired, ssoEnabled, ssoConfig, sessionTimeout, ipWhitelist };
+      localStorage.setItem('vorkhive_security_settings', JSON.stringify(settings));
+
+      // Persist public SSO config (clientId, domain, tenantId) to server
+      await apiFetch('/auth/org-settings/general', { method: 'PUT', body: JSON.stringify({ ssoConfig }) }).catch(() => {});
+
+      // Persist secrets separately if the admin typed any — never stored locally
+      const secretsPayload: Record<string, { clientSecret: string }> = {};
+      for (const [id, secret] of Object.entries(ssoSecrets)) {
+        if (secret.trim()) secretsPayload[id] = { clientSecret: secret.trim() };
+      }
+      if (Object.keys(secretsPayload).length > 0) {
+        await apiFetch('/auth/org-settings/sso-secrets', { method: 'PUT', body: JSON.stringify(secretsPayload) });
+        // Mark those providers as having a secret now, clear the typed values
+        setSsoSecretStatus(prev => {
+          const next = { ...prev };
+          for (const id of Object.keys(secretsPayload)) next[id] = true;
+          return next;
+        });
+        setSsoSecrets({});
+      }
+
+      showToast('Security settings saved');
+    } catch (e: any) {
+      showToast(e.message || 'Failed to save settings', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const role = user?.role?.toUpperCase() ?? '';
@@ -519,6 +548,27 @@ export default function SecurityPage() {
                         />
                       </div>
                     </div>
+
+                    {/* Client Secret — full width, server-side only, never returned */}
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Client Secret</label>
+                        {ssoSecretStatus[provider.id] && (
+                          <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg uppercase tracking-widest">Secret configured ✓</span>
+                        )}
+                      </div>
+                      <input
+                        type="password"
+                        value={ssoSecrets[provider.id] ?? ''}
+                        onChange={e => setSsoSecrets(prev => ({ ...prev, [provider.id]: e.target.value }))}
+                        placeholder={ssoSecretStatus[provider.id] ? 'Enter new value to replace existing secret' : 'Paste your client secret'}
+                        disabled={!canEdit}
+                        autoComplete="new-password"
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 transition-all placeholder:font-normal placeholder:text-slate-300 disabled:opacity-60"
+                      />
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Stored encrypted on the server — never displayed after saving.</p>
+                    </div>
+
                     <div className="flex items-center gap-3 px-4 py-3 bg-violet-50 border border-violet-100 rounded-xl">
                       <svg className="w-4 h-4 text-violet-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                       <p className="text-[10px] font-bold text-violet-700 uppercase tracking-widest">

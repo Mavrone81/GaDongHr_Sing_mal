@@ -9,8 +9,11 @@ const { authenticate, authorize, authorizeSelfOrRole, ROLES } = require('/app/sh
 
 const prisma = new PrismaClient();
 
+const UPLOAD_DIR = '/app/uploads';
+require('fs').mkdirSync(UPLOAD_DIR, { recursive: true });
+
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, '../../uploads')),
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => cb(null, `${uuidv4()}-${file.originalname}`),
 });
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB
@@ -44,6 +47,28 @@ router.post('/employee/:employeeId', authenticate, authorize(ROLES.SUPER_ADMIN, 
       },
     });
     res.status(201).json(doc);
+  } catch (err) { next(err); }
+});
+
+// GET /documents/:id/download — stream file to client
+router.get('/:id/download', authenticate, async (req, res, next) => {
+  try {
+    const doc = await prisma.document.findUnique({ where: { id: req.params.id } });
+    if (!doc) return res.status(404).json({ error: 'Document not found' });
+
+    // Self-service: employee can only download their own docs
+    const isSelf = req.user?.employeeId === doc.employeeId;
+    const isPrivileged = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER].includes(req.user?.role);
+    if (!isSelf && !isPrivileged) return res.status(403).json({ error: 'Forbidden' });
+
+    const fs = require('fs');
+    // Support both old relative paths and new absolute /app/uploads paths
+    const filePath = doc.filePath.startsWith('/') ? doc.filePath : path.join(UPLOAD_DIR, path.basename(doc.filePath));
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on disk' });
+
+    res.setHeader('Content-Disposition', `inline; filename="${doc.fileName}"`);
+    if (doc.mimeType) res.setHeader('Content-Type', doc.mimeType);
+    fs.createReadStream(filePath).pipe(res);
   } catch (err) { next(err); }
 });
 

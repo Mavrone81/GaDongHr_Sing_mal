@@ -53,7 +53,7 @@ interface Employee {
   sickLeaveBalance?: number;
 }
 
-type Tab = 'general' | 'contracts' | 'statutory' | 'documents' | 'assets';
+type Tab = 'general' | 'contracts' | 'statutory' | 'documents' | 'assets' | 'supervisors';
 
 interface EmployeeDocument {
   id: string;
@@ -214,6 +214,16 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
   const [savingEntitlements, setSavingEntitlements] = useState(false);
   const [entitlementToast, setEntitlementToast] = useState('');
 
+  // Supervisors
+  const [supervisorData, setSupervisorData] = useState<{ flowType: string; supervisors: any[] } | null>(null);
+  const [loadingSupervisors, setLoadingSupervisors] = useState(false);
+  const [supervisorToast, setSupervisorToast] = useState('');
+  const [editingSupervisors, setEditingSupervisors] = useState(false);
+  const [draftSupervisors, setDraftSupervisors] = useState<any[]>([]);
+  const [draftFlowType, setDraftFlowType] = useState('ANY_ONE');
+  const [allEmployees, setAllEmployees] = useState<any[]>([]);
+  const [savingSupervisors, setSavingSupervisors] = useState(false);
+
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
   const fetchEmployee = useCallback(async () => {
@@ -267,6 +277,15 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
       .then(d => { setLeaveEntitlements(d); setEntitlementEdits({}); })
       .catch(() => {})
       .finally(() => setLoadingEntitlements(false));
+  }, [activeTab, params.id]);
+
+  useEffect(() => {
+    if (activeTab !== 'supervisors' || !params.id) return;
+    setLoadingSupervisors(true);
+    apiFetch(`/employees/${params.id}/supervisors`)
+      .then(d => setSupervisorData(d))
+      .catch(() => {})
+      .finally(() => setLoadingSupervisors(false));
   }, [activeTab, params.id]);
 
   const startEditing = () => {
@@ -340,6 +359,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
   const TABS: { key: Tab; label: string }[] = [
     { key: 'general', label: 'General Profile' },
     { key: 'contracts', label: 'Contracts & Entitlements' },
+    { key: 'supervisors', label: 'Supervisors' },
     { key: 'assets', label: 'Assets' },
     { key: 'statutory', label: 'Statutory & Compliance' },
     { key: 'documents', label: 'Document Archive' },
@@ -1143,6 +1163,178 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                         </tbody>
                       </table>
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* ══ SUPERVISORS ══════════════════════════════════════════════════ */}
+              {activeTab === 'supervisors' && (
+                <div className="flex flex-col gap-6">
+                  {loadingSupervisors ? (
+                    <div className="flex items-center justify-center py-16">
+                      <div className="w-8 h-8 border-[3px] border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                    </div>
+                  ) : (
+                    <>
+                      {/* Header row */}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Leave Approval Supervisors</h3>
+                          <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">Supervisors assigned for this employee's leave requests</p>
+                        </div>
+                        {hasPermission('employee:manage') && !editingSupervisors && (
+                          <button
+                            onClick={async () => {
+                              if (allEmployees.length === 0) {
+                                const data = await apiFetch('/employees?limit=500&isActive=true').catch(() => ({ employees: [] }));
+                                setAllEmployees((data.employees ?? []).filter((e: any) => e.id !== params.id));
+                              }
+                              setDraftSupervisors(supervisorData?.supervisors ?? []);
+                              setDraftFlowType(supervisorData?.flowType ?? 'ANY_ONE');
+                              setEditingSupervisors(true);
+                            }}
+                            className="px-5 py-2.5 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl uppercase tracking-widest transition-all"
+                          >
+                            Edit Supervisors
+                          </button>
+                        )}
+                      </div>
+
+                      {!editingSupervisors ? (
+                        <>
+                          {/* Flow type badge */}
+                          <div className="flex items-center gap-3">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Approval Flow:</span>
+                            <span className={`text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-widest ${supervisorData?.flowType === 'SEQUENTIAL' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'}`}>
+                              {supervisorData?.flowType === 'SEQUENTIAL' ? 'Sequential — Must approve in order' : 'Any One — Any supervisor can approve'}
+                            </span>
+                          </div>
+
+                          {/* Supervisor list */}
+                          {supervisorData?.supervisors && supervisorData.supervisors.length > 0 ? (
+                            <div className="flex flex-col gap-3">
+                              {supervisorData.supervisors.map((s: any, idx: number) => (
+                                <div key={s.id} className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                  {supervisorData.flowType === 'SEQUENTIAL' && (
+                                    <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center text-white text-xs font-black shrink-0">{s.order ?? idx + 1}</div>
+                                  )}
+                                  <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-[10px] font-black text-indigo-400 shrink-0">
+                                    {s.fullName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{s.fullName}</p>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{s.designation || '—'} · {s.department || '—'}</p>
+                                  </div>
+                                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{s.employeeCode}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="py-12 flex flex-col items-center gap-3 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                              <div className="w-12 h-12 bg-white border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center text-slate-300 text-xl">👤</div>
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No supervisors assigned</p>
+                              <p className="text-[9px] font-bold text-slate-300 text-center max-w-xs">Only HR Admin / Super Admin can approve this employee's leave requests</p>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        /* ── Edit mode ─────────────────────────────────────── */
+                        <div className="flex flex-col gap-5 bg-slate-50 rounded-2xl border border-slate-200 p-6">
+                          {supervisorToast && (
+                            <div className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${supervisorToast.startsWith('Error') ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
+                              {supervisorToast}
+                            </div>
+                          )}
+
+                          {/* Flow type selector */}
+                          <div className="flex flex-col gap-2">
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Approval Flow Type</label>
+                            <div className="flex gap-3">
+                              {(['ANY_ONE', 'SEQUENTIAL'] as const).map(ft => (
+                                <button
+                                  key={ft}
+                                  onClick={() => setDraftFlowType(ft)}
+                                  className={`flex-1 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${draftFlowType === ft ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-200'}`}
+                                >
+                                  {ft === 'ANY_ONE' ? 'Any One' : 'Sequential'}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="text-[9px] font-bold text-slate-400">
+                              {draftFlowType === 'SEQUENTIAL' ? 'Supervisors must approve in listed order. Each step unlocks after the previous.' : 'Any single supervisor can approve the leave request.'}
+                            </p>
+                          </div>
+
+                          {/* Supervisor entries */}
+                          <div className="flex flex-col gap-2">
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Supervisors</label>
+                            {draftSupervisors.map((s: any, idx: number) => (
+                              <div key={idx} className="flex items-center gap-3 bg-white rounded-xl border border-slate-200 p-3">
+                                {draftFlowType === 'SEQUENTIAL' && (
+                                  <span className="w-7 h-7 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-xs font-black shrink-0">{idx + 1}</span>
+                                )}
+                                <select
+                                  value={s.employeeId}
+                                  onChange={e => {
+                                    const chosen = allEmployees.find((em: any) => em.id === e.target.value);
+                                    setDraftSupervisors(prev => prev.map((x, i) => i === idx ? { ...x, employeeId: e.target.value, fullName: chosen?.fullName, designation: chosen?.designation, department: chosen?.department, employeeCode: chosen?.employeeCode } : x));
+                                  }}
+                                  className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-indigo-500"
+                                >
+                                  <option value="">— Select employee —</option>
+                                  {allEmployees.map((em: any) => (
+                                    <option key={em.id} value={em.id}>{em.fullName} ({em.employeeCode})</option>
+                                  ))}
+                                </select>
+                                <button
+                                  onClick={() => setDraftSupervisors(prev => prev.filter((_, i) => i !== idx))}
+                                  className="w-7 h-7 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                >✕</button>
+                              </div>
+                            ))}
+                            <button
+                              onClick={() => setDraftSupervisors(prev => [...prev, { employeeId: '', fullName: '', order: prev.length + 1 }])}
+                              className="mt-1 py-2.5 bg-white border border-dashed border-slate-300 text-[10px] font-black text-slate-400 rounded-xl hover:border-indigo-300 hover:text-indigo-600 uppercase tracking-widest transition-all"
+                            >+ Add Supervisor</button>
+                          </div>
+
+                          {/* Action buttons */}
+                          <div className="flex gap-3 pt-2">
+                            <button
+                              onClick={() => { setEditingSupervisors(false); setSupervisorToast(''); }}
+                              className="flex-1 py-3 text-[10px] font-black text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-100 uppercase tracking-widest transition-all"
+                            >Cancel</button>
+                            <button
+                              onClick={async () => {
+                                const validSups = draftSupervisors.filter(s => s.employeeId);
+                                if (validSups.some(s => !s.employeeId)) return;
+                                setSavingSupervisors(true);
+                                setSupervisorToast('');
+                                try {
+                                  const updated = await apiFetch(`/employees/${params.id}/supervisors`, {
+                                    method: 'PUT',
+                                    body: JSON.stringify({
+                                      flowType: draftFlowType,
+                                      supervisors: validSups.map((s, i) => ({ employeeId: s.employeeId, order: i + 1 })),
+                                    }),
+                                  });
+                                  setSupervisorData(updated);
+                                  setEditingSupervisors(false);
+                                  setSupervisorToast('Supervisors saved successfully');
+                                  setTimeout(() => setSupervisorToast(''), 3000);
+                                } catch (e: any) {
+                                  setSupervisorToast(`Error: ${e.message}`);
+                                } finally {
+                                  setSavingSupervisors(false);
+                                }
+                              }}
+                              disabled={savingSupervisors}
+                              className="flex-1 py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl uppercase tracking-widest transition-all"
+                            >{savingSupervisors ? 'Saving…' : 'Save Supervisors'}</button>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}

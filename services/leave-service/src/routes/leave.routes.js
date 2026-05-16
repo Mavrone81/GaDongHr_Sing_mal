@@ -2,10 +2,35 @@
 
 const router = require('express').Router();
 const { v4: uuidv4 } = require('uuid');
+const axios = require('axios');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, authorizeSelfOrRole, ROLES } = require('/app/shared/auth-middleware');
 
 const prisma = new PrismaClient();
+
+const EMPLOYEE_URL = process.env.EMPLOYEE_SERVICE_URL || 'http://employee-service:4002';
+const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY || '';
+
+const ADMIN_ROLES = new Set([ROLES.SUPER_ADMIN, ROLES.HR_ADMIN]);
+
+// Fetch supervisor info from employee-service (returns null on any error)
+async function getSupervisorCheck(employeeId, checkerEmployeeId) {
+  if (!employeeId || !checkerEmployeeId) return null;
+  try {
+    const { data } = await axios.get(
+      `${EMPLOYEE_URL}/employees/${employeeId}/supervisor-check`,
+      {
+        params: { checkerEmployeeId },
+        headers: { 'x-internal-service-key': INTERNAL_KEY, Authorization: 'Bearer internal' },
+        timeout: 3000,
+      }
+    );
+    return data;
+  } catch (err) {
+    console.warn('[leave-service] supervisor-check failed:', err.message);
+    return null;
+  }
+}
 
 // ── GET /leave/types ──────────────────────────────────────────────────────────
 router.get('/types', authenticate, async (req, res, next) => {
@@ -229,11 +254,61 @@ router.post('/applications', authenticate, async (req, res, next) => {
 // ── PUT /leave/applications/:id/approve ───────────────────────────────────────
 router.put('/applications/:id/approve', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.LINE_MANAGER), async (req, res, next) => {
   try {
-    const app = await prisma.leaveApplication.findUnique({ where: { id: req.params.id } });
+    const app = await prisma.leaveApplication.findUnique({
+      where: { id: req.params.id },
+      include: { approvalSteps: { orderBy: { step: 'asc' } } },
+    });
     if (!app) return res.status(404).json({ error: 'Application not found' });
     if (app.status !== 'PENDING') return res.status(400).json({ error: 'Only PENDING applications can be approved' });
 
-    // Move pendingDays → usedDays
+    const approverRole = req.user.role?.toUpperCase();
+    const approverEmpId = req.user.employeeId;
+
+    // HR_ADMIN / SUPER_ADMIN bypass supervisor chain entirely
+    if (!ADMIN_ROLES.has(approverRole)) {
+      const check = await getSupervisorCheck(app.employeeId, approverEmpId);
+
+      if (check && check.totalSupervisors > 0) {
+        // Supervisor chain is configured — enforce it
+        if (!check.isSupervisor) {
+          return res.status(403).json({ error: 'You are not a designated supervisor for this employee' });
+        }
+
+        if (check.flowType === 'SEQUENTIAL') {
+          const expectedStep = app.currentApprovalStep;
+          if (check.supervisorOrder !== expectedStep) {
+            return res.status(403).json({
+              error: `Sequential approval required. Waiting for supervisor at step ${expectedStep}.`,
+            });
+          }
+
+          // Record this step
+          await prisma.leaveApprovalStep.create({
+            data: { id: uuidv4(), applicationId: app.id, step: expectedStep, approvedByEmpId: approverEmpId },
+          });
+
+          const isLastStep = expectedStep >= check.totalSupervisors;
+          if (!isLastStep) {
+            // Advance to next step — application stays PENDING
+            const advanced = await prisma.leaveApplication.update({
+              where: { id: app.id },
+              data: { currentApprovalStep: expectedStep + 1 },
+            });
+            return res.json({ ...advanced, message: `Step ${expectedStep} approved. Awaiting step ${expectedStep + 1}.` });
+          }
+          // Last step — fall through to final approval below
+        }
+        // ANY_ONE flow: any supervisor can approve immediately — fall through
+      }
+      // No supervisors configured — only HR_ADMIN / SUPER_ADMIN would reach here
+      // (they are already excluded above). For other roles without a supervisor chain,
+      // we deny to prevent unintended approvals.
+      else if (check && check.totalSupervisors === 0) {
+        return res.status(403).json({ error: 'No supervisors configured for this employee. Contact HR Admin.' });
+      }
+    }
+
+    // Final approval: move pendingDays → usedDays and mark APPROVED
     await prisma.leaveEntitlement.updateMany({
       where: { employeeId: app.employeeId, leaveTypeId: app.leaveTypeId, year: app.startDate.getFullYear() },
       data: { usedDays: { increment: app.totalDays }, pendingDays: { decrement: app.totalDays } },

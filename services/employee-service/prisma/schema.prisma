@@ -9,6 +9,27 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ApprovalFlowType {
+  ANY_ONE
+  SEQUENTIAL
+}
+
+model EmployeeSupervisor {
+  id                    String   @id @default(uuid())
+  employeeId            String
+  supervisorEmployeeId  String
+  order                 Int      @default(0)
+  createdAt             DateTime @default(now())
+
+  employee   Employee @relation("EmployeeSupervisors", fields: [employeeId], references: [id], onDelete: Cascade)
+  supervisor Employee @relation("SupervisorOf", fields: [supervisorEmployeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, supervisorEmployeeId])
+  @@index([employeeId])
+  @@index([supervisorEmployeeId])
+  @@map("employee_supervisors")
+}
+
 model Employee {
   id                  String    @id @default(uuid())
   employeeCode        String    @unique // e.g. EMP-0001
@@ -67,6 +88,7 @@ model Employee {
   cpfVoluntaryRate    Boolean  @default(false)
 
   profilePhotoUrl     String?  // base64 data URL for face verification
+  approvalFlowType    ApprovalFlowType @default(ANY_ONE)
 
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -74,6 +96,8 @@ model Employee {
   documents           Document[]
   salaryHistory       SalaryHistory[]
   emergencyContacts   EmergencyContact[]
+  supervisors         EmployeeSupervisor[] @relation("EmployeeSupervisors")
+  supervising         EmployeeSupervisor[] @relation("SupervisorOf")
 
   @@index([department])
   @@index([isActive])

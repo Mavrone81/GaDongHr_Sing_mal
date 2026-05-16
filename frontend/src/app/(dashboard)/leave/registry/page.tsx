@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
@@ -61,6 +61,156 @@ export default function LeaveRegistryPage() {
   return <AdminLeaveView />;
 }
 
+interface TeamMember {
+  id: string; fullName: string; designation: string; department: string; employeeCode: string;
+}
+interface TeamLeave {
+  id: string; employeeId: string; startDate: string; endDate: string; totalDays: number;
+  leaveType: { name: string; isPaid: boolean; code: string };
+  status: string;
+}
+
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DAY_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function TeamCalendar({ subordinates }: { subordinates: TeamMember[] }) {
+  const today = new Date();
+  const [year, setYear] = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth()); // 0-indexed
+  const [teamLeaves, setTeamLeaves] = useState<TeamLeave[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (subordinates.length === 0) return;
+    setLoading(true);
+    const from = new Date(year, month, 1).toISOString().slice(0, 10);
+    const to = new Date(year, month + 1, 0).toISOString().slice(0, 10);
+    const ids = subordinates.map(s => s.id);
+    Promise.all(
+      ids.map(id => apiFetch(`/leave/applications?employeeId=${id}&status=APPROVED&startDateFrom=${from}&startDateTo=${to}&limit=50`).catch(() => ({ applications: [] })))
+    ).then(results => {
+      setTeamLeaves(results.flatMap(r => r.applications ?? []));
+    }).finally(() => setLoading(false));
+  }, [subordinates, year, month]);
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const calDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  const leaveMap = useMemo(() => {
+    const m: Record<string, TeamLeave[]> = {};
+    teamLeaves.forEach(lv => {
+      const start = new Date(lv.startDate);
+      const end = new Date(lv.endDate);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const key = d.toISOString().slice(0, 10);
+        if (!m[key]) m[key] = [];
+        m[key].push(lv);
+      }
+    });
+    return m;
+  }, [teamLeaves]);
+
+  const prevMonth = () => { if (month === 0) { setMonth(11); setYear(y => y - 1); } else setMonth(m => m - 1); };
+  const nextMonth = () => { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); };
+
+  const MEMBER_COLORS = ['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-sky-500', 'bg-purple-500', 'bg-teal-500', 'bg-orange-500'];
+  const colorFor = (empId: string) => {
+    const idx = subordinates.findIndex(s => s.id === empId);
+    return MEMBER_COLORS[idx % MEMBER_COLORS.length] ?? 'bg-slate-500';
+  };
+
+  if (subordinates.length === 0) {
+    return (
+      <div className="py-16 flex flex-col items-center gap-4">
+        <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center text-xl shadow-xl border border-slate-800">👥</div>
+        <p className="text-sm font-black text-slate-400 uppercase tracking-widest">No team members assigned</p>
+        <p className="text-[10px] font-bold text-slate-300 text-center max-w-xs">Assign supervisors to employees from their profile to see team leave here</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Navigation */}
+      <div className="flex items-center justify-between">
+        <button onClick={prevMonth} className="w-9 h-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-all">‹</button>
+        <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">{MONTH_NAMES[month]} {year}</h3>
+        <button onClick={nextMonth} className="w-9 h-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-all">›</button>
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-2">
+        {subordinates.map((s, i) => (
+          <div key={s.id} className="flex items-center gap-1.5">
+            <div className={`w-2.5 h-2.5 rounded-full ${MEMBER_COLORS[i % MEMBER_COLORS.length]}`} />
+            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{s.fullName.split(' ')[0]}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Calendar grid */}
+      {loading ? (
+        <div className="h-40 bg-slate-50 rounded-2xl animate-pulse" />
+      ) : (
+        <div className="rounded-2xl border border-slate-100 overflow-hidden">
+          {/* Day labels */}
+          <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-100">
+            {DAY_LABELS.map(d => (
+              <div key={d} className="py-2 text-center text-[9px] font-black text-slate-400 uppercase tracking-widest">{d}</div>
+            ))}
+          </div>
+          {/* Weeks */}
+          <div className="grid grid-cols-7">
+            {Array.from({ length: firstDay }).map((_, i) => (
+              <div key={`empty-${i}`} className="min-h-[72px] border-b border-r border-slate-50 bg-slate-50/40" />
+            ))}
+            {calDays.map(day => {
+              const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+              const dayLeaves = leaveMap[dateStr] ?? [];
+              const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+              return (
+                <div key={day} className={`min-h-[72px] border-b border-r border-slate-50 p-1.5 flex flex-col gap-1 ${isToday ? 'bg-indigo-50/50' : ''}`}>
+                  <span className={`text-[9px] font-black self-start w-5 h-5 flex items-center justify-center rounded-full ${isToday ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>{day}</span>
+                  {dayLeaves.slice(0, 3).map(lv => (
+                    <div key={lv.id} title={`${subordinates.find(s => s.id === lv.employeeId)?.fullName}: ${lv.leaveType.name}`} className={`${colorFor(lv.employeeId)} rounded px-1 py-0.5 text-[7px] font-black text-white truncate leading-tight`}>
+                      {subordinates.find(s => s.id === lv.employeeId)?.fullName.split(' ')[0]}
+                    </div>
+                  ))}
+                  {dayLeaves.length > 3 && <div className="text-[7px] font-black text-slate-400">+{dayLeaves.length - 3}</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* On-leave list for selected month */}
+      {teamLeaves.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Approved Leave This Month</p>
+          {teamLeaves.map(lv => {
+            const member = subordinates.find(s => s.id === lv.employeeId);
+            return (
+              <div key={lv.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <div className={`w-2 h-8 rounded-full ${colorFor(lv.employeeId)} shrink-0`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{member?.fullName}</p>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase">{lv.leaveType.name} · {lv.totalDays} day{lv.totalDays > 1 ? 's' : ''}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[9px] font-bold text-slate-500">{new Date(lv.startDate + 'T00:00:00').toLocaleDateString('en-SG', { day: 'numeric', month: 'short' })}</p>
+                  <p className="text-[9px] font-bold text-slate-400">→ {new Date(lv.endDate + 'T00:00:00').toLocaleDateString('en-SG', { day: 'numeric', month: 'short' })}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminLeaveView() {
   const [activeTab, setActiveTab] = useState<'approvals' | 'types' | 'calendar'>('approvals');
   const [pending, setPending] = useState<PendingLeave[]>([]);
@@ -74,6 +224,10 @@ function AdminLeaveView() {
   const [editingType, setEditingType] = useState<LeaveType | null>(null);
   const [typeForm, setTypeForm] = useState<Omit<LeaveType, 'id' | 'isActive'>>(BLANK_TYPE);
   const [savingType, setSavingType] = useState(false);
+
+  // Team calendar state
+  const [subordinates, setSubordinates] = useState<TeamMember[]>([]);
+  const [loadingSubordinates, setLoadingSubordinates] = useState(false);
 
   useEffect(() => {
     apiFetch('/leave/applications?status=PENDING&limit=100')
@@ -99,6 +253,15 @@ function AdminLeaveView() {
       .then(d => setLeaveTypes(d))
       .catch(e => showToast(e.message, 'error'))
       .finally(() => setLoadingTypes(false));
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'calendar') return;
+    setLoadingSubordinates(true);
+    apiFetch('/employees/me/subordinates')
+      .then(d => setSubordinates(Array.isArray(d) ? d : []))
+      .catch(() => setSubordinates([]))
+      .finally(() => setLoadingSubordinates(false));
   }, [activeTab]);
 
   const showToast = (msg: string, type: 'success' | 'error') => setToast({ msg, type });
@@ -303,10 +466,28 @@ function AdminLeaveView() {
 
           {/* ── CALENDAR ── */}
           {activeTab === 'calendar' && (
-            <div className="h-80 flex flex-col items-center justify-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-              <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center text-xl mb-4 shadow-xl border border-slate-800">📅</div>
-              <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Team Availability Calendar</h3>
-              <p className="text-[10px] font-bold mt-2 text-slate-400 uppercase tracking-widest text-center max-w-xs">Integrating leave data for team overlap visualization</p>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Your Team</p>
+                  <p className="text-sm font-black text-slate-900 mt-0.5">{loadingSubordinates ? '…' : `${subordinates.length} direct report${subordinates.length !== 1 ? 's' : ''}`}</p>
+                </div>
+                {subordinates.length > 0 && (
+                  <div className="flex -space-x-2">
+                    {subordinates.slice(0, 6).map(s => (
+                      <div key={s.id} className="w-8 h-8 rounded-full bg-slate-900 border-2 border-white flex items-center justify-center text-[9px] font-black text-indigo-400">
+                        {s.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                    ))}
+                    {subordinates.length > 6 && <div className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-[9px] font-black text-slate-500">+{subordinates.length - 6}</div>}
+                  </div>
+                )}
+              </div>
+              {loadingSubordinates ? (
+                <div className="h-40 bg-slate-50 rounded-2xl animate-pulse" />
+              ) : (
+                <TeamCalendar subordinates={subordinates} />
+              )}
             </div>
           )}
         </div>

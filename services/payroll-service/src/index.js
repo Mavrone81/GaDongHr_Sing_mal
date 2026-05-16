@@ -30,4 +30,8 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
 
-app.listen(PORT, () => console.log(`[payroll-service] Running on port ${PORT}`));
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`[payroll-service] Running on port ${PORT}`));
+}
+
+module.exports = app;

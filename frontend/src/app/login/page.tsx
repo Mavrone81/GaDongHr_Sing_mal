@@ -37,6 +37,7 @@ export default function LoginPage() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [navigating, setNavigating] = useState(false);
 
   // MFA setup state
   const [qrCode, setQrCode]     = useState('');
@@ -141,6 +142,7 @@ export default function LoginPage() {
 
       // Successful login — no MFA required
       await login(data.accessToken, data.refreshToken);
+      setNavigating(true);
       router.push('/');
     } catch {
       setError(`Cannot reach API. Is the gateway running on port 4000?`);
@@ -164,6 +166,7 @@ export default function LoginPage() {
         sessionStorage.removeItem('sso_mfa_method');
         sessionStorage.removeItem('sso_mfa_setup');
         await login(data.accessToken, data.refreshToken);
+        setNavigating(true);
         router.push('/');
         return;
       }
@@ -176,6 +179,7 @@ export default function LoginPage() {
       const data = await res.json();
       if (!res.ok) { setMfaCode(''); setError(data.error || 'Invalid MFA code'); return; }
       await login(data.accessToken, data.refreshToken);
+      setNavigating(true);
       router.push('/');
     } catch { setError('Connection error'); }
     finally { setLoading(false); }
@@ -221,6 +225,7 @@ export default function LoginPage() {
         setError(data.error || 'Invalid code — wait for the next code and try again');
         return;
       }
+      setNavigating(true);
       router.push('/');
     } catch { setError('Connection error'); }
     finally { setLoading(false); }
@@ -265,6 +270,19 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen w-full bg-white font-sans">
+
+      {/* Full-screen navigation overlay */}
+      {navigating && (
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center gap-6">
+          <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center shadow-2xl shadow-indigo-500/40">
+            <span className="font-black text-white text-lg italic">V</span>
+          </div>
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-6 h-6 border-2 border-indigo-400/30 border-t-indigo-500 rounded-full animate-spin" />
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Loading workspace…</span>
+          </div>
+        </div>
+      )}
 
       {/* Left brand panel */}
       <div className="hidden lg:flex w-[45%] bg-slate-950 border-r border-slate-900 p-16 flex-col justify-between relative overflow-hidden">

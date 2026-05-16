@@ -856,4 +856,145 @@ router.post('/apply', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── GET /employees/:id/supervisors ────────────────────────────────────────────
+router.get('/:id/supervisors', authenticate, authorizeSelfOrRole('id', ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER), async (req, res, next) => {
+  try {
+    const emp = await prisma.employee.findUnique({
+      where: { id: req.params.id },
+      select: {
+        approvalFlowType: true,
+        supervisors: {
+          orderBy: { order: 'asc' },
+          select: {
+            id: true, order: true,
+            supervisor: { select: { id: true, fullName: true, designation: true, department: true, employeeCode: true } },
+          },
+        },
+      },
+    });
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    res.json({
+      flowType: emp.approvalFlowType,
+      supervisors: emp.supervisors.map(s => ({
+        id: s.id, order: s.order,
+        employeeId: s.supervisor.id,
+        fullName: s.supervisor.fullName,
+        designation: s.supervisor.designation,
+        department: s.supervisor.department,
+        employeeCode: s.supervisor.employeeCode,
+      })),
+    });
+  } catch (err) { next(err); }
+});
+
+// ── PUT /employees/:id/supervisors ─── HR Admin only, replaces full list ──────
+router.put('/:id/supervisors', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { flowType, supervisors } = req.body; // supervisors: [{ employeeId, order }]
+
+    const emp = await prisma.employee.findUnique({ where: { id }, select: { id: true } });
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+    // Validate supervisor employeeIds exist
+    if (Array.isArray(supervisors) && supervisors.length > 0) {
+      const ids = supervisors.map(s => s.employeeId);
+      const found = await prisma.employee.findMany({ where: { id: { in: ids } }, select: { id: true } });
+      if (found.length !== ids.length) return res.status(400).json({ error: 'One or more supervisor employee IDs not found' });
+      if (ids.includes(id)) return res.status(400).json({ error: 'Employee cannot be their own supervisor' });
+    }
+
+    // Replace all supervisors atomically
+    await prisma.$transaction([
+      prisma.employeeSupervisor.deleteMany({ where: { employeeId: id } }),
+      ...(Array.isArray(supervisors) ? supervisors.map((s, idx) =>
+        prisma.employeeSupervisor.create({
+          data: { id: uuidv4(), employeeId: id, supervisorEmployeeId: s.employeeId, order: s.order ?? idx + 1 },
+        })
+      ) : []),
+      ...(flowType ? [prisma.employee.update({ where: { id }, data: { approvalFlowType: flowType } })] : []),
+    ]);
+
+    // Return updated list
+    const updated = await prisma.employee.findUnique({
+      where: { id },
+      select: {
+        approvalFlowType: true,
+        supervisors: {
+          orderBy: { order: 'asc' },
+          select: {
+            id: true, order: true,
+            supervisor: { select: { id: true, fullName: true, designation: true, department: true, employeeCode: true } },
+          },
+        },
+      },
+    });
+    res.json({
+      flowType: updated.approvalFlowType,
+      supervisors: updated.supervisors.map(s => ({
+        id: s.id, order: s.order,
+        employeeId: s.supervisor.id,
+        fullName: s.supervisor.fullName,
+        designation: s.supervisor.designation,
+        department: s.supervisor.department,
+        employeeCode: s.supervisor.employeeCode,
+      })),
+    });
+  } catch (err) { next(err); }
+});
+
+// ── GET /employees/me/subordinates — employees where I am a supervisor ─────────
+router.get('/me/subordinates', authenticate, async (req, res, next) => {
+  try {
+    const empId = await resolveEmployeeId(req.user);
+    if (!empId) return res.status(400).json({ error: 'No employee profile linked to this account' });
+
+    const supervised = await prisma.employeeSupervisor.findMany({
+      where: { supervisorEmployeeId: empId },
+      include: {
+        employee: {
+          select: { id: true, fullName: true, designation: true, department: true, employeeCode: true, isActive: true },
+        },
+      },
+    });
+
+    res.json(supervised.map(s => s.employee));
+  } catch (err) { next(err); }
+});
+
+// ── GET /employees/:id/supervisor-check — check if user is supervisor (for leave-service) ──
+// Accepts either internal service key OR a valid JWT.
+const checkInternalOrAuth = (req, res, next) => {
+  const internalKey = req.headers['x-internal-service-key'];
+  if (internalKey && internalKey === INTERNAL_KEY) { req.isInternal = true; return next(); }
+  return authenticate(req, res, next);
+};
+
+router.get('/:id/supervisor-check', checkInternalOrAuth, async (req, res, next) => {
+  try {
+    const { checkerEmployeeId } = req.query;
+    if (!checkerEmployeeId) return res.status(400).json({ error: 'checkerEmployeeId query param required' });
+
+    const emp = await prisma.employee.findUnique({
+      where: { id: req.params.id },
+      select: {
+        approvalFlowType: true,
+        supervisors: { orderBy: { order: 'asc' }, select: { supervisorEmployeeId: true, order: true } },
+      },
+    });
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+    const isSupervisor = emp.supervisors.some(s => s.supervisorEmployeeId === checkerEmployeeId);
+    const supervisorEntry = emp.supervisors.find(s => s.supervisorEmployeeId === checkerEmployeeId);
+
+    res.json({
+      isSupervisor,
+      flowType: emp.approvalFlowType,
+      supervisorOrder: supervisorEntry?.order ?? null,
+      totalSupervisors: emp.supervisors.length,
+      supervisors: emp.supervisors.map(s => ({ employeeId: s.supervisorEmployeeId, order: s.order })),
+    });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
