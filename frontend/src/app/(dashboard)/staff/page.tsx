@@ -14,6 +14,7 @@ interface Employee {
   email?: string;
   workPhone?: string;
   workEmail?: string;
+  profilePhotoUrl?: string | null;
 }
 
 function getInitials(name: string) {
@@ -162,8 +163,15 @@ export default function StaffDirectoryPage() {
             <div key={emp.id} className="bg-white p-7 rounded-[2rem] border border-slate-100 shadow-lg shadow-indigo-500/5 group hover:border-indigo-200 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300">
               <div className="flex items-center gap-4 mb-5">
                 <div className="w-14 h-14 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center text-xs font-black text-indigo-400 group-hover:scale-110 transition-transform duration-500 relative overflow-hidden shrink-0">
-                  <div className="absolute inset-0 bg-indigo-600/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  {getInitials(emp.fullName)}
+                  {emp.profilePhotoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={emp.profilePhotoUrl} alt={emp.fullName} className="absolute inset-0 w-full h-full object-cover" />
+                  ) : (
+                    <>
+                      <div className="absolute inset-0 bg-indigo-600/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      {getInitials(emp.fullName)}
+                    </>
+                  )}
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-black text-slate-900 uppercase tracking-tight group-hover:text-indigo-600 transition-colors truncate">{emp.fullName}</p>
