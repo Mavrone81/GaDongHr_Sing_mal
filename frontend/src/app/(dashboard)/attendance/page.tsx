@@ -139,6 +139,24 @@ function EmployeeAttendanceView() {
   const streamRef        = useRef<MediaStream | null>(null);
   const pendingStreamRef = useRef<MediaStream | null>(null);
 
+  // ── Sync isClockedIn from loaded log so button label is correct on load ────
+  useEffect(() => {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayRec = weekLog.find(r => r.isoDate === todayIso);
+    if (todayRec) {
+      const clockedIn = !!todayRec.clockIn && !todayRec.clockOut;
+      setIsClockedIn(clockedIn);
+      if (todayRec.clockIn && clockedIn) {
+        // Store today's clock-in time for display
+        const todayDate = new Date();
+        const [h, m] = todayRec.clockIn.replace(/\s?(AM|PM)/, '').split(':').map(Number);
+        const isPM = /PM/.test(todayRec.clockIn);
+        todayDate.setHours(isPM && h !== 12 ? h + 12 : (!isPM && h === 12 ? 0 : h), m, 0, 0);
+        setClockInTime(todayDate);
+      }
+    }
+  }, [weekLog]);
+
   // ── Fetch profile photo on mount ──────────────────────────────────────────
   useEffect(() => {
     async function fetchPhoto() {
@@ -160,7 +178,10 @@ function EmployeeAttendanceView() {
     setWeekLoading(true);
     const { start, end } = getPeriodBounds(viewMode, periodOffset);
     const from = start.toISOString().slice(0, 10);
-    const to   = end.toISOString().slice(0, 10);
+    // Add one day to `to` so the backend's lte covers all records on the end date
+    const toDate = new Date(end);
+    toDate.setDate(toDate.getDate() + 1);
+    const to = toDate.toISOString().slice(0, 10);
     apiFetch(`/attendance/${user.employeeId}?from=${from}&to=${to}`)
       .then((records: any[]) => setWeekLog(buildPeriodLog(Array.isArray(records) ? records : [], start, end)))
       .catch(() => setWeekLog(buildPeriodLog([], start, end)))
@@ -293,26 +314,32 @@ function EmployeeAttendanceView() {
 
       if (result.matched) {
         setClockState('success');
-        setTimeout(() => {
-          const todayIso = new Date().toISOString().slice(0, 10);
+        // Call the actual attendance API now that identity is confirmed
+        const todayIso = new Date().toISOString().slice(0, 10);
+        const endpoint = isClockedIn ? '/attendance/clock-out' : '/attendance/clock-in';
+        try {
+          const rec = await apiFetch(endpoint, { method: 'POST', body: JSON.stringify({}) });
+          const fmtT = (iso: string) => new Date(iso).toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', hour12: true });
+
           if (!isClockedIn) {
             setIsClockedIn(true);
-            const now = new Date();
-            setClockInTime(now);
+            setClockInTime(new Date(rec.clockIn));
             setWeekLog(prev => prev.map(r => r.isoDate === todayIso
-              ? { ...r, clockIn: now.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', hour12: true }), status: 'present' as const }
+              ? { ...r, clockIn: fmtT(rec.clockIn), status: (rec.status === 'LATE' ? 'present' : 'present') as AttendanceRecord['status'] }
               : r
             ));
           } else {
-            const now = new Date();
             setIsClockedIn(false);
-            const dur = clockInTime ? Math.round((now.getTime() - clockInTime.getTime()) / 60000) : 0;
-            const h   = Math.floor(dur / 60), m = dur % 60;
+            const dur = rec.hoursWorked != null ? `${Math.floor(rec.hoursWorked)}h ${Math.round((rec.hoursWorked % 1) * 60)}m` : null;
             setWeekLog(prev => prev.map(r => r.isoDate === todayIso
-              ? { ...r, clockOut: now.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', hour12: true }), duration: `${h}h ${m}m` }
+              ? { ...r, clockOut: fmtT(rec.clockOut), duration: dur ?? r.duration }
               : r
             ));
           }
+        } catch (clockErr: any) {
+          setVerifyError(clockErr.message || 'Clock recorded but attendance save failed.');
+        }
+        setTimeout(() => {
           setClockState('idle');
           setCapturedImg(null);
         }, 2500);
