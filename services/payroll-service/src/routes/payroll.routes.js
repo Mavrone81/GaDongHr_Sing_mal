@@ -55,8 +55,9 @@ async function consolidatePeriod(period, primaryRunId) {
     const ytdEmployeeCpf = Math.max(...slips.map(p => decSafe(p.ytdEmployeeCpfEnc)));
     const ytdEmployerCpf = Math.max(...slips.map(p => decSafe(p.ytdEmployerCpfEnc)));
 
-    // basicSalary from primary run's payslip
-    const basicSalary = decSafe(primary.basicSalaryEnc);
+    // basicSalary: use the highest value across all runs — a supplemental run
+    // may carry the corrected salary when the primary was computed with stale data
+    const basicSalary = Math.max(...slips.map(p => decSafe(p.basicSalaryEnc)));
 
     // Update the primary payslip with consolidated values
     await prisma.payslip.update({

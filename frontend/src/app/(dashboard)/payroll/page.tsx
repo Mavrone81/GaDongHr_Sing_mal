@@ -677,9 +677,14 @@ function AdminPayrollDashboard() {
 
             {/* Per-employee payslip comparison */}
             <div className="flex-1 overflow-y-auto px-8 py-4">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                Current Payslip Totals by Employee
-                <span className="ml-2 text-slate-300">— new run will add on top of these upon finalization</span>
+              <div className="flex items-start gap-2 mb-3">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                  Existing Payslips — Computed Values at Time of Run
+                </p>
+                <span className="shrink-0 text-[8px] font-black px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full uppercase tracking-widest">Stale salaries possible</span>
+              </div>
+              <p className="text-[9px] font-bold text-slate-400 mb-3 normal-case">
+                The new supplemental run will re-fetch each employee&apos;s <strong>current salary</strong> from their profile — salary changes made since the prior run will be picked up automatically.
               </p>
               {conflictLoading ? (
                 <div className="flex items-center gap-3 py-8">
@@ -695,28 +700,33 @@ function AdminPayrollDashboard() {
                       <tr>
                         <th className="px-5 py-3">Employee</th>
                         {periodConflictRuns.map(r => (
-                          <th key={r.id} className="px-5 py-3 text-right">{r.runType} Net</th>
+                          <th key={r.id} className="px-5 py-3 text-right">{r.runType} Net <span className="font-normal text-slate-300">(historical)</span></th>
                         ))}
-                        <th className="px-5 py-3 text-right text-indigo-600">Current Total Net</th>
-                        <th className="px-5 py-3 text-right text-amber-600">+ Supplemental Adds</th>
+                        <th className="px-5 py-3 text-right text-indigo-600">Historical Total Net</th>
+                        <th className="px-5 py-3 text-right text-amber-600">Supplemental Note</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {conflictPayslips.map((emp: any) => {
                         const totalNet = emp.runs.reduce((s: number, r: any) => s + (r.netPay ?? 0), 0);
+                        const hasZero = emp.runs.some((r: any) => (r.netPay ?? 0) === 0);
                         return (
                           <tr key={emp.employeeId} className="hover:bg-slate-50/50 transition-colors">
                             <td className="px-5 py-3 font-black text-slate-800">{emp.name}</td>
                             {periodConflictRuns.map(r => {
                               const ps = emp.runs.find((x: any) => x.runId === r.id);
                               return (
-                                <td key={r.id} className="px-5 py-3 text-right font-bold text-slate-500">
+                                <td key={r.id} className={`px-5 py-3 text-right font-bold ${(ps?.netPay ?? 0) === 0 ? 'text-red-400' : 'text-slate-500'}`}>
                                   {ps ? `SGD ${fmtSGD(ps.netPay ?? 0)}` : '—'}
                                 </td>
                               );
                             })}
                             <td className="px-5 py-3 text-right font-black text-indigo-700">SGD {fmtSGD(totalNet)}</td>
-                            <td className="px-5 py-3 text-right font-black text-amber-600">+ computed on save</td>
+                            <td className="px-5 py-3 text-right text-[9px] font-black">
+                              {hasZero
+                                ? <span className="text-amber-600">⚠ Prior run had $0 — current salary will be used</span>
+                                : <span className="text-slate-400 italic">Will add delta only</span>}
+                            </td>
                           </tr>
                         );
                       })}
