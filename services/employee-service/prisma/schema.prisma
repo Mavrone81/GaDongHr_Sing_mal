@@ -14,12 +14,12 @@ model Employee {
   employeeCode        String    @unique // e.g. EMP-0001
   fullName            String
   preferredName       String?
-  nricEncrypted       String    // AES-256-GCM encrypted NRIC/FIN
+  nricEncrypted       String?   // AES-256-GCM encrypted NRIC/FIN
   nricType            NricType  @default(NRIC)  // NRIC | FIN
-  nationality         String
+  nationality         String?
   citizenshipStatus   CitizenStatus @default(SC)
-  dateOfBirth         DateTime
-  gender              Gender
+  dateOfBirth         DateTime?
+  gender              Gender?
   race                String?
   religion            String?
   maritalStatus       MaritalStatus @default(SINGLE)

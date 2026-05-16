@@ -1,28 +1,22 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import Script from 'next/script';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-
-// face-api.js is loaded as a UMD script from /js/face-api.min.js
-// and exposes itself on window.faceapi — no webpack bundling needed
-declare global {
-  interface Window {
-    faceapi: typeof import('face-api.js');
-  }
-}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ClockState = 'idle' | 'camera' | 'capturing' | 'verifying' | 'success' | 'failed' | 'no_photo' | 'upload_photo';
+type ViewMode = 'work-week' | 'week' | 'bi-weekly' | 'month';
 
 interface AttendanceRecord {
-  date: string;
+  date: string;       // display label
+  isoDate: string;    // YYYY-MM-DD
+  dayOfWeek: number;  // 0=Sun … 6=Sat
   clockIn: string | null;
   clockOut: string | null;
   duration: string | null;
-  status: 'present' | 'half' | 'absent' | 'leave';
+  status: 'present' | 'half' | 'absent' | 'leave' | 'weekend';
 }
 
 // ─── Clock display ────────────────────────────────────────────────────────────
@@ -43,39 +37,72 @@ function LiveClock() {
   );
 }
 
-// ─── Week helpers ──────────────────────────────────────────────────────────────
+// ─── Period helpers ────────────────────────────────────────────────────────────
 
-function getWeekBounds(): { start: Date; end: Date } {
-  const now = new Date();
-  const day = now.getDay(); // 0=Sun
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - ((day + 6) % 7));
-  monday.setHours(0, 0, 0, 0);
-  const friday = new Date(monday);
-  friday.setDate(monday.getDate() + 4);
-  return { start: monday, end: friday };
+type ApiRecord = { date: string; clockIn?: string | null; clockOut?: string | null; hoursWorked?: number | null; status?: string };
+
+function getMondayOf(d: Date): Date {
+  const out = new Date(d);
+  const day = out.getDay();
+  out.setDate(out.getDate() - ((day + 6) % 7));
+  out.setHours(0, 0, 0, 0);
+  return out;
 }
 
-function buildWeekLog(apiRecords: Array<{ date: string; clockIn?: string | null; clockOut?: string | null; hoursWorked?: number | null; status?: string }>): AttendanceRecord[] {
-  const { start } = getWeekBounds();
-  const recMap = new Map<string, typeof apiRecords[0]>();
+function getPeriodBounds(mode: ViewMode, offset: number): { start: Date; end: Date; label: string } {
+  const today = new Date();
+  const fmt = (d: Date) => d.toLocaleDateString('en-SG', { day: 'numeric', month: 'short' });
+
+  if (mode === 'work-week' || mode === 'week') {
+    const monday = getMondayOf(today);
+    monday.setDate(monday.getDate() + offset * 7);
+    const end = new Date(monday);
+    end.setDate(monday.getDate() + (mode === 'work-week' ? 4 : 6));
+    return { start: monday, end, label: `${fmt(monday)} – ${fmt(end)} ${end.getFullYear()}` };
+  }
+  if (mode === 'bi-weekly') {
+    const monday = getMondayOf(today);
+    monday.setDate(monday.getDate() + offset * 14);
+    const end = new Date(monday);
+    end.setDate(monday.getDate() + 13);
+    return { start: monday, end, label: `${fmt(monday)} – ${fmt(end)} ${end.getFullYear()}` };
+  }
+  // month
+  const d = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+  const start = new Date(d.getFullYear(), d.getMonth(), 1);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return { start, end, label: start.toLocaleDateString('en-SG', { month: 'long', year: 'numeric' }) };
+}
+
+function buildPeriodLog(apiRecords: ApiRecord[], start: Date, end: Date): AttendanceRecord[] {
+  const recMap = new Map<string, ApiRecord>();
   for (const r of apiRecords) recMap.set(r.date.slice(0, 10), r);
 
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-  return Array.from({ length: 5 }).map((_, i) => {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    const key = d.toISOString().slice(0, 10);
-    const label = `${days[i]} ${d.getDate()} ${d.toLocaleDateString('en-SG', { month: 'short' })}`;
-    const rec = recMap.get(key);
-    if (!rec) return { date: label, clockIn: null, clockOut: null, duration: null, status: 'absent' as const };
-    const fmtT = (iso: string | null | undefined) => iso ? new Date(iso).toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', hour12: true }) : null;
-    const dur = rec.hoursWorked != null ? `${Math.floor(rec.hoursWorked)}h ${Math.round((rec.hoursWorked % 1) * 60)}m` : null;
-    let status: AttendanceRecord['status'] = 'present';
-    if (rec.status === 'HALF_DAY') status = 'half';
-    else if (rec.status === 'LEAVE') status = 'leave';
-    return { date: label, clockIn: fmtT(rec.clockIn), clockOut: fmtT(rec.clockOut), duration: dur, status };
-  });
+  const fmtT = (iso: string | null | undefined) =>
+    iso ? new Date(iso).toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', hour12: true }) : null;
+
+  const rows: AttendanceRecord[] = [];
+  const cur = new Date(start);
+  while (cur <= end) {
+    const iso = cur.toISOString().slice(0, 10);
+    const dow = cur.getDay();
+    const label = cur.toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' });
+    const isWeekend = dow === 0 || dow === 6;
+    const rec = recMap.get(iso);
+
+    if (!rec) {
+      rows.push({ date: label, isoDate: iso, dayOfWeek: dow, clockIn: null, clockOut: null, duration: null, status: isWeekend ? 'weekend' : 'absent' });
+    } else {
+      const dur = rec.hoursWorked != null ? `${Math.floor(rec.hoursWorked)}h ${Math.round((rec.hoursWorked % 1) * 60)}m` : null;
+      let status: AttendanceRecord['status'] = 'present';
+      if (rec.status === 'HALF_DAY') status = 'half';
+      else if (rec.status === 'LEAVE') status = 'leave';
+      rows.push({ date: label, isoDate: iso, dayOfWeek: dow, clockIn: fmtT(rec.clockIn), clockOut: fmtT(rec.clockOut), duration: dur, status });
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return rows;
 }
 
 // ─── Employee self-service view ───────────────────────────────────────────────
@@ -91,9 +118,10 @@ function EmployeeAttendanceView() {
   const [photoLoading, setPhotoLoading] = useState(true);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
-  const [modelsLoaded, setModelsLoaded] = useState(false);
   const [weekLog, setWeekLog]         = useState<AttendanceRecord[]>([]);
   const [weekLoading, setWeekLoading] = useState(true);
+  const [viewMode, setViewMode]       = useState<ViewMode>('work-week');
+  const [periodOffset, setPeriodOffset] = useState(0);
 
   // Upload photo state
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
@@ -111,22 +139,6 @@ function EmployeeAttendanceView() {
   const streamRef        = useRef<MediaStream | null>(null);
   const pendingStreamRef = useRef<MediaStream | null>(null);
 
-  // ── Load face-api models once the UMD script is ready ────────────────────
-  const loadFaceModels = useCallback(async () => {
-    if (!window.faceapi) return;
-    try {
-      const MODEL_URL = '/models';
-      await Promise.all([
-        window.faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-        window.faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
-        window.faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-      ]);
-      setModelsLoaded(true);
-    } catch (e) {
-      console.error('face-api models failed to load', e);
-    }
-  }, []);
-
   // ── Fetch profile photo on mount ──────────────────────────────────────────
   useEffect(() => {
     async function fetchPhoto() {
@@ -142,17 +154,18 @@ function EmployeeAttendanceView() {
     fetchPhoto();
   }, []);
 
-  // ── Load this week's attendance records ───────────────────────────────────
+  // ── Load attendance records for the selected period ───────────────────────
   useEffect(() => {
     if (!user?.employeeId) { setWeekLoading(false); return; }
-    const { start, end } = getWeekBounds();
+    setWeekLoading(true);
+    const { start, end } = getPeriodBounds(viewMode, periodOffset);
     const from = start.toISOString().slice(0, 10);
-    const to = end.toISOString().slice(0, 10);
+    const to   = end.toISOString().slice(0, 10);
     apiFetch(`/attendance/${user.employeeId}?from=${from}&to=${to}`)
-      .then((records: any[]) => setWeekLog(buildWeekLog(records)))
-      .catch(() => setWeekLog(buildWeekLog([])))
+      .then((records: any[]) => setWeekLog(buildPeriodLog(Array.isArray(records) ? records : [], start, end)))
+      .catch(() => setWeekLog(buildPeriodLog([], start, end)))
       .finally(() => setWeekLoading(false));
-  }, [user?.employeeId]);
+  }, [user?.employeeId, viewMode, periodOffset]);
 
   // ── Attach camera stream after video element is in DOM ────────────────────
   useEffect(() => {
@@ -181,6 +194,11 @@ function EmployeeAttendanceView() {
   // ── Start webcam for profile photo capture ────────────────────────────────
   useEffect(() => {
     if (clockState !== 'upload_photo' || photoSource !== 'camera') return;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setUploadError('Camera is unavailable. This feature requires HTTPS — please upload a photo instead.');
+      setPhotoSource('file');
+      return;
+    }
     let active = true;
     navigator.mediaDevices.getUserMedia({
       video: { width: { ideal: 480 }, height: { ideal: 480 }, facingMode: 'user' },
@@ -204,15 +222,23 @@ function EmployeeAttendanceView() {
     const video  = uploadVideoRef.current;
     const canvas = uploadCanvasRef.current;
     if (!video || !canvas) return;
-    canvas.width  = video.videoWidth  || 480;
-    canvas.height = video.videoHeight || 480;
-    canvas.getContext('2d')!.drawImage(video, 0, 0);
-    setUploadPreview(canvas.toDataURL('image/jpeg', 0.92));
+    const MAX = 512;
+    const vw = video.videoWidth  || 480;
+    const vh = video.videoHeight || 480;
+    const scale = Math.min(1, MAX / Math.max(vw, vh));
+    canvas.width  = Math.round(vw * scale);
+    canvas.height = Math.round(vh * scale);
+    canvas.getContext('2d')!.drawImage(video, 0, 0, canvas.width, canvas.height);
+    setUploadPreview(canvas.toDataURL('image/jpeg', 0.75));
   };
 
   const startCamera = async () => {
     if (!profilePhoto) { setClockState('no_photo'); return; }
     setCameraError(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('Camera unavailable — this feature requires HTTPS. Contact your administrator.');
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 480 }, height: { ideal: 480 }, facingMode: 'user' },
@@ -225,67 +251,56 @@ function EmployeeAttendanceView() {
     }
   };
 
-  // ── Face comparison with face-api.js ──────────────────────────────────────
+  // ── Face verification via InsightFace (server-side) ──────────────────────
   const captureAndVerify = async () => {
     const video  = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
 
     setClockState('capturing');
-    canvas.width  = video.videoWidth  || 480;
-    canvas.height = video.videoHeight || 480;
-    canvas.getContext('2d')!.drawImage(video, 0, 0);
-    const imageData = canvas.toDataURL('image/jpeg', 0.92);
+    const MAX = 640;
+    const vw = video.videoWidth  || 480;
+    const vh = video.videoHeight || 480;
+    const scale = Math.min(1, MAX / Math.max(vw, vh));
+    canvas.width  = Math.round(vw * scale);
+    canvas.height = Math.round(vh * scale);
+    canvas.getContext('2d')!.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = canvas.toDataURL('image/jpeg', 0.85);
     setCapturedImg(imageData);
     stopCamera();
     setClockState('verifying');
     setVerifyError(null);
 
     try {
-      const faceapi = window.faceapi;
+      const result = await apiFetch('/employees/me/verify-face', {
+        method: 'POST',
+        body: JSON.stringify({ capturedPhoto: imageData }),
+      });
 
-      const detectorOpts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 });
-
-      // Detect face in captured frame
-      const capturedEl = await createImgElement(imageData);
-      const capturedResult = await faceapi
-        .detectSingleFace(capturedEl, detectorOpts)
-        .withFaceLandmarks(true)
-        .withFaceDescriptor();
-
-      if (!capturedResult) {
-        setVerifyError('No face detected in captured image. Please ensure your face is clearly visible.');
+      if (result.error === 'no_face_in_target') {
+        setVerifyError('No face detected. Please centre your face in the oval and ensure good lighting.');
+        setClockState('failed');
+        return;
+      }
+      if (result.error === 'no_face_in_reference' || result.error === 'no_profile_photo') {
+        setVerifyError('Could not read your profile photo. Please re-upload a clear, front-facing photo.');
         setClockState('failed');
         return;
       }
 
-      // Detect face in profile photo
-      const profileEl = await createImgElement(profilePhoto!);
-      const profileResult = await faceapi
-        .detectSingleFace(profileEl, detectorOpts)
-        .withFaceLandmarks(true)
-        .withFaceDescriptor();
-
-      if (!profileResult) {
-        setVerifyError('Could not detect a face in your profile photo. Please update your profile photo with a clear face shot.');
-        setClockState('failed');
-        return;
-      }
-
-      // Euclidean distance — < 0.45 = same person (strict), < 0.6 = likely same
-      const distance   = faceapi.euclideanDistance(capturedResult.descriptor, profileResult.descriptor);
-      const similarity = Math.max(0, Math.round((1 - distance) * 100));
+      const similarity = Math.max(0, Math.round((result.similarity ?? 0) * 100));
       setConfidence(similarity);
 
-      if (distance < 0.55) {
+      if (result.matched) {
         setClockState('success');
         setTimeout(() => {
+          const todayIso = new Date().toISOString().slice(0, 10);
           if (!isClockedIn) {
             setIsClockedIn(true);
             const now = new Date();
             setClockInTime(now);
-            setWeekLog(prev => prev.map((r, i) => i === 1
-              ? { ...r, clockIn: now.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', hour12: true }), status: 'present' }
+            setWeekLog(prev => prev.map(r => r.isoDate === todayIso
+              ? { ...r, clockIn: now.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', hour12: true }), status: 'present' as const }
               : r
             ));
           } else {
@@ -293,7 +308,7 @@ function EmployeeAttendanceView() {
             setIsClockedIn(false);
             const dur = clockInTime ? Math.round((now.getTime() - clockInTime.getTime()) / 60000) : 0;
             const h   = Math.floor(dur / 60), m = dur % 60;
-            setWeekLog(prev => prev.map((r, i) => i === 1
+            setWeekLog(prev => prev.map(r => r.isoDate === todayIso
               ? { ...r, clockOut: now.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', hour12: true }), duration: `${h}h ${m}m` }
               : r
             ));
@@ -351,16 +366,9 @@ function EmployeeAttendanceView() {
     setClockState('idle');
   };
 
-  const statusColor = (s: AttendanceRecord['status']) => {
-    if (s === 'present') return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
-    if (s === 'half')    return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
-    if (s === 'leave')   return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-    return 'bg-slate-700/30 text-slate-500 border-slate-700/30';
-  };
 
   return (
     <>
-    <Script src="/js/face-api.min.js" strategy="afterInteractive" onLoad={loadFaceModels} />
     <div className="flex flex-col gap-6 max-w-[1100px] mx-auto pb-20 animate-in fade-in duration-700">
 
       {/* ── Main Clock-in Card ──────────────────────────────────────────────── */}
@@ -429,14 +437,10 @@ function EmployeeAttendanceView() {
                     </p>
                   </div>
 
-                  {!modelsLoaded && profilePhoto && (
-                    <p className="text-[9px] font-black text-indigo-400/70 uppercase tracking-widest animate-pulse">Loading face recognition models…</p>
-                  )}
-
                   <div className="flex flex-col items-center gap-3">
                     <button
                       onClick={startCamera}
-                      disabled={!modelsLoaded && !!profilePhoto}
+                      disabled={false}
                       className={`flex items-center gap-3 px-10 py-5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-2xl disabled:opacity-40 disabled:cursor-not-allowed ${
                         isClockedIn
                           ? 'bg-rose-600 text-white hover:bg-rose-700 shadow-rose-500/20'
@@ -781,56 +785,232 @@ function EmployeeAttendanceView() {
         </div>
       </div>
 
-      {/* ── This Week's Log ──────────────────────────────────────────────────── */}
+      {/* ── Attendance Log ───────────────────────────────────────────────────── */}
       {(() => {
-        const { start, end } = getWeekBounds();
-        const fmt = (d: Date) => d.toLocaleDateString('en-SG', { day: 'numeric', month: 'short' });
+        const { label } = getPeriodBounds(viewMode, periodOffset);
+        const workDays  = weekLog.filter(r => r.status !== 'weekend');
         const presentCount = weekLog.filter(r => r.status === 'present' || r.status === 'half').length;
+        const expectedDays = workDays.length;
+
+        const VIEW_TABS: { key: ViewMode; label: string }[] = [
+          { key: 'work-week', label: 'Work Week' },
+          { key: 'week',      label: 'Week' },
+          { key: 'bi-weekly', label: 'Bi-weekly' },
+          { key: 'month',     label: 'Month' },
+        ];
+
+        const statusBadge = (s: AttendanceRecord['status']) => {
+          if (s === 'present')  return { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', txt: 'Present' };
+          if (s === 'half')     return { cls: 'bg-amber-50 text-amber-700 border-amber-200',       txt: 'Half Day' };
+          if (s === 'leave')    return { cls: 'bg-blue-50 text-blue-700 border-blue-200',          txt: 'On Leave' };
+          if (s === 'weekend')  return { cls: 'bg-slate-50 text-slate-400 border-slate-100',       txt: 'Weekend' };
+          return                       { cls: 'bg-red-50 text-red-400 border-red-100',             txt: 'Absent' };
+        };
+
+        // ── Month: calendar grid ──────────────────────────────────────────────
+        if (viewMode === 'month') {
+          const { start } = getPeriodBounds('month', periodOffset);
+          // group rows into weeks (7-day chunks starting Mon)
+          const firstMonday = getMondayOf(start);
+          const calStart = new Date(firstMonday);
+          calStart.setHours(0, 0, 0, 0);
+          const recMap = new Map(weekLog.map(r => [r.isoDate, r]));
+          const weeks: (AttendanceRecord | null)[][] = [];
+          const cur = new Date(calStart);
+          const { end: mEnd } = getPeriodBounds('month', periodOffset);
+          while (cur <= mEnd || weeks.length === 0) {
+            const week: (AttendanceRecord | null)[] = [];
+            for (let d = 0; d < 7; d++) {
+              const iso = cur.toISOString().slice(0, 10);
+              const rec = recMap.get(iso) ?? null;
+              // days outside the current month
+              const inMonth = cur.getMonth() === start.getMonth();
+              week.push(inMonth ? (rec ?? {
+                date: cur.toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' }),
+                isoDate: iso, dayOfWeek: cur.getDay(),
+                clockIn: null, clockOut: null, duration: null,
+                status: (cur.getDay() === 0 || cur.getDay() === 6) ? 'weekend' : 'absent',
+              } as AttendanceRecord) : null);
+              cur.setDate(cur.getDate() + 1);
+            }
+            weeks.push(week);
+            if (cur > mEnd) break;
+          }
+
+          const dayHeaders = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+          const cellColor = (s: AttendanceRecord['status'] | undefined) => {
+            if (!s)            return 'bg-slate-50/40 border-transparent';
+            if (s === 'present') return 'bg-emerald-50 border-emerald-200';
+            if (s === 'half')    return 'bg-amber-50 border-amber-200';
+            if (s === 'leave')   return 'bg-blue-50 border-blue-200';
+            if (s === 'weekend') return 'bg-slate-50 border-slate-100';
+            return 'bg-red-50/60 border-red-100';
+          };
+          const dotColor = (s: AttendanceRecord['status'] | undefined) => {
+            if (s === 'present') return 'bg-emerald-500';
+            if (s === 'half')    return 'bg-amber-400';
+            if (s === 'leave')   return 'bg-blue-400';
+            return 'bg-transparent';
+          };
+
+          return (
+            <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 overflow-hidden">
+              {/* Header */}
+              <div className="px-8 py-5 border-b border-slate-100 bg-slate-50/50">
+                <div className="flex flex-wrap items-center gap-4">
+                  {/* View tabs */}
+                  <div className="flex rounded-xl bg-slate-100 p-0.5 gap-0.5">
+                    {VIEW_TABS.map(t => (
+                      <button key={t.key} onClick={() => { setViewMode(t.key); setPeriodOffset(0); }}
+                        className={`px-3 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${viewMode === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Nav */}
+                  <div className="flex items-center gap-2 ml-auto">
+                    <button onClick={() => setPeriodOffset(p => p - 1)}
+                      className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 transition-all text-slate-600">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+                    </button>
+                    <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest min-w-[140px] text-center">{label}</span>
+                    <button onClick={() => setPeriodOffset(p => p + 1)} disabled={periodOffset >= 0}
+                      className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 transition-all text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+                    </button>
+                  </div>
+                  {!weekLoading && (
+                    <div className="px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-xl">
+                      <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">{presentCount} / {expectedDays} days</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* Calendar grid */}
+              <div className="p-6">
+                <div className="grid grid-cols-7 gap-1.5 mb-1.5">
+                  {dayHeaders.map(d => (
+                    <div key={d} className="text-center text-[9px] font-black text-slate-400 uppercase tracking-widest py-1">{d}</div>
+                  ))}
+                </div>
+                {weekLoading ? (
+                  <div className="grid grid-cols-7 gap-1.5">
+                    {Array.from({ length: 35 }).map((_, i) => <div key={i} className="h-14 bg-slate-50 rounded-xl animate-pulse" />)}
+                  </div>
+                ) : (
+                  weeks.map((week, wi) => (
+                    <div key={wi} className="grid grid-cols-7 gap-1.5 mb-1.5">
+                      {week.map((rec, di) => {
+                        if (!rec) return <div key={di} className="h-14 rounded-xl bg-slate-50/30" />;
+                        const dayNum = rec.isoDate.slice(8);
+                        const isToday = rec.isoDate === new Date().toISOString().slice(0, 10);
+                        return (
+                          <div key={di} className={`h-14 rounded-xl border px-2 py-1.5 flex flex-col justify-between transition-all ${cellColor(rec.status)} ${isToday ? 'ring-2 ring-indigo-400 ring-offset-1' : ''}`}>
+                            <div className="flex items-center justify-between">
+                              <span className={`text-[10px] font-black ${isToday ? 'text-indigo-600' : 'text-slate-700'}`}>{dayNum}</span>
+                              {rec.status !== 'absent' && rec.status !== 'weekend' && (
+                                <span className={`w-1.5 h-1.5 rounded-full ${dotColor(rec.status)}`} />
+                              )}
+                            </div>
+                            <span className="text-[8px] font-black uppercase tracking-wide text-slate-500 leading-none">
+                              {rec.status === 'present' ? rec.duration ?? 'Present' : rec.status === 'half' ? 'Half Day' : rec.status === 'leave' ? 'Leave' : rec.status === 'weekend' ? '' : 'Absent'}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        // ── List view (work-week / week / bi-weekly) ───────────────────────────
+        const compact = viewMode === 'bi-weekly';
         return (
           <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 overflow-hidden">
-            <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">This Week</h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{fmt(start)} – {fmt(end)} {end.getFullYear()}</p>
-              </div>
-              {!weekLoading && (
-                <div className="px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-xl">
-                  <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">{presentCount} / 5 days</p>
+            {/* Header */}
+            <div className="px-8 py-5 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex flex-wrap items-center gap-4">
+                {/* View tabs */}
+                <div className="flex rounded-xl bg-slate-100 p-0.5 gap-0.5">
+                  {VIEW_TABS.map(t => (
+                    <button key={t.key} onClick={() => { setViewMode(t.key); setPeriodOffset(0); }}
+                      className={`px-3 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${viewMode === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                      {t.label}
+                    </button>
+                  ))}
                 </div>
-              )}
+                {/* Nav */}
+                <div className="flex items-center gap-2 ml-auto">
+                  <button onClick={() => setPeriodOffset(p => p - 1)}
+                    className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 transition-all text-slate-600">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+                  </button>
+                  <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest min-w-[160px] text-center">{label}</span>
+                  <button onClick={() => setPeriodOffset(p => p + 1)} disabled={periodOffset >= 0}
+                    className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 transition-all text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+                  </button>
+                </div>
+                {!weekLoading && (
+                  <div className="px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-xl">
+                    <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">{presentCount} / {expectedDays} days</p>
+                  </div>
+                )}
+              </div>
             </div>
+            {/* Rows */}
             <div className="divide-y divide-slate-50">
               {weekLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
+                Array.from({ length: viewMode === 'work-week' ? 5 : 7 }).map((_, i) => (
                   <div key={i} className="flex items-center px-8 py-4 animate-pulse">
                     <div className="w-28 h-4 bg-slate-100 rounded" />
                     <div className="flex-1 ml-6 h-4 bg-slate-100 rounded" />
                   </div>
                 ))
-              ) : weekLog.map((rec, i) => (
-                <div key={i} className="flex items-center px-8 py-4 hover:bg-slate-50/50 transition-all">
-                  <div className="w-28">
-                    <p className="text-[11px] font-black text-slate-700 uppercase tracking-tight">{rec.date}</p>
+              ) : weekLog.map((rec) => {
+                const isToday = rec.isoDate === new Date().toISOString().slice(0, 10);
+                const badge = statusBadge(rec.status);
+                const isWeekendRow = rec.status === 'weekend';
+                return (
+                  <div key={rec.isoDate} className={`flex items-center px-8 transition-all ${compact ? 'py-3' : 'py-4'} ${isToday ? 'bg-indigo-50/40' : 'hover:bg-slate-50/50'} ${isWeekendRow ? 'opacity-50' : ''}`}>
+                    <div className={`${compact ? 'w-24' : 'w-32'} flex items-center gap-2`}>
+                      {isToday && <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />}
+                      <p className={`font-black text-slate-700 uppercase tracking-tight ${compact ? 'text-[10px]' : 'text-[11px]'}`}>{rec.date}</p>
+                    </div>
+                    {isWeekendRow ? (
+                      <p className="flex-1 text-[9px] font-bold text-slate-300 uppercase tracking-widest">Weekend</p>
+                    ) : compact ? (
+                      <div className="flex-1 flex items-center gap-4">
+                        <p className="text-[10px] font-black text-slate-800">{rec.clockIn ?? '—'}</p>
+                        <span className="text-slate-300 text-[10px]">→</span>
+                        <p className="text-[10px] font-black text-slate-800">{rec.clockOut ?? '—'}</p>
+                        {rec.duration && <p className="text-[10px] font-bold text-indigo-600 ml-2">{rec.duration}</p>}
+                      </div>
+                    ) : (
+                      <div className="flex-1 flex items-center gap-6">
+                        <div className="flex flex-col">
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Clock In</p>
+                          <p className="text-xs font-black text-slate-900 mt-0.5">{rec.clockIn ?? '—'}</p>
+                        </div>
+                        <div className="flex flex-col">
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Clock Out</p>
+                          <p className="text-xs font-black text-slate-900 mt-0.5">{rec.clockOut ?? '—'}</p>
+                        </div>
+                        <div className="flex flex-col">
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Duration</p>
+                          <p className="text-xs font-bold text-indigo-600 mt-0.5">{rec.duration ?? '—'}</p>
+                        </div>
+                      </div>
+                    )}
+                    <span className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg border ${badge.cls}`}>
+                      {badge.txt}
+                    </span>
                   </div>
-                  <div className="flex-1 flex items-center gap-6">
-                    <div className="flex flex-col">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Clock In</p>
-                      <p className="text-xs font-black text-slate-900 mt-0.5">{rec.clockIn ?? '—'}</p>
-                    </div>
-                    <div className="flex flex-col">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Clock Out</p>
-                      <p className="text-xs font-black text-slate-900 mt-0.5">{rec.clockOut ?? '—'}</p>
-                    </div>
-                    <div className="flex flex-col">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Duration</p>
-                      <p className="text-xs font-bold text-indigo-600 mt-0.5">{rec.duration ?? '—'}</p>
-                    </div>
-                  </div>
-                  <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-lg border ${statusColor(rec.status)}`}>
-                    {rec.status === 'present' ? 'Present' : rec.status === 'half' ? 'Half Day' : rec.status === 'leave' ? 'On Leave' : '—'}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         );
@@ -838,17 +1018,6 @@ function EmployeeAttendanceView() {
     </div>
     </>
   );
-}
-
-// ─── Helper: create an HTMLImageElement from a data URL ──────────────────────
-
-function createImgElement(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload  = () => resolve(img);
-    img.onerror = reject;
-    img.src     = src;
-  });
 }
 
 // ─── Entry point — always the employee self-service clock-in view ─────────────

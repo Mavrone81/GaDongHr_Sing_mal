@@ -22,7 +22,7 @@ let smtpConfig = {
   port: parseInt(process.env.SMTP_PORT) || 587,
   user: process.env.SMTP_USER || 'enquires@vorkhive.com',
   pass: process.env.SMTP_PASS || '',
-  from: process.env.SMTP_FROM || 'no-reply@vorkhive.com',
+  from: process.env.SMTP_FROM || 'enquires@vorkhive.com',
 };
 
 function buildTransporter() {

@@ -278,6 +278,62 @@ router.get('/me/photo', authenticate, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── HR: admin creates pre-filled application (HR fill-on-behalf or template) ──
+router.post('/applications/prefill', authenticate, authorize('employee:manage', ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const {
+      userId, email, fullName, preferredName,
+      gender, dateOfBirth, nationality, nricFin,
+      personalPhone, homeAddress,
+      department, designation, employmentType, startDate,
+      bankName, bankAccount, notes,
+      basicSalary,
+    } = req.body;
+    if (!userId || !email || !fullName) return res.status(400).json({ error: 'userId, email, fullName required' });
+
+    const existing = await prisma.employeeApplication.findUnique({ where: { userId } });
+    if (existing) {
+      // Only overwrite a field if HR actually provided a value — don't blank out data the employee filled
+      const patch = {};
+      if (fullName)        patch.fullName = fullName;
+      if (preferredName !== undefined) patch.preferredName = preferredName || null;
+      if (gender)          patch.gender = gender;
+      if (dateOfBirth)     patch.dateOfBirth = dateOfBirth;
+      if (nationality)     patch.nationality = nationality;
+      if (nricFin)         patch.nricFin = nricFin;
+      if (personalPhone)   patch.personalPhone = personalPhone;
+      if (homeAddress)     patch.homeAddress = homeAddress;
+      if (department)      patch.department = department;
+      if (designation)     patch.designation = designation;
+      if (employmentType)  patch.employmentType = employmentType;
+      if (startDate)       patch.startDate = startDate;
+      if (bankName)        patch.bankName = bankName;
+      if (bankAccount)     patch.bankAccount = bankAccount;
+      if (notes || basicSalary) patch.notes = notes || (basicSalary ? `Suggested salary: ${basicSalary}` : existing.notes);
+      patch.status = 'PENDING';
+      const updated = await prisma.employeeApplication.update({ where: { userId }, data: patch });
+      return res.json(updated);
+    }
+
+    const app = await prisma.employeeApplication.create({
+      data: {
+        id: require('crypto').randomUUID(),
+        userId, email, fullName,
+        preferredName: preferredName || null,
+        gender: gender || null, dateOfBirth: dateOfBirth || null,
+        nationality: nationality || null, nricFin: nricFin || null,
+        personalPhone: personalPhone || null, homeAddress: homeAddress || null,
+        department: department || null, designation: designation || null,
+        employmentType: employmentType || null, startDate: startDate || null,
+        bankName: bankName || null, bankAccount: bankAccount || null,
+        notes: notes || (basicSalary ? `Suggested salary: ${basicSalary}` : null),
+        status: 'PENDING',
+      },
+    });
+    res.status(201).json(app);
+  } catch (err) { next(err); }
+});
+
 // ── HR: list pending applications ─────────────────────────────────────────────
 router.get('/applications', authenticate, authorize('employee:manage', ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER), async (req, res, next) => {
   try {
@@ -384,8 +440,8 @@ router.post('/', authenticate, authorize('employee:manage', ROLES.SUPER_ADMIN, R
         employeeCode,
         ...data,
         ...encrypted,
-        dateOfBirth: new Date(data.dateOfBirth),
-        startDate:   new Date(data.startDate),
+        dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
+        startDate:   data.startDate ? new Date(data.startDate) : new Date(),
       },
     });
 
@@ -572,6 +628,43 @@ router.post('/me/photo', authenticate, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── POST /me/verify-face — server-side face recognition via InsightFace ──────
+router.post('/me/verify-face', authenticate, async (req, res, next) => {
+  try {
+    const employeeId = req.user.employeeId;
+    if (!employeeId) return res.status(400).json({ error: 'No employee profile linked to this account' });
+
+    const { capturedPhoto } = req.body;
+    if (!capturedPhoto || !capturedPhoto.startsWith('data:image/')) {
+      return res.status(400).json({ error: 'Invalid captured photo. Must be a base64 data URL.' });
+    }
+
+    const emp = await prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { profilePhotoUrl: true },
+    });
+
+    if (!emp?.profilePhotoUrl) {
+      return res.status(400).json({ error: 'no_profile_photo' });
+    }
+
+    const FACE_SERVICE_URL = process.env.FACE_SERVICE_URL || 'http://face-service:5010';
+    const faceRes = await fetch(`${FACE_SERVICE_URL}/compare`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reference: emp.profilePhotoUrl, target: capturedPhoto }),
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (!faceRes.ok) {
+      return res.status(502).json({ error: 'Face service error' });
+    }
+
+    const result = await faceRes.json();
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
 // ── GET /:id/salary-history ───────────────────────────────────────────────────
 router.get('/:id/salary-history', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
   try {
@@ -668,31 +761,63 @@ router.post('/apply', async (req, res, next) => {
     if (!fields.fullName) return res.status(400).json({ error: 'fullName is required' });
 
     const existing = await prisma.employeeApplication.findUnique({ where: { userId } });
-    if (existing) return res.status(409).json({ error: 'Your profile has already been submitted. HR will review it shortly.' });
 
-    // Step 4: Consume token only after we know the payload is valid
+    // Step 4: Consume token (marks invite as used so it can't be replayed)
+    // Only consume if the token is still valid — for prefill-created applications the
+    // token hasn't been consumed yet, so we still need to consume it here.
     const consumeRes = await fetch(`${AUTH_SERVICE_URL}/users/consume-invite`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-internal-service-key': INTERNAL_KEY },
       body: JSON.stringify({ token: inviteToken }),
     });
+    // Ignore 404/gone — means token was already consumed (re-submission guard on auth side)
     if (!consumeRes.ok) {
       const err = await consumeRes.json().catch(() => ({}));
-      return res.status(400).json({ error: err.error || 'Invalid or expired invite link' });
+      // If the token is gone but application already exists, let it through (idempotent)
+      if (!existing) return res.status(400).json({ error: err.error || 'Invalid or expired invite link' });
     }
 
-    // Step 5: Save application
-    const application = await prisma.employeeApplication.create({
-      data: {
-        id: uuidv4(), userId, email,
-        fullName: fields.fullName, preferredName: fields.preferredName, gender: fields.gender,
-        dateOfBirth: fields.dateOfBirth, nationality: fields.nationality, nricFin: fields.nricFin,
-        personalPhone: fields.personalPhone, homeAddress: fields.homeAddress,
-        department: fields.department, designation: fields.designation,
-        employmentType: fields.employmentType, startDate: fields.startDate,
-        bankName: fields.bankName, bankAccount: fields.bankAccount, notes: fields.notes,
-      },
-    });
+    // Step 5: Save or update application — employee data always wins over HR prefill
+    const appData = {
+      fullName: fields.fullName, preferredName: fields.preferredName || null,
+      gender: fields.gender || null, dateOfBirth: fields.dateOfBirth || null,
+      nationality: fields.nationality || null, nricFin: fields.nricFin || null,
+      personalPhone: fields.personalPhone || null, homeAddress: fields.homeAddress || null,
+      department: fields.department || null, designation: fields.designation || null,
+      employmentType: fields.employmentType || null, startDate: fields.startDate || null,
+      bankName: fields.bankName || null, bankAccount: fields.bankAccount || null,
+      notes: fields.notes || null, status: 'PENDING',
+    };
+
+    let application;
+    if (existing) {
+      // Merge: employee-submitted values override prefill, but keep HR-set fields if employee left them blank
+      application = await prisma.employeeApplication.update({
+        where: { userId },
+        data: {
+          fullName: appData.fullName,
+          preferredName: appData.preferredName ?? existing.preferredName,
+          gender: appData.gender ?? existing.gender,
+          dateOfBirth: appData.dateOfBirth ?? existing.dateOfBirth,
+          nationality: appData.nationality ?? existing.nationality,
+          nricFin: appData.nricFin ?? existing.nricFin,
+          personalPhone: appData.personalPhone ?? existing.personalPhone,
+          homeAddress: appData.homeAddress ?? existing.homeAddress,
+          department: appData.department ?? existing.department,
+          designation: appData.designation ?? existing.designation,
+          employmentType: appData.employmentType ?? existing.employmentType,
+          startDate: appData.startDate ?? existing.startDate,
+          bankName: appData.bankName ?? existing.bankName,
+          bankAccount: appData.bankAccount ?? existing.bankAccount,
+          notes: appData.notes ?? existing.notes,
+          status: 'PENDING',
+        },
+      });
+    } else {
+      application = await prisma.employeeApplication.create({
+        data: { id: uuidv4(), userId, email, ...appData },
+      });
+    }
     res.status(201).json({ message: 'Application submitted. HR will review and activate your profile soon.', applicationId: application.id });
   } catch (err) { next(err); }
 });

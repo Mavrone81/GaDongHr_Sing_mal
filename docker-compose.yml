@@ -81,6 +81,15 @@ services:
       postgres:
         condition: service_healthy
 
+  face-service:
+    build:
+      context: .
+      dockerfile: services/face-service/Dockerfile
+    container_name: hrms-face
+    restart: unless-stopped
+    expose:
+      - "5010"
+
   employee-service:
     build:
       context: .
@@ -97,6 +106,7 @@ services:
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - INTERNAL_SERVICE_KEY=***REMOVED***
       - AUTH_SERVICE_URL=http://auth-service:4001
+      - FACE_SERVICE_URL=http://face-service:5010
     volumes:
       - shared_certs:/app/certs:ro
       - /app/services/employee-service/node_modules
@@ -107,6 +117,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      face-service:
+        condition: service_started
 
   payroll-service:
     build:

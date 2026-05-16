@@ -19,7 +19,7 @@ fs.mkdirSync(uploadDir, { recursive: true });
 
 app.use(helmet());
 app.use(cors());
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({ limit: '5mb' }));
 app.use(morgan('combined'));
 
 app.get('/health', (req, res) => res.json({ service: 'employee-service', status: 'ok', ts: new Date() }));
