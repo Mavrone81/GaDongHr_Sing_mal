@@ -13,6 +13,7 @@ interface Employee {
   id: string;
   employeeCode: string;
   fullName: string;
+  profilePhotoUrl?: string | null;
   preferredName?: string;
   gender?: string;
   workEmail: string;
@@ -53,6 +54,17 @@ interface Employee {
 }
 
 type Tab = 'general' | 'contracts' | 'statutory' | 'documents' | 'assets';
+
+interface EmployeeDocument {
+  id: string;
+  docType: string;
+  fileName: string;
+  fileSize?: number;
+  mimeType?: string;
+  expiryDate?: string;
+  createdAt: string;
+  uploadedBy: string;
+}
 
 // ─── Shared input styles ───────────────────────────────────────────────────────
 const IX = 'w-full bg-white border border-indigo-300 rounded-lg px-4 py-2.5 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-400 placeholder:font-normal';
@@ -185,6 +197,16 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
   const [assigningAsset, setAssigningAsset] = useState(false);
   const [returningAsset, setReturningAsset] = useState<string | null>(null);
 
+  // Documents
+  const [documents, setDocuments] = useState<EmployeeDocument[]>([]);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadDocType, setUploadDocType] = useState('OTHER');
+  const [uploadExpiry, setUploadExpiry] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+
   // Leave entitlements
   const [leaveEntitlements, setLeaveEntitlements] = useState<any[]>([]);
   const [loadingEntitlements, setLoadingEntitlements] = useState(false);
@@ -209,6 +231,19 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
   }, [params.id, apiBaseUrl]);
 
   useEffect(() => { fetchEmployee(); }, [fetchEmployee]);
+
+  const loadDocuments = useCallback(() => {
+    if (!params.id) return;
+    setDocsLoading(true);
+    apiFetch(`/documents/employee/${params.id}`)
+      .then(d => setDocuments(Array.isArray(d) ? d : []))
+      .catch(() => {})
+      .finally(() => setDocsLoading(false));
+  }, [params.id]);
+
+  useEffect(() => {
+    if (activeTab === 'documents') loadDocuments();
+  }, [activeTab, loadDocuments]);
 
   useEffect(() => {
     if (activeTab !== 'assets' || !params.id) return;
@@ -381,8 +416,13 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
           {/* Hero card */}
           <section className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm flex items-start gap-8 relative overflow-hidden">
             <div className={`absolute top-0 left-0 w-1 h-full ${isEditing ? 'bg-amber-400' : 'bg-indigo-600'} transition-colors`} />
-            <div className="h-28 w-28 rounded-3xl bg-slate-900 border-4 border-slate-800 shadow-2xl flex items-center justify-center shrink-0">
-              <span className="text-3xl font-black text-white">{initials}</span>
+            <div className="h-28 w-28 rounded-3xl bg-slate-900 border-4 border-slate-800 shadow-2xl flex items-center justify-center shrink-0 relative overflow-hidden">
+              {emp.profilePhotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={emp.profilePhotoUrl} alt={emp.fullName} className="absolute inset-0 w-full h-full object-cover" />
+              ) : (
+                <span className="text-3xl font-black text-white">{initials}</span>
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-3">
@@ -942,44 +982,168 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
               {/* ══ DOCUMENT ARCHIVE ═════════════════════════════════════════════ */}
               {activeTab === 'documents' && (
                 <div className="flex flex-col gap-6">
+                  {/* Upload modal */}
+                  {uploadOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+                      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 flex flex-col gap-5">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-black text-slate-900">Upload Document</h3>
+                          <button onClick={() => { setUploadOpen(false); setUploadFile(null); setUploadError(''); }} className="text-slate-400 hover:text-slate-700 text-lg font-black">✕</button>
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">File</label>
+                          <label className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl py-6 cursor-pointer transition-all ${uploadFile ? 'border-indigo-300 bg-indigo-50/40' : 'border-slate-200 hover:border-indigo-300'}`}>
+                            <svg className={`w-6 h-6 ${uploadFile ? 'text-indigo-500' : 'text-slate-300'}`} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                            <span className="text-[10px] font-bold text-slate-500">{uploadFile ? uploadFile.name : 'Click to select file (max 10 MB)'}</span>
+                            <input type="file" className="hidden" onChange={e => setUploadFile(e.target.files?.[0] ?? null)} />
+                          </label>
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">Document Type</label>
+                          <select value={uploadDocType} onChange={e => setUploadDocType(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-indigo-500 appearance-none">
+                            <option value="CONTRACT">Employment Contract</option>
+                            <option value="NRIC_COPY">NRIC / FIN Copy</option>
+                            <option value="EMPLOYMENT_PASS">Employment / Work Pass</option>
+                            <option value="CERT">Certificate / Qualification</option>
+                            <option value="OTHER">Other</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">Expiry Date <span className="normal-case font-bold">(optional)</span></label>
+                          <input type="date" value={uploadExpiry} onChange={e => setUploadExpiry(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-indigo-500" />
+                        </div>
+                        {uploadError && <p className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-lg">{uploadError}</p>}
+                        <div className="flex gap-3">
+                          <button onClick={() => { setUploadOpen(false); setUploadFile(null); setUploadError(''); }} className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 uppercase tracking-widest hover:bg-slate-50">Cancel</button>
+                          <button
+                            disabled={!uploadFile || uploading}
+                            onClick={async () => {
+                              if (!uploadFile) return;
+                              setUploading(true); setUploadError('');
+                              try {
+                                const { getAccessToken } = await import('@/lib/api');
+                                const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+                                const form = new FormData();
+                                form.append('file', uploadFile);
+                                form.append('docType', uploadDocType);
+                                if (uploadExpiry) form.append('expiryDate', uploadExpiry);
+                                const res = await fetch(`${apiBase}/documents/employee/${params.id}`, {
+                                  method: 'POST',
+                                  headers: { Authorization: `Bearer ${getAccessToken()}` },
+                                  body: form,
+                                });
+                                if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Upload failed'); }
+                                setUploadOpen(false); setUploadFile(null); setUploadExpiry(''); setUploadDocType('OTHER');
+                                loadDocuments();
+                              } catch (e: any) { setUploadError(e.message); }
+                              finally { setUploading(false); }
+                            }}
+                            className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"
+                          >
+                            {uploading && <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+                            {uploading ? 'Uploading…' : 'Upload'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex justify-between items-center">
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Secure Document Archive</h4>
-                    <button className="text-[10px] font-black uppercase text-indigo-600 bg-indigo-50 px-4 py-2 rounded-lg hover:bg-indigo-100 transition-all">+ Upload Document</button>
+                    <button onClick={() => { setUploadOpen(true); setUploadError(''); }} className="text-[10px] font-black uppercase text-indigo-600 bg-indigo-50 px-4 py-2 rounded-lg hover:bg-indigo-100 transition-all">+ Upload Document</button>
                   </div>
-                  <div className="overflow-hidden border border-slate-200 rounded-2xl shadow-sm">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200">
-                          <th className="px-6 py-4">Document</th>
-                          <th className="px-6 py-4">Category</th>
-                          <th className="px-6 py-4">Security</th>
-                          <th className="px-6 py-4">Expiry</th>
-                          <th className="px-6 py-4 text-right">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 text-xs">
-                        {[
-                          { name: 'Employment_Contract_Signed_Final.pdf', ext: 'PDF', cat: 'Contract', expiry: 'Permanent' },
-                          { name: 'NRIC_Front_Scan.jpg', ext: 'IMG', cat: 'Identification', expiry: '31 Dec 2030' },
-                        ].map(doc => (
-                          <tr key={doc.name} className="hover:bg-slate-50/50 transition-all">
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded bg-red-50 flex items-center justify-center text-red-500 font-black text-[9px]">{doc.ext}</div>
-                                <span className="font-bold text-slate-900 truncate max-w-[180px]">{doc.name}</span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4"><span className="text-[9px] font-black uppercase text-slate-500 border border-slate-200 px-2 py-0.5 rounded">{doc.cat}</span></td>
-                            <td className="px-6 py-4"><span className="text-[9px] font-black uppercase text-red-600 bg-red-50 px-2 py-0.5 rounded">High (Enc)</span></td>
-                            <td className="px-6 py-4 text-slate-400 font-bold uppercase text-[10px]">{doc.expiry}</td>
-                            <td className="px-6 py-4 text-right">
-                              <button className="text-indigo-600 hover:underline font-black uppercase text-[9px]">View</button>
-                            </td>
+
+                  {docsLoading ? (
+                    <div className="py-12 flex items-center justify-center gap-3 text-slate-400 text-xs font-bold">
+                      <span className="w-4 h-4 border-2 border-slate-200 border-t-slate-400 rounded-full animate-spin" /> Loading documents…
+                    </div>
+                  ) : documents.length === 0 ? (
+                    <div className="py-14 flex flex-col items-center gap-3 text-center opacity-40">
+                      <span className="text-3xl">📄</span>
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">No documents uploaded yet</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-hidden border border-slate-200 rounded-2xl shadow-sm">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200">
+                            <th className="px-6 py-4">Document</th>
+                            <th className="px-6 py-4">Type</th>
+                            <th className="px-6 py-4">Uploaded</th>
+                            <th className="px-6 py-4">Expiry</th>
+                            <th className="px-6 py-4 text-right">Actions</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-xs">
+                          {documents.map(doc => {
+                            const ext = doc.fileName.split('.').pop()?.toUpperCase() ?? 'FILE';
+                            const isImg = doc.mimeType?.startsWith('image/');
+                            const isPdf = doc.mimeType === 'application/pdf';
+                            const extColor = isPdf ? 'bg-red-50 text-red-500' : isImg ? 'bg-blue-50 text-blue-500' : 'bg-slate-50 text-slate-500';
+                            const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+                            return (
+                              <tr key={doc.id} className="hover:bg-slate-50/50 transition-all">
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded flex items-center justify-center font-black text-[9px] ${extColor}`}>{ext}</div>
+                                    <span className="font-bold text-slate-900 truncate max-w-[200px]">{doc.fileName}</span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className="text-[9px] font-black uppercase text-slate-500 border border-slate-200 px-2 py-0.5 rounded">
+                                    {doc.docType.replace(/_/g, ' ')}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 text-slate-400 font-bold text-[10px]">
+                                  {new Date(doc.createdAt).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </td>
+                                <td className="px-6 py-4 text-[10px] font-bold">
+                                  {doc.expiryDate ? (
+                                    <span className={new Date(doc.expiryDate) < new Date() ? 'text-red-500' : 'text-slate-400'}>
+                                      {new Date(doc.expiryDate).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                    </span>
+                                  ) : <span className="text-slate-300">Permanent</span>}
+                                </td>
+                                <td className="px-6 py-4 text-right flex items-center justify-end gap-3">
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        const { getAccessToken: tok } = await import('@/lib/api');
+                                        const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+                                        const res = await fetch(`${apiBase}/documents/${doc.id}/download`, {
+                                          headers: { Authorization: `Bearer ${tok()}` },
+                                        });
+                                        if (!res.ok) throw new Error();
+                                        const blob = await res.blob();
+                                        const url = URL.createObjectURL(blob);
+                                        window.open(url, '_blank');
+                                        setTimeout(() => URL.revokeObjectURL(url), 60000);
+                                      } catch { alert('Could not load document.'); }
+                                    }}
+                                    className="text-indigo-600 hover:underline font-black uppercase text-[9px]"
+                                  >
+                                    View
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      if (!confirm(`Delete "${doc.fileName}"?`)) return;
+                                      try {
+                                        await apiFetch(`/documents/${doc.id}`, { method: 'DELETE' });
+                                        loadDocuments();
+                                      } catch {}
+                                    }}
+                                    className="text-red-400 hover:text-red-600 hover:underline font-black uppercase text-[9px]"
+                                  >
+                                    Delete
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
 
