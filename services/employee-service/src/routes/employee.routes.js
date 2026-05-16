@@ -261,7 +261,7 @@ router.get('/payroll-data', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_
   try {
     const employees = await prisma.employee.findMany({
       where: { isActive: true },
-      select: { id: true, employeeCode: true, fullName: true, department: true, citizenshipStatus: true, dateOfBirth: true, basicSalaryEncrypted: true, salaryBasis: true, bankName: true, bankCode: true, bankBranchCode: true, bankAccountEncrypted: true },
+      select: { id: true, employeeCode: true, fullName: true, department: true, citizenshipStatus: true, dateOfBirth: true, startDate: true, endDate: true, basicSalaryEncrypted: true, salaryBasis: true, bankName: true, bankCode: true, bankBranchCode: true, bankAccountEncrypted: true },
       orderBy: { employeeCode: 'asc' },
     });
     const result = employees.map(emp => {
@@ -273,6 +273,8 @@ router.get('/payroll-data', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_
       return {
         employeeId: emp.id, employeeCode: emp.employeeCode, fullName: emp.fullName, department: emp.department,
         citizenStatus: emp.citizenshipStatus || 'SC', age, ow: basicSalary, grossPay: basicSalary,
+        startDate: emp.startDate ? emp.startDate.toISOString().slice(0, 10) : null,
+        endDate: emp.endDate ? emp.endDate.toISOString().slice(0, 10) : null,
         bankName: emp.bankName || '', bankCode: emp.bankCode || '', bankBranchCode: emp.bankBranchCode || '', bankAccount,
       };
     });

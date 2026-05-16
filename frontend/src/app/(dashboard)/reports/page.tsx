@@ -202,6 +202,18 @@ async function runCpfForRun(runId: string, period: string) {
   URL.revokeObjectURL(url);
 }
 
+async function fetchPayrollBreakdownData(runId: string) {
+  const [psData, empData] = await Promise.all([
+    apiFetch(`/payroll/runs/${runId}/payslips`),
+    apiFetch('/employees?limit=500'),
+  ]);
+  const payslips: any[] = psData.payslips ?? psData ?? [];
+  const employees: any[] = empData.employees ?? empData ?? [];
+  const empMap: Record<string, any> = {};
+  for (const e of employees) empMap[e.id] = e;
+  return payslips.map(ps => ({ ...ps, employeeName: empMap[ps.employeeId]?.fullName ?? ps.employeeId, employeeCode: empMap[ps.employeeId]?.employeeCode ?? '—' }));
+}
+
 async function runSdlReport() {
   const data = await apiFetch('/payroll/runs?limit=10&status=FINALISED');
   const runs = data.runs ?? [];
@@ -221,8 +233,120 @@ async function runSdlReport() {
   );
 }
 
+// ── Payroll Breakdown Modal ───────────────────────────────────────────────────
+function PayrollBreakdownModal({ runId, period, onClose, onToast }: { runId: string; period: string; onClose: () => void; onToast: (m: string, t: 'ok'|'err') => void }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchPayrollBreakdownData(runId)
+      .then(setRows)
+      .catch(e => onToast(e.message || 'Failed to load breakdown', 'err'))
+      .finally(() => setLoading(false));
+  }, [runId]);
+
+  const fmt = (v: number | null | undefined) => v == null ? '—' : `$${Number(v).toFixed(2)}`;
+
+  const handleCsv = () => {
+    downloadCsv(`payroll-breakdown-${period}.csv`,
+      ['Employee Code', 'Full Name', 'Basic Salary (OW)', 'Gross Pay', 'Employee CPF', 'Employer CPF', 'SDL', 'FWL', 'NPL Days', 'NPL Deduction', 'Govt-Paid Days', 'Govt-Paid Amount', 'Net Pay', 'YTD Gross', 'YTD Employee CPF'],
+      rows.map(r => [r.employeeCode, r.employeeName, r.basicSalary, r.grossPay, r.employeeCpf, r.employerCpf, r.sdl, r.fwl, r.nplDays, r.nplDeduction, r.govtPaidDays, r.govtPaidAmount, r.netPay, r.ytdGross, r.ytdEmployeeCpf])
+    );
+    onToast('Payroll breakdown CSV downloaded', 'ok');
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+      <div className="w-full max-w-6xl bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100 flex-shrink-0">
+          <div>
+            <h2 className="text-base font-black text-slate-900 tracking-tighter">Payroll Breakdown — {period}</h2>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">All payroll calculations per employee (Singapore MOM/CPF/EA)</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={handleCsv} disabled={loading || rows.length === 0}
+              className="px-5 py-2 bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-700 disabled:opacity-50 transition-all">
+              Download CSV
+            </button>
+            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">✕</button>
+          </div>
+        </div>
+
+        {/* Summary pills */}
+        {!loading && rows.length > 0 && (() => {
+          const tot = rows.reduce((a, r) => ({
+            gross: a.gross + r.grossPay,
+            net: a.net + r.netPay,
+            empCpf: a.empCpf + r.employeeCpf,
+            emplrCpf: a.emplrCpf + r.employerCpf,
+            sdl: a.sdl + r.sdl,
+          }), { gross: 0, net: 0, empCpf: 0, emplrCpf: 0, sdl: 0 });
+          return (
+            <div className="flex flex-wrap gap-3 px-8 py-4 border-b border-slate-50 bg-slate-50/50 flex-shrink-0">
+              {[
+                { label: 'Total Gross', value: fmt(tot.gross), color: 'text-slate-700' },
+                { label: 'Total Net', value: fmt(tot.net), color: 'text-emerald-700' },
+                { label: 'Employee CPF', value: fmt(tot.empCpf), color: 'text-indigo-700' },
+                { label: 'Employer CPF', value: fmt(tot.emplrCpf), color: 'text-purple-700' },
+                { label: 'SDL', value: fmt(tot.sdl), color: 'text-amber-700' },
+                { label: 'Employees', value: String(rows.length), color: 'text-slate-700' },
+              ].map(s => (
+                <div key={s.label} className="px-4 py-2 bg-white rounded-xl border border-slate-100 text-center">
+                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{s.label}</p>
+                  <p className={`text-xs font-black ${s.color}`}>{s.value}</p>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
+        {/* Table */}
+        <div className="overflow-auto flex-1">
+          {loading ? (
+            <div className="flex items-center justify-center h-40 text-slate-400 text-sm font-bold">Loading…</div>
+          ) : rows.length === 0 ? (
+            <div className="flex items-center justify-center h-40 text-slate-400 text-sm font-bold">No payslips found for this run</div>
+          ) : (
+            <table className="w-full text-left border-collapse text-[11px]">
+              <thead className="sticky top-0 bg-slate-50 border-b border-slate-100 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                <tr>
+                  {['Code', 'Employee', 'Basic Salary (OW)', 'Gross Pay', 'Emp CPF', 'Emplr CPF', 'SDL', 'FWL', 'NPL Days', 'NPL Deduct', 'Govt Days', 'Govt Amt', 'Net Pay', 'YTD Gross', 'YTD Emp CPF'].map(h => (
+                    <th key={h} className="px-4 py-3 whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {rows.map(r => (
+                  <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-4 py-3 font-black text-slate-500 whitespace-nowrap">{r.employeeCode}</td>
+                    <td className="px-4 py-3 font-bold text-slate-800 whitespace-nowrap">{r.employeeName}</td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-600">{fmt(r.basicSalary)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-700 font-bold">{fmt(r.grossPay)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-indigo-600">{fmt(r.employeeCpf)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-purple-600">{fmt(r.employerCpf)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-amber-600">{fmt(r.sdl)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-400">{r.fwl > 0 ? fmt(r.fwl) : '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono text-rose-500">{r.nplDays > 0 ? r.nplDays : '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono text-rose-500">{r.nplDeduction > 0 ? fmt(r.nplDeduction) : '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono text-teal-600">{r.govtPaidDays > 0 ? r.govtPaidDays : '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono text-teal-600">{r.govtPaidAmount > 0 ? fmt(r.govtPaidAmount) : '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono font-black text-emerald-700">{fmt(r.netPay)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-500">{fmt(r.ytdGross)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-500">{fmt(r.ytdEmployeeCpf)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Report definitions ────────────────────────────────────────────────────────
-type ReportKey = 'cpf' | 'iras' | 'giro' | 'leave' | 'workforce' | 'attrition' | 'mom' | 'sdl' | 'variance' | 'custom';
+type ReportKey = 'cpf' | 'iras' | 'giro' | 'leave' | 'workforce' | 'attrition' | 'mom' | 'sdl' | 'variance' | 'payroll-breakdown' | 'custom';
 
 interface ReportDef {
   key: ReportKey;
@@ -236,16 +360,17 @@ interface ReportDef {
 }
 
 const REPORTS: ReportDef[] = [
-  { key: 'cpf',       name: 'CPF / SDL / FWL Statutory Report',  category: 'Statutory',  icon: '◆', freq: 'Monthly',    badge: 'MOM Required',  needsRunSelector: true, runSelectorTitle: 'Select Payroll Run — CPF e-Submit' },
-  { key: 'iras',      name: 'IRAS AIS / IR8A Annual Filing',      category: 'Statutory',  icon: '◆', freq: 'Annual',     badge: 'IRAS Required' },
-  { key: 'giro',      name: 'Bank GIRO Reconciliation',           category: 'Financial',  icon: '◫', freq: 'Monthly',    badge: '',              needsRunSelector: true, runSelectorTitle: 'Select Payroll Run — Bank GIRO' },
-  { key: 'leave',     name: 'Leave Liability Report',             category: 'Workforce',  icon: '◌', freq: 'Monthly',    badge: '' },
-  { key: 'workforce', name: 'Executive Workforce Dashboard',      category: 'Analytics',  icon: '▣', freq: 'Real-time',  badge: 'SA Only' },
-  { key: 'attrition', name: 'Attrition & Workforce Analytics',    category: 'Analytics',  icon: '▣', freq: 'Quarterly',  badge: '' },
-  { key: 'mom',       name: 'MOM Headcount Report',               category: 'Statutory',  icon: '◆', freq: 'Annual',     badge: 'MOM Required' },
-  { key: 'sdl',       name: 'Training & SDL Analytics',           category: 'Training',   icon: '◑', freq: 'Monthly',    badge: '' },
-  { key: 'variance',  name: 'Payroll Variance Report',            category: 'Financial',  icon: '◫', freq: 'Per Run',    badge: '' },
-  { key: 'custom',    name: 'Custom Report Builder',              category: 'Analytics',  icon: '▤', freq: 'On-demand',  badge: 'Premium' },
+  { key: 'cpf',               name: 'CPF / SDL / FWL Statutory Report',          category: 'Statutory',  icon: '◆', freq: 'Monthly',    badge: 'MOM Required',  needsRunSelector: true, runSelectorTitle: 'Select Payroll Run — CPF e-Submit' },
+  { key: 'iras',              name: 'IRAS AIS / IR8A Annual Filing',              category: 'Statutory',  icon: '◆', freq: 'Annual',     badge: 'IRAS Required' },
+  { key: 'giro',              name: 'Bank GIRO Reconciliation',                   category: 'Financial',  icon: '◫', freq: 'Monthly',    badge: '',              needsRunSelector: true, runSelectorTitle: 'Select Payroll Run — Bank GIRO' },
+  { key: 'payroll-breakdown', name: 'Payroll Calculation Breakdown',              category: 'Financial',  icon: '◫', freq: 'Per Run',    badge: 'Full Detail',   needsRunSelector: true, runSelectorTitle: 'Select Payroll Run — Breakdown Report' },
+  { key: 'leave',             name: 'Leave Liability Report',                     category: 'Workforce',  icon: '◌', freq: 'Monthly',    badge: '' },
+  { key: 'workforce',         name: 'Executive Workforce Dashboard',              category: 'Analytics',  icon: '▣', freq: 'Real-time',  badge: 'SA Only' },
+  { key: 'attrition',         name: 'Attrition & Workforce Analytics',            category: 'Analytics',  icon: '▣', freq: 'Quarterly',  badge: '' },
+  { key: 'mom',               name: 'MOM Headcount Report',                       category: 'Statutory',  icon: '◆', freq: 'Annual',     badge: 'MOM Required' },
+  { key: 'sdl',               name: 'Training & SDL Analytics',                   category: 'Training',   icon: '◑', freq: 'Monthly',    badge: '' },
+  { key: 'variance',          name: 'Payroll Variance Report',                    category: 'Financial',  icon: '◫', freq: 'Per Run',    badge: '' },
+  { key: 'custom',            name: 'Custom Report Builder',                      category: 'Analytics',  icon: '▤', freq: 'On-demand',  badge: 'Premium' },
 ];
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -344,10 +469,16 @@ export default function ReportsPage() {
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
   const [runSelector, setRunSelector] = useState<{ key: ReportKey; title: string } | null>(null);
   const [customOpen, setCustomOpen] = useState(false);
+  const [breakdownModal, setBreakdownModal] = useState<{ runId: string; period: string } | null>(null);
 
   const showToast = (msg: string, type: 'ok' | 'err') => setToast({ msg, type });
 
   const execute = async (key: ReportKey, runId?: string, period?: string) => {
+    if (key === 'payroll-breakdown') {
+      setBreakdownModal({ runId: runId!, period: period! });
+      setLastRun(p => ({ ...p, [key]: new Date().toLocaleDateString('en-SG') }));
+      return;
+    }
     setRunning(key);
     try {
       switch (key) {
@@ -492,6 +623,16 @@ export default function ReportsPage() {
       {customOpen && (
         <CustomReportModal
           onClose={() => setCustomOpen(false)}
+          onToast={showToast}
+        />
+      )}
+
+      {/* Payroll Breakdown Modal */}
+      {breakdownModal && (
+        <PayrollBreakdownModal
+          runId={breakdownModal.runId}
+          period={breakdownModal.period}
+          onClose={() => setBreakdownModal(null)}
           onToast={showToast}
         />
       )}

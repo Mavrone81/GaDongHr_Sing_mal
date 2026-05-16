@@ -52,6 +52,7 @@ const mockLineItemCreateMany = jest.fn();
 const mockPayslipDeleteMany = jest.fn();
 const mockPayslipCreateMany = jest.fn();
 const mockPayslipUpsert = jest.fn().mockResolvedValue({});
+const mockPayslipFindMany = jest.fn().mockResolvedValue([]);
 const mockCpfRateFindMany = jest.fn();
 const mockSdlConfigFindFirst = jest.fn();
 const mockLineItemFindMany = jest.fn();
@@ -72,7 +73,7 @@ jest.mock('@prisma/client', () => ({
       createMany: mockLineItemCreateMany,
       findMany: mockLineItemFindMany,
     },
-    payslip: { deleteMany: mockPayslipDeleteMany, createMany: mockPayslipCreateMany, upsert: mockPayslipUpsert },
+    payslip: { deleteMany: mockPayslipDeleteMany, createMany: mockPayslipCreateMany, upsert: mockPayslipUpsert, findMany: mockPayslipFindMany },
     cpfRate: { findMany: mockCpfRateFindMany },
     sdlConfig: { findFirst: mockSdlConfigFindFirst },
     payrollComponent: { findMany: jest.fn().mockResolvedValue([]) },
@@ -262,5 +263,85 @@ describe('D) POST /payroll/runs/:id/compute — CPF + SDL integration', () => {
       .post('/payroll/runs/nonexistent/compute')
       .send({ employees });
     expect(res.status).toBe(404);
+  });
+
+  // ── Start/end date eligibility filter (EA compliance) ──────────────────────
+  test('400 — excludes all employees whose startDate is after period end', async () => {
+    // Period is 2026-05; employee starts 2026-06-01 — not yet started
+    const futureStartEmp = [{ ...employees[0], startDate: '2026-06-01', endDate: null }];
+    const res = await request(app)
+      .post('/payroll/runs/run-001/compute')
+      .send({ employees: futureStartEmp });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/No active employees/i);
+  });
+
+  test('200 — includes employees whose startDate is within or before period', async () => {
+    // Employee starts 2026-05-16 (mid-month) — still eligible for May payroll
+    const midMonthStart = [{ ...employees[0], startDate: '2026-05-16', endDate: null }];
+    const res = await request(app)
+      .post('/payroll/runs/run-001/compute')
+      .send({ employees: midMonthStart });
+    expect(res.status).toBe(200);
+  });
+
+  test('400 — excludes employees terminated before period start', async () => {
+    // Period is 2026-05; employee ended 2026-04-30 — already gone
+    const terminatedEmp = [{ ...employees[0], startDate: '2025-01-01', endDate: '2026-04-30' }];
+    const res = await request(app)
+      .post('/payroll/runs/run-001/compute')
+      .send({ employees: terminatedEmp });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/No active employees/i);
+  });
+
+  test('200 — mixes eligible and ineligible; only eligible are processed', async () => {
+    const mixed = [
+      { ...employees[0], employeeId: 'emp-eligible', startDate: '2025-01-01', endDate: null },
+      { ...employees[0], employeeId: 'emp-future',   startDate: '2026-06-01', endDate: null },
+    ];
+    const res = await request(app)
+      .post('/payroll/runs/run-001/compute')
+      .send({ employees: mixed });
+    expect(res.status).toBe(200);
+    // payslip.upsert should have been called once (only the eligible employee)
+    expect(mockPayslipUpsert).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── E-extended) GET /payroll/runs/:id/payslips — full breakdown fields ────────
+describe('E-extended) GET /payroll/runs/:id/payslips — breakdown field coverage', () => {
+  test('200 — returns all breakdown fields including SDL, NPL, govtPaid, YTD', async () => {
+    mockRunFindUnique.mockResolvedValue({
+      id: 'run-001', period: '2026-05', status: 'FINALISED',
+    });
+    // Simulate a payslip with all encrypted fields set
+    const enc = (v) => String(v); // mock encrypt = identity
+    mockPayslipFindMany.mockResolvedValue([{
+      id: 'ps-001', employeeId: 'emp-001', period: '2026-05',
+      basicSalaryEnc: enc('5000'), grossPayEnc: enc('5000'), netPayEnc: enc('3850'),
+      employeeCpfEnc: enc('1000'), employerCpfEnc: enc('850'),
+      sdlAmountEnc: enc('11.25'), fwlAmountEnc: null,
+      ytdGrossEnc: enc('5000'), ytdEmployeeCpfEnc: enc('1000'), ytdEmployerCpfEnc: enc('850'),
+      nplDays: 2, nplDeductionEnc: enc('384.62'),
+      govtPaidDays: 0, govtPaidAmountEnc: null,
+      isPublished: false,
+    }]);
+
+    const res = await request(app).get('/payroll/runs/run-001/payslips');
+
+    expect(res.status).toBe(200);
+    const ps = res.body.payslips[0];
+    expect(ps.basicSalary).toBe(5000);
+    expect(ps.grossPay).toBe(5000);
+    expect(ps.netPay).toBe(3850);
+    expect(ps.employeeCpf).toBe(1000);
+    expect(ps.employerCpf).toBe(850);
+    expect(ps.sdl).toBe(11.25);
+    expect(ps.nplDays).toBe(2);
+    expect(ps.nplDeduction).toBeCloseTo(384.62);
+    expect(ps.govtPaidDays).toBe(0);
+    expect(ps.ytdGross).toBe(5000);
+    expect(ps.ytdEmployeeCpf).toBe(1000);
   });
 });

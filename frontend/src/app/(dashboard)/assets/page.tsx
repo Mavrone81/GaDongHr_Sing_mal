@@ -194,11 +194,11 @@ function ManageModal({ asset, onClose, onUpdated }: { asset: Asset; onClose: () 
         {/* Tabs */}
         <div className="flex border-b border-slate-100 bg-slate-50/50">
           {([
-            { key: 'assign', label: 'Assign', show: asset.status === 'AVAILABLE' },
-            { key: 'return', label: 'Return', show: asset.status === 'ASSIGNED' },
-            { key: 'status', label: 'Change Status' },
-            { key: 'history', label: 'History' },
-          ] as const).filter(t => t.show !== false).map(t => (
+            { key: 'assign' as const, label: 'Assign', show: asset.status === 'AVAILABLE' },
+            { key: 'return' as const, label: 'Return', show: asset.status === 'ASSIGNED' },
+            { key: 'status' as const, label: 'Change Status', show: true },
+            { key: 'history' as const, label: 'History', show: true },
+          ]).filter(t => t.show !== false).map(t => (
             <button key={t.key} onClick={() => { setTab(t.key); setErr(''); }}
               className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${tab === t.key ? 'border-teal-500 text-teal-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
               {t.label}

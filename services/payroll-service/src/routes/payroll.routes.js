@@ -83,15 +83,25 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
 
     if (!employees || employees.length === 0) return res.status(400).json({ error: 'No active employees found for payroll computation' });
 
-    const cpfRates = await prisma.cpfRate.findMany({ where: { isActive: true } });
-    const sdlConfig = await prisma.sdlConfig.findFirst({ where: { isActive: true } });
-    const savedLineItems = await prisma.payrollLineItem.findMany({ where: { runId: run.id } });
-
-    // ── Auto-fetch leave data for this pay period ─────────────────────────────
+    // ── Derive period boundaries first (needed for employee eligibility filter) ─
     const [periodYear, periodMonth] = run.period.split('-').map(Number);
     const periodStart = new Date(periodYear, periodMonth - 1, 1);
     const periodEnd   = new Date(periodYear, periodMonth, 0); // last day of month
     const daysInMonth = periodEnd.getDate();
+
+    // Exclude employees whose employment hasn't started by the period end,
+    // or whose employment ended before the period start (EA: pay only covers actual service days)
+    employees = employees.filter(emp => {
+      if (emp.startDate && new Date(emp.startDate) > periodEnd) return false;
+      if (emp.endDate   && new Date(emp.endDate)   < periodStart) return false;
+      return true;
+    });
+
+    if (employees.length === 0) return res.status(400).json({ error: 'No active employees found for payroll computation' });
+
+    const cpfRates = await prisma.cpfRate.findMany({ where: { isActive: true } });
+    const sdlConfig = await prisma.sdlConfig.findFirst({ where: { isActive: true } });
+    const savedLineItems = await prisma.payrollLineItem.findMany({ where: { runId: run.id } });
 
     // Fetch all approved leave applications in the period from leave service
     const LEAVE_SERVICE_URL = process.env.LEAVE_SERVICE_URL || 'http://leave-service:4004';
@@ -467,14 +477,25 @@ router.get('/runs/:id/payslips', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
     const run = await prisma.payrollRun.findUnique({ where: { id: req.params.id } });
     if (!run) return res.status(404).json({ error: 'Run not found' });
     const payslips = await prisma.payslip.findMany({ where: { runId: req.params.id }, orderBy: { employeeId: 'asc' } });
+    const dec = (enc) => { try { return enc ? parseFloat(decrypt(enc)) || 0 : 0; } catch { return 0; } };
     const result = payslips.map(ps => ({
       id: ps.id,
       employeeId: ps.employeeId,
       period: ps.period,
-      grossPay: (() => { try { return parseFloat(decrypt(ps.grossPayEnc)) || 0; } catch { return 0; } })(),
-      netPay: (() => { try { return parseFloat(decrypt(ps.netPayEnc)) || 0; } catch { return 0; } })(),
-      employeeCpf: (() => { try { return parseFloat(decrypt(ps.employeeCpfEnc)) || 0; } catch { return 0; } })(),
-      employerCpf: (() => { try { return parseFloat(decrypt(ps.employerCpfEnc)) || 0; } catch { return 0; } })(),
+      basicSalary: dec(ps.basicSalaryEnc),
+      grossPay: dec(ps.grossPayEnc),
+      netPay: dec(ps.netPayEnc),
+      employeeCpf: dec(ps.employeeCpfEnc),
+      employerCpf: dec(ps.employerCpfEnc),
+      sdl: dec(ps.sdlAmountEnc),
+      fwl: dec(ps.fwlAmountEnc),
+      ytdGross: dec(ps.ytdGrossEnc),
+      ytdEmployeeCpf: dec(ps.ytdEmployeeCpfEnc),
+      ytdEmployerCpf: dec(ps.ytdEmployerCpfEnc),
+      nplDays: ps.nplDays ?? 0,
+      nplDeduction: dec(ps.nplDeductionEnc),
+      govtPaidDays: ps.govtPaidDays ?? 0,
+      govtPaidAmount: dec(ps.govtPaidAmountEnc),
       isPublished: ps.isPublished,
     }));
     res.json({ payslips: result, total: result.length, period: run.period });
