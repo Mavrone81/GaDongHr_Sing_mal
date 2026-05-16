@@ -3,21 +3,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { getMondayOf, getPeriodBounds, buildPeriodLog } from '@/lib/attendanceUtils';
+import type { ViewMode, AttendanceRecord, ApiRecord } from '@/lib/attendanceUtils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ClockState = 'idle' | 'camera' | 'capturing' | 'verifying' | 'success' | 'failed' | 'no_photo' | 'upload_photo';
-type ViewMode = 'work-week' | 'week' | 'bi-weekly' | 'month';
-
-interface AttendanceRecord {
-  date: string;       // display label
-  isoDate: string;    // YYYY-MM-DD
-  dayOfWeek: number;  // 0=Sun … 6=Sat
-  clockIn: string | null;
-  clockOut: string | null;
-  duration: string | null;
-  status: 'present' | 'half' | 'absent' | 'leave' | 'weekend';
-}
 
 // ─── Clock display ────────────────────────────────────────────────────────────
 
@@ -35,74 +26,6 @@ function LiveClock() {
       <p className="text-sm font-bold text-slate-400 mt-2 uppercase tracking-widest">{dateStr}</p>
     </div>
   );
-}
-
-// ─── Period helpers ────────────────────────────────────────────────────────────
-
-type ApiRecord = { date: string; clockIn?: string | null; clockOut?: string | null; hoursWorked?: number | null; status?: string };
-
-function getMondayOf(d: Date): Date {
-  const out = new Date(d);
-  const day = out.getDay();
-  out.setDate(out.getDate() - ((day + 6) % 7));
-  out.setHours(0, 0, 0, 0);
-  return out;
-}
-
-function getPeriodBounds(mode: ViewMode, offset: number): { start: Date; end: Date; label: string } {
-  const today = new Date();
-  const fmt = (d: Date) => d.toLocaleDateString('en-SG', { day: 'numeric', month: 'short' });
-
-  if (mode === 'work-week' || mode === 'week') {
-    const monday = getMondayOf(today);
-    monday.setDate(monday.getDate() + offset * 7);
-    const end = new Date(monday);
-    end.setDate(monday.getDate() + (mode === 'work-week' ? 4 : 6));
-    return { start: monday, end, label: `${fmt(monday)} – ${fmt(end)} ${end.getFullYear()}` };
-  }
-  if (mode === 'bi-weekly') {
-    const monday = getMondayOf(today);
-    monday.setDate(monday.getDate() + offset * 14);
-    const end = new Date(monday);
-    end.setDate(monday.getDate() + 13);
-    return { start: monday, end, label: `${fmt(monday)} – ${fmt(end)} ${end.getFullYear()}` };
-  }
-  // month
-  const d = new Date(today.getFullYear(), today.getMonth() + offset, 1);
-  const start = new Date(d.getFullYear(), d.getMonth(), 1);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-  return { start, end, label: start.toLocaleDateString('en-SG', { month: 'long', year: 'numeric' }) };
-}
-
-function buildPeriodLog(apiRecords: ApiRecord[], start: Date, end: Date): AttendanceRecord[] {
-  const recMap = new Map<string, ApiRecord>();
-  for (const r of apiRecords) recMap.set(r.date.slice(0, 10), r);
-
-  const fmtT = (iso: string | null | undefined) =>
-    iso ? new Date(iso).toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', hour12: true }) : null;
-
-  const rows: AttendanceRecord[] = [];
-  const cur = new Date(start);
-  while (cur <= end) {
-    const iso = cur.toISOString().slice(0, 10);
-    const dow = cur.getDay();
-    const label = cur.toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' });
-    const isWeekend = dow === 0 || dow === 6;
-    const rec = recMap.get(iso);
-
-    if (!rec) {
-      rows.push({ date: label, isoDate: iso, dayOfWeek: dow, clockIn: null, clockOut: null, duration: null, status: isWeekend ? 'weekend' : 'absent' });
-    } else {
-      const dur = rec.hoursWorked != null ? `${Math.floor(rec.hoursWorked)}h ${Math.round((rec.hoursWorked % 1) * 60)}m` : null;
-      let status: AttendanceRecord['status'] = 'present';
-      if (rec.status === 'HALF_DAY') status = 'half';
-      else if (rec.status === 'LEAVE') status = 'leave';
-      rows.push({ date: label, isoDate: iso, dayOfWeek: dow, clockIn: fmtT(rec.clockIn), clockOut: fmtT(rec.clockOut), duration: dur, status });
-    }
-    cur.setDate(cur.getDate() + 1);
-  }
-  return rows;
 }
 
 // ─── Employee self-service view ───────────────────────────────────────────────

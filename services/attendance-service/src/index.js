@@ -7,6 +7,7 @@ const morgan = require('morgan');
 const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
+const { haversineMetres, isLate, calcHoursWorked, calcOtHours } = require('./utils');
 
 const prisma = new PrismaClient();
 const app = express();
@@ -37,16 +38,6 @@ async function writeAudit({ entityType, entityId, entityName, action, actor, cha
   }
 }
 
-// ── Haversine distance (metres) ───────────────────────────────────────────────
-function haversineMetres(lat1, lng1, lat2, lng2) {
-  const R = 6371000;
-  const toRad = d => d * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
 
 // Returns { valid: bool, locationName: string|null } given employee + coordinates
 async function checkGeofence(employeeId, lat, lng) {
@@ -78,21 +69,16 @@ app.post('/attendance/clock-in', authenticate, async (req, res, next) => {
       return res.status(403).json({ error: 'Clock-in denied: you are outside your assigned work location(s). Contact HR if this is incorrect.' });
     }
 
-    // Late detection: after 09:15 SGT
-    const sgHour = parseInt(new Intl.DateTimeFormat('en-SG', { hour: 'numeric', hour12: false, timeZone: 'Asia/Singapore' }).format(now));
-    const sgMin  = parseInt(new Intl.DateTimeFormat('en-SG', { minute: 'numeric', timeZone: 'Asia/Singapore' }).format(now));
-    const isLate = sgHour > 9 || (sgHour === 9 && sgMin >= 15);
-
     const record = await prisma.attendanceRecord.upsert({
       where: { employeeId_date: { employeeId: empId, date: today } },
       create: {
         id: uuidv4(), employeeId: empId, date: today, clockIn: now,
-        status: isLate ? 'LATE' : 'PRESENT',
+        status: isLate(now) ? 'LATE' : 'PRESENT',
         clockInLat: latitude ?? null, clockInLng: longitude ?? null,
         withinGeofence: geo.valid, locationName: geo.locationName,
       },
       update: {
-        clockIn: now, status: isLate ? 'LATE' : 'PRESENT',
+        clockIn: now, status: isLate(now) ? 'LATE' : 'PRESENT',
         clockInLat: latitude ?? null, clockInLng: longitude ?? null,
         withinGeofence: geo.valid, locationName: geo.locationName,
       },
@@ -116,15 +102,15 @@ app.post('/attendance/clock-out', authenticate, async (req, res, next) => {
       return res.status(403).json({ error: 'Clock-out denied: you are outside your assigned work location(s). Contact HR if this is incorrect.' });
     }
 
-    const hoursWorked = (now - record.clockIn) / (1000 * 60 * 60);
-    const otHours = Math.max(0, hoursWorked - 8);
+    const hoursWorked = calcHoursWorked(record.clockIn, now);
+    const otHours = calcOtHours(hoursWorked);
 
     const updated = await prisma.attendanceRecord.update({
       where: { id: record.id },
       data: {
         clockOut: now,
-        hoursWorked: Math.round(hoursWorked * 100) / 100,
-        otHours: Math.round(otHours * 100) / 100,
+        hoursWorked,
+        otHours,
         clockOutLat: latitude ?? null, clockOutLng: longitude ?? null,
       },
     });
@@ -789,4 +775,9 @@ app.delete('/attendance/shifts/projects/:id/members/:memberId', authenticate, au
 });
 
 app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: err.message || 'Internal server error' }); });
-app.listen(PORT, () => console.log(`[attendance-service] Running on port ${PORT}`));
+
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`[attendance-service] Running on port ${PORT}`));
+}
+
+module.exports = app;
