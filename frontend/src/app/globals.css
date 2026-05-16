@@ -46,3 +46,9 @@
     @apply px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-all shadow-sm active:scale-[0.98];
   }
 }
+
+@keyframes navprogress {
+  0%   { transform: translateX(-100%); }
+  50%  { transform: translateX(0%); }
+  100% { transform: translateX(100%); }
+}

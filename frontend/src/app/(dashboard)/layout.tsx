@@ -209,6 +209,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [loading, user, cachedAdmin]);
 
+  // Navigation loading overlay — shown when user clicks a sidebar link
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [navTarget, setNavTarget] = useState('');
+  useEffect(() => {
+    // Pathname changed → destination page has mounted, hide overlay
+    setIsNavigating(false);
+  }, [pathname]);
+
   const authErrorBanner = null;
 
   const cachedRole = typeof window !== 'undefined' ? (localStorage.getItem('vorkhive_user_role') || '') : '';
@@ -241,6 +249,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex h-screen bg-slate-100 font-sans overflow-hidden selection:bg-indigo-100 selection:text-indigo-900 relative">
       {authErrorBanner}
+
+      {/* Navigation loading overlay */}
+      {isNavigating && (
+        <div className="fixed inset-0 z-[60] pointer-events-none">
+          {/* Thin progress bar at top */}
+          <div className="absolute top-0 left-0 right-0 h-0.5 bg-indigo-600/20 overflow-hidden">
+            <div className="h-full bg-indigo-500 w-3/5" style={{ animation: 'navprogress 1.2s ease-in-out infinite' }} />
+          </div>
+          {/* Content area overlay with destination label */}
+          <div className="absolute inset-y-0 left-64 right-0 flex flex-col items-center justify-center gap-4 bg-slate-50/80 backdrop-blur-[2px]">
+            <div className="flex flex-col items-center gap-3">
+              <div className="relative w-10 h-10">
+                <div className="absolute inset-0 border-[3px] border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                <div className="absolute inset-[5px] border-[2px] border-slate-200 border-t-indigo-400/60 rounded-full animate-spin [animation-direction:reverse] [animation-duration:0.5s]" />
+              </div>
+              {navTarget && (
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.35em]">
+                  Loading {navTarget}…
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── SIDEBAR ─────────────────────────────────────────────────────────── */}
       <aside className="w-64 bg-[#0a0f1e] flex flex-col z-50 shadow-2xl shadow-black/60 shrink-0 relative">
@@ -290,6 +322,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <Link
                       key={item.path}
                       href={item.path}
+                      onClick={() => {
+                        if (!isActive) {
+                          setIsNavigating(true);
+                          setNavTarget(item.name);
+                        }
+                      }}
                       className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[11px] font-bold tracking-wide transition-all duration-200 group relative ${
                         isActive
                           ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25'
