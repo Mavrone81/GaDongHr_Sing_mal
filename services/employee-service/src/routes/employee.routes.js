@@ -212,7 +212,7 @@ router.get('/', checkInternal, (req, res, next) => {
         orderBy: { employeeCode: 'asc' },
         skip: (Number(page) - 1) * Number(limit),
         take: Number(limit),
-        select: { id: true, employeeCode: true, fullName: true, preferredName: true, department: true, designation: true, workEmail: true, employmentType: true, startDate: true, isActive: true, citizenshipStatus: true, passType: true },
+        select: { id: true, employeeCode: true, fullName: true, preferredName: true, department: true, designation: true, workEmail: true, employmentType: true, startDate: true, isActive: true, citizenshipStatus: true, passType: true, profilePhotoUrl: true },
       }),
       prisma.employee.count({ where }),
     ]);

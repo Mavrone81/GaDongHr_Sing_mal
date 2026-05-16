@@ -18,6 +18,7 @@ interface Employee {
   isActive: boolean;
   citizenshipStatus: string;
   workEmail?: string;
+  profilePhotoUrl?: string | null;
 }
 
 interface ParsedRow { [key: string]: string }
@@ -86,7 +87,8 @@ export default function EmployeeDirectoryPage() {
 
   // Provision identity state
   const [provisionOpen, setProvisionOpen] = useState(false);
-  const [provisionEmpId, setProvisionEmpId] = useState('');
+  const [templateEmpId, setTemplateEmpId] = useState('');
+  const [templatePreview, setTemplatePreview] = useState<{ department: string; designation: string; employmentType: string; citizenshipStatus: string; basicSalary?: string } | null>(null);
   const [provisionEmail, setProvisionEmail] = useState('');
   const [provisionName, setProvisionName] = useState('');
   const [provisionPassword, setProvisionPassword] = useState('');
@@ -96,16 +98,21 @@ export default function EmployeeDirectoryPage() {
   const [provisionResult, setProvisionResult] = useState<{ ok: boolean; message: string; userId?: string } | null>(null);
   const [sendingInvite, setSendingInvite] = useState(false);
   const [inviteSent, setInviteSent] = useState(false);
+  const [allEmployeesForDropdown, setAllEmployeesForDropdown] = useState<Employee[]>([]);
 
   // Applications state
   const [applicationsOpen, setApplicationsOpen] = useState(false);
-  type Application = { id: string; fullName: string; preferredName?: string; email: string; userId: string; gender?: string; dateOfBirth?: string; nationality?: string; nricFin?: string; personalPhone?: string; homeAddress?: string; department?: string; designation?: string; employmentType?: string; startDate?: string; bankName?: string; bankAccount?: string; notes?: string; status: string; createdAt: string };
+  type Application = { id: string; fullName: string; preferredName?: string; email: string; userId: string; gender?: string; dateOfBirth?: string; nationality?: string; nricFin?: string; personalPhone?: string; homeAddress?: string; department?: string; designation?: string; employmentType?: string; startDate?: string; bankName?: string; bankAccount?: string; basicSalary?: string; notes?: string; status: string; createdAt: string };
   const [applications, setApplications] = useState<Application[]>([]);
   const [pendingInvites, setPendingInvites] = useState<{ id: string; name: string; email: string; inviteExpiry: string; createdAt: string }[]>([]);
   const [appLoading, setAppLoading] = useState(false);
   const [approvingId, setApprovingId] = useState('');
   const [retriggeringId, setRetriggeringId] = useState('');
   const [reviewingApp, setReviewingApp] = useState<Application | null>(null);
+  const [hrFillUser, setHrFillUser] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [hrFillData, setHrFillData] = useState<Record<string, string>>({});
+  const [hrFillSubmitting, setHrFillSubmitting] = useState(false);
+  const [hrFillError, setHrFillError] = useState('');
 
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
@@ -146,6 +153,13 @@ export default function EmployeeDirectoryPage() {
     const t = setTimeout(fetchEmployees, 300);
     return () => clearTimeout(t);
   }, [fetchEmployees]);
+
+  // Preload full employee list for the provision dropdown — runs once on mount
+  useEffect(() => {
+    apiFetch('/employees?limit=500&isActive=true')
+      .then(d => setAllEmployeesForDropdown(d.employees ?? []))
+      .catch(() => {});
+  }, []);
 
   // Load pending count on mount so badge shows without clicking
   useEffect(() => { loadApplications(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -193,13 +207,33 @@ export default function EmployeeDirectoryPage() {
 
   const resetProvision = () => {
     setProvisionOpen(false);
-    setProvisionEmpId('');
+    setTemplateEmpId('');
+    setTemplatePreview(null);
     setProvisionEmail('');
     setProvisionName('');
     setProvisionPassword('');
     setProvisionShowPass(false);
     setProvisionRole('EMPLOYEE');
     setProvisionResult(null);
+    // allEmployeesForDropdown intentionally kept — preloaded once at mount
+  };
+
+  const openProvision = () => setProvisionOpen(true);
+
+  const onTemplateSelect = async (empId: string) => {
+    setTemplateEmpId(empId);
+    setTemplatePreview(null);
+    if (!empId) return;
+    try {
+      const emp = await apiFetch(`/employees/${empId}`);
+      setTemplatePreview({
+        department: emp.department,
+        designation: emp.designation,
+        employmentType: emp.employmentType,
+        citizenshipStatus: emp.citizenshipStatus,
+        basicSalary: emp.basicSalary,
+      });
+    } catch { /* non-critical */ }
   };
 
   const submitProvision = async () => {
@@ -207,19 +241,40 @@ export default function EmployeeDirectoryPage() {
     setProvisioning(true);
     setProvisionResult(null);
     try {
-      const data = await apiFetch('/users', {
+      // Step 1: Create login account
+      const res = await fetch(`${apiBaseUrl}/users`, {
         method: 'POST',
-        body: JSON.stringify({
-          email: provisionEmail,
-          password: provisionPassword,
-          name: provisionName,
-          role: provisionRole,
-          employeeId: provisionEmpId || undefined,
-        }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAccessToken()}` },
+        body: JSON.stringify({ email: provisionEmail, password: provisionPassword, name: provisionName, role: provisionRole }),
       });
+      const data = await res.json();
+      if (!res.ok) {
+        setProvisionResult({ ok: false, message: data.error || 'Creation failed.' });
+        return;
+      }
+
+      // Step 2: If a template was selected, create a pre-filled application
+      // so the employee appears in Pending HR Verification immediately.
+      if (templateEmpId && templatePreview) {
+        await fetch(`${apiBaseUrl}/employees/applications/prefill`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAccessToken()}` },
+          body: JSON.stringify({
+            userId: data.id,
+            email: provisionEmail,
+            fullName: provisionName,
+            department: templatePreview.department,
+            designation: templatePreview.designation,
+            employmentType: templatePreview.employmentType,
+            citizenshipStatus: templatePreview.citizenshipStatus,
+            basicSalary: templatePreview.basicSalary,
+          }),
+        }).catch(() => {}); // non-critical — login was already created
+      }
+
       setProvisionResult({ ok: true, message: `Login account created for ${provisionName}`, userId: data.id });
-    } catch (e: any) {
-      setProvisionResult({ ok: false, message: e.message });
+    } catch {
+      setProvisionResult({ ok: false, message: 'Network error. Please try again.' });
     } finally {
       setProvisioning(false);
     }
@@ -235,6 +290,25 @@ export default function EmployeeDirectoryPage() {
     } finally {
       setSendingInvite(false);
     }
+  };
+
+  const submitHrFill = async () => {
+    if (!hrFillUser || !hrFillData.fullName) return;
+    setHrFillSubmitting(true);
+    setHrFillError('');
+    try {
+      const res = await fetch(`${apiBaseUrl}/employees/applications/prefill`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAccessToken()}` },
+        body: JSON.stringify({ userId: hrFillUser.id, email: hrFillUser.email, ...hrFillData }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setHrFillError(data.error || 'Submission failed.'); return; }
+      setHrFillUser(null);
+      setHrFillData({});
+      await loadApplications();
+    } catch { setHrFillError('Network error. Please try again.'); }
+    finally { setHrFillSubmitting(false); }
   };
 
   const loadApplications = async () => {
@@ -459,7 +533,7 @@ export default function EmployeeDirectoryPage() {
           </button>
 
           <button
-            onClick={() => { setProvisionResult(null); setInviteSent(false); setProvisionOpen(true); }}
+            onClick={() => { setProvisionResult(null); setInviteSent(false); openProvision(); }}
             className="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-indigo-700 shadow-xl shadow-indigo-500/30 transition-all active:scale-95 flex items-center gap-3"
           >
             <span>+</span> Provision Identity
@@ -503,9 +577,16 @@ export default function EmployeeDirectoryPage() {
                 <tr key={emp.id} className="group hover:bg-slate-50/50 transition-all duration-300">
                   <td className="px-10 py-6">
                     <div className="flex items-center gap-5">
-                      <div className="h-14 w-14 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center text-xs font-black text-indigo-400 shadow-xl group-hover:scale-110 transition-transform duration-500 relative overflow-hidden">
-                        <div className="absolute inset-0 bg-indigo-600/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        {emp.fullName.split(' ').map(n => n[0]).join('')}
+                      <div className="h-14 w-14 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center text-xs font-black text-indigo-400 shadow-xl group-hover:scale-110 transition-transform duration-500 relative overflow-hidden flex-shrink-0">
+                        {emp.profilePhotoUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={emp.profilePhotoUrl} alt={emp.fullName} className="absolute inset-0 w-full h-full object-cover" />
+                        ) : (
+                          <>
+                            <div className="absolute inset-0 bg-indigo-600/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            {emp.fullName.split(' ').map(n => n[0]).join('')}
+                          </>
+                        )}
                       </div>
                       <div className="flex flex-col">
                         <span className="text-sm font-black text-slate-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{emp.fullName}</span>
@@ -585,30 +666,55 @@ export default function EmployeeDirectoryPage() {
 
             <div className="flex flex-col gap-5 p-8">
 
-              {/* Link to employee */}
+              {/* Copy from Employee (Template) */}
               <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Link to Employee</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Copy from Employee <span className="text-indigo-400">(Template)</span></label>
                 <select
-                  value={provisionEmpId}
-                  onChange={e => {
-                    const emp = employees.find(em => em.id === e.target.value);
-                    setProvisionEmpId(e.target.value);
-                    if (emp) {
-                      setProvisionName(emp.fullName);
-                      setProvisionEmail(emp.workEmail || '');
-                    }
-                  }}
+                  value={templateEmpId}
+                  onChange={e => onTemplateSelect(e.target.value)}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all appearance-none"
                 >
-                  <option value="">— Standalone account (no employee record) —</option>
-                  {employees.map(emp => (
-                    <option key={emp.id} value={emp.id}>{emp.fullName} · {emp.employeeCode}</option>
+                  <option value="">— Standalone account only (no employee record) —</option>
+                  {allEmployeesForDropdown.length === 0 && (
+                    <option disabled value="">Loading…</option>
+                  )}
+                  {allEmployeesForDropdown.map(emp => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.fullName} · {emp.employeeCode} · {emp.department}
+                    </option>
                   ))}
                 </select>
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                  When linked, this login inherits the employee's contractual details — leave entitlements, compliance status, payroll &amp; attendance records
+                  Copies department, designation &amp; employment type — creates a new independent employee record.
                 </p>
               </div>
+
+              {/* Template preview */}
+              {templateEmpId && templatePreview && (
+                <div className="flex flex-col gap-2 px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+                  <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Will copy from template</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                    {[
+                      ['Department', templatePreview.department],
+                      ['Designation', templatePreview.designation],
+                      ['Employment Type', templatePreview.employmentType?.replace(/_/g, ' ')],
+                      ['Citizenship', templatePreview.citizenshipStatus],
+                    ].map(([label, val]) => (
+                      <div key={label}>
+                        <p className="text-[8px] font-black text-indigo-400 uppercase tracking-widest">{label}</p>
+                        <p className="text-[10px] font-bold text-indigo-800">{val || '—'}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {templateEmpId && !templatePreview && (
+                <div className="flex items-center gap-2 px-4 py-2 text-[10px] font-bold text-slate-400">
+                  <span className="w-3 h-3 border-2 border-slate-200 border-t-slate-400 rounded-full animate-spin" />
+                  Loading template data…
+                </div>
+              )}
 
               {/* Display name */}
               <div className="flex flex-col gap-2">
@@ -664,9 +770,13 @@ export default function EmployeeDirectoryPage() {
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all appearance-none"
                 >
                   <option value="EMPLOYEE">Employee</option>
+                  <option value="LINE_MANAGER">Line Manager</option>
+                  <option value="RECRUITER">Recruiter</option>
+                  <option value="HR_MANAGER">HR Manager</option>
                   <option value="HR_ADMIN">HR Admin</option>
                   <option value="PAYROLL_OFFICER">Payroll Officer</option>
-                  <option value="ADMIN">Admin</option>
+                  <option value="FINANCE_ADMIN">Finance Admin</option>
+                  <option value="IT_ADMIN">IT Admin</option>
                   <option value="SUPER_ADMIN">Super Admin</option>
                 </select>
               </div>
@@ -707,9 +817,10 @@ export default function EmployeeDirectoryPage() {
                   <button
                     onClick={submitProvision}
                     disabled={provisioning || !provisionEmail || !provisionPassword || !provisionName}
-                    className="flex-1 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                    className="flex-1 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                   >
-                    {provisioning ? 'Provisioning…' : 'Create Account'}
+                    {provisioning && <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+                    {provisioning ? 'Provisioning…' : templateEmpId ? 'Create Account + Pre-fill Profile' : 'Create Account'}
                   </button>
                 )}
               </div>
@@ -837,6 +948,125 @@ export default function EmployeeDirectoryPage() {
         </div>
       )}
 
+      {/* HR Fill-on-Behalf Modal */}
+      {hrFillUser && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100 flex-shrink-0">
+              <div>
+                <h2 className="text-lg font-black text-slate-900 tracking-tighter">Fill on Behalf</h2>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">{hrFillUser.name} · {hrFillUser.email}</p>
+              </div>
+              <button onClick={() => { setHrFillUser(null); setHrFillData({}); setHrFillError(''); }} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all text-lg">✕</button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 px-8 py-6 flex flex-col gap-6">
+              {/* Personal */}
+              <section>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">Personal Details</p>
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    { key: 'fullName', label: 'Full Legal Name', required: true },
+                    { key: 'preferredName', label: 'Preferred Name' },
+                    { key: 'nricFin', label: 'NRIC / FIN' },
+                    { key: 'dateOfBirth', label: 'Date of Birth', type: 'date' },
+                    { key: 'nationality', label: 'Nationality' },
+                    { key: 'personalPhone', label: 'Mobile' },
+                  ].map(f => (
+                    <div key={f.key}>
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">{f.label}{f.required && <span className="text-red-500 ml-0.5">*</span>}</label>
+                      <input
+                        type={f.type || 'text'}
+                        value={hrFillData[f.key] || ''}
+                        onChange={e => setHrFillData(p => ({ ...p, [f.key]: e.target.value }))}
+                        className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all"
+                        placeholder={f.required ? 'Required' : 'Optional'}
+                      />
+                    </div>
+                  ))}
+                  <div>
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Gender</label>
+                    <select value={hrFillData.gender || ''} onChange={e => setHrFillData(p => ({ ...p, gender: e.target.value }))} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-indigo-500 appearance-none">
+                      <option value="">— Select —</option>
+                      <option value="MALE">Male</option>
+                      <option value="FEMALE">Female</option>
+                      <option value="PREFER_NOT_TO_SAY">Prefer not to say</option>
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Home Address</label>
+                    <input type="text" value={hrFillData.homeAddress || ''} onChange={e => setHrFillData(p => ({ ...p, homeAddress: e.target.value }))} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all" placeholder="Block, Street, Unit, Postal Code" />
+                  </div>
+                </div>
+              </section>
+
+              {/* Employment */}
+              <section>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">Employment</p>
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    { key: 'department', label: 'Department' },
+                    { key: 'designation', label: 'Designation' },
+                    { key: 'startDate', label: 'Start Date', type: 'date' },
+                  ].map(f => (
+                    <div key={f.key}>
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">{f.label}</label>
+                      <input type={f.type || 'text'} value={hrFillData[f.key] || ''} onChange={e => setHrFillData(p => ({ ...p, [f.key]: e.target.value }))} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all" placeholder="Optional" />
+                    </div>
+                  ))}
+                  <div>
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Employment Type</label>
+                    <select value={hrFillData.employmentType || ''} onChange={e => setHrFillData(p => ({ ...p, employmentType: e.target.value }))} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-indigo-500 appearance-none">
+                      <option value="">— Select —</option>
+                      <option value="FULL_TIME">Full Time</option>
+                      <option value="PART_TIME">Part Time</option>
+                      <option value="CONTRACT">Contract</option>
+                      <option value="INTERN">Intern</option>
+                    </select>
+                  </div>
+                </div>
+              </section>
+
+              {/* Banking */}
+              <section>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">Banking</p>
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    { key: 'bankName', label: 'Bank Name' },
+                    { key: 'bankAccount', label: 'Account Number' },
+                  ].map(f => (
+                    <div key={f.key}>
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">{f.label}</label>
+                      <input type="text" value={hrFillData[f.key] || ''} onChange={e => setHrFillData(p => ({ ...p, [f.key]: e.target.value }))} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all" placeholder="Optional" />
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* Notes */}
+              <section>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Notes</label>
+                <textarea value={hrFillData.notes || ''} onChange={e => setHrFillData(p => ({ ...p, notes: e.target.value }))} rows={2} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all resize-none" placeholder="Optional notes for HR" />
+              </section>
+
+              {hrFillError && <p className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-100 px-4 py-2.5 rounded-xl">{hrFillError}</p>}
+            </div>
+
+            <div className="px-8 py-5 border-t border-slate-100 flex items-center justify-between flex-shrink-0">
+              <button onClick={() => { setHrFillUser(null); setHrFillData({}); setHrFillError(''); }} className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors">Cancel</button>
+              <button
+                onClick={submitHrFill}
+                disabled={hrFillSubmitting || !hrFillData.fullName}
+                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-indigo-500/20 transition-all"
+              >
+                {hrFillSubmitting && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                Submit for HR Review
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Pending Profiles Modal */}
       {applicationsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
@@ -898,13 +1128,21 @@ export default function EmployeeDirectoryPage() {
                           </div>
                         </td>
                         <td className="px-8 py-5 text-right">
-                          <button
-                            onClick={() => retriggerInvite(u.id)}
-                            disabled={retriggeringId === u.id}
-                            className="text-[9px] font-black text-indigo-600 border border-indigo-200 bg-indigo-50 px-3 py-1.5 rounded-lg uppercase tracking-widest hover:bg-indigo-100 disabled:opacity-50 transition-all"
-                          >
-                            {retriggeringId === u.id ? 'Sending…' : 'Re-send Invite'}
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => { setHrFillData({ fullName: u.name }); setHrFillUser({ id: u.id, name: u.name, email: u.email }); }}
+                              className="text-[9px] font-black text-emerald-700 border border-emerald-200 bg-emerald-50 px-3 py-1.5 rounded-lg uppercase tracking-widest hover:bg-emerald-100 transition-all"
+                            >
+                              Fill on Behalf
+                            </button>
+                            <button
+                              onClick={() => retriggerInvite(u.id)}
+                              disabled={retriggeringId === u.id}
+                              className="text-[9px] font-black text-indigo-600 border border-indigo-200 bg-indigo-50 px-3 py-1.5 rounded-lg uppercase tracking-widest hover:bg-indigo-100 disabled:opacity-50 transition-all"
+                            >
+                              {retriggeringId === u.id ? 'Sending…' : 'Re-send Email'}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -930,10 +1168,45 @@ export default function EmployeeDirectoryPage() {
                           <span className="text-[9px] font-bold text-slate-400">{new Date(app.createdAt).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
                         </td>
                         <td className="px-8 py-5 text-right">
-                          <button onClick={() => setReviewingApp(app)}
-                            className="text-[9px] font-black text-indigo-600 border border-indigo-200 bg-indigo-50 px-3 py-1.5 rounded-lg uppercase tracking-widest hover:bg-indigo-100 transition-all">
-                            Review →
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setHrFillData({
+                                  fullName: app.fullName || '',
+                                  preferredName: app.preferredName || '',
+                                  gender: app.gender || '',
+                                  dateOfBirth: app.dateOfBirth ? app.dateOfBirth.slice(0, 10) : '',
+                                  nationality: app.nationality || '',
+                                  nricFin: app.nricFin || '',
+                                  personalPhone: app.personalPhone || '',
+                                  homeAddress: app.homeAddress || '',
+                                  department: app.department || '',
+                                  designation: app.designation || '',
+                                  employmentType: app.employmentType || '',
+                                  startDate: app.startDate ? app.startDate.slice(0, 10) : '',
+                                  bankName: app.bankName || '',
+                                  bankAccount: app.bankAccount || '',
+                                  basicSalary: app.basicSalary || '',
+                                  notes: app.notes || '',
+                                });
+                                setHrFillUser({ id: app.userId, name: app.fullName, email: app.email });
+                              }}
+                              className="text-[9px] font-black text-emerald-700 border border-emerald-200 bg-emerald-50 px-3 py-1.5 rounded-lg uppercase tracking-widest hover:bg-emerald-100 transition-all"
+                            >
+                              Edit Details
+                            </button>
+                            <button
+                              onClick={() => retriggerInvite(app.userId)}
+                              disabled={retriggeringId === app.userId}
+                              className="text-[9px] font-black text-slate-500 border border-slate-200 bg-slate-50 px-3 py-1.5 rounded-lg uppercase tracking-widest hover:bg-slate-100 disabled:opacity-50 transition-all"
+                            >
+                              {retriggeringId === app.userId ? 'Sending…' : 'Re-send Email'}
+                            </button>
+                            <button onClick={() => setReviewingApp(app)}
+                              className="text-[9px] font-black text-indigo-600 border border-indigo-200 bg-indigo-50 px-3 py-1.5 rounded-lg uppercase tracking-widest hover:bg-indigo-100 transition-all">
+                              Review →
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
