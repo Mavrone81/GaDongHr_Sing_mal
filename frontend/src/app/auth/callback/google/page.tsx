@@ -21,6 +21,11 @@ export default function GoogleCallbackPage() {
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
+    const controller = new AbortController();
+    // Once we start navigating away, suppress any late error state updates
+    // (covers Strict Mode double-invoke and login() internal failures)
+    let navigating = false;
+
     const params = getSearchParams();
     const code = params.get('code');
     const errorParam = params.get('error');
@@ -29,13 +34,13 @@ export default function GoogleCallbackPage() {
     if (errorParam) {
       setErrorMsg(errorParam === 'access_denied' ? 'You declined the Google sign-in request.' : (errorDescription || errorParam));
       setStatus('error');
-      return;
+      return () => controller.abort();
     }
 
     if (!code) {
       setErrorMsg('No authorization code received from Google.');
       setStatus('error');
-      return;
+      return () => controller.abort();
     }
 
     const redirectUri = `${window.location.origin}/auth/callback/google`;
@@ -44,6 +49,7 @@ export default function GoogleCallbackPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, redirectUri }),
+      signal: controller.signal,
     })
       .then(async res => {
         const data = await res.json();
@@ -51,6 +57,7 @@ export default function GoogleCallbackPage() {
         return data;
       })
       .then(async data => {
+        navigating = true;
         if (data.ssoMfaPending) {
           sessionStorage.setItem('sso_pending_token', data.pendingToken);
           sessionStorage.setItem('sso_mfa_method', data.mfaMethod || 'TOTP');
@@ -62,9 +69,13 @@ export default function GoogleCallbackPage() {
         router.replace('/');
       })
       .catch(err => {
+        // Ignore aborted requests (Strict Mode cleanup) and post-navigation errors
+        if (controller.signal.aborted || navigating) return;
         setErrorMsg(err.message || 'Sign-in failed. Please try again.');
         setStatus('error');
       });
+
+    return () => controller.abort();
   }, []);
 
   if (status === 'error') {

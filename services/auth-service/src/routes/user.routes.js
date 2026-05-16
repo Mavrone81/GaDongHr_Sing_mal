@@ -25,10 +25,11 @@ function verifyInviteJwt(token) {
 // GET /users  (admin: list all users)
 router.get('/', authenticate, authorize('user:manage'), async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, role, isActive } = req.query;
+    const { page = 1, limit = 20, role, isActive, employeeId } = req.query;
     const where = {};
     if (role) where.role = role.toUpperCase();
     if (isActive !== undefined) where.isActive = isActive === 'true';
+    if (employeeId) where.employeeId = employeeId;
 
     const [users, total] = await Promise.all([
       prisma.user.findMany({
@@ -65,7 +66,7 @@ router.post('/', checkInternal, (req, res, next) => {
   });
 }, async (req, res, next) => {
   try {
-    const { email, password, name, role, employeeId } = req.body;
+    const { email, password, name, role, employeeId, relink } = req.body;
     if (!email || !password || !name) return res.status(400).json({ error: 'email, password, name are required' });
 
     const exists = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
@@ -73,7 +74,17 @@ router.post('/', checkInternal, (req, res, next) => {
 
     if (employeeId) {
       const empExists = await prisma.user.findUnique({ where: { employeeId } });
-      if (empExists) return res.status(409).json({ error: 'A login account already exists for this employee' });
+      if (empExists) {
+        if (!relink) {
+          return res.status(409).json({
+            error: 'This employee already has a login account.',
+            existingUser: { id: empExists.id, email: empExists.email, name: empExists.name },
+            canRelink: true,
+          });
+        }
+        // relink=true: unlink the old account so the new one can take the employeeId
+        await prisma.user.update({ where: { id: empExists.id }, data: { employeeId: null } });
+      }
     }
 
     const targetRole = await prisma.role.findFirst({
@@ -95,18 +106,21 @@ router.post('/', checkInternal, (req, res, next) => {
     res.status(201).json({ ...user, role: user.role?.name });
   } catch (err) {
     if (err.code === 'P2002' && err.meta?.target?.includes('employeeId')) {
-      return res.status(409).json({ error: 'A login account already exists for this employee' });
+      return res.status(409).json({ error: 'This employee already has a login account.' });
     }
     next(err);
   }
 });
 
-// PUT /users/:id  (update user)
-router.put('/:id', authenticate, authorize('user:manage'), async (req, res, next) => {
+// PUT /users/:id  (update user — admin or internal service)
+router.put('/:id', checkInternal, (req, res, next) => {
+  if (req.isInternal) return next();
+  authenticate(req, res, () => { authorize('user:manage')(req, res, next); });
+}, async (req, res, next) => {
   try {
-    const { name, role, isActive } = req.body;
+    const { name, role, isActive, employeeId } = req.body;
     let roleId = undefined;
-    
+
     if (role) {
       const targetRole = await prisma.role.findFirst({
         where: { name: { equals: role, mode: 'insensitive' } }
@@ -116,11 +130,31 @@ router.put('/:id', authenticate, authorize('user:manage'), async (req, res, next
 
     const user = await prisma.user.update({
       where: { id: req.params.id },
-      data: { 
-        ...(name && { name }), 
-        ...(roleId && { roleId }), 
-        ...(isActive !== undefined && { isActive }) 
+      data: {
+        ...(name && { name }),
+        ...(roleId && { roleId }),
+        ...(isActive !== undefined && { isActive }),
+        ...(req.isInternal && employeeId !== undefined && { employeeId }),
       },
+      include: { role: true },
+    });
+    res.json({ ...user, role: user.role?.name });
+  } catch (err) { next(err); }
+});
+
+// PATCH /users/link-employee  (internal — link existing auth user to an employee record by email)
+router.patch('/link-employee', checkInternal, async (req, res, next) => {
+  if (!req.isInternal) return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { email, employeeId } = req.body;
+    if (!email || !employeeId) return res.status(400).json({ error: 'email and employeeId required' });
+
+    const target = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (!target) return res.status(404).json({ error: 'User not found' });
+
+    const user = await prisma.user.update({
+      where: { id: target.id },
+      data: { employeeId },
       include: { role: true },
     });
     res.json({ ...user, role: user.role?.name });

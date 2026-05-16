@@ -71,4 +71,8 @@ async function start() {
   schedulePurge();
 }
 
-start().catch(console.error);
+if (require.main === module) {
+  start().catch(console.error);
+}
+
+module.exports = app;

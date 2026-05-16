@@ -21,6 +21,9 @@ export default function MicrosoftCallbackPage() {
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
+    const controller = new AbortController();
+    let navigating = false;
+
     const params = getSearchParams();
     const code = params.get('code');
     const errorParam = params.get('error');
@@ -29,13 +32,13 @@ export default function MicrosoftCallbackPage() {
     if (errorParam) {
       setErrorMsg(errorParam === 'access_denied' ? 'You declined the Microsoft sign-in request.' : (errorDescription || errorParam));
       setStatus('error');
-      return;
+      return () => controller.abort();
     }
 
     if (!code) {
       setErrorMsg('No authorization code received from Microsoft.');
       setStatus('error');
-      return;
+      return () => controller.abort();
     }
 
     const redirectUri = `${window.location.origin}/auth/callback/microsoft`;
@@ -44,6 +47,7 @@ export default function MicrosoftCallbackPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, redirectUri }),
+      signal: controller.signal,
     })
       .then(async res => {
         const data = await res.json();
@@ -51,6 +55,7 @@ export default function MicrosoftCallbackPage() {
         return data;
       })
       .then(async data => {
+        navigating = true;
         if (data.ssoMfaPending) {
           sessionStorage.setItem('sso_pending_token', data.pendingToken);
           sessionStorage.setItem('sso_mfa_method', data.mfaMethod || 'TOTP');
@@ -62,9 +67,12 @@ export default function MicrosoftCallbackPage() {
         router.replace('/');
       })
       .catch(err => {
+        if (controller.signal.aborted || navigating) return;
         setErrorMsg(err.message || 'Sign-in failed. Please try again.');
         setStatus('error');
       });
+
+    return () => controller.abort();
   }, []);
 
   if (status === 'error') {

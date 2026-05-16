@@ -26,6 +26,19 @@ const prisma = new PrismaClient();
 
 const ENCRYPTED_FIELDS = ['nricEncrypted', 'homeAddressEncrypted', 'basicSalaryEncrypted', 'bankAccountEncrypted'];
 
+// Resolve employeeId from JWT claim, falling back to a DB lookup by email.
+// This makes /me endpoints resilient when a JWT was issued before the account
+// was linked (e.g. the account existed before the employee record was created).
+async function resolveEmployeeId(user) {
+  if (user.employeeId) return user.employeeId;
+  if (!user.email) return null;
+  const emp = await prisma.employee.findFirst({
+    where: { workEmail: { equals: user.email, mode: 'insensitive' } },
+    select: { id: true },
+  });
+  return emp?.id ?? null;
+}
+
 // Fields that are sensitive — we log they changed but never store values in audit trail
 const SENSITIVE_AUDIT_FIELDS = new Set(['nricEncrypted', 'homeAddressEncrypted', 'basicSalaryEncrypted', 'bankAccountEncrypted', 'bankCode', 'passNumber']);
 
@@ -270,7 +283,7 @@ router.get('/payroll-data', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_
 // ── GET /me/photo — must be before /:id to avoid shadowing ───────────────────
 router.get('/me/photo', authenticate, async (req, res, next) => {
   try {
-    const employeeId = req.user.employeeId;
+    const employeeId = await resolveEmployeeId(req.user);
     if (!employeeId) return res.status(400).json({ error: 'No employee profile linked to this account' });
     const emp = await prisma.employee.findUnique({ where: { id: employeeId }, select: { profilePhotoUrl: true } });
     if (!emp) return res.status(404).json({ error: 'Employee not found' });
@@ -392,6 +405,16 @@ router.post('/applications/:id/approve', authenticate, authorize('employee:manag
     await prisma.employeeApplication.update({
       where: { id: app.id },
       data: { status: 'APPROVED', reviewedBy: req.user?.sub, reviewedAt: new Date() },
+    });
+
+    await writeAudit({
+      entityId:   employee.id,
+      entityCode: employee.employeeCode,
+      entityName: employee.fullName,
+      action:     'CREATE',
+      actor:      req.user,
+      changedFields: null,
+      req,
     });
 
     res.json({ message: 'Application approved. Employee record created.', employee });
@@ -610,7 +633,7 @@ router.delete('/:id', authenticate, authorize('employee:manage', ROLES.SUPER_ADM
 // ── POST /me/photo — employee uploads their own profile photo ────────────────
 router.post('/me/photo', authenticate, async (req, res, next) => {
   try {
-    const employeeId = req.user.employeeId;
+    const employeeId = await resolveEmployeeId(req.user);
     if (!employeeId) return res.status(400).json({ error: 'No employee profile linked to this account' });
     const { profilePhotoUrl } = req.body;
     if (!profilePhotoUrl || !profilePhotoUrl.startsWith('data:image/')) {
@@ -622,8 +645,19 @@ router.post('/me/photo', authenticate, async (req, res, next) => {
     const emp = await prisma.employee.update({
       where: { id: employeeId },
       data: { profilePhotoUrl },
-      select: { id: true, profilePhotoUrl: true },
+      select: { id: true, employeeCode: true, fullName: true, profilePhotoUrl: true },
     });
+
+    await writeAudit({
+      entityId:   emp.id,
+      entityCode: emp.employeeCode,
+      entityName: emp.fullName,
+      action:     'UPDATE_PHOTO',
+      actor:      req.user,
+      changedFields: { profilePhotoUrl: { from: null, to: '[photo set]' } },
+      req,
+    });
+
     res.json({ success: true, profilePhotoUrl: emp.profilePhotoUrl });
   } catch (err) { next(err); }
 });
@@ -631,7 +665,7 @@ router.post('/me/photo', authenticate, async (req, res, next) => {
 // ── POST /me/verify-face — server-side face recognition via InsightFace ──────
 router.post('/me/verify-face', authenticate, async (req, res, next) => {
   try {
-    const employeeId = req.user.employeeId;
+    const employeeId = await resolveEmployeeId(req.user);
     if (!employeeId) return res.status(400).json({ error: 'No employee profile linked to this account' });
 
     const { capturedPhoto } = req.body;

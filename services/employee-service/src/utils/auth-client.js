@@ -11,25 +11,40 @@ async function createAuthUser(employee) {
     return;
   }
 
+  const headers = { 'x-internal-service-key': internalKey, 'Content-Type': 'application/json' };
+
   try {
     const response = await axios.post(`${authUrl}/users`, {
       email: employee.workEmail,
       name: employee.fullName,
-      password: '***REMOVED***', // Default temporary password
+      password: '***REMOVED***',
       role: 'EMPLOYEE',
-      employeeId: employee.id
-    }, {
-      headers: {
-        'x-internal-service-key': internalKey,
-        'Content-Type': 'application/json'
-      }
-    });
+      employeeId: employee.id,
+    }, { headers });
 
-    console.log(`[EmployeeService] Successfully created auth user for ${employee.workEmail}`);
+    console.log(`[EmployeeService] Created auth user for ${employee.workEmail}`);
     return response.data;
   } catch (err) {
-    console.error(`[EmployeeService] Failed to create auth user for ${employee.workEmail}:`, err.response?.data || err.message);
-    // We don't throw here to avoid failing employee creation if auth-service is down
+    const status = err.response?.status;
+    const errData = err.response?.data;
+
+    // Email already exists — link the existing account to this employee record
+    if (status === 409 && errData?.error === 'Email already registered') {
+      console.warn(`[EmployeeService] Auth user for ${employee.workEmail} already exists — linking employeeId`);
+      try {
+        const linkRes = await axios.patch(`${authUrl}/users/link-employee`, {
+          email: employee.workEmail,
+          employeeId: employee.id,
+        }, { headers });
+        console.log(`[EmployeeService] Linked auth user for ${employee.workEmail} to employeeId ${employee.id}`);
+        return linkRes.data;
+      } catch (linkErr) {
+        console.error(`[EmployeeService] Failed to link auth user for ${employee.workEmail}:`, linkErr.response?.data || linkErr.message);
+      }
+      return;
+    }
+
+    console.error(`[EmployeeService] Failed to create auth user for ${employee.workEmail}:`, errData || err.message);
   }
 }
 
