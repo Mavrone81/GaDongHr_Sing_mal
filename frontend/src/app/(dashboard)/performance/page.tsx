@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type CycleType   = 'ANNUAL' | 'MID_YEAR' | 'PROBATION' | 'CUSTOM';
@@ -112,13 +113,75 @@ function Toast({ msg, onClear }: { msg: string; onClear: () => void }) {
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
-type Tab = 'overview' | 'cycles' | 'myreview' | 'team' | 'goals' | 'pip';
+type AdminTab    = 'overview' | 'cycles' | 'myappraisal' | 'team' | 'goals' | 'pip';
+type EmployeeTab = 'myappraisal' | 'goals';
 
 export default function PerformancePage() {
-  const [tab, setTab] = useState<Tab>('overview');
+  const { user, loading } = useAuth();
   const [toast, setToast] = useState('');
 
+  const role = user?.role?.toUpperCase() ?? 'EMPLOYEE';
+  const isPrivileged = ['SUPER_ADMIN', 'HR_ADMIN', 'HR_MANAGER'].includes(role);
+  const isManager    = role === 'MANAGER' || isPrivileged;
+  const isEmployee   = !isPrivileged && !isManager;
+
+  const [adminTab, setAdminTab]       = useState<AdminTab>('overview');
+  const [employeeTab, setEmployeeTab] = useState<EmployeeTab>('myappraisal');
+
   function notify(msg: string) { setToast(msg); }
+
+  if (loading) {
+    return <div className="h-40 bg-white rounded-[2rem] border border-slate-100 animate-pulse max-w-[1400px] mx-auto" />;
+  }
+
+  // ── Employee-only view ─────────────────────────────────────────────────────
+  if (isEmployee) {
+    return (
+      <div className="flex flex-col gap-8 max-w-[900px] mx-auto pb-20 animate-in fade-in duration-700">
+        {/* Header */}
+        <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-violet-500/5 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-violet-600/5 rounded-full blur-3xl" />
+          <div className="relative z-10">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-2 h-2 bg-violet-600 rounded-full animate-pulse" />
+              <span className="text-[9px] font-black text-violet-600 uppercase tracking-[0.4em]">My Performance</span>
+            </div>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tighter">
+              {user?.name ? `Hi, ${user.name.split(' ')[0]}` : 'My Performance'}
+            </h1>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-2">
+              Submit your self-assessment · Track your goals
+            </p>
+          </div>
+        </div>
+
+        {/* Employee tabs */}
+        <div className="flex gap-2">
+          {([['myappraisal', 'My Appraisal'], ['goals', 'My Goals']] as [EmployeeTab, string][]).map(([key, label]) => (
+            <button key={key} onClick={() => setEmployeeTab(key)}
+              className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${employeeTab === key ? 'bg-violet-600 text-white shadow-lg shadow-violet-500/20' : 'bg-white border border-slate-200 text-slate-400 hover:border-slate-300'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {employeeTab === 'myappraisal' && <MyAppraisalTab notify={notify} />}
+        {employeeTab === 'goals'       && <GoalsTab notify={notify} />}
+
+        {toast && <Toast msg={toast} onClear={() => setToast('')} />}
+      </div>
+    );
+  }
+
+  // ── Admin / Manager view ───────────────────────────────────────────────────
+  const adminTabs: [AdminTab, string][] = [
+    ['overview',    'Overview'],
+    ['cycles',      'Cycles'],
+    ['myappraisal', 'My Appraisal'],
+    ['team',        'Team Reviews'],
+    ['goals',       'Goals'],
+    ...(isPrivileged ? [['pip', 'PIP'] as [AdminTab, string]] : []),
+  ];
 
   return (
     <div className="flex flex-col gap-8 max-w-[1400px] mx-auto pb-20 animate-in fade-in duration-700">
@@ -139,27 +202,20 @@ export default function PerformancePage() {
 
       {/* Tabs */}
       <div className="flex gap-2 flex-wrap">
-        {([
-          ['overview', 'Overview'],
-          ['cycles',   'Cycles'],
-          ['myreview', 'My Review'],
-          ['team',     'Team Reviews'],
-          ['goals',    'Goals'],
-          ['pip',      'PIP'],
-        ] as [Tab, string][]).map(([key, label]) => (
-          <button key={key} onClick={() => setTab(key)}
-            className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${tab === key ? 'bg-violet-600 text-white shadow-lg shadow-violet-500/20' : 'bg-white border border-slate-200 text-slate-400 hover:border-slate-300'}`}>
+        {adminTabs.map(([key, label]) => (
+          <button key={key} onClick={() => setAdminTab(key)}
+            className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${adminTab === key ? 'bg-violet-600 text-white shadow-lg shadow-violet-500/20' : 'bg-white border border-slate-200 text-slate-400 hover:border-slate-300'}`}>
             {label}
           </button>
         ))}
       </div>
 
-      {tab === 'overview'  && <OverviewTab notify={notify} />}
-      {tab === 'cycles'    && <CyclesTab notify={notify} />}
-      {tab === 'myreview'  && <MyReviewTab notify={notify} />}
-      {tab === 'team'      && <TeamTab notify={notify} />}
-      {tab === 'goals'     && <GoalsTab notify={notify} />}
-      {tab === 'pip'       && <PipTab notify={notify} />}
+      {adminTab === 'overview'    && <OverviewTab notify={notify} />}
+      {adminTab === 'cycles'      && <CyclesTab notify={notify} />}
+      {adminTab === 'myappraisal' && <MyAppraisalTab notify={notify} />}
+      {adminTab === 'team'        && <TeamTab notify={notify} />}
+      {adminTab === 'goals'       && <GoalsTab notify={notify} />}
+      {adminTab === 'pip'         && <PipTab notify={notify} />}
 
       {toast && <Toast msg={toast} onClear={() => setToast('')} />}
     </div>
@@ -462,34 +518,56 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MY REVIEW TAB (employee self-assessment)
+// MY APPRAISAL TAB — employee's own workflow only, no admin actions
+// Used by both employee-only view AND the admin/manager "My Appraisal" tab
 // ─────────────────────────────────────────────────────────────────────────────
-function MyReviewTab({ notify }: { notify: (m: string) => void }) {
+const STEP_LABELS: Record<AppraisalStatus, string> = {
+  PENDING:           'Not started',
+  SELF_SUBMITTED:    'Self-assessment submitted',
+  MANAGER_SUBMITTED: 'Manager has reviewed',
+  FINALISED:         'Appraisal finalised',
+};
+
+const STEP_ORDER: AppraisalStatus[] = ['PENDING', 'SELF_SUBMITTED', 'MANAGER_SUBMITTED', 'FINALISED'];
+
+function stepIndex(s: AppraisalStatus) { return STEP_ORDER.indexOf(s); }
+
+function MyAppraisalTab({ notify }: { notify: (m: string) => void }) {
   const [appraisals, setAppraisals] = useState<Appraisal[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Appraisal | null>(null);
   const [form, setForm] = useState({ selfScore: 0, selfComments: '', strengths: '', improvements: '' });
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    apiFetch('/performance/appraisals/me')
-      .then(data => { setAppraisals(data); setLoading(false); })
-      .catch(() => setLoading(false));
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try { setAppraisals(await apiFetch('/performance/appraisals/me')); }
+    catch {} finally { setLoading(false); }
   }, []);
 
+  useEffect(() => { reload(); }, [reload]);
+
+  function select(a: Appraisal) {
+    setSelected(a);
+    setForm({
+      selfScore:    a.selfScore    ?? 0,
+      selfComments: a.selfComments ?? '',
+      strengths:    a.strengths    ?? '',
+      improvements: a.improvements ?? '',
+    });
+  }
+
   async function submitSelf() {
-    if (!selected || !form.selfScore) { notify('Please select a score'); return; }
+    if (!selected || !form.selfScore) { notify('Please select a rating before submitting'); return; }
     setSubmitting(true);
     try {
-      await apiFetch(`/performance/appraisals/${selected.id}/self-submit`, {
+      const updated = await apiFetch(`/performance/appraisals/${selected.id}/self-submit`, {
         method: 'POST', body: JSON.stringify(form),
       });
-      notify('Self-assessment submitted');
-      const updated = await apiFetch('/performance/appraisals/me');
-      setAppraisals(updated);
-      const refreshed = updated.find((a: Appraisal) => a.id === selected.id);
-      if (refreshed) setSelected(refreshed);
-    } catch (e: any) { notify(e.message || 'Failed'); }
+      notify('Self-assessment submitted successfully');
+      await reload();
+      setSelected(updated);
+    } catch (e: any) { notify(e.message || 'Submission failed'); }
     finally { setSubmitting(false); }
   }
 
@@ -497,118 +575,211 @@ function MyReviewTab({ notify }: { notify: (m: string) => void }) {
 
   if (appraisals.length === 0) {
     return (
-      <div className="bg-white rounded-[2.5rem] border border-slate-100 p-16 text-center">
-        <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">You have not been enrolled in any review cycle yet.</p>
-        <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-2">Contact your HR admin to get enrolled.</p>
+      <div className="bg-white rounded-[2.5rem] border border-slate-100 p-16 text-center flex flex-col items-center gap-4">
+        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-3xl">📋</div>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No appraisals yet</p>
+        <p className="text-[11px] text-slate-300 font-medium">You have not been enrolled in any review cycle yet.<br />Contact your HR admin to get enrolled.</p>
       </div>
     );
   }
 
   return (
     <div className="grid lg:grid-cols-3 gap-6">
-      {/* List */}
+      {/* Cycle list */}
       <div className="flex flex-col gap-3">
-        {appraisals.map(a => (
-          <button key={a.id} onClick={() => { setSelected(a); setForm({ selfScore: a.selfScore ?? 0, selfComments: a.selfComments ?? '', strengths: a.strengths ?? '', improvements: a.improvements ?? '' }); }}
-            className={`w-full text-left bg-white p-6 rounded-2xl border transition-all ${selected?.id === a.id ? 'border-violet-600 shadow-lg shadow-violet-500/10' : 'border-slate-100 hover:border-slate-200'}`}>
-            <p className="text-sm font-black text-slate-900">{a.cycle?.name ?? a.cycleId}</p>
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{a.cycle?.type ?? ''}</p>
-            <div className="mt-3">
-              <span className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase ${STATUS_COLORS[a.status]}`}>{a.status.replace('_', ' ')}</span>
-            </div>
-          </button>
-        ))}
+        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1 mb-1">Your Review Cycles</p>
+        {appraisals.map(a => {
+          const done = stepIndex(a.status);
+          const isActive = a.status === 'PENDING' || a.status === 'SELF_SUBMITTED';
+          return (
+            <button key={a.id} onClick={() => select(a)}
+              className={`w-full text-left bg-white p-5 rounded-2xl border transition-all ${selected?.id === a.id ? 'border-violet-500 shadow-lg shadow-violet-500/10 ring-1 ring-violet-500/20' : 'border-slate-100 hover:border-slate-200'}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-black text-slate-900 leading-tight">{a.cycle?.name ?? a.cycleId}</p>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{a.cycle?.type ?? ''}</p>
+                </div>
+                {isActive && <span className="w-2 h-2 bg-violet-500 rounded-full mt-1 animate-pulse shrink-0" />}
+              </div>
+              {/* Mini progress dots */}
+              <div className="flex items-center gap-1.5 mt-3">
+                {STEP_ORDER.map((_, i) => (
+                  <div key={i} className={`h-1.5 flex-1 rounded-full ${i <= done ? 'bg-violet-500' : 'bg-slate-100'}`} />
+                ))}
+              </div>
+              <p className="text-[9px] font-bold text-slate-400 mt-1.5">{STEP_LABELS[a.status]}</p>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Detail / form */}
+      {/* Detail panel */}
       <div className="lg:col-span-2">
         {!selected ? (
           <div className="bg-white rounded-[2rem] border border-slate-100 p-12 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">
-            Select a review to view or submit
+            Select a cycle to view your appraisal
           </div>
         ) : (
-          <div className="bg-white rounded-[2rem] border border-slate-100 p-8 flex flex-col gap-6">
-            <div>
-              <h3 className="text-xl font-black text-slate-900">{selected.cycle?.name}</h3>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
-                {PHASE_LABELS[selected.cycle?.currentPhase ?? 'SELF_ASSESSMENT']} · {fmtDate(selected.cycle?.startDate)} – {fmtDate(selected.cycle?.endDate)}
+          <div className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden">
+            {/* Cycle banner */}
+            <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-8 text-white">
+              <p className="text-[9px] font-black uppercase tracking-widest opacity-70 mb-1">{selected.cycle?.type ?? 'Review'}</p>
+              <h3 className="text-xl font-black">{selected.cycle?.name}</h3>
+              <p className="text-[10px] font-bold opacity-70 mt-1 uppercase tracking-wide">
+                {fmtDate(selected.cycle?.startDate)} – {fmtDate(selected.cycle?.endDate)}
               </p>
             </div>
 
-            {/* Status timeline */}
-            <div className="flex gap-3 items-center">
-              {(['PENDING', 'SELF_SUBMITTED', 'MANAGER_SUBMITTED', 'FINALISED'] as AppraisalStatus[]).map((s, i) => (
-                <div key={s} className="flex items-center gap-2">
-                  <div className={`w-2.5 h-2.5 rounded-full border-2 ${['SELF_SUBMITTED', 'MANAGER_SUBMITTED', 'FINALISED'].includes(selected.status) && i > 0 ? 'bg-violet-600 border-violet-600' : selected.status === s ? 'bg-violet-600 border-violet-600' : 'bg-white border-slate-200'}`} />
-                  <span className="text-[8px] font-black text-slate-400 uppercase hidden sm:block">{s.replace('_', ' ')}</span>
-                  {i < 3 && <div className="w-8 h-px bg-slate-100" />}
+            <div className="p-8 flex flex-col gap-8">
+              {/* Workflow progress */}
+              <div>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Progress</p>
+                <div className="flex items-start gap-0">
+                  {STEP_ORDER.map((step, i) => {
+                    const done = stepIndex(selected.status);
+                    const isCurrent = step === selected.status;
+                    const isPast    = i < done;
+                    const isFuture  = i > done;
+                    return (
+                      <div key={step} className="flex flex-col items-center flex-1">
+                        <div className="flex items-center w-full">
+                          {i > 0 && <div className={`flex-1 h-0.5 ${isPast || isCurrent ? 'bg-violet-500' : 'bg-slate-100'}`} />}
+                          <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-[11px] font-black shrink-0 transition-all
+                            ${isPast    ? 'bg-violet-500 border-violet-500 text-white'
+                            : isCurrent ? 'bg-white border-violet-500 text-violet-600 shadow-md shadow-violet-500/20'
+                            : 'bg-white border-slate-200 text-slate-300'}`}>
+                            {isPast ? '✓' : i + 1}
+                          </div>
+                          {i < 3 && <div className={`flex-1 h-0.5 ${isPast ? 'bg-violet-500' : 'bg-slate-100'}`} />}
+                        </div>
+                        <p className={`text-[8px] font-black uppercase tracking-wide mt-2 text-center max-w-16 leading-tight
+                          ${isCurrent ? 'text-violet-600' : isPast ? 'text-slate-500' : 'text-slate-300'}`}>
+                          {step.replace('_', ' ')}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
+              </div>
+
+              {/* Scores (visible once something has been submitted) */}
+              {selected.status !== 'PENDING' && (
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-violet-50 rounded-2xl p-5 text-center border border-violet-100">
+                    <p className="text-[9px] font-black text-violet-400 uppercase tracking-widest mb-2">Your Score</p>
+                    <p className="text-3xl font-black text-violet-700">{selected.selfScore?.toFixed(1) ?? '—'}</p>
+                    <p className="text-[8px] font-bold text-violet-400 mt-1">out of 5.0</p>
+                  </div>
+                  <div className={`rounded-2xl p-5 text-center border ${selected.managerScore ? 'bg-indigo-50 border-indigo-100' : 'bg-slate-50 border-slate-100'}`}>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Manager Score</p>
+                    <p className={`text-3xl font-black ${selected.managerScore ? 'text-indigo-700' : 'text-slate-300'}`}>
+                      {selected.managerScore?.toFixed(1) ?? '—'}
+                    </p>
+                    {!selected.managerScore && <p className="text-[8px] font-bold text-slate-300 mt-1">Pending review</p>}
+                  </div>
+                  <div className={`rounded-2xl p-5 text-center border ${selected.overallScore ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Final Score</p>
+                    <p className={`text-3xl font-black ${selected.overallScore ? 'text-emerald-700' : 'text-slate-300'}`}>
+                      {selected.overallScore?.toFixed(1) ?? '—'}
+                    </p>
+                    {!selected.overallScore && <p className="text-[8px] font-bold text-slate-300 mt-1">Not yet finalised</p>}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Self-assessment form (PENDING or SELF_SUBMITTED = can update) ── */}
+              {(selected.status === 'PENDING' || selected.status === 'SELF_SUBMITTED') && (
+                <div className="flex flex-col gap-5 border-t border-slate-50 pt-6">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Self-Assessment</h4>
+                    {selected.status === 'SELF_SUBMITTED' && (
+                      <span className="text-[8px] font-black px-2 py-1 bg-amber-50 text-amber-600 border border-amber-200 rounded-lg uppercase tracking-widest">Submitted — you can update until manager reviews</span>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Your Overall Rating *</p>
+                    <StarRating value={form.selfScore} onChange={v => setForm(f => ({ ...f, selfScore: v }))} />
+                    <p className="text-[8px] font-bold text-slate-300 mt-2">1 = Needs improvement · 3 = Meets expectations · 5 = Exceptional</p>
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Key Achievements & Highlights</label>
+                    <textarea value={form.selfComments} onChange={e => setForm(f => ({ ...f, selfComments: e.target.value }))}
+                      rows={4} placeholder="Describe your key contributions, wins, and achievements this period…"
+                      className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-500 resize-none placeholder:text-slate-300" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Strengths</label>
+                      <textarea value={form.strengths} onChange={e => setForm(f => ({ ...f, strengths: e.target.value }))}
+                        rows={3} placeholder="What did you do really well?"
+                        className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-500 resize-none placeholder:text-slate-300" />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Development Areas</label>
+                      <textarea value={form.improvements} onChange={e => setForm(f => ({ ...f, improvements: e.target.value }))}
+                        rows={3} placeholder="What would you like to develop or improve?"
+                        className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-500 resize-none placeholder:text-slate-300" />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button onClick={submitSelf} disabled={submitting || !form.selfScore}
+                      className="px-10 py-4 bg-violet-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-700 shadow-xl shadow-violet-500/20 disabled:opacity-40 transition-all active:scale-95">
+                      {submitting ? 'Submitting…' : selected.status === 'SELF_SUBMITTED' ? 'Update Submission' : 'Submit Self-Assessment'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Read-only view of own submission after manager has reviewed ── */}
+              {selected.status !== 'PENDING' && selected.selfComments && (
+                <div className="border-t border-slate-50 pt-6 flex flex-col gap-4">
+                  <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Your Submission</h4>
+                  <div className="bg-slate-50 rounded-2xl p-5 flex flex-col gap-3">
+                    <p className="text-sm text-slate-700 leading-relaxed">{selected.selfComments}</p>
+                    {selected.strengths && (
+                      <div>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Strengths</p>
+                        <p className="text-sm text-slate-600">{selected.strengths}</p>
+                      </div>
+                    )}
+                    {selected.improvements && (
+                      <div>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Development Areas</p>
+                        <p className="text-sm text-slate-600">{selected.improvements}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Manager feedback (only shown once manager has submitted) ── */}
+              {selected.managerComments && (
+                <div className="border-t border-slate-50 pt-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-5 h-5 bg-indigo-100 rounded-full flex items-center justify-center text-[10px]">👤</div>
+                    <h4 className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Manager Feedback</h4>
+                  </div>
+                  <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5">
+                    <p className="text-sm text-slate-700 leading-relaxed">{selected.managerComments}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Waiting message when self-submitted, no manager review yet ── */}
+              {selected.status === 'SELF_SUBMITTED' && !selected.managerScore && (
+                <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 flex items-center gap-4">
+                  <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center text-base shrink-0">⏳</div>
+                  <div>
+                    <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest">Waiting for manager review</p>
+                    <p className="text-[11px] text-amber-600 mt-0.5">Your self-assessment has been submitted. Your manager will review it shortly.</p>
+                  </div>
+                </div>
+              )}
             </div>
-
-            {/* Scores display if submitted */}
-            {selected.status !== 'PENDING' && (
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-slate-50 rounded-2xl p-4 text-center">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Self Score</p>
-                  <p className="text-2xl font-black text-indigo-600">{selected.selfScore?.toFixed(1) ?? '—'}</p>
-                </div>
-                <div className="bg-slate-50 rounded-2xl p-4 text-center">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Manager Score</p>
-                  <p className="text-2xl font-black text-violet-600">{selected.managerScore?.toFixed(1) ?? '—'}</p>
-                </div>
-                <div className="bg-slate-50 rounded-2xl p-4 text-center">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Overall</p>
-                  <p className="text-2xl font-black text-emerald-600">{selected.overallScore?.toFixed(1) ?? '—'}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Self-assessment form */}
-            {(selected.status === 'PENDING' || selected.status === 'SELF_SUBMITTED') && (
-              <div className="flex flex-col gap-5 border-t border-slate-50 pt-6">
-                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Self-Assessment</h4>
-                <div>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Overall Rating *</p>
-                  <StarRating value={form.selfScore} onChange={v => setForm(f => ({ ...f, selfScore: v }))} />
-                </div>
-                <div>
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Key Achievements & Comments</label>
-                  <textarea value={form.selfComments} onChange={e => setForm(f => ({ ...f, selfComments: e.target.value }))} rows={3} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-600 resize-none" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Strengths</label>
-                    <textarea value={form.strengths} onChange={e => setForm(f => ({ ...f, strengths: e.target.value }))} rows={3} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-600 resize-none" />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Areas for Improvement</label>
-                    <textarea value={form.improvements} onChange={e => setForm(f => ({ ...f, improvements: e.target.value }))} rows={3} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-600 resize-none" />
-                  </div>
-                </div>
-                <div className="flex justify-end">
-                  <button onClick={submitSelf} disabled={submitting || !form.selfScore} className="px-8 py-3 bg-violet-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-700 shadow-lg shadow-violet-500/20 disabled:opacity-50 transition-all">
-                    {submitting ? 'Submitting…' : 'Submit Self-Assessment'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Submitted view */}
-            {selected.status !== 'PENDING' && selected.selfComments && (
-              <div className="border-t border-slate-50 pt-6 flex flex-col gap-3">
-                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Your Assessment</h4>
-                <p className="text-sm text-slate-600">{selected.selfComments}</p>
-                {selected.strengths && <div><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Strengths</p><p className="text-sm text-slate-600 mt-1">{selected.strengths}</p></div>}
-                {selected.improvements && <div><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Improvements</p><p className="text-sm text-slate-600 mt-1">{selected.improvements}</p></div>}
-              </div>
-            )}
-            {selected.managerComments && (
-              <div className="border-t border-slate-50 pt-6">
-                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Manager Feedback</h4>
-                <p className="text-sm text-slate-600">{selected.managerComments}</p>
-              </div>
-            )}
           </div>
         )}
       </div>
