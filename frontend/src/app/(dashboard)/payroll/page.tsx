@@ -448,8 +448,52 @@ function AdminPayrollDashboard() {
   const [periodConflictRuns, setPeriodConflictRuns] = useState<PayrollRun[]>([]);
   const [conflictPayslips, setConflictPayslips] = useState<any[]>([]); // existing payslips for the conflict period
   const [conflictLoading, setConflictLoading] = useState(false);
+  const [conflictSalaryMap, setConflictSalaryMap] = useState<Record<string, number>>({}); // employeeId → current ow
   const [variance, setVariance] = useState<any>(null);
   const [varianceLoading, setVarianceLoading] = useState(false);
+
+  // ── Period working-day config ──────────────────────────────────────────────
+  const [periodCfg, setPeriodCfg] = useState<{
+    workDayType: string;
+    workingDays: number;
+    recommendedWorkingDays: number;
+    isOverridden: boolean;
+    publicHolidays: { id: string; date: string; name: string }[];
+  } | null>(null);
+  const [periodCfgLoading, setPeriodCfgLoading] = useState(false);
+  const [periodCfgWorkDayType, setPeriodCfgWorkDayType] = useState<'FIVE_DAY' | 'SIX_DAY'>('FIVE_DAY');
+  const [periodCfgOverride, setPeriodCfgOverride] = useState<string>('');
+  const [periodCfgSaving, setPeriodCfgSaving] = useState(false);
+
+  async function loadPeriodConfig(period: string) {
+    setPeriodCfgLoading(true);
+    try {
+      const data = await apiFetch(`/payroll/period-config/${period}`);
+      setPeriodCfg(data);
+      setPeriodCfgWorkDayType(data.workDayType);
+      setPeriodCfgOverride(data.isOverridden ? String(data.workingDays) : '');
+    } catch {
+      setPeriodCfg(null);
+    } finally {
+      setPeriodCfgLoading(false);
+    }
+  }
+
+  async function savePeriodConfig() {
+    setPeriodCfgSaving(true);
+    try {
+      const body: any = { workDayType: periodCfgWorkDayType };
+      if (periodCfgOverride.trim()) body.workingDays = parseInt(periodCfgOverride);
+      else body.workingDays = null;
+      await apiFetch(`/payroll/period-config/${selectedPeriod}`, { method: 'PUT', body: JSON.stringify(body) });
+      await loadPeriodConfig(selectedPeriod);
+      handleActionToast('Period config saved');
+    } catch (e: any) {
+      handleActionToast(e.message || 'Failed to save period config');
+    } finally {
+      setPeriodCfgSaving(false);
+    }
+  }
 
   async function loadRuns() {
     try {
@@ -464,6 +508,7 @@ function AdminPayrollDashboard() {
   }
 
   useEffect(() => { loadRuns(); }, []);
+  useEffect(() => { if (isRunModalOpen && selectedPeriod) loadPeriodConfig(selectedPeriod); }, [isRunModalOpen, selectedPeriod]);
 
   const fetchPayslipsForRun = async (runId: string) => {
     try {
@@ -575,14 +620,21 @@ function AdminPayrollDashboard() {
     setIsProcessing(true);
     setPeriodConflictRuns([]);
     setConflictPayslips([]);
+    setConflictSalaryMap({});
     try {
-      await apiFetch('/payroll/runs', { method: 'POST', body: JSON.stringify({ period: selectedPeriod, runType: selectedRunType }) });
+      const newRun = await apiFetch('/payroll/runs', { method: 'POST', body: JSON.stringify({ period: selectedPeriod, runType: selectedRunType }) });
       setIsRunModalOpen(false);
       await loadRuns();
-      setShowSuccessToast(true);
-      setTimeout(() => setShowSuccessToast(false), 3000);
+      // Immediately open Review Protocol so the user can compute → approve → finalise
+      if (newRun?.id) setReviewRunData(newRun);
     } catch (e: any) {
-      handleActionToast(e.message || 'Failed to initiate payroll run');
+      const msg = e.message || 'Failed to initiate payroll run';
+      // Re-show the conflict dialog with the error so it's not missed as a brief toast
+      if (msg.includes('already exists')) {
+        handleActionToast(`⛔ ${msg}`);
+      } else {
+        handleActionToast(msg);
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -596,17 +648,25 @@ function AdminPayrollDashboard() {
         setPeriodConflictRuns(data.runs);
         setIsRunModalOpen(false);
         setIsProcessing(false);
-        // Load existing payslips from all runs for this period to show diff
+        // Load existing payslips + current salary data for the conflict preview
         setConflictLoading(true);
         setConflictPayslips([]);
+        setConflictSalaryMap({});
         try {
-          const [empData, ...runPayslipResults] = await Promise.allSettled([
+          const [empData, payrollDataResult, ...runPayslipResults] = await Promise.allSettled([
             apiFetch('/employees?limit=500&isActive=true'),
+            apiFetch('/employees/payroll-data'),
             ...data.runs.map((r: PayrollRun) => apiFetch(`/payroll/runs/${r.id}/payslips`)),
           ]);
           const nameMap: Record<string, string> = {};
           if (empData.status === 'fulfilled') {
             for (const e of (empData.value.employees ?? [])) nameMap[e.id] = e.fullName;
+          }
+          // Build salary map from payroll-data (current profile OW)
+          if (payrollDataResult.status === 'fulfilled') {
+            const sm: Record<string, number> = {};
+            for (const e of (payrollDataResult.value ?? [])) sm[e.employeeId] = e.ow ?? 0;
+            setConflictSalaryMap(sm);
           }
           // Merge all payslips across runs, keyed by employeeId
           const byEmp: Record<string, any> = {};
@@ -710,8 +770,10 @@ function AdminPayrollDashboard() {
                       {conflictPayslips.map((emp: any) => {
                         const totalNet = emp.runs.reduce((s: number, r: any) => s + (r.netPay ?? 0), 0);
                         const hasZero = emp.runs.some((r: any) => (r.netPay ?? 0) === 0);
+                        const currentOw = conflictSalaryMap[emp.employeeId] ?? null;
+                        const salaryMissing = hasZero && currentOw === 0;
                         return (
-                          <tr key={emp.employeeId} className="hover:bg-slate-50/50 transition-colors">
+                          <tr key={emp.employeeId} className={`hover:bg-slate-50/50 transition-colors ${salaryMissing ? 'bg-red-50/50' : ''}`}>
                             <td className="px-5 py-3 font-black text-slate-800">{emp.name}</td>
                             {periodConflictRuns.map(r => {
                               const ps = emp.runs.find((x: any) => x.runId === r.id);
@@ -723,9 +785,13 @@ function AdminPayrollDashboard() {
                             })}
                             <td className="px-5 py-3 text-right font-black text-indigo-700">SGD {fmtSGD(totalNet)}</td>
                             <td className="px-5 py-3 text-right text-[9px] font-black">
-                              {hasZero
-                                ? <span className="text-amber-600">⚠ Prior run had $0 — current salary will be used</span>
-                                : <span className="text-slate-400 italic">Will add delta only</span>}
+                              {hasZero ? (
+                                salaryMissing
+                                  ? <span className="text-red-600">⛔ No salary in profile — update employee record first</span>
+                                  : <span className="text-emerald-600">✓ Profile salary SGD {fmtSGD(currentOw ?? 0)} — will pro-rate by start date</span>
+                              ) : (
+                                <span className="text-slate-400 italic">Will add delta only</span>
+                              )}
                             </td>
                           </tr>
                         );
@@ -737,27 +803,81 @@ function AdminPayrollDashboard() {
             </div>
 
             {/* Info banner + actions */}
+            {(() => {
+              const blockedEmps = conflictPayslips.filter((emp: any) => {
+                const hasZero = emp.runs.some((r: any) => (r.netPay ?? 0) === 0);
+                // Only block if salary data loaded AND confirmed to be $0
+                const currentOw = conflictSalaryMap[emp.employeeId];
+                return hasZero && currentOw !== undefined && currentOw === 0;
+              });
+              const conflictingRun = periodConflictRuns.find(
+                r => r.runType === selectedRunType && r.status === 'FINALISED'
+              );
+              return (
             <div className="shrink-0 border-t border-slate-100">
+              {conflictingRun && (
+                <div className="px-8 py-4 bg-red-50 border-b border-red-200">
+                  <p className="text-[9px] font-black text-red-700 uppercase tracking-widest leading-relaxed">
+                    ⛔ A <strong>{conflictingRun.runType}</strong> run for {fmtPeriod(selectedPeriod)} is already DISBURSED.
+                    You cannot create another {selectedRunType} run until the existing one is voided.
+                    Use "Void &amp; Replace" to delete the old run and create a corrected one — or choose a different run type.
+                  </p>
+                </div>
+              )}
+              {blockedEmps.length > 0 && (
+                <div className="px-8 py-4 bg-red-50 border-b border-red-200">
+                  <p className="text-[9px] font-black text-red-700 uppercase tracking-widest leading-relaxed">
+                    ⛔ {blockedEmps.length} employee{blockedEmps.length !== 1 ? 's have' : ' has'} no salary configured:{' '}
+                    <strong>{blockedEmps.map((e: any) => e.name).join(', ')}</strong>.
+                    Go to their employee profile and set a Basic Salary before running payroll.
+                  </p>
+                </div>
+              )}
               <div className="px-8 py-4 bg-amber-50/50 border-b border-amber-100">
                 <p className="text-[9px] font-black text-amber-800 uppercase tracking-widest leading-relaxed">
                   A new <strong className="text-amber-900">{selectedRunType}</strong> run will compute additional pay items. Upon finalization, all runs for <strong>{fmtPeriod(selectedPeriod)}</strong> will be automatically consolidated — employees will see only one payslip per month.
                 </p>
               </div>
               <div className="px-8 py-5 flex justify-end gap-4 bg-slate-50/50">
-                <button onClick={() => { setPeriodConflictRuns([]); setConflictPayslips([]); }} className="px-6 py-3 bg-white border border-slate-200 text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-100 transition-all">Cancel</button>
-                <button
-                  onClick={actuallyCreateRun}
-                  disabled={isProcessing}
-                  className="px-8 py-3 bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-amber-600 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-60 flex items-center gap-2"
-                >
-                  {isProcessing ? (
-                    <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Creating…</>
-                  ) : (
-                    <>⚡ Confirm — Create Supplemental Run</>
-                  )}
-                </button>
+                <button onClick={() => { setPeriodConflictRuns([]); setConflictPayslips([]); setConflictSalaryMap({}); }} className="px-6 py-3 bg-white border border-slate-200 text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-100 transition-all">Cancel</button>
+                {conflictingRun ? (
+                  <button
+                    onClick={async () => {
+                      setIsProcessing(true);
+                      try {
+                        await apiFetch(`/payroll/runs/${conflictingRun.id}/cancel`, { method: 'POST' });
+                        await actuallyCreateRun();
+                      } catch (e: any) {
+                        handleActionToast(e.message || 'Void & Replace failed');
+                        setIsProcessing(false);
+                      }
+                    }}
+                    disabled={isProcessing}
+                    className="px-8 py-3 bg-red-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-red-700 transition-all shadow-lg shadow-red-500/20 disabled:opacity-60 flex items-center gap-2"
+                  >
+                    {isProcessing ? (
+                      <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing…</>
+                    ) : (
+                      <>⚡ Void & Replace — {selectedRunType}</>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    onClick={actuallyCreateRun}
+                    disabled={isProcessing}
+                    className="px-8 py-3 bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-amber-600 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-60 flex items-center gap-2"
+                  >
+                    {isProcessing ? (
+                      <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Creating…</>
+                    ) : (
+                      <>⚡ Confirm — Create Supplemental Run</>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -1106,6 +1226,74 @@ function AdminPayrollDashboard() {
                   <option value="management">Personnel: Executive</option>
                 </select>
               </div>
+              {/* ── Period Working-Day Config (MOM EA s.20) ─────────────────── */}
+              <div className="pt-4 border-t border-slate-50 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Working Days — {fmtPeriod(selectedPeriod)}</p>
+                    <p className="text-[8px] font-bold text-slate-300 uppercase tracking-wide mt-0.5">MOM EA s.20 · Pro-ration basis for new joiners &amp; leavers</p>
+                  </div>
+                  {periodCfg && (
+                    <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${periodCfg.isOverridden ? 'bg-amber-50 text-amber-600 border border-amber-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
+                      {periodCfg.isOverridden ? 'Overridden' : 'Auto (MOM)'}
+                    </span>
+                  )}
+                </div>
+
+                {periodCfgLoading ? (
+                  <div className="h-16 bg-slate-50 rounded-2xl animate-pulse" />
+                ) : periodCfg ? (
+                  <div className="bg-slate-50 rounded-2xl p-4 flex flex-col gap-3">
+                    {/* Work week selector */}
+                    <div className="flex gap-2">
+                      {(['FIVE_DAY', 'SIX_DAY'] as const).map(t => (
+                        <button key={t} onClick={() => setPeriodCfgWorkDayType(t)}
+                          className={`flex-1 py-2 px-3 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${periodCfgWorkDayType === t ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'}`}>
+                          {t === 'FIVE_DAY' ? '5-Day (Mon–Fri)' : '6-Day (Mon–Sat)'}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Recommended vs override */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">MOM Recommended</p>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-2xl font-black text-indigo-600">{periodCfg.recommendedWorkingDays}</span>
+                          <span className="text-[9px] font-black text-slate-400 uppercase">days</span>
+                        </div>
+                        {periodCfg.publicHolidays.length > 0 && (
+                          <p className="text-[8px] font-bold text-slate-400 mt-1">
+                            {periodCfg.publicHolidays.length} public holiday{periodCfg.publicHolidays.length !== 1 ? 's' : ''} deducted
+                            {' ('}{periodCfg.publicHolidays.map(h => h.name).join(', ')}{')'}
+                          </p>
+                        )}
+                      </div>
+                      <div className="w-px h-10 bg-slate-200" />
+                      <div className="flex-1">
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Override (optional)</p>
+                        <input
+                          type="number" min="1" max="31"
+                          value={periodCfgOverride}
+                          onChange={e => setPeriodCfgOverride(e.target.value)}
+                          placeholder={String(periodCfg.recommendedWorkingDays)}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-black text-slate-900 outline-none focus:border-indigo-600 transition-all placeholder:text-slate-300"
+                        />
+                      </div>
+                    </div>
+
+                    <button onClick={savePeriodConfig} disabled={periodCfgSaving}
+                      className="self-end px-5 py-2 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-600 transition-all disabled:opacity-50">
+                      {periodCfgSaving ? 'Saving…' : 'Save Config'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bg-slate-50 rounded-2xl p-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">
+                    Could not load period config
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-4 pt-4 border-t border-slate-50">
                 <label className="flex items-center gap-4 cursor-pointer group">
                   <div className="relative">
@@ -1346,11 +1534,18 @@ function AdminPayrollDashboard() {
                    <button onClick={async () => {
                      const id = reviewRunData.id;
                      try {
-                       await apiFetch(`/payroll/runs/${id}/compute`, { method: 'POST', body: JSON.stringify({}) });
+                       const result = await apiFetch(`/payroll/runs/${id}/compute`, { method: 'POST', body: JSON.stringify({}) });
                        const { payslips } = await fetchPayslipsForRun(id);
                        setReviewPayslips(payslips);
                        setPaycodesDirty(false);
-                       handleActionToast('Recomputed with updated paycodes.');
+                       const zeroIds: string[] = result?.warnings?.zeroOrdinaryWages ?? [];
+                       const removedIds: string[] = result?.autoRemovedIds ?? [];
+                       const notes: string[] = [];
+                       if (removedIds.length > 0) notes.push(`${removedIds.length} employee(s) unchanged — skipped`);
+                       if (zeroIds.length > 0) notes.push(`${zeroIds.length} have $0 ordinary wages — check salary`);
+                       handleActionToast(notes.length > 0
+                         ? `Recomputed. NOTE: ${notes.join('; ')}.`
+                         : 'Recomputed with updated paycodes.');
                      } catch (e: any) { handleActionToast(e.message || 'Recompute failed'); }
                    }} className="px-10 py-5 bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-amber-600 shadow-xl shadow-amber-500/20 active:scale-95 transition-all">
                      Recompute
@@ -1369,8 +1564,15 @@ function AdminPayrollDashboard() {
                          await apiFetch(`/payroll/runs/${id}/approve`, { method: 'POST' });
                          handleActionToast('Payroll approved. Ready to finalise.');
                        } else if (status === 'DRAFT') {
-                         await apiFetch(`/payroll/runs/${id}/compute`, { method: 'POST', body: JSON.stringify({}) });
-                         handleActionToast('Payroll computed. Pending authorisation.');
+                         const result = await apiFetch(`/payroll/runs/${id}/compute`, { method: 'POST', body: JSON.stringify({}) });
+                         const zeroIds: string[] = result?.warnings?.zeroOrdinaryWages ?? [];
+                         const removedIds: string[] = result?.autoRemovedIds ?? [];
+                         const notes: string[] = [];
+                         if (removedIds.length > 0) notes.push(`${removedIds.length} employee(s) unchanged from prior payslip — skipped from this run`);
+                         if (zeroIds.length > 0) notes.push(`${zeroIds.length} have $0 ordinary wages — check salary before authorising`);
+                         handleActionToast(notes.length > 0
+                           ? `Computed. NOTE: ${notes.join('; ')}.`
+                           : 'Payroll computed. Pending authorisation.');
                        }
                        loadRuns();
                      } catch (e: any) { handleActionToast(e.message || 'Action failed'); }

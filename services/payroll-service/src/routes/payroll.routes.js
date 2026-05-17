@@ -15,6 +15,27 @@ const prisma = new PrismaClient();
 // ─── Helper: safe decrypt to float ───────────────────────────────────────────
 const decSafe = (enc) => { try { return enc ? parseFloat(decrypt(enc)) || 0 : 0; } catch { return 0; } };
 
+// ─── Helper: count working days between two dates (inclusive) ─────────────────
+// workDayType 'FIVE_DAY' = Mon–Fri; 'SIX_DAY' = Mon–Sat
+// holidaySet: Set of date strings 'YYYY-MM-DD' that are public holidays
+function countWorkingDays(from, to, holidaySet, workDayType = 'FIVE_DAY') {
+  const maxDow = workDayType === 'SIX_DAY' ? 6 : 5; // 0=Sun … 6=Sat
+  let count = 0;
+  const d = new Date(from);
+  d.setHours(0, 0, 0, 0);
+  const end = new Date(to);
+  end.setHours(23, 59, 59, 999);
+  while (d <= end) {
+    const dow = d.getDay();
+    if (dow >= 1 && dow <= maxDow) {
+      const ds = d.toISOString().slice(0, 10);
+      if (!holidaySet.has(ds)) count++;
+    }
+    d.setDate(d.getDate() + 1);
+  }
+  return count;
+}
+
 // ─── Helper: consolidatePeriod ────────────────────────────────────────────────
 // Merges all published payslips for a period into the primary run's payslips.
 // Returns the count of employees where consolidation was needed (>1 payslip).
@@ -183,6 +204,56 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
 
     if (employees.length === 0) return res.status(400).json({ error: 'No active employees found for payroll computation' });
 
+    // ── For supplemental runs: fetch prior published payslips now so we can compare after compute ──
+    // Employees whose computed values exactly match their prior payslip and have no paycodes
+    // will be auto-removed from this run — only true deltas and paycode additions are kept.
+    let priorPayslipMap = {}; // employeeId → { basicSalary, grossPay, netPay }
+    if (run.runType !== 'MONTHLY') {
+      const priorPublished = await prisma.payslip.findMany({
+        where: { period: run.period, isPublished: true },
+        select: { employeeId: true, basicSalaryEnc: true, grossPayEnc: true, netPayEnc: true },
+      });
+      for (const ps of priorPublished) {
+        priorPayslipMap[ps.employeeId] = {
+          basicSalary: decSafe(ps.basicSalaryEnc),
+          grossPay:    decSafe(ps.grossPayEnc),
+          netPay:      decSafe(ps.netPayEnc),
+        };
+      }
+    }
+
+    // ── Fetch period config + public holidays for working-day pro-rating (MOM EA s.20) ──
+    const [periodConfig, periodHolidays] = await Promise.all([
+      prisma.payrollPeriodConfig.findUnique({ where: { period: run.period } }),
+      prisma.publicHoliday.findMany({
+        where: { date: { gte: periodStart, lte: periodEnd } },
+        select: { date: true },
+      }),
+    ]);
+    const workDayType = periodConfig?.workDayType || 'FIVE_DAY';
+    const holidaySet  = new Set(periodHolidays.map(h => h.date.toISOString().slice(0, 10)));
+    // Total working days in this pay period (override or auto-computed)
+    const workingDaysInPeriod = (periodConfig?.workingDays != null)
+      ? periodConfig.workingDays
+      : countWorkingDays(periodStart, periodEnd, holidaySet, workDayType);
+
+    // ── EA s.20: pro-rate OW/grossPay for mid-month starters/leavers using working days ──
+    // prorationFactors is also used below to pro-rate OW line items (salary-as-paycode)
+    const prorationFactors = new Map();
+    for (const emp of employees) {
+      const startD   = emp.startDate ? new Date(emp.startDate) : null;
+      const endD     = emp.endDate   ? new Date(emp.endDate)   : null;
+      const effStart = (startD && startD > periodStart) ? startD : periodStart;
+      const effEnd   = (endD   && endD   < periodEnd)   ? endD   : periodEnd;
+      const workedDays = countWorkingDays(effStart, effEnd, holidaySet, workDayType);
+      const factor = workedDays < workingDaysInPeriod ? workedDays / workingDaysInPeriod : 1;
+      prorationFactors.set(emp.employeeId, factor);
+      if (factor < 1) {
+        emp.ow       = Math.round((emp.ow       || 0) * factor * 100) / 100;
+        emp.grossPay = Math.round((emp.grossPay || 0) * factor * 100) / 100;
+      }
+    }
+
     const cpfRates = await prisma.cpfRate.findMany({ where: { isActive: true } });
     const sdlConfig = await prisma.sdlConfig.findFirst({ where: { isActive: true } });
     const savedLineItems = await prisma.payrollLineItem.findMany({ where: { runId: run.id } });
@@ -214,18 +285,22 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
     }
 
     let totalGross = 0, totalNet = 0, totalEmployee = 0, totalEmployer = 0, totalSdl = 0;
+    const zeroSalaryWarnings = [];
+    const computedResults = []; // { employeeId, effectiveOw, effectiveGross, net, hasPaycodes }
 
     for (const emp of employees) {
       const empItems = savedLineItems.filter(li => li.employeeId === emp.employeeId);
 
+      const empFactor = prorationFactors.get(emp.employeeId) || 1;
       let owAdj = 0, awAdj = 0, nonCpfAdj = 0, deductions = 0, reimbursements = 0;
       for (const item of empItems) {
         const amt = parseFloat(decrypt(item.amountEncrypted)) || 0;
         if (item.wageType === 'DEDUCTION')      deductions    += Math.abs(amt);
         else if (item.wageType === 'REIMBURSEMENT') reimbursements += amt;
         else if (item.isCpfApplicable && item.wageType === 'AW') awAdj += amt;
-        else if (item.isCpfApplicable)           owAdj         += amt;
-        else                                     nonCpfAdj     += amt;
+        // OW line items represent monthly rates — apply the same EA s.20 pro-ration
+        else if (item.isCpfApplicable)           owAdj         += Math.round(amt * empFactor * 100) / 100;
+        else                                     nonCpfAdj     += Math.round(amt * empFactor * 100) / 100;
       }
 
       const effectiveOw    = (emp.ow || 0) + owAdj;
@@ -248,7 +323,7 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
 
       const payslipData = {
         runId: run.id, employeeId: emp.employeeId, period: run.period,
-        basicSalaryEnc: encrypt(String(emp.ow)),
+        basicSalaryEnc: encrypt(String(effectiveOw)),
         grossPayEnc: encrypt(String(effectiveGross)),
         netPayEnc: encrypt(String(net)),
         employeeCpfEnc: encrypt(String(cpf.totalEmployee)),
@@ -263,11 +338,42 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
         govtPaidAmountEnc: govtPaidAmt > 0 ? encrypt(String(govtPaidAmt)) : null,
       };
 
+      if (effectiveOw === 0) zeroSalaryWarnings.push(emp.employeeId);
+
+      computedResults.push({ employeeId: emp.employeeId, effectiveOw, effectiveGross, net, hasPaycodes: empItems.length > 0 });
+
       await prisma.payslip.upsert({
         where: { runId_employeeId: { runId: run.id, employeeId: emp.employeeId } },
         create: { id: uuidv4(), ...payslipData },
         update: payslipData,
       });
+    }
+
+    // ── Post-compute: auto-remove employees whose values match their prior payslip ──
+    // For supplemental runs: if computed basicSalary == prior basicSalary and no paycodes,
+    // the employee is unchanged — drop them from this run, keep only their prior payslip.
+    let autoRemovedIds = [];
+    if (run.runType !== 'MONTHLY' && Object.keys(priorPayslipMap).length > 0) {
+      const toRemove = computedResults
+        .filter(r => {
+          if (r.hasPaycodes) return false; // always keep employees with paycodes
+          const prior = priorPayslipMap[r.employeeId];
+          if (!prior) return false; // no prior payslip → new employee, keep
+          const sameBasic = Math.abs(r.effectiveOw   - prior.basicSalary) < 0.01;
+          const sameGross = Math.abs(r.effectiveGross - prior.grossPay)    < 0.01;
+          return sameBasic && sameGross;
+        })
+        .map(r => r.employeeId);
+
+      if (toRemove.length > 0) {
+        await prisma.payslip.deleteMany({ where: { runId: run.id, employeeId: { in: toRemove } } });
+        // Subtract their amounts from the run totals
+        for (const r of computedResults.filter(c => toRemove.includes(c.employeeId))) {
+          totalGross -= r.effectiveGross;
+          totalNet   -= r.net;
+        }
+        autoRemovedIds = toRemove;
+      }
     }
 
     await prisma.payrollRun.update({
@@ -281,7 +387,12 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
         totalSdl: String(totalSdl),
       },
     });
-    res.json({ message: 'Payroll computed. Status: PENDING_APPROVAL', total: { gross: totalGross, net: totalNet, employeeCpf: totalEmployee, employerCpf: totalEmployer, sdl: totalSdl } });
+    res.json({
+      message: 'Payroll computed. Status: PENDING_APPROVAL',
+      total: { gross: totalGross, net: totalNet, employeeCpf: totalEmployee, employerCpf: totalEmployer, sdl: totalSdl },
+      ...(zeroSalaryWarnings.length > 0 && { warnings: { zeroOrdinaryWages: zeroSalaryWarnings } }),
+      ...(autoRemovedIds.length > 0 && { autoRemovedIds }),
+    });
   } catch (err) { next(err); }
 });
 
@@ -961,6 +1072,105 @@ function generateDbsGiro(payments, totalAmount, run, today, opts = {}) {
 
   return lines.join('\r\n');
 }
+
+// ─── GET /payroll/period-config/:period ─ MOM working-day config for a period ─
+router.get('/period-config/:period', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const { period } = req.params;
+    if (!/^\d{4}-\d{2}$/.test(period)) return res.status(400).json({ error: 'Period must be YYYY-MM' });
+    const [y, m] = period.split('-').map(Number);
+    const pStart = new Date(y, m - 1, 1);
+    const pEnd   = new Date(y, m,     0);
+
+    const [config, holidays] = await Promise.all([
+      prisma.payrollPeriodConfig.findUnique({ where: { period } }),
+      prisma.publicHoliday.findMany({
+        where: { date: { gte: pStart, lte: pEnd } },
+        select: { id: true, date: true, name: true },
+        orderBy: { date: 'asc' },
+      }),
+    ]);
+
+    const workDayType = config?.workDayType || 'FIVE_DAY';
+    const hSet = new Set(holidays.map(h => h.date.toISOString().slice(0, 10)));
+    const recommended = countWorkingDays(pStart, pEnd, hSet, workDayType);
+
+    res.json({
+      period,
+      workDayType,
+      workingDays:          config?.workingDays ?? recommended,
+      recommendedWorkingDays: recommended,
+      isOverridden:         config?.workingDays != null,
+      notes:                config?.notes ?? null,
+      publicHolidays:       holidays.map(h => ({ id: h.id, date: h.date.toISOString().slice(0, 10), name: h.name })),
+    });
+  } catch (err) { next(err); }
+});
+
+// ─── PUT /payroll/period-config/:period ─ Save working-day override ──────────
+router.put('/period-config/:period', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const { period } = req.params;
+    if (!/^\d{4}-\d{2}$/.test(period)) return res.status(400).json({ error: 'Period must be YYYY-MM' });
+    const { workDayType = 'FIVE_DAY', workingDays, notes } = req.body;
+
+    if (!['FIVE_DAY', 'SIX_DAY'].includes(workDayType)) {
+      return res.status(400).json({ error: 'workDayType must be FIVE_DAY or SIX_DAY' });
+    }
+    if (workingDays !== undefined && workingDays !== null) {
+      const n = Number(workingDays);
+      if (!Number.isInteger(n) || n < 1 || n > 31) {
+        return res.status(400).json({ error: 'workingDays must be an integer between 1 and 31' });
+      }
+    }
+
+    const config = await prisma.payrollPeriodConfig.upsert({
+      where:  { period },
+      create: { id: uuidv4(), period, workDayType, workingDays: workingDays ?? null, notes: notes ?? null },
+      update: { workDayType, workingDays: workingDays ?? null, notes: notes ?? null },
+    });
+    res.json(config);
+  } catch (err) { next(err); }
+});
+
+// ─── GET /payroll/public-holidays ─ List holidays (filter by year) ───────────
+router.get('/public-holidays', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const { year } = req.query;
+    const where = year ? { year: Number(year) } : {};
+    const holidays = await prisma.publicHoliday.findMany({ where, orderBy: { date: 'asc' } });
+    res.json(holidays.map(h => ({ id: h.id, date: h.date.toISOString().slice(0, 10), name: h.name, year: h.year })));
+  } catch (err) { next(err); }
+});
+
+// ─── POST /payroll/public-holidays ─ Add a public holiday ────────────────────
+router.post('/public-holidays', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const { date, name } = req.body;
+    if (!date || !name) return res.status(400).json({ error: 'date (YYYY-MM-DD) and name are required' });
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return res.status(400).json({ error: 'Invalid date' });
+    const year = d.getUTCFullYear();
+    const holiday = await prisma.publicHoliday.create({
+      data: { id: uuidv4(), date: d, name: name.trim(), year },
+    });
+    res.status(201).json({ id: holiday.id, date: holiday.date.toISOString().slice(0, 10), name: holiday.name, year: holiday.year });
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'A holiday on this date already exists' });
+    next(err);
+  }
+});
+
+// ─── DELETE /payroll/public-holidays/:id ─ Remove a public holiday ─────────
+router.delete('/public-holidays/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    await prisma.publicHoliday.delete({ where: { id: req.params.id } });
+    res.json({ message: 'Holiday removed' });
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Holiday not found' });
+    next(err);
+  }
+});
 
 // ─── Helper functions ────────────────────────────────────────────────────────
 function findCpfRate(rates, citizenStatus, age) {

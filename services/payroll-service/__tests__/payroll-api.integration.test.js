@@ -59,6 +59,11 @@ const mockCpfRateFindMany = jest.fn();
 const mockSdlConfigFindFirst = jest.fn();
 const mockLineItemFindMany = jest.fn();
 const mockPayrollOverrideFindMany = jest.fn().mockResolvedValue([]);
+const mockPeriodConfigFindUnique = jest.fn().mockResolvedValue(null); // default: no override
+const mockPublicHolidayFindMany = jest.fn().mockResolvedValue([]);   // default: no holidays
+const mockPeriodConfigUpsert = jest.fn().mockResolvedValue({});
+const mockPublicHolidayCreate = jest.fn();
+const mockPublicHolidayDelete = jest.fn();
 
 jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({
@@ -81,6 +86,8 @@ jest.mock('@prisma/client', () => ({
     payrollComponent: { findMany: jest.fn().mockResolvedValue([]) },
     payrollOverride: { findMany: mockPayrollOverrideFindMany },
     payComponent: { findMany: jest.fn().mockResolvedValue([]) },
+    payrollPeriodConfig: { findUnique: mockPeriodConfigFindUnique, upsert: mockPeriodConfigUpsert },
+    publicHoliday: { findMany: mockPublicHolidayFindMany, create: mockPublicHolidayCreate, delete: mockPublicHolidayDelete },
   })),
 }));
 
@@ -227,6 +234,8 @@ describe('D) POST /payroll/runs/:id/compute — CPF + SDL integration', () => {
     mockPayslipDeleteMany.mockResolvedValue({});
     mockPayslipCreateMany.mockResolvedValue({ count: 1 });
     mockRunUpdate.mockResolvedValue({ ...draftRun, status: 'PENDING_APPROVAL' });
+    mockPeriodConfigFindUnique.mockResolvedValue(null); // no period config override
+    mockPublicHolidayFindMany.mockResolvedValue([]);    // no public holidays
   });
 
   test('200 — computes payroll with CPF and SDL when employees provided in body', async () => {
@@ -458,5 +467,227 @@ describe('E-extended) GET /payroll/runs/:id/payslips — breakdown field coverag
     expect(ps.govtPaidDays).toBe(0);
     expect(ps.ytdGross).toBe(5000);
     expect(ps.ytdEmployeeCpf).toBe(1000);
+  });
+});
+
+// ── G) Pro-rating for mid-month starters and leavers (EA s.20, working days) ──
+// May 2026: Mon May 4 – Fri May 29 (no public holidays in mock)
+//   Week 1: 4 days (Mon 4 – Thu 1 is April; Mon 4–Fri 8 = 5 days)
+//   Actually May 2026: May 1=Fri, May 4=Mon … May 29=Fri, May 30=Sat, May 31=Sun
+//   Working days (FIVE_DAY, no holidays): May 1(Fri), 4–8, 11–15, 18–22, 25–29 = 1+5+5+5+5 = 21 days
+describe('G) Pro-rating — EA s.20 working-day salary (MOM guidelines)', () => {
+  // May 2026: 21 working days (Mon–Fri, no holidays)
+  const MAY_2026_WORKING_DAYS = 21; // May 1=Fri + 4 full Mon-Fri weeks
+
+  const cpfRates = [
+    { id: 'rate-1', citizenStatus: 'SC', ageFrom: 0, ageTo: 55, employeeRate: 0.20, employerRate: 0.17, owCeiling: 6800, awCeiling: 102000, isActive: true },
+  ];
+  const sdlConfig = { rate: 0.0025, minAmount: 2.00, maxAmount: 11.25, salaryCap: 4500, isActive: true };
+  const adhocRun  = { id: 'run-adhoc', period: '2026-05', runType: 'ADHOC', status: 'DRAFT', employeeGroup: null, initiatedBy: 'admin-001' };
+
+  const baseEmp = {
+    employeeId: 'emp-001', employeeCode: 'EMP-001', fullName: 'Test',
+    ow: 5000, grossPay: 5000, citizenStatus: 'SC', age: 30,
+    startDate: null, endDate: null,
+    ytdOw: 0, ytdAw: 0, ytdGross: 0, ytdEmployeeCpf: 0, ytdEmployerCpf: 0,
+  };
+
+  beforeEach(() => {
+    mockRunFindUnique.mockResolvedValue(adhocRun);
+    mockCpfRateFindMany.mockResolvedValue(cpfRates);
+    mockSdlConfigFindFirst.mockResolvedValue(sdlConfig);
+    mockLineItemFindMany.mockResolvedValue([]);
+    mockPayslipFindMany.mockResolvedValue([]); // no prior published payslips (supplemental filter)
+    mockRunUpdate.mockResolvedValue({});
+    mockPeriodConfigFindUnique.mockResolvedValue(null); // auto-compute from holidays
+    mockPublicHolidayFindMany.mockResolvedValue([]);    // no holidays in May 2026
+  });
+
+  // Helper: count working days Mon–Fri between two date strings (no holidays)
+  function wd(fromStr, toStr) {
+    let count = 0;
+    const d = new Date(fromStr); d.setHours(0,0,0,0);
+    const e = new Date(toStr);   e.setHours(23,59,59,999);
+    while (d <= e) { const dow = d.getDay(); if (dow >= 1 && dow <= 5) count++; d.setDate(d.getDate()+1); }
+    return count;
+  }
+
+  test('G1 — starter Mon May 4 gets (May 4–31 working days)/21 of monthly salary', async () => {
+    // May 4 = first Monday: worked = 21-0 = 20 working days (May 1 Fri is skipped; Mon4–Fri29=20)
+    // Actually May 1=Fri is a working day. May 4=Mon. workedDays from May 4 to May 31 = 20 days.
+    const workedDays = wd('2026-05-04', '2026-05-31'); // 20
+    const res = await request(app)
+      .post('/payroll/runs/run-adhoc/compute')
+      .send({ employees: [{ ...baseEmp, startDate: '2026-05-04' }] });
+
+    expect(res.status).toBe(200);
+    const upsertData = mockPayslipUpsert.mock.calls[0][0].create;
+    const expectedOw = Math.round(5000 * (workedDays / MAY_2026_WORKING_DAYS) * 100) / 100;
+    expect(parseFloat(upsertData.basicSalaryEnc)).toBeCloseTo(expectedOw, 2);
+    expect(parseFloat(upsertData.grossPayEnc)).toBeCloseTo(expectedOw, 2);
+    expect(parseFloat(upsertData.grossPayEnc)).toBeGreaterThan(0);
+  });
+
+  test('G2 — starter Mon May 12 (Bam/Samuel scenario) gets (May 12–31 working days)/21', async () => {
+    const workedDays = wd('2026-05-12', '2026-05-31'); // 14 working days
+    const res = await request(app)
+      .post('/payroll/runs/run-adhoc/compute')
+      .send({ employees: [{ ...baseEmp, startDate: '2026-05-12' }] });
+
+    expect(res.status).toBe(200);
+    const upsertData = mockPayslipUpsert.mock.calls[0][0].create;
+    const expectedOw = Math.round(5000 * (workedDays / MAY_2026_WORKING_DAYS) * 100) / 100;
+    expect(parseFloat(upsertData.basicSalaryEnc)).toBeCloseTo(expectedOw, 2);
+    expect(parseFloat(upsertData.grossPayEnc)).toBeCloseTo(expectedOw, 2);
+  });
+
+  test('G3 — starter May 1 (Fri, first day) gets full month salary (21/21)', async () => {
+    const res = await request(app)
+      .post('/payroll/runs/run-adhoc/compute')
+      .send({ employees: [{ ...baseEmp, startDate: '2026-05-01' }] });
+
+    expect(res.status).toBe(200);
+    const upsertData = mockPayslipUpsert.mock.calls[0][0].create;
+    expect(parseFloat(upsertData.basicSalaryEnc)).toBe(5000);
+    expect(parseFloat(upsertData.grossPayEnc)).toBe(5000);
+  });
+
+  test('G4 — employee started before period: full working-day salary', async () => {
+    const res = await request(app)
+      .post('/payroll/runs/run-adhoc/compute')
+      .send({ employees: [{ ...baseEmp, startDate: '2025-03-01' }] });
+
+    expect(res.status).toBe(200);
+    const upsertData = mockPayslipUpsert.mock.calls[0][0].create;
+    expect(parseFloat(upsertData.basicSalaryEnc)).toBe(5000);
+  });
+
+  test('G5 — leaver on Fri May 16 gets (May 1–16 working days)/21 of salary', async () => {
+    const workedDays = wd('2026-05-01', '2026-05-16'); // Fri1, Mon4-Fri8, Mon11-Fri16 = 1+5+5=11
+    const res = await request(app)
+      .post('/payroll/runs/run-adhoc/compute')
+      .send({ employees: [{ ...baseEmp, startDate: '2025-01-01', endDate: '2026-05-16' }] });
+
+    expect(res.status).toBe(200);
+    const upsertData = mockPayslipUpsert.mock.calls[0][0].create;
+    const expectedOw = Math.round(5000 * (workedDays / MAY_2026_WORKING_DAYS) * 100) / 100;
+    expect(parseFloat(upsertData.basicSalaryEnc)).toBeCloseTo(expectedOw, 2);
+  });
+
+  test('G6 — same-month joiner AND leaver: uses working days (start May 12, end May 20)', async () => {
+    // May 12 Mon – May 20 Wed: Mon12, Tue13, Wed14, Thu15, Fri16, Mon18, Tue19, Wed20 = 8 working days
+    const workedDays = wd('2026-05-12', '2026-05-20');
+    const res = await request(app)
+      .post('/payroll/runs/run-adhoc/compute')
+      .send({ employees: [{ ...baseEmp, startDate: '2026-05-12', endDate: '2026-05-20' }] });
+
+    expect(res.status).toBe(200);
+    const upsertData = mockPayslipUpsert.mock.calls[0][0].create;
+    const expectedOw = Math.round(5000 * (workedDays / MAY_2026_WORKING_DAYS) * 100) / 100;
+    expect(parseFloat(upsertData.basicSalaryEnc)).toBeCloseTo(expectedOw, 2);
+  });
+
+  test('G7 — period config override: admin sets 20 working days; pro-rating uses override', async () => {
+    // Override: say admin marks 20 working days (e.g. one extra holiday)
+    mockPeriodConfigFindUnique.mockResolvedValue({ workDayType: 'FIVE_DAY', workingDays: 20 });
+    const workedDays = wd('2026-05-12', '2026-05-31'); // same as G2 = 14
+    const res = await request(app)
+      .post('/payroll/runs/run-adhoc/compute')
+      .send({ employees: [{ ...baseEmp, startDate: '2026-05-12' }] });
+
+    expect(res.status).toBe(200);
+    const upsertData = mockPayslipUpsert.mock.calls[0][0].create;
+    const expectedOw = Math.round(5000 * (workedDays / 20) * 100) / 100;
+    expect(parseFloat(upsertData.basicSalaryEnc)).toBeCloseTo(expectedOw, 2);
+  });
+
+  test('G8 — public holiday on May 1 reduces working days to 20; starter on May 4 gets 20/20', async () => {
+    // May 1 = Fri, marked as public holiday → working days in month = 20
+    mockPublicHolidayFindMany.mockResolvedValue([
+      { date: new Date('2026-05-01T00:00:00.000Z') },
+    ]);
+    // Employee starts May 4 (Mon): worked days = May 4–31 = 20 working days = full month (20/20)
+    const res = await request(app)
+      .post('/payroll/runs/run-adhoc/compute')
+      .send({ employees: [{ ...baseEmp, startDate: '2026-05-04' }] });
+
+    expect(res.status).toBe(200);
+    const upsertData = mockPayslipUpsert.mock.calls[0][0].create;
+    // worked = May 4–31 = 20; total in period = 20 (holiday excluded May 1)
+    expect(parseFloat(upsertData.basicSalaryEnc)).toBe(5000); // full salary
+  });
+
+  it('G9 — OW line item pro-rated for mid-month starter; basicSalaryEnc = effectiveOw (salary-as-paycode)', async () => {
+    // Bam/Samuel scenario: profile salary is $0, salary entered as an OW paycode line item
+    const salaryAmt = 3000;
+    mockLineItemFindMany.mockResolvedValue([{
+      employeeId: 'emp-001',
+      amountEncrypted: String(salaryAmt),
+      wageType: 'OW',
+      isCpfApplicable: true,
+    }]);
+    // starter May 12 (Mon): 14 worked days out of 21
+    const res = await request(app)
+      .post('/payroll/runs/run-adhoc/compute')
+      .send({ employees: [{ ...baseEmp, ow: 0, grossPay: 0, startDate: '2026-05-12' }] });
+
+    expect(res.status).toBe(200);
+    const upsertData = mockPayslipUpsert.mock.calls[0][0].create;
+    const expectedOw = Math.round(salaryAmt * (14 / 21) * 100) / 100;
+    expect(parseFloat(upsertData.basicSalaryEnc)).toBeCloseTo(expectedOw, 2);
+    expect(parseFloat(upsertData.grossPayEnc)).toBeCloseTo(expectedOw, 2);
+  });
+
+  it('G10 — zero effectiveOw triggers warning in compute response', async () => {
+    // Employee with no profile salary and no OW line items
+    const res = await request(app)
+      .post('/payroll/runs/run-adhoc/compute')
+      .send({ employees: [{ ...baseEmp, ow: 0, grossPay: 0 }] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.warnings).toBeDefined();
+    expect(res.body.warnings.zeroOrdinaryWages).toContain('emp-001');
+  });
+
+  it('G11 — supplemental ADHOC: employees whose salary matches prior published payslip are auto-removed post-compute', async () => {
+    // emp-001 has a prior published payslip with basicSalary=5000, grossPay=5000 (MONTHLY run)
+    mockPayslipFindMany.mockResolvedValue([{
+      employeeId: 'emp-001',
+      basicSalaryEnc: '5000',
+      grossPayEnc:    '5000',
+      netPayEnc:      '3850',
+    }]);
+    mockPayslipDeleteMany.mockResolvedValue({ count: 1 });
+
+    // emp-002 is a new joiner with no prior payslip → kept in this run
+    const newJoiner = { ...baseEmp, employeeId: 'emp-002', startDate: '2026-05-12' };
+
+    const res = await request(app)
+      .post('/payroll/runs/run-adhoc/compute')
+      .send({ employees: [baseEmp, newJoiner] });
+
+    expect(res.status).toBe(200);
+    // Both employees are upserted (compute all first)…
+    const upsertedIds = mockPayslipUpsert.mock.calls.map(c => c[0].create.employeeId);
+    expect(upsertedIds).toContain('emp-001');
+    expect(upsertedIds).toContain('emp-002');
+    // …then emp-001 is deleted because their computed salary matches the prior payslip
+    expect(mockPayslipDeleteMany).toHaveBeenCalledWith({
+      where: { runId: 'run-adhoc', employeeId: { in: ['emp-001'] } },
+    });
+    expect(res.body.autoRemovedIds).toContain('emp-001');
+    expect(res.body.autoRemovedIds).not.toContain('emp-002');
+  });
+
+  it('G12 — MONTHLY run skips auto-removal; all employees computed regardless of prior payslips', async () => {
+    mockRunFindUnique.mockResolvedValue({ ...adhocRun, runType: 'MONTHLY' });
+    // Even with prior payslips present, MONTHLY compute should not auto-remove anyone
+    const res = await request(app)
+      .post('/payroll/runs/run-adhoc/compute')
+      .send({ employees: [baseEmp] });
+
+    expect(res.status).toBe(200);
+    expect(mockPayslipUpsert).toHaveBeenCalledTimes(1);
+    expect(res.body.autoRemovedIds).toBeUndefined();
   });
 });

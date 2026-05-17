@@ -157,6 +157,23 @@ model PublicHoliday {
   @@map("public_holidays")
 }
 
+model PayrollPeriodConfig {
+  id          String      @id @default(uuid())
+  period      String      @unique    // "YYYY-MM"
+  workDayType WorkDayType @default(FIVE_DAY)
+  workingDays Int?                   // null = auto-computed from public holidays
+  notes       String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("payroll_period_configs")
+}
+
+enum WorkDayType {
+  FIVE_DAY
+  SIX_DAY
+}
+
 enum ComponentCategory {
   BASIC
   ALLOWANCE
