@@ -42,6 +42,7 @@ services:
       - REPORTING_SERVICE_URL=http://reporting-service:4010
       - ASSET_SERVICE_URL=http://asset-service:4011
       - PERFORMANCE_SERVICE_URL=http://performance-service:4012
+      - TRAINING_SERVICE_URL=http://training-service:4013
     volumes:
       - shared_certs:/app/certs:ro
     depends_on:
@@ -325,6 +326,25 @@ services:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4012
       - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/hrms_performance
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+    volumes:
+      - shared_certs:/app/certs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  training-service:
+    build:
+      context: .
+      dockerfile: services/training-service/Dockerfile
+    container_name: hrms-training
+    restart: unless-stopped
+    ports:
+      - "${TRAINING_SERVICE_PORT:-4013}:4013"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4013
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/hrms_training
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
     volumes:
       - shared_certs:/app/certs:ro

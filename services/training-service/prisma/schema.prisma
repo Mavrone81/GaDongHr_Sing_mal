@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProgramStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ProgramCategory {
+  COMPLIANCE
+  TECHNICAL
+  SOFT_SKILLS
+  LEADERSHIP
+  ONBOARDING
+  SAFETY
+}
+
+enum MaterialType {
+  VIDEO
+  DOCUMENT
+  QUIZ
+  LINK
+}
+
+enum EnrollmentStatus {
+  ENROLLED
+  IN_PROGRESS
+  COMPLETED
+  DROPPED
+}
+
+model TrainingProgram {
+  id           String          @id @default(uuid())
+  title        String
+  description  String?
+  category     ProgramCategory @default(TECHNICAL)
+  status       ProgramStatus   @default(DRAFT)
+  durationMins Int?
+  passingScore Int?
+  thumbnail    String?
+  isMandatory  Boolean         @default(false)
+  createdBy    String
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  materials   TrainingMaterial[]
+  enrollments TrainingEnrollment[]
+
+  @@map("training_programs")
+}
+
+model TrainingMaterial {
+  id           String       @id @default(uuid())
+  programId    String
+  title        String
+  type         MaterialType @default(DOCUMENT)
+  url          String?
+  content      String?
+  orderIndex   Int          @default(0)
+  durationMins Int?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  program TrainingProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@map("training_materials")
+}
+
+model TrainingEnrollment {
+  id          String           @id @default(uuid())
+  programId   String
+  employeeId  String
+  status      EnrollmentStatus @default(ENROLLED)
+  progress    Int              @default(0)
+  score       Int?
+  enrolledBy  String?
+  dueDate     DateTime?
+  enrolledAt  DateTime         @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  program TrainingProgram @relation(fields: [programId], references: [id])
+
+  @@unique([programId, employeeId])
+  @@map("training_enrollments")
+}

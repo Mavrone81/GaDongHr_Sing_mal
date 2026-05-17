@@ -27,6 +27,7 @@ const SERVICES = {
   reporting:    process.env.REPORTING_SERVICE_URL    || 'http://reporting-service:4010',
   asset:        process.env.ASSET_SERVICE_URL        || 'http://asset-service:4011',
   performance:  process.env.PERFORMANCE_SERVICE_URL  || 'http://performance-service:4012',
+  training:     process.env.TRAINING_SERVICE_URL     || 'http://training-service:4013',
 };
 
 const corsOptions = { 
@@ -125,6 +126,7 @@ app.use('/api/notifications',proxy(SERVICES.notification, { ...proxyOpts, proxyR
 app.use('/api/reports',      proxy(SERVICES.reporting,    { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/reports', '/reports') }));
 app.use('/api/assets',       proxy(SERVICES.asset,        { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/assets', '/assets') }));
 app.use('/api/performance',  proxy(SERVICES.performance,  { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/performance', '/performance') }));
+app.use('/api/training',     proxy(SERVICES.training,     { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/training', '/training') }));
 
 app.use((err, req, res, next) => { console.error(err.message); res.status(502).json({ error: 'Gateway error', message: err.message }); });
 
