@@ -41,6 +41,7 @@ services:
       - NOTIFICATION_SERVICE_URL=http://notification-service:4009
       - REPORTING_SERVICE_URL=http://reporting-service:4010
       - ASSET_SERVICE_URL=http://asset-service:4011
+      - PERFORMANCE_SERVICE_URL=http://performance-service:4012
     volumes:
       - shared_certs:/app/certs:ro
     depends_on:
@@ -306,6 +307,25 @@ services:
       - PAYROLL_SERVICE_URL=http://payroll-service:4003
       - EMPLOYEE_SERVICE_URL=http://employee-service:4002
       - LEAVE_SERVICE_URL=http://leave-service:4004
+    volumes:
+      - shared_certs:/app/certs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  performance-service:
+    build:
+      context: .
+      dockerfile: services/performance-service/Dockerfile
+    container_name: hrms-performance
+    restart: unless-stopped
+    ports:
+      - "${PERFORMANCE_SERVICE_PORT:-4012}:4012"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4012
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/hrms_performance
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
     volumes:
       - shared_certs:/app/certs:ro
     depends_on:

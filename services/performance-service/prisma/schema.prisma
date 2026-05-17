@@ -1,0 +1,130 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CycleType {
+  ANNUAL
+  MID_YEAR
+  PROBATION
+  CUSTOM
+}
+
+enum CyclePhase {
+  GOAL_SETTING
+  SELF_ASSESSMENT
+  MANAGER_REVIEW
+  CALIBRATION
+  COMPLETED
+}
+
+enum CycleStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+}
+
+enum AppraisalStatus {
+  PENDING
+  SELF_SUBMITTED
+  MANAGER_SUBMITTED
+  FINALISED
+}
+
+enum GoalStatus {
+  ACTIVE
+  ACHIEVED
+  MISSED
+  CANCELLED
+}
+
+enum GoalCategory {
+  PERFORMANCE
+  DEVELOPMENT
+  ORGANIZATIONAL
+}
+
+enum PipStatus {
+  ACTIVE
+  COMPLETED
+  EXTENDED
+  TERMINATED
+}
+
+model ReviewCycle {
+  id           String      @id @default(uuid())
+  name         String
+  type         CycleType
+  startDate    DateTime
+  endDate      DateTime
+  currentPhase CyclePhase  @default(GOAL_SETTING)
+  status       CycleStatus @default(DRAFT)
+  description  String?
+  createdBy    String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  appraisals   Appraisal[]
+
+  @@map("review_cycles")
+}
+
+model Appraisal {
+  id               String          @id @default(uuid())
+  cycleId          String
+  employeeId       String
+  managerId        String?
+  selfScore        Float?
+  managerScore     Float?
+  overallScore     Float?
+  selfComments     String?
+  managerComments  String?
+  strengths        String?
+  improvements     String?
+  status           AppraisalStatus @default(PENDING)
+  selfSubmittedAt  DateTime?
+  managerSubmittedAt DateTime?
+  finalisedAt      DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  cycle            ReviewCycle     @relation(fields: [cycleId], references: [id])
+
+  @@unique([cycleId, employeeId])
+  @@map("appraisals")
+}
+
+model Goal {
+  id          String       @id @default(uuid())
+  employeeId  String
+  cycleId     String?
+  title       String
+  description String?
+  targetDate  DateTime?
+  progress    Int          @default(0)
+  status      GoalStatus   @default(ACTIVE)
+  category    GoalCategory @default(PERFORMANCE)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@map("goals")
+}
+
+model PipRecord {
+  id             String    @id @default(uuid())
+  employeeId     String
+  managerId      String
+  startDate      DateTime
+  endDate        DateTime
+  objectives     String
+  progressNotes  String?
+  status         PipStatus @default(ACTIVE)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@map("pip_records")
+}
