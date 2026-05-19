@@ -68,7 +68,7 @@ interface Payslip {
   ytdEmployeeCpf: number | null;
 }
 
-function EmployeePayslipsView() {
+export function EmployeePayslipsView() {
   const [payslips, setPayslips] = useState<Payslip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

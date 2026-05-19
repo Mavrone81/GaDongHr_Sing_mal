@@ -13,6 +13,92 @@ const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY || '';
 
 const ADMIN_ROLES = new Set([ROLES.SUPER_ADMIN, ROLES.HR_ADMIN]);
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Complete months between two dates (floor)
+function monthsBetween(start, end) {
+  let m = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+  if (end.getDate() < start.getDate()) m -= 1;
+  return m;
+}
+
+// Pro-rate annual entitlement for partial year starting at eligibilityDate
+function proRateEntitlement(annualDays, eligibilityDate, targetYear) {
+  if (eligibilityDate.getFullYear() < targetYear) return annualDays; // full year
+  const remainingMonths = 12 - eligibilityDate.getMonth(); // 0-indexed: April=3 → 9 months left
+  return Math.ceil((annualDays / 12) * remainingMonths * 10) / 10;
+}
+
+async function getEmployeeStartDate(employeeId) {
+  try {
+    const { data } = await axios.get(`${EMPLOYEE_URL}/employees/${employeeId}`, {
+      headers: { 'x-internal-service-key': INTERNAL_KEY, Authorization: 'Bearer internal' },
+      timeout: 5000,
+    });
+    return data.startDate ? new Date(data.startDate) : null;
+  } catch (err) {
+    console.warn('[leave-service] getEmployeeStartDate failed:', err.message);
+    return null;
+  }
+}
+
+async function getActiveEmployees() {
+  try {
+    const { data } = await axios.get(`${EMPLOYEE_URL}/employees?limit=2000&isActive=true`, {
+      headers: { 'x-internal-service-key': INTERNAL_KEY },
+      timeout: 15000,
+    });
+    return data.employees || (Array.isArray(data) ? data : []);
+  } catch (err) {
+    console.warn('[leave-service] getActiveEmployees failed:', err.message);
+    return [];
+  }
+}
+
+// Auto-provision MOM-compliant entitlements for employees who have completed minServiceMonths
+async function runAutoProvision() {
+  const today = new Date();
+  const year = today.getFullYear();
+  console.log(`[leave-service] Auto-provision run: ${today.toISOString()}`);
+
+  const leaveTypes = await prisma.leaveType.findMany({
+    where: { isActive: true, minServiceMonths: { gt: 0 } },
+  });
+  if (!leaveTypes.length) return { provisioned: 0 };
+
+  const employees = await getActiveEmployees();
+  let provisioned = 0;
+
+  for (const emp of employees) {
+    if (!emp.startDate) continue;
+    const startDate = new Date(emp.startDate);
+    const monthsWorked = monthsBetween(startDate, today);
+
+    for (const lt of leaveTypes) {
+      if (monthsWorked < lt.minServiceMonths) continue;
+
+      const existing = await prisma.leaveEntitlement.findFirst({
+        where: { employeeId: emp.id, leaveTypeId: lt.id, year },
+      });
+      if (existing) continue;
+
+      const eligibilityDate = new Date(startDate);
+      eligibilityDate.setMonth(eligibilityDate.getMonth() + lt.minServiceMonths);
+
+      const entitledDays = proRateEntitlement(lt.annualEntitlement, eligibilityDate, year);
+
+      await prisma.leaveEntitlement.create({
+        data: { id: uuidv4(), employeeId: emp.id, leaveTypeId: lt.id, year, entitledDays },
+      });
+      provisioned++;
+      console.log(`[leave-service] Provisioned ${lt.code} for ${emp.id}: ${entitledDays} days`);
+    }
+  }
+
+  console.log(`[leave-service] Auto-provision done. Provisioned: ${provisioned}`);
+  return { provisioned };
+}
+
 // Fetch supervisor info from employee-service (returns null on any error)
 async function getSupervisorCheck(employeeId, checkerEmployeeId) {
   if (!employeeId || !checkerEmployeeId) return null;
@@ -44,7 +130,7 @@ router.get('/types', authenticate, async (req, res, next) => {
 // ── POST /leave/types ─────────────────────────────────────────────────────────
 router.post('/types', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
   try {
-    const { code, name, isPaid, isStatutory, annualEntitlement, maxCarryForward, isGovtPaid, requiresDocument, minNoticeDays } = req.body;
+    const { code, name, isPaid, isStatutory, annualEntitlement, maxCarryForward, isGovtPaid, requiresDocument, minNoticeDays, minServiceMonths } = req.body;
     if (!code || !name) return res.status(400).json({ error: 'code and name are required' });
     const type = await prisma.leaveType.create({
       data: {
@@ -55,6 +141,7 @@ router.post('/types', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN)
         isGovtPaid: isGovtPaid ?? false,
         requiresDocument: requiresDocument ?? false,
         minNoticeDays: parseInt(minNoticeDays) || 0,
+        minServiceMonths: parseInt(minServiceMonths) || 0,
       },
     });
     res.status(201).json(type);
@@ -67,7 +154,7 @@ router.post('/types', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN)
 // ── PUT /leave/types/:id ──────────────────────────────────────────────────────
 router.put('/types/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
   try {
-    const { name, isPaid, isStatutory, annualEntitlement, maxCarryForward, isGovtPaid, requiresDocument, minNoticeDays, isActive } = req.body;
+    const { name, isPaid, isStatutory, annualEntitlement, maxCarryForward, isGovtPaid, requiresDocument, minNoticeDays, minServiceMonths, isActive } = req.body;
     const type = await prisma.leaveType.update({
       where: { id: req.params.id },
       data: {
@@ -79,6 +166,7 @@ router.put('/types/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADM
         ...(isGovtPaid !== undefined && { isGovtPaid }),
         ...(requiresDocument !== undefined && { requiresDocument }),
         ...(minNoticeDays !== undefined && { minNoticeDays: parseInt(minNoticeDays) }),
+        ...(minServiceMonths !== undefined && { minServiceMonths: parseInt(minServiceMonths) }),
         ...(isActive !== undefined && { isActive }),
       },
     });
@@ -216,6 +304,19 @@ router.post('/applications', authenticate, async (req, res, next) => {
     const leaveType = await prisma.leaveType.findUnique({ where: { id: leaveTypeId } });
     if (!leaveType) return res.status(404).json({ error: 'Leave type not found' });
     if (!leaveType.isActive) return res.status(400).json({ error: 'This leave type is no longer active' });
+
+    // MOM minimum service check
+    if (leaveType.minServiceMonths > 0) {
+      const empStartDate = await getEmployeeStartDate(employeeId);
+      if (empStartDate) {
+        const monthsWorked = monthsBetween(empStartDate, new Date());
+        if (monthsWorked < leaveType.minServiceMonths) {
+          return res.status(400).json({
+            error: `${leaveType.name} requires a minimum of ${leaveType.minServiceMonths} months of service. You have completed ${monthsWorked} month(s). Eligibility date: ${new Date(empStartDate.getFullYear(), empStartDate.getMonth() + leaveType.minServiceMonths, empStartDate.getDate()).toISOString().slice(0, 10)}.`,
+          });
+        }
+      }
+    }
 
     const year = start.getFullYear();
     // Unpaid leave (isPaid=false) and open-ended types (annualEntitlement=0) have no balance ceiling.
@@ -361,6 +462,16 @@ router.post('/public-holidays', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES
   } catch (err) { next(err); }
 });
 
+// ── POST /leave/internal/auto-provision — trigger MOM entitlement provisioning ─
+router.post('/internal/auto-provision', async (req, res, next) => {
+  const key = req.headers['x-internal-service-key'];
+  if (!key || key !== INTERNAL_KEY) return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const result = await runAutoProvision();
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
 // POST /leave/purge — PDPA data retention purge (internal, SUPER_ADMIN only)
 router.post('/purge', authenticate, authorize(ROLES.SUPER_ADMIN), async (req, res, next) => {
   try {
@@ -380,3 +491,4 @@ router.post('/purge', authenticate, authorize(ROLES.SUPER_ADMIN), async (req, re
 });
 
 module.exports = router;
+module.exports.runAutoProvision = runAutoProvision;

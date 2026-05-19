@@ -319,6 +319,10 @@ function OverviewTab({ notify }: { notify: (m: string) => void }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // CYCLES TAB (HR/Admin)
 // ─────────────────────────────────────────────────────────────────────────────
+interface EmployeeLite {
+  id: string; fullName: string; employeeCode: string; department?: string; designation?: string;
+}
+
 function CyclesTab({ notify }: { notify: (m: string) => void }) {
   const [cycles, setCycles] = useState<ReviewCycle[]>([]);
   const [loading, setLoading] = useState(true);
@@ -326,8 +330,11 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: '', type: 'ANNUAL' as CycleType, startDate: '', endDate: '', description: '' });
   const [enrollModal, setEnrollModal] = useState<ReviewCycle | null>(null);
-  const [enrollIds, setEnrollIds] = useState('');
   const [enrolling, setEnrolling] = useState(false);
+  const [allEmployees, setAllEmployees] = useState<EmployeeLite[]>([]);
+  const [employeesLoading, setEmployeesLoading] = useState(false);
+  const [enrollSearch, setEnrollSearch] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -336,6 +343,20 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  async function openEnrollModal(cycle: ReviewCycle) {
+    setEnrollModal(cycle);
+    setSelectedIds(new Set());
+    setEnrollSearch('');
+    if (allEmployees.length === 0) {
+      setEmployeesLoading(true);
+      try {
+        const data = await apiFetch('/employees?limit=500&isActive=true');
+        setAllEmployees(data.employees ?? []);
+      } catch { notify('Could not load employees'); }
+      finally { setEmployeesLoading(false); }
+    }
+  }
 
   async function createCycle() {
     if (!form.name || !form.startDate || !form.endDate) { notify('Fill all required fields'); return; }
@@ -366,13 +387,13 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
 
   async function enrollEmployees() {
     if (!enrollModal) return;
-    const ids = enrollIds.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
-    if (ids.length === 0) { notify('Enter at least one employee ID'); return; }
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) { notify('Select at least one employee'); return; }
     setEnrolling(true);
     try {
       const r = await apiFetch(`/performance/cycles/${enrollModal.id}/enroll`, { method: 'POST', body: JSON.stringify({ employeeIds: ids }) });
       notify(`Enrolled ${r.enrolled}, skipped ${r.skipped}`);
-      setEnrollModal(null); setEnrollIds(''); load();
+      setEnrollModal(null); setSelectedIds(new Set()); load();
     } catch (e: any) { notify(e.message || 'Failed'); }
     finally { setEnrolling(false); }
   }
@@ -433,22 +454,88 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
       )}
 
       {/* Enroll modal */}
-      {enrollModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-6" onClick={() => setEnrollModal(null)}>
-          <div className="bg-white rounded-[2rem] p-10 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-black text-slate-900 mb-2 uppercase tracking-tight">Enroll Employees</h3>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">{enrollModal.name}</p>
-            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Employee IDs (comma or newline separated)</label>
-            <textarea value={enrollIds} onChange={e => setEnrollIds(e.target.value)} rows={5} placeholder="emp-001&#10;emp-002&#10;emp-003" className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold font-mono outline-none focus:border-violet-600 resize-none" />
-            <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setEnrollModal(null)} className="px-6 py-3 border border-slate-200 rounded-xl text-[10px] font-black text-slate-500 uppercase tracking-widest hover:bg-slate-50">Cancel</button>
-              <button onClick={enrollEmployees} disabled={enrolling} className="px-8 py-3 bg-violet-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-700 disabled:opacity-60">
-                {enrolling ? 'Enrolling…' : 'Enroll'}
-              </button>
+      {enrollModal && (() => {
+        const filtered = allEmployees.filter(e => {
+          const q = enrollSearch.toLowerCase();
+          return !q || e.fullName.toLowerCase().includes(q) || e.employeeCode.toLowerCase().includes(q) || (e.department ?? '').toLowerCase().includes(q);
+        });
+        const allFilteredSelected = filtered.length > 0 && filtered.every(e => selectedIds.has(e.id));
+        return (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-6" onClick={() => setEnrollModal(null)}>
+            <div className="bg-white rounded-[2rem] p-8 w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Enroll Employees</h3>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 mb-5">{enrollModal.name}</p>
+
+              {/* Search */}
+              <input
+                value={enrollSearch}
+                onChange={e => setEnrollSearch(e.target.value)}
+                placeholder="Search by name, code, or department…"
+                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600 mb-3"
+              />
+
+              {/* Select all row */}
+              <div className="flex items-center justify-between px-1 mb-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (allFilteredSelected) {
+                      setSelectedIds(prev => { const next = new Set(prev); filtered.forEach(e => next.delete(e.id)); return next; });
+                    } else {
+                      setSelectedIds(prev => { const next = new Set(prev); filtered.forEach(e => next.add(e.id)); return next; });
+                    }
+                  }}
+                  className="text-[10px] font-black text-violet-600 uppercase tracking-widest hover:underline"
+                >
+                  {allFilteredSelected ? 'Deselect All' : 'Select All'}
+                </button>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  {selectedIds.size} selected
+                </span>
+              </div>
+
+              {/* Employee list */}
+              <div className="flex-1 overflow-y-auto border border-slate-100 rounded-2xl divide-y divide-slate-50 min-h-0">
+                {employeesLoading ? (
+                  <div className="p-8 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest animate-pulse">Loading employees…</div>
+                ) : filtered.length === 0 ? (
+                  <div className="p-8 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">No employees found</div>
+                ) : filtered.map(emp => {
+                  const checked = selectedIds.has(emp.id);
+                  return (
+                    <label key={emp.id} className={`flex items-center gap-4 px-5 py-3 cursor-pointer transition-colors ${checked ? 'bg-violet-50' : 'hover:bg-slate-50'}`}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          setSelectedIds(prev => {
+                            const next = new Set(prev);
+                            checked ? next.delete(emp.id) : next.add(emp.id);
+                            return next;
+                          });
+                        }}
+                        className="w-4 h-4 rounded accent-violet-600"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-black text-slate-900 truncate">{emp.fullName}</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{emp.employeeCode}{emp.department ? ` · ${emp.department}` : ''}</p>
+                      </div>
+                      {emp.designation && <span className="text-[9px] font-bold text-slate-400 truncate max-w-28">{emp.designation}</span>}
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-50">
+                <button onClick={() => setEnrollModal(null)} className="px-6 py-3 border border-slate-200 rounded-xl text-[10px] font-black text-slate-500 uppercase tracking-widest hover:bg-slate-50">Cancel</button>
+                <button onClick={enrollEmployees} disabled={enrolling || selectedIds.size === 0} className="px-8 py-3 bg-violet-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-700 disabled:opacity-50">
+                  {enrolling ? 'Enrolling…' : `Enroll ${selectedIds.size > 0 ? `(${selectedIds.size})` : ''}`}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Cycle cards */}
       {loading ? (
@@ -500,7 +587,7 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
                         Advance Phase
                       </button>
                     )}
-                    <button onClick={() => setEnrollModal(c)} className="px-4 py-2 border border-slate-200 rounded-xl text-[9px] font-black text-slate-500 uppercase tracking-widest hover:border-violet-600 hover:text-violet-600 transition-all">
+                    <button onClick={() => openEnrollModal(c)} className="px-4 py-2 border border-slate-200 rounded-xl text-[9px] font-black text-slate-500 uppercase tracking-widest hover:border-violet-600 hover:text-violet-600 transition-all">
                       Enroll
                     </button>
                     <button onClick={() => deleteCycle(c.id)} className="px-4 py-2 border border-red-200 rounded-xl text-[9px] font-black text-red-500 uppercase tracking-widest hover:bg-red-50 transition-all">

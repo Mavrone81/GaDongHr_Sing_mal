@@ -50,6 +50,9 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
       { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
       { name: 'My Leave',      path: '/leave',               icon: '◌' },
       { name: 'My Claims',     path: '/claims',              icon: '◫' },
+      { name: 'My Training',   path: '/training',            icon: '◑' },
+      { name: 'My Appraisal',  path: '/performance',         icon: '▣' },
+      { name: 'My Payslips',   path: '/payroll/me',          icon: '◆' },
     ]
   },
   {
@@ -82,6 +85,13 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
       { name: 'System Overrides',   path: '/settings/overrides',icon: '◒' },
     ]
   },
+  {
+    group: 'SUPPORT',
+    color: 'text-slate-400',
+    items: [
+      { name: 'Support Inbox', path: '/support/admin', icon: '◇' },
+    ]
+  },
 ];
 
 // HR Admin nav
@@ -101,12 +111,16 @@ const HR_ADMIN_NAV: NavGroup[] = [
     { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
     { name: 'My Leave',      path: '/leave',               icon: '◌' },
     { name: 'My Claims',     path: '/claims',              icon: '◫' },
+    { name: 'My Training',   path: '/training',            icon: '◑' },
+    { name: 'My Appraisal',  path: '/performance',         icon: '▣' },
+    { name: 'My Payslips',   path: '/payroll/me',          icon: '◆' },
   ]},
   { group: 'FINANCIAL',  color: 'text-emerald-400', items: [
     { name: 'Payroll', path: '/payroll', icon: '◆' },
   ]},
   { group: 'COMPLIANCE', color: 'text-amber-400',   items: [{ name: 'Reports', path: '/reports', icon: '▤' }] },
   { group: 'ADMIN',      color: 'text-violet-400',  items: [{ name: 'User Management', path: '/settings/users', icon: '◪' }] },
+  { group: 'SUPPORT',   color: 'text-slate-400',   items: [{ name: 'Support Inbox', path: '/support/admin', icon: '◇' }] },
 ];
 
 // Payroll Officer nav
@@ -123,12 +137,18 @@ const PAYROLL_OFFICER_NAV: NavGroup[] = [
     { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
     { name: 'My Leave',      path: '/leave',               icon: '◌' },
     { name: 'My Claims',     path: '/claims',              icon: '◫' },
+    { name: 'My Training',   path: '/training',            icon: '◑' },
+    { name: 'My Appraisal',  path: '/performance',         icon: '▣' },
+    { name: 'My Payslips',   path: '/payroll/me',          icon: '◆' },
   ]},
   { group: 'FINANCIAL',  color: 'text-emerald-400', items: [
     { name: 'Payroll', path: '/payroll', icon: '◆', badge: 'Action' },
   ]},
   { group: 'COMPLIANCE', color: 'text-amber-400',   items: [
     { name: 'Reports', path: '/reports', icon: '▤' },
+  ]},
+  { group: 'SUPPORT',   color: 'text-slate-400',   items: [
+    { name: 'Help & Support', path: '/support', icon: '◇' },
   ]},
 ];
 
@@ -140,9 +160,11 @@ const EMPLOYEE_NAV: NavGroup[] = [
     { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
     { name: 'My Leave',      path: '/leave',               icon: '◌' },
     { name: 'My Claims',     path: '/claims',              icon: '◫' },
+    { name: 'My Training',   path: '/training',            icon: '◑' },
+    { name: 'My Appraisal',  path: '/performance',         icon: '▣' },
   ]},
   { group: 'PAYSLIPS',  color: 'text-emerald-400', items: [
-    { name: 'My Payslips', path: '/payroll', icon: '◆' },
+    { name: 'My Payslips', path: '/payroll/me', icon: '◆' },
   ]},
   { group: 'SUPPORT',   color: 'text-slate-400',   items: [
     { name: 'Staff Directory', path: '/staff',   icon: '◈' },

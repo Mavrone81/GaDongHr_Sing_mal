@@ -208,28 +208,31 @@ function MaterialsModal({ program, onClose }: { program: TrainingProgram; onClos
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    apiFetch(`/training/programs/${program.id}`).then(d => {
-      setMaterials(d.materials ?? []);
-      setLoading(false);
-    });
+    apiFetch(`/training/programs/${program.id}`)
+      .then(d => { setMaterials(d.materials ?? []); setLoading(false); })
+      .catch(() => setLoading(false));
   }, [program.id]);
 
   async function addMaterial() {
     if (!form.title) return;
     setSaving(true);
-    await apiFetch(`/training/programs/${program.id}/materials`, {
-      method: 'POST',
-      body: JSON.stringify({ ...form, orderIndex: materials.length, durationMins: form.durationMins ? Number(form.durationMins) : null }),
-    });
-    const d = await apiFetch(`/training/programs/${program.id}`);
-    setMaterials(d.materials ?? []);
-    setForm({ title: '', type: 'DOCUMENT', url: '', durationMins: '' });
-    setSaving(false);
+    try {
+      await apiFetch(`/training/programs/${program.id}/materials`, {
+        method: 'POST',
+        body: JSON.stringify({ ...form, orderIndex: materials.length, durationMins: form.durationMins ? Number(form.durationMins) : null }),
+      });
+      const d = await apiFetch(`/training/programs/${program.id}`);
+      setMaterials(d.materials ?? []);
+      setForm({ title: '', type: 'DOCUMENT', url: '', durationMins: '' });
+    } catch { /* swallow */ }
+    finally { setSaving(false); }
   }
 
   async function deleteMaterial(id: string) {
-    await apiFetch(`/training/materials/${id}`, { method: 'DELETE' });
-    setMaterials(m => m.filter(x => x.id !== id));
+    try {
+      await apiFetch(`/training/materials/${id}`, { method: 'DELETE' });
+      setMaterials(m => m.filter(x => x.id !== id));
+    } catch { /* swallow */ }
   }
 
   return (
@@ -311,50 +314,115 @@ function MaterialsModal({ program, onClose }: { program: TrainingProgram; onClos
 }
 
 // ── Admin: Enroll Modal ───────────────────────────────────────────────────────
+interface EmployeeLite { id: string; fullName: string; employeeCode: string; department?: string; designation?: string; }
+
 function EnrollModal({ program, onClose, onDone }: { program: TrainingProgram; onClose: () => void; onDone: () => void }) {
-  const [employeeIds, setEmployeeIds] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [allEmployees, setAllEmployees] = useState<EmployeeLite[]>([]);
+  const [empLoading, setEmpLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setEmpLoading(true);
+    apiFetch('/employees?limit=500&isActive=true')
+      .then(d => setAllEmployees(d.employees ?? []))
+      .catch(() => {})
+      .finally(() => setEmpLoading(false));
+  }, []);
 
   async function submit() {
-    const ids = employeeIds.split(',').map(s => s.trim()).filter(Boolean);
+    const ids = Array.from(selectedIds);
     if (!ids.length) return;
     setSaving(true);
-    const data = await apiFetch(`/training/programs/${program.id}/enroll`, {
-      method: 'POST',
-      body: JSON.stringify({ employeeIds: ids, dueDate: dueDate || null }),
-    });
-    setResult(`Enrolled ${data.enrolled}/${ids.length} employees`);
-    setSaving(false);
-    onDone();
+    try {
+      const data = await apiFetch(`/training/programs/${program.id}/enroll`, {
+        method: 'POST',
+        body: JSON.stringify({ employeeIds: ids, dueDate: dueDate || null }),
+      });
+      setResult(`Enrolled ${data.enrolled}/${ids.length} employees`);
+      onDone();
+    } catch (e: any) { setResult(`Error: ${e.message || 'Failed to enroll'}`); }
+    finally { setSaving(false); }
   }
+
+  const filtered = allEmployees.filter(e => {
+    const q = search.toLowerCase();
+    return !q || e.fullName.toLowerCase().includes(q) || e.employeeCode.toLowerCase().includes(q) || (e.department ?? '').toLowerCase().includes(q);
+  });
+  const allFilteredSelected = filtered.length > 0 && filtered.every(e => selectedIds.has(e.id));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-[2rem] w-full max-w-md shadow-2xl">
-        <div className="p-8 border-b border-slate-100 flex justify-between items-start">
+      <div className="bg-white rounded-[2rem] w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh]">
+        <div className="p-8 border-b border-slate-100 flex justify-between items-start shrink-0">
           <div>
             <h2 className="text-lg font-black text-slate-900">Enroll Employees</h2>
             <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-1 font-black">{program.title}</p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-900 text-xl font-black">✕</button>
         </div>
-        <div className="p-8 flex flex-col gap-4">
+        <div className="p-6 flex flex-col gap-4 min-h-0 flex-1">
           {result ? (
             <div className="p-4 bg-emerald-50 text-emerald-700 text-xs font-black rounded-xl border border-emerald-200">{result}</div>
           ) : (
             <>
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Employee IDs (comma-separated)</label>
-                <textarea
-                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-xs font-black text-slate-700 focus:outline-none focus:border-amber-400 resize-none h-24"
-                  placeholder="emp-uuid-1, emp-uuid-2, …"
-                  value={employeeIds}
-                  onChange={e => setEmployeeIds(e.target.value)}
-                />
+              {/* Search */}
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search by name, code, or department…"
+                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-amber-400 shrink-0"
+              />
+
+              {/* Select all / count */}
+              <div className="flex items-center justify-between px-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (allFilteredSelected) {
+                      setSelectedIds(prev => { const n = new Set(prev); filtered.forEach(e => n.delete(e.id)); return n; });
+                    } else {
+                      setSelectedIds(prev => { const n = new Set(prev); filtered.forEach(e => n.add(e.id)); return n; });
+                    }
+                  }}
+                  className="text-[10px] font-black text-amber-600 uppercase tracking-widest hover:underline"
+                >
+                  {allFilteredSelected ? 'Deselect All' : 'Select All'}
+                </button>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{selectedIds.size} selected</span>
               </div>
-              <div>
+
+              {/* Employee list */}
+              <div className="flex-1 overflow-y-auto border border-slate-100 rounded-2xl divide-y divide-slate-50 min-h-0">
+                {empLoading ? (
+                  <div className="p-8 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest animate-pulse">Loading employees…</div>
+                ) : filtered.length === 0 ? (
+                  <div className="p-8 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">No employees found</div>
+                ) : filtered.map(emp => {
+                  const checked = selectedIds.has(emp.id);
+                  return (
+                    <label key={emp.id} className={`flex items-center gap-4 px-5 py-3 cursor-pointer transition-colors ${checked ? 'bg-amber-50' : 'hover:bg-slate-50'}`}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => setSelectedIds(prev => { const n = new Set(prev); checked ? n.delete(emp.id) : n.add(emp.id); return n; })}
+                        className="w-4 h-4 rounded accent-amber-500"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-black text-slate-900 truncate">{emp.fullName}</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{emp.employeeCode}{emp.department ? ` · ${emp.department}` : ''}</p>
+                      </div>
+                      {emp.designation && <span className="text-[9px] font-bold text-slate-400 truncate max-w-28">{emp.designation}</span>}
+                    </label>
+                  );
+                })}
+              </div>
+
+              {/* Due date */}
+              <div className="shrink-0">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Due Date (optional)</label>
                 <input
                   type="date"
@@ -363,16 +431,17 @@ function EnrollModal({ program, onClose, onDone }: { program: TrainingProgram; o
                   onChange={e => setDueDate(e.target.value)}
                 />
               </div>
+
               <button
                 onClick={submit}
-                disabled={saving || !employeeIds.trim()}
-                className="w-full py-3 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all disabled:opacity-50"
+                disabled={saving || selectedIds.size === 0}
+                className="w-full py-3 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all disabled:opacity-50 shrink-0"
               >
-                {saving ? 'Enrolling…' : 'Enroll'}
+                {saving ? 'Enrolling…' : `Enroll${selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}`}
               </button>
             </>
           )}
-          <button onClick={onClose} className="w-full py-3 border border-slate-200 text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-50">
+          <button onClick={onClose} className="w-full py-3 border border-slate-200 text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-50 shrink-0">
             {result ? 'Close' : 'Cancel'}
           </button>
         </div>
@@ -385,6 +454,7 @@ function EnrollModal({ program, onClose, onDone }: { program: TrainingProgram; o
 function AdminProgramsTab({ onRefreshStats }: { onRefreshStats: () => void }) {
   const [programs, setPrograms] = useState<TrainingProgram[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [materialsFor, setMaterialsFor] = useState<TrainingProgram | null>(null);
   const [enrollFor, setEnrollFor] = useState<TrainingProgram | null>(null);
@@ -393,8 +463,11 @@ function AdminProgramsTab({ onRefreshStats }: { onRefreshStats: () => void }) {
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(() => {
+    setError('');
     const qs = filter ? `?status=${filter}` : '';
-    apiFetch(`/training/programs${qs}`).then(d => { setPrograms(d); setLoading(false); });
+    apiFetch(`/training/programs${qs}`)
+      .then(d => { setPrograms(Array.isArray(d) ? d : []); setLoading(false); })
+      .catch((e: any) => { setError(e.message || 'Failed to load programs'); setLoading(false); });
   }, [filter]);
 
   useEffect(() => { load(); }, [load]);
@@ -402,31 +475,37 @@ function AdminProgramsTab({ onRefreshStats }: { onRefreshStats: () => void }) {
   async function createProgram() {
     if (!form.title) return;
     setSaving(true);
-    await apiFetch('/training/programs', {
-      method: 'POST',
-      body: JSON.stringify({
-        ...form,
-        durationMins: form.durationMins ? Number(form.durationMins) : null,
-        passingScore: form.passingScore ? Number(form.passingScore) : null,
-      }),
-    });
-    setForm({ title: '', description: '', category: 'TECHNICAL', durationMins: '', passingScore: '', isMandatory: false });
-    setShowCreate(false);
-    setSaving(false);
-    load();
-    onRefreshStats();
+    try {
+      await apiFetch('/training/programs', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...form,
+          durationMins: form.durationMins ? Number(form.durationMins) : null,
+          passingScore: form.passingScore ? Number(form.passingScore) : null,
+        }),
+      });
+      setForm({ title: '', description: '', category: 'TECHNICAL', durationMins: '', passingScore: '', isMandatory: false });
+      setShowCreate(false);
+      load();
+      onRefreshStats();
+    } catch (e: any) { setError(e.message || 'Failed to create program'); }
+    finally { setSaving(false); }
   }
 
   async function updateStatus(id: string, status: ProgramStatus) {
-    await apiFetch(`/training/programs/${id}`, { method: 'PUT', body: JSON.stringify({ status }) });
-    load();
-    onRefreshStats();
+    try {
+      await apiFetch(`/training/programs/${id}`, { method: 'PUT', body: JSON.stringify({ status }) });
+      load();
+      onRefreshStats();
+    } catch (e: any) { setError(e.message || 'Failed to update status'); }
   }
 
   async function archiveProgram(id: string) {
-    await apiFetch(`/training/programs/${id}`, { method: 'DELETE' });
-    load();
-    onRefreshStats();
+    try {
+      await apiFetch(`/training/programs/${id}`, { method: 'DELETE' });
+      load();
+      onRefreshStats();
+    } catch (e: any) { setError(e.message || 'Failed to archive program'); }
   }
 
   const filteredPrograms = programs.filter(p => p.status !== 'ARCHIVED' || filter === 'ARCHIVED');
@@ -516,6 +595,13 @@ function AdminProgramsTab({ onRefreshStats }: { onRefreshStats: () => void }) {
         </div>
       )}
 
+      {error && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex items-center justify-between gap-4">
+          <p className="text-sm font-black text-amber-700">{error}</p>
+          <button onClick={load} className="px-5 py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 shrink-0">Retry</button>
+        </div>
+      )}
+
       {loading ? (
         <p className="text-sm text-slate-400 p-4">Loading programs…</p>
       ) : filteredPrograms.length === 0 ? (
@@ -594,11 +680,16 @@ function AdminProgramsTab({ onRefreshStats }: { onRefreshStats: () => void }) {
 function AdminEnrollmentsTab() {
   const [enrollments, setEnrollments] = useState<TrainingEnrollment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [filter, setFilter] = useState<EnrollmentStatus | ''>('');
 
   useEffect(() => {
+    setError('');
+    setLoading(true);
     const qs = filter ? `?status=${filter}` : '';
-    apiFetch(`/training/enrollments${qs}`).then(d => { setEnrollments(d); setLoading(false); });
+    apiFetch(`/training/enrollments${qs}`)
+      .then(d => { setEnrollments(Array.isArray(d) ? d : []); setLoading(false); })
+      .catch((e: any) => { setError(e.message || 'Failed to load enrollments'); setLoading(false); });
   }, [filter]);
 
   return (
@@ -614,6 +705,12 @@ function AdminEnrollmentsTab() {
           </button>
         ))}
       </div>
+
+      {error && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex items-center justify-between gap-4">
+          <p className="text-sm font-black text-amber-700">{error}</p>
+        </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-slate-400 p-4">Loading enrollments…</p>
@@ -676,29 +773,44 @@ function AdminEnrollmentsTab() {
 function MyTrainingTab() {
   const [enrollments, setEnrollments] = useState<TrainingEnrollment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [updating, setUpdating] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    apiFetch('/training/my-programs').then(d => { setEnrollments(d); setLoading(false); });
+    setError('');
+    apiFetch('/training/my-programs')
+      .then(d => { setEnrollments(Array.isArray(d) ? d : []); setLoading(false); })
+      .catch((e: any) => { setError(e.message || 'Failed to load training data'); setLoading(false); });
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
   async function updateProgress(enrollmentId: string, progress: number) {
     setUpdating(enrollmentId);
-    await apiFetch(`/training/enrollments/${enrollmentId}/progress`, {
-      method: 'PUT', body: JSON.stringify({ progress }),
-    });
-    load();
-    setUpdating(null);
+    try {
+      await apiFetch(`/training/enrollments/${enrollmentId}/progress`, {
+        method: 'PUT', body: JSON.stringify({ progress }),
+      });
+      load();
+    } catch { /* swallow — stale UI, user can retry */ }
+    finally { setUpdating(null); }
   }
 
   async function dropEnrollment(enrollmentId: string) {
-    await apiFetch(`/training/enrollments/${enrollmentId}`, { method: 'DELETE' });
-    load();
+    try {
+      await apiFetch(`/training/enrollments/${enrollmentId}`, { method: 'DELETE' });
+      load();
+    } catch { /* swallow */ }
   }
 
   if (loading) return <p className="text-sm text-slate-400 p-8">Loading your programs…</p>;
+  if (error) return (
+    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center">
+      <p className="text-sm font-black text-amber-700 uppercase tracking-widest mb-2">Could not load training data</p>
+      <p className="text-xs text-amber-600 mb-4">{error}</p>
+      <button onClick={load} className="px-6 py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600">Retry</button>
+    </div>
+  );
 
   const active = enrollments.filter(e => e.status !== 'COMPLETED' && e.status !== 'DROPPED');
   const completed = enrollments.filter(e => e.status === 'COMPLETED');
@@ -819,22 +931,33 @@ function MyTrainingTab() {
 function BrowseProgramsTab() {
   const [programs, setPrograms] = useState<TrainingProgram[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [category, setCategory] = useState<ProgramCategory | ''>('');
 
   const load = useCallback(() => {
+    setError('');
     const qs = category ? `?category=${category}` : '';
-    apiFetch(`/training/programs${qs}`).then(d => {
-      setPrograms(Array.isArray(d) ? d : []);
-      setLoading(false);
-    });
+    apiFetch(`/training/programs${qs}`)
+      .then(d => { setPrograms(Array.isArray(d) ? d : []); setLoading(false); })
+      .catch((e: any) => { setError(e.message || 'Failed to load programs'); setLoading(false); });
   }, [category]);
 
   useEffect(() => { load(); }, [load]);
 
   async function handleEnroll(programId: string) {
-    await apiFetch(`/training/programs/${programId}/self-enroll`, { method: 'POST' });
-    load();
+    try {
+      await apiFetch(`/training/programs/${programId}/self-enroll`, { method: 'POST' });
+      load();
+    } catch { /* swallow */ }
   }
+
+  if (error) return (
+    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center">
+      <p className="text-sm font-black text-amber-700 uppercase tracking-widest mb-2">Could not load programs</p>
+      <p className="text-xs text-amber-600 mb-4">{error}</p>
+      <button onClick={load} className="px-6 py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600">Retry</button>
+    </div>
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -876,7 +999,7 @@ function BrowseProgramsTab() {
 
 // ── Root page ─────────────────────────────────────────────────────────────────
 export default function TrainingPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const role = user?.role ?? '';
   const firstName = user?.name?.split(' ')[0] ?? 'there';
 
@@ -884,7 +1007,7 @@ export default function TrainingPage() {
   const isManager = role === 'MANAGER';
   const isEmployee = !isPrivileged && !isManager;
 
-  const adminTabs = ['Programs', 'Enrollments', 'Stats'] as const;
+  const adminTabs = ['Programs', 'Enrollments', 'Stats', 'My Training', 'Browse Programs'] as const;
   const empTabs   = ['My Training', 'Browse Programs'] as const;
 
   type AdminTab = typeof adminTabs[number];
@@ -901,6 +1024,10 @@ export default function TrainingPage() {
   }, [isPrivileged, isManager]);
 
   useEffect(() => { loadStats(); }, [loadStats]);
+
+  if (authLoading) {
+    return <div className="h-40 bg-white rounded-[2rem] border border-slate-100 animate-pulse max-w-[1400px] mx-auto" />;
+  }
 
   // ── Employee layout ─────────────────────────────────────────────────────────
   if (isEmployee) {
@@ -990,9 +1117,11 @@ export default function TrainingPage() {
       </div>
 
       <div>
-        {adminTab === 'Programs'    && <AdminProgramsTab onRefreshStats={loadStats} />}
-        {adminTab === 'Enrollments' && <AdminEnrollmentsTab />}
-        {adminTab === 'Stats'       && <StatsTab stats={stats} />}
+        {adminTab === 'Programs'       && <AdminProgramsTab onRefreshStats={loadStats} />}
+        {adminTab === 'Enrollments'    && <AdminEnrollmentsTab />}
+        {adminTab === 'Stats'          && <StatsTab stats={stats} />}
+        {adminTab === 'My Training'    && <MyTrainingTab />}
+        {adminTab === 'Browse Programs'&& <BrowseProgramsTab />}
       </div>
     </div>
   );

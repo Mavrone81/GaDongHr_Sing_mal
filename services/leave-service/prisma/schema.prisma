@@ -20,6 +20,7 @@ model LeaveType {
   isGovtPaid          Boolean   @default(false) // GPML, GPPL etc
   requiresDocument    Boolean   @default(false)
   minNoticeDays       Int       @default(0)
+  minServiceMonths    Int       @default(0)
   isActive            Boolean   @default(true)
   createdAt           DateTime  @default(now())
 
