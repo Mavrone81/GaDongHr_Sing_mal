@@ -80,6 +80,18 @@ async function main() {
       ],
     },
     {
+      name: 'ADMIN',
+      description: 'General administrative access for HR-adjacent staff who do not need full HR data',
+      isSystem: true,
+      perms: [
+        'employee:view', 'employee:manage',
+        'leave:view', 'leave:approve',
+        'claims:view',
+        'attendance:view', 'roster:view', 'roster:manage',
+        'report:view',
+      ],
+    },
+    {
       name: 'HR_ADMIN',
       description: 'Full HR operations — employees, leave, payroll reports, claims, recruitment, and offboarding',
       isSystem: true,

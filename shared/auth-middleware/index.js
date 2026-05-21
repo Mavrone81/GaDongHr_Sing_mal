@@ -102,6 +102,7 @@ function authorizeSelfOrRole(paramName, ...allowedItems) {
 
 const ROLES = {
   SUPER_ADMIN: 'SUPER_ADMIN',
+  ADMIN: 'ADMIN',
   HR_ADMIN: 'HR_ADMIN',
   HR_MANAGER: 'HR_MANAGER',
   PAYROLL_OFFICER: 'PAYROLL_OFFICER',
