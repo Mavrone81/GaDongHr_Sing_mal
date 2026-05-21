@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 
 interface Employee {
@@ -160,7 +161,7 @@ export default function StaffDirectoryPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {filtered.map(emp => (
-            <div key={emp.id} className="bg-white p-7 rounded-[2rem] border border-slate-100 shadow-lg shadow-indigo-500/5 group hover:border-indigo-200 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300">
+            <Link key={emp.id} href={`/employees/${emp.id}`} className="bg-white p-7 rounded-[2rem] border border-slate-100 shadow-lg shadow-indigo-500/5 group hover:border-indigo-200 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 cursor-pointer block">
               <div className="flex items-center gap-4 mb-5">
                 <div className="w-14 h-14 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center text-xs font-black text-indigo-400 group-hover:scale-110 transition-transform duration-500 relative overflow-hidden shrink-0">
                   {emp.profilePhotoUrl ? (
@@ -195,11 +196,17 @@ export default function StaffDirectoryPage() {
                 {emp.workEmail && (
                   <div className="flex justify-between items-center gap-2">
                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest shrink-0">Email</span>
-                    <a href={`mailto:${emp.workEmail}`} className="text-[9px] font-bold text-indigo-600 hover:underline truncate max-w-[130px]">{emp.workEmail}</a>
+                    <a
+                      href={`mailto:${emp.workEmail}`}
+                      onClick={e => e.stopPropagation()}
+                      className="text-[9px] font-bold text-indigo-600 hover:underline truncate max-w-[130px]"
+                    >
+                      {emp.workEmail}
+                    </a>
                   </div>
                 )}
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}
