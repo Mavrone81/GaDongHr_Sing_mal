@@ -292,11 +292,11 @@ function LeaveRequestsCard({ employeeId }: { employeeId: string }) {
 }
 
 // ── Quick Links Card ───────────────────────────────────────────────────────────
-function QuickLinksCard() {
+function QuickLinksCard({ employeeId }: { employeeId: string }) {
   const links = [
     { label: 'Apply Leave', href: '/leave', icon: '📅', color: 'bg-indigo-50 hover:bg-indigo-100 border-indigo-100' },
     { label: 'Submit Claim', href: '/claims', icon: '💳', color: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-100' },
-    { label: 'My Profile', href: '/staff', icon: '👤', color: 'bg-slate-50 hover:bg-slate-100 border-slate-100' },
+    { label: 'My Profile', href: `/employees/${employeeId}`, icon: '👤', color: 'bg-slate-50 hover:bg-slate-100 border-slate-100' },
     { label: 'Payslips', href: '/payroll', icon: '💰', color: 'bg-amber-50 hover:bg-amber-100 border-amber-100' },
     { label: 'Attendance', href: '/attendance', icon: '🕐', color: 'bg-blue-50 hover:bg-blue-100 border-blue-100' },
     { label: 'Training', href: '/training', icon: '📚', color: 'bg-purple-50 hover:bg-purple-100 border-purple-100' },
@@ -381,7 +381,7 @@ export default function EmployeeDashboard() {
             <LeaveCard employeeId={employeeId} />
             <LeaveRequestsCard employeeId={employeeId} />
           </div>
-          <QuickLinksCard />
+          <QuickLinksCard employeeId={employeeId} />
           <UpcomingCard />
         </div>
 
