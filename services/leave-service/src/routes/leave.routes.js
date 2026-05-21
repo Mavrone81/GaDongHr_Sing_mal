@@ -36,8 +36,9 @@ const upload = multer({
 });
 
 // Batch-fetch employee summaries from employee-service and attach to applications.
+// Forwards the caller's Bearer token so employee-service's JWT auth is satisfied.
 // Falls back gracefully if employee-service is unreachable.
-async function enrichWithEmployees(apps) {
+async function enrichWithEmployees(apps, authHeader) {
   if (!apps || apps.length === 0) return apps;
   const ids = [...new Set(apps.map(a => a.employeeId).filter(Boolean))];
   if (ids.length === 0) return apps;
@@ -45,7 +46,7 @@ async function enrichWithEmployees(apps) {
   await Promise.all(ids.map(async (id) => {
     try {
       const { data } = await axios.get(`${EMPLOYEE_URL}/employees/${id}`, {
-        headers: { 'x-internal-service-key': INTERNAL_KEY, Authorization: 'Bearer internal' },
+        headers: authHeader ? { Authorization: authHeader } : {},
         timeout: 3000,
       });
       lookup[id] = {
@@ -352,7 +353,7 @@ router.get('/applications', authenticate, async (req, res, next) => {
       }),
       prisma.leaveApplication.count({ where }),
     ]);
-    const enriched = (await enrichWithEmployees(apps)).map(a => ({ ...a, attachment: attachmentMeta(a) }));
+    const enriched = (await enrichWithEmployees(apps, req.headers.authorization)).map(a => ({ ...a, attachment: attachmentMeta(a) }));
     res.json({ applications: enriched, total, page: Number(page), pages: Math.ceil(total / limit) });
   } catch (err) { next(err); }
 });
@@ -442,7 +443,7 @@ router.get('/applications/:id', authenticate, async (req, res, next) => {
     const isPrivileged = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.LINE_MANAGER, ROLES.PAYROLL_OFFICER].includes(role);
     if (!isSelf && !isPrivileged) return res.status(403).json({ error: 'Forbidden' });
 
-    const [enriched] = await enrichWithEmployees([app]);
+    const [enriched] = await enrichWithEmployees([app], req.headers.authorization);
     res.json({ ...enriched, attachment: attachmentMeta(app) });
   } catch (err) { next(err); }
 });
