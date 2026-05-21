@@ -12,8 +12,26 @@ function fmtDate(d: string) {
 }
 
 interface PendingLeave {
-  id: string; employeeId: string; employeeName: string; dept: string;
+  id: string; employeeId: string; employeeName: string; employeeCode?: string; designation?: string; dept: string;
   leaveTypeName: string; from: string; to: string; days: number; reason: string;
+  hasAttachment: boolean;
+}
+
+interface LeaveDetail {
+  id: string;
+  employeeId: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+  totalDays: number;
+  reason: string | null;
+  createdAt: string;
+  isHalfDay: boolean;
+  halfDaySlot: string | null;
+  leaveType?: { code: string; name: string; isPaid: boolean; requiresDocument: boolean };
+  employee?: { id: string; fullName: string; employeeCode: string; department: string; designation: string; workEmail: string; profilePhotoUrl: string | null };
+  attachment?: { fileName: string; mimeType: string; downloadUrl: string } | null;
+  approvalSteps?: { step: number; approvedByEmpId: string; approvedAt: string }[];
 }
 
 interface LeaveType {
@@ -229,6 +247,13 @@ function AdminLeaveView() {
   const [subordinates, setSubordinates] = useState<TeamMember[]>([]);
   const [loadingSubordinates, setLoadingSubordinates] = useState(false);
 
+  // Detail modal
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<LeaveDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [attachmentObjectUrl, setAttachmentObjectUrl] = useState<string | null>(null);
+  const [decisionBusy, setDecisionBusy] = useState(false);
+
   useEffect(() => {
     apiFetch('/leave/applications?status=PENDING&limit=100')
       .then(data => {
@@ -236,10 +261,13 @@ function AdminLeaveView() {
         setPending(apps.map((a: any) => ({
           id: a.id, employeeId: a.employeeId,
           employeeName: a.employee?.fullName ?? a.employeeId,
+          employeeCode: a.employee?.employeeCode,
+          designation: a.employee?.designation,
           dept: a.employee?.department ?? '—',
           leaveTypeName: a.leaveType?.name ?? a.leaveTypeId,
           from: a.startDate.slice(0, 10), to: a.endDate.slice(0, 10),
           days: a.totalDays, reason: a.reason ?? '',
+          hasAttachment: !!a.attachment,
         })));
       })
       .catch(e => console.error('[LeaveRegistry] load failed:', e.message))
@@ -266,20 +294,71 @@ function AdminLeaveView() {
 
   const showToast = (msg: string, type: 'success' | 'error') => setToast({ msg, type });
 
+  // Fetch full detail when opening the modal
+  useEffect(() => {
+    if (!detailId) {
+      setDetail(null);
+      if (attachmentObjectUrl) { URL.revokeObjectURL(attachmentObjectUrl); setAttachmentObjectUrl(null); }
+      return;
+    }
+    setLoadingDetail(true);
+    apiFetch(`/leave/applications/${detailId}`)
+      .then(async (d: LeaveDetail) => {
+        setDetail(d);
+        // For image attachments, fetch with auth header and create an object URL
+        if (d.attachment && d.attachment.mimeType.startsWith('image/')) {
+          try {
+            const token = document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
+            const base = process.env.NEXT_PUBLIC_API_URL || `${window.location.protocol}//${window.location.hostname}:4000/api`;
+            const res = await fetch(`${base}${d.attachment.downloadUrl}`, { headers: { Authorization: `Bearer ${token}` } });
+            if (res.ok) {
+              const blob = await res.blob();
+              setAttachmentObjectUrl(URL.createObjectURL(blob));
+            }
+          } catch { /* fall through — UI shows download link instead */ }
+        }
+      })
+      .catch(e => showToast(e.message, 'error'))
+      .finally(() => setLoadingDetail(false));
+  }, [detailId]);
+
+  // Authenticated download (cannot use plain <a> because we need a Bearer token)
+  const downloadAttachment = async () => {
+    if (!detail?.attachment) return;
+    try {
+      const token = document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
+      const base = process.env.NEXT_PUBLIC_API_URL || `${window.location.protocol}//${window.location.hostname}:4000/api`;
+      const res = await fetch(`${base}${detail.attachment.downloadUrl}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = detail.attachment.fileName;
+      document.body.appendChild(a); a.click();
+      a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e: any) { showToast(e.message ?? 'Download failed', 'error'); }
+  };
+
   const handleApprove = async (id: string) => {
+    setDecisionBusy(true);
     try {
       await apiFetch(`/leave/applications/${id}/approve`, { method: 'PUT' });
       setPending(prev => prev.filter(p => p.id !== id));
+      setDetailId(null);
       showToast('Leave approved', 'success');
     } catch (e: any) { showToast(e.message, 'error'); }
+    finally { setDecisionBusy(false); }
   };
 
   const handleReject = async (id: string) => {
+    setDecisionBusy(true);
     try {
       await apiFetch(`/leave/applications/${id}/reject`, { method: 'PUT', body: JSON.stringify({ reason: 'Rejected by HR' }) });
       setPending(prev => prev.filter(p => p.id !== id));
+      setDetailId(null);
       showToast('Leave rejected', 'success');
     } catch (e: any) { showToast(e.message, 'error'); }
+    finally { setDecisionBusy(false); }
   };
 
   const openNewType = () => { setEditingType(null); setTypeForm(BLANK_TYPE); setTypeModal(true); };
@@ -374,17 +453,25 @@ function AdminLeaveView() {
                   <p className="text-sm font-black text-slate-300 uppercase tracking-widest">No pending leave applications</p>
                 </div>
               ) : pending.map(req => (
-                <div key={req.id} className="flex items-center gap-5 p-5 rounded-2xl border bg-slate-50/50 border-slate-100 hover:border-indigo-100 transition-all">
+                <div
+                  key={req.id}
+                  onClick={() => setDetailId(req.id)}
+                  className="flex items-center gap-5 p-5 rounded-2xl border bg-slate-50/50 border-slate-100 hover:border-indigo-200 hover:bg-white hover:shadow-md transition-all cursor-pointer"
+                >
                   <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-[11px] font-black text-white shrink-0">
                     {req.employeeName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-black text-slate-900 uppercase tracking-tight text-sm">{req.employeeName}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-black text-slate-900 uppercase tracking-tight text-sm">{req.employeeName}</p>
+                      {req.employeeCode && <span className="text-[8px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md uppercase tracking-widest">{req.employeeCode}</span>}
+                      {req.hasAttachment && <span className="text-[8px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-md uppercase tracking-widest flex items-center gap-1">📎 Attachment</span>}
+                    </div>
                     <p className="text-[10px] font-bold text-slate-500 mt-0.5 uppercase tracking-widest">{req.dept} · {req.leaveTypeName} · {req.days} day{req.days > 1 ? 's' : ''}</p>
                     <p className="text-[10px] font-bold text-slate-400 mt-0.5">{fmtDate(req.from)} → {fmtDate(req.to)}</p>
                     {req.reason && <p className="text-[9px] font-bold text-slate-400 mt-0.5 truncate">"{req.reason}"</p>}
                   </div>
-                  <div className="flex gap-3 shrink-0">
+                  <div className="flex gap-3 shrink-0" onClick={e => e.stopPropagation()}>
                     <button onClick={() => handleReject(req.id)} className="px-5 py-2 bg-red-50 text-red-600 border border-red-100 text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-red-100 transition-all">Reject</button>
                     <button onClick={() => handleApprove(req.id)} className="px-5 py-2 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-500/15 transition-all">Approve</button>
                   </div>
@@ -555,6 +642,168 @@ function AdminLeaveView() {
                 {savingType ? 'Saving…' : editingType ? 'Save Changes' : 'Create Leave Type'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── DETAIL MODAL ── */}
+      {detailId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={() => setDetailId(null)}>
+          <div className="w-full max-w-3xl bg-white rounded-[2rem] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
+              <div>
+                <h2 className="text-lg font-black text-slate-900 tracking-tighter">Leave Application</h2>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
+                  {loadingDetail ? 'Loading…' : detail ? `${detail.leaveType?.name ?? '—'} · ${detail.totalDays} day${detail.totalDays !== 1 ? 's' : ''}` : ''}
+                </p>
+              </div>
+              <button onClick={() => setDetailId(null)} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all text-lg">✕</button>
+            </div>
+
+            <div className="p-8 flex flex-col gap-6 overflow-y-auto">
+              {loadingDetail ? (
+                <div className="h-40 bg-slate-50 rounded-2xl animate-pulse" />
+              ) : !detail ? (
+                <p className="text-sm font-black text-slate-400 text-center py-12">Unable to load application</p>
+              ) : (
+                <>
+                  {/* Employee */}
+                  <div className="flex items-center gap-4 p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center text-sm font-black text-white shrink-0">
+                      {(detail.employee?.fullName ?? '?').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-base font-black text-slate-900 truncate">{detail.employee?.fullName ?? detail.employeeId}</p>
+                      <p className="text-[10px] font-bold text-slate-500 mt-0.5 uppercase tracking-widest">
+                        {detail.employee?.designation ?? '—'} · {detail.employee?.department ?? '—'}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        {detail.employee?.employeeCode && (
+                          <span className="text-[9px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded uppercase tracking-widest">EMP {detail.employee.employeeCode}</span>
+                        )}
+                        {detail.employee?.workEmail && (
+                          <a href={`mailto:${detail.employee.workEmail}`} className="text-[9px] font-bold text-indigo-600 hover:underline">{detail.employee.workEmail}</a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Leave summary */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="p-4 bg-white border border-slate-100 rounded-xl">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Leave Type</p>
+                      <p className="text-sm font-black text-slate-900 mt-1">{detail.leaveType?.name ?? '—'}</p>
+                      {detail.leaveType && (
+                        <p className="text-[9px] font-bold text-slate-400 mt-0.5">{detail.leaveType.isPaid ? 'Paid' : 'Unpaid'}</p>
+                      )}
+                    </div>
+                    <div className="p-4 bg-white border border-slate-100 rounded-xl">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Start</p>
+                      <p className="text-sm font-black text-slate-900 mt-1">{fmtDate(detail.startDate.slice(0, 10))}</p>
+                    </div>
+                    <div className="p-4 bg-white border border-slate-100 rounded-xl">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">End</p>
+                      <p className="text-sm font-black text-slate-900 mt-1">{fmtDate(detail.endDate.slice(0, 10))}</p>
+                    </div>
+                    <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
+                      <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Total</p>
+                      <p className="text-sm font-black text-indigo-800 mt-1">{detail.totalDays} day{detail.totalDays !== 1 ? 's' : ''}{detail.isHalfDay ? ` (${detail.halfDaySlot ?? 'half'})` : ''}</p>
+                    </div>
+                  </div>
+
+                  {/* Reason */}
+                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Reason</p>
+                    <p className="text-sm font-bold text-slate-700 leading-relaxed whitespace-pre-wrap">
+                      {detail.reason?.trim() ? detail.reason : <span className="text-slate-400 italic">No reason provided</span>}
+                    </p>
+                  </div>
+
+                  {/* Attachment */}
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Supporting Document</p>
+                      {detail.attachment && (
+                        <button onClick={downloadAttachment} className="text-[9px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest">
+                          Download ↓
+                        </button>
+                      )}
+                    </div>
+                    {!detail.attachment ? (
+                      <div className="p-6 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No attachment provided</p>
+                      </div>
+                    ) : detail.attachment.mimeType.startsWith('image/') ? (
+                      <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
+                        {attachmentObjectUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={attachmentObjectUrl} alt={detail.attachment.fileName} className="w-full max-h-[400px] object-contain" />
+                        ) : (
+                          <div className="h-40 flex items-center justify-center text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Loading image…</div>
+                        )}
+                        <p className="text-[9px] font-bold text-slate-500 text-center py-2 border-t border-slate-100">{detail.attachment.fileName}</p>
+                      </div>
+                    ) : detail.attachment.mimeType === 'application/pdf' ? (
+                      <div className="flex items-center justify-between gap-4 p-4 bg-rose-50 border border-rose-100 rounded-xl">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-2xl">📄</span>
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-black text-rose-800 truncate">{detail.attachment.fileName}</p>
+                            <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest">PDF Document</p>
+                          </div>
+                        </div>
+                        <button onClick={downloadAttachment} className="px-4 py-2 bg-rose-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-rose-700 transition-all">Open</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-2xl">📎</span>
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-black text-slate-800 truncate">{detail.attachment.fileName}</p>
+                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{detail.attachment.mimeType}</p>
+                          </div>
+                        </div>
+                        <button onClick={downloadAttachment} className="px-4 py-2 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-slate-800 transition-all">Download</button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Approval chain (if multi-step) */}
+                  {detail.approvalSteps && detail.approvalSteps.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Approval Trail</p>
+                      {detail.approvalSteps.map(s => (
+                        <div key={s.step} className="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
+                          <span className="text-[9px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded">Step {s.step}</span>
+                          <span className="text-[10px] font-bold text-emerald-700">{new Date(s.approvedAt).toLocaleString('en-SG')}</span>
+                          <span className="text-[9px] font-bold text-slate-500 ml-auto">{s.approvedByEmpId.slice(0, 8)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Action footer (only when status is PENDING) */}
+            {detail?.status === 'PENDING' && (
+              <div className="flex gap-3 px-8 py-5 border-t border-slate-100 bg-slate-50/50">
+                <button
+                  onClick={() => handleReject(detail.id)}
+                  disabled={decisionBusy}
+                  className="flex-1 py-3 text-[10px] font-black text-red-600 bg-red-50 border border-red-100 rounded-xl hover:bg-red-100 uppercase tracking-widest transition-all disabled:opacity-50"
+                >
+                  Reject
+                </button>
+                <button
+                  onClick={() => handleApprove(detail.id)}
+                  disabled={decisionBusy}
+                  className="flex-1 py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50"
+                >
+                  {decisionBusy ? 'Working…' : 'Approve'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

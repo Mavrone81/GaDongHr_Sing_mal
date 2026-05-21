@@ -116,6 +116,8 @@ app.use('/api/employees',    proxy(SERVICES.employee,     { ...proxyOpts, proxyR
 app.use('/api/documents',    proxy(SERVICES.employee,     { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/documents', '/documents') }));
 app.use('/api/payroll',      proxy(SERVICES.payroll,      { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/payroll', '/payroll') }));
 app.use('/api/components',   proxy(SERVICES.payroll,      { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/components', '/components') }));
+// Leave application creation supports multipart attachments — stream raw body
+app.use('/api/leave/applications', proxy(SERVICES.leave, { ...proxyOpts, parseReqBody: false, proxyReqPathResolver: req => req.originalUrl.replace('/api/leave', '/leave') }));
 app.use('/api/leave',        proxy(SERVICES.leave,        { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/leave', '/leave') }));
 app.use('/api/claims',       proxy(SERVICES.claims,       { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/claims', '/claims') }));
 // Resume upload route needs raw body streaming (no body parsing)

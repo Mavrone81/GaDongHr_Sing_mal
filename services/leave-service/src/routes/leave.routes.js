@@ -3,6 +3,9 @@
 const router = require('express').Router();
 const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, authorizeSelfOrRole, ROLES } = require('/app/shared/auth-middleware');
 
@@ -12,6 +15,72 @@ const EMPLOYEE_URL = process.env.EMPLOYEE_SERVICE_URL || 'http://employee-servic
 const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY || '';
 
 const ADMIN_ROLES = new Set([ROLES.SUPER_ADMIN, ROLES.HR_ADMIN]);
+
+// ── File-upload setup for leave attachments ───────────────────────────────────
+const UPLOADS_DIR = path.join('/app/uploads/leave');
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname);
+      cb(null, `${uuidv4()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['.pdf', '.png', '.jpg', '.jpeg', '.doc', '.docx', '.heic', '.webp'];
+    cb(null, allowed.includes(path.extname(file.originalname).toLowerCase()));
+  },
+});
+
+// Batch-fetch employee summaries from employee-service and attach to applications.
+// Falls back gracefully if employee-service is unreachable.
+async function enrichWithEmployees(apps) {
+  if (!apps || apps.length === 0) return apps;
+  const ids = [...new Set(apps.map(a => a.employeeId).filter(Boolean))];
+  if (ids.length === 0) return apps;
+  const lookup = {};
+  await Promise.all(ids.map(async (id) => {
+    try {
+      const { data } = await axios.get(`${EMPLOYEE_URL}/employees/${id}`, {
+        headers: { 'x-internal-service-key': INTERNAL_KEY, Authorization: 'Bearer internal' },
+        timeout: 3000,
+      });
+      lookup[id] = {
+        id: data.id,
+        fullName: data.fullName,
+        employeeCode: data.employeeCode,
+        department: data.department,
+        designation: data.designation,
+        workEmail: data.workEmail,
+        profilePhotoUrl: data.profilePhotoUrl ?? null,
+      };
+    } catch (err) {
+      // swallow individual lookup failures — UI shows employeeId as fallback
+    }
+  }));
+  return apps.map(a => ({ ...a, employee: lookup[a.employeeId] ?? null }));
+}
+
+// Build an attachment metadata blob for response payloads
+function attachmentMeta(app) {
+  if (!app?.documentPath) return null;
+  const fileName = path.basename(app.documentPath);
+  const ext = path.extname(fileName).toLowerCase();
+  const mimeMap = {
+    '.pdf': 'application/pdf', '.png': 'image/png', '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.heic': 'image/heic',
+    '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  };
+  return {
+    fileName,
+    mimeType: mimeMap[ext] ?? 'application/octet-stream',
+    downloadUrl: `/leave/applications/${app.id}/attachment`,
+  };
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -283,12 +352,14 @@ router.get('/applications', authenticate, async (req, res, next) => {
       }),
       prisma.leaveApplication.count({ where }),
     ]);
-    res.json({ applications: apps, total, page: Number(page), pages: Math.ceil(total / limit) });
+    const enriched = (await enrichWithEmployees(apps)).map(a => ({ ...a, attachment: attachmentMeta(a) }));
+    res.json({ applications: enriched, total, page: Number(page), pages: Math.ceil(total / limit) });
   } catch (err) { next(err); }
 });
 
 // ── POST /leave/applications ──────────────────────────────────────────────────
-router.post('/applications', authenticate, async (req, res, next) => {
+// Accepts multipart/form-data with optional 'attachment' file (10MB, PDF/img/doc).
+router.post('/applications', authenticate, upload.single('attachment'), async (req, res, next) => {
   try {
     const { leaveTypeId, startDate, endDate, reason, isHalfDay, halfDaySlot } = req.body;
     const employeeId = req.body.employeeId || req.user.employeeId;
@@ -344,11 +415,57 @@ router.post('/applications', authenticate, async (req, res, next) => {
       });
     }
 
+    const documentPath = req.file ? req.file.filename : null;
     const app = await prisma.leaveApplication.create({
-      data: { id: uuidv4(), employeeId, leaveTypeId, startDate: start, endDate: end, totalDays, reason, isHalfDay: !!isHalfDay, halfDaySlot, status: 'PENDING' },
+      data: { id: uuidv4(), employeeId, leaveTypeId, startDate: start, endDate: end, totalDays, reason, isHalfDay: !!isHalfDay, halfDaySlot, status: 'PENDING', documentPath },
       include: { leaveType: { select: { code: true, name: true } } },
     });
-    res.status(201).json(app);
+    res.status(201).json({ ...app, attachment: attachmentMeta(app) });
+  } catch (err) { next(err); }
+});
+
+// ── GET /leave/applications/:id ───────────────────────────────────────────────
+router.get('/applications/:id', authenticate, async (req, res, next) => {
+  try {
+    const app = await prisma.leaveApplication.findUnique({
+      where: { id: req.params.id },
+      include: {
+        leaveType: { select: { code: true, name: true, isPaid: true, requiresDocument: true } },
+        approvalSteps: { orderBy: { step: 'asc' } },
+      },
+    });
+    if (!app) return res.status(404).json({ error: 'Application not found' });
+
+    // Authorize: applicant, or HR / supervisor roles
+    const role = req.user.role?.toUpperCase();
+    const isSelf = req.user.employeeId && req.user.employeeId === app.employeeId;
+    const isPrivileged = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.LINE_MANAGER, ROLES.PAYROLL_OFFICER].includes(role);
+    if (!isSelf && !isPrivileged) return res.status(403).json({ error: 'Forbidden' });
+
+    const [enriched] = await enrichWithEmployees([app]);
+    res.json({ ...enriched, attachment: attachmentMeta(app) });
+  } catch (err) { next(err); }
+});
+
+// ── GET /leave/applications/:id/attachment — stream the uploaded file ─────────
+router.get('/applications/:id/attachment', authenticate, async (req, res, next) => {
+  try {
+    const app = await prisma.leaveApplication.findUnique({ where: { id: req.params.id } });
+    if (!app) return res.status(404).json({ error: 'Application not found' });
+    if (!app.documentPath) return res.status(404).json({ error: 'No attachment on this application' });
+
+    const role = req.user.role?.toUpperCase();
+    const isSelf = req.user.employeeId && req.user.employeeId === app.employeeId;
+    const isPrivileged = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.LINE_MANAGER, ROLES.PAYROLL_OFFICER].includes(role);
+    if (!isSelf && !isPrivileged) return res.status(403).json({ error: 'Forbidden' });
+
+    const filePath = path.join(UPLOADS_DIR, path.basename(app.documentPath));
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on disk' });
+
+    const meta = attachmentMeta(app);
+    res.setHeader('Content-Type', meta.mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${meta.fileName}"`);
+    fs.createReadStream(filePath).pipe(res);
   } catch (err) { next(err); }
 });
 

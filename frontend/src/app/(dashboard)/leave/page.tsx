@@ -55,6 +55,7 @@ interface ApplyModalProps {
 
 function ApplyLeaveModal({ onClose, onCreated, leaveTypes, balances }: ApplyModalProps) {
   const [form, setForm] = useState({ typeId: leaveTypes[0]?.id ?? '', from: '', to: '', reason: '' });
+  const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }));
@@ -70,10 +71,13 @@ function ApplyLeaveModal({ onClose, onCreated, leaveTypes, balances }: ApplyModa
     if (!form.from || !form.to || !form.reason.trim() || !form.typeId) return;
     setSubmitting(true); setError(null);
     try {
-      const app = await apiFetch('/leave/applications', {
-        method: 'POST',
-        body: JSON.stringify({ leaveTypeId: form.typeId, startDate: form.from, endDate: form.to, reason: form.reason }),
-      });
+      const fd = new FormData();
+      fd.append('leaveTypeId', form.typeId);
+      fd.append('startDate', form.from);
+      fd.append('endDate', form.to);
+      fd.append('reason', form.reason);
+      if (file) fd.append('attachment', file);
+      const app = await apiFetch('/leave/applications', { method: 'POST', body: fd });
       onCreated({
         id: app.id,
         type: selectedType?.name ?? form.typeId,
@@ -144,6 +148,41 @@ function ApplyLeaveModal({ onClose, onCreated, leaveTypes, balances }: ApplyModa
             <textarea value={form.reason} onChange={e => set('reason', e.target.value)} rows={3}
               placeholder="Briefly describe the reason for your leave request…"
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all resize-none placeholder:text-slate-300 placeholder:font-normal" />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+              Supporting Document <span className="text-slate-400 normal-case tracking-normal font-bold">(optional · PDF or image, max 10 MB)</span>
+            </label>
+            {file ? (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-lg">📎</span>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-black text-indigo-800 truncate">{file.name}</p>
+                    <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-widest">{(file.size / 1024).toFixed(1)} KB</p>
+                  </div>
+                </div>
+                <button onClick={() => setFile(null)} className="text-[9px] font-black text-indigo-600 hover:text-red-600 uppercase tracking-widest">Remove</button>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center gap-2 px-4 py-6 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/40 transition-all">
+                <span className="text-xl text-slate-400">📎</span>
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Click to attach a file</span>
+                <input
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,.doc,.docx"
+                  className="hidden"
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    if (f.size > 10 * 1024 * 1024) { setError('File exceeds 10 MB limit'); return; }
+                    setError(null);
+                    setFile(f);
+                  }}
+                />
+              </label>
+            )}
           </div>
 
           {error && <p className="text-[10px] font-black text-red-600 bg-red-50 border border-red-100 px-4 py-3 rounded-xl">{error}</p>}
