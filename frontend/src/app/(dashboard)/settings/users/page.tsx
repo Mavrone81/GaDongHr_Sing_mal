@@ -199,14 +199,14 @@ function AdjustPanel({
           {tab === 'role' && (
             <div className="flex flex-col gap-6">
               <div>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Current Role</p>
+                <p className="label-form mb-1.5">Current Role</p>
                 <span className={`text-xs font-black px-3 py-1.5 rounded-full border ${ROLE_COLORS[user.role] ?? ROLE_COLORS.EMPLOYEE}`}>
                   {user.role.replace(/_/g, ' ')}
                 </span>
               </div>
 
               <div>
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Assign New Role</label>
+                <label className="label-form block mb-1.5">Assign New Role</label>
                 <div className="relative">
                   <select
                     value={updateRole}
@@ -236,7 +236,7 @@ function AdjustPanel({
               )}
 
               <div className="border-t border-slate-100 pt-6">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Account Status</p>
+                <p className="label-form mb-3">Account Status</p>
                 <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-slate-50">
                   <div className="flex items-center gap-3">
                     <div className={`w-2.5 h-2.5 rounded-full ${user.isActive ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]' : 'bg-red-500'}`} />
@@ -278,7 +278,7 @@ function AdjustPanel({
               </div>
 
               <div>
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">New Password</label>
+                <label className="label-form block mb-1.5">New Password</label>
                 <div className="relative">
                   <input
                     type={showPw ? 'text' : 'password'}
@@ -312,7 +312,7 @@ function AdjustPanel({
               </div>
 
               <div>
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Confirm Password</label>
+                <label className="label-form block mb-1.5">Confirm Password</label>
                 <input
                   type={showPw ? 'text' : 'password'}
                   value={pwConfirm}
@@ -519,7 +519,7 @@ export default function UserManagementPage() {
   if (loading) return (
     <div className="flex flex-col items-center justify-center p-24 gap-4">
       <div className="h-10 w-10 rounded-full border-4 border-indigo-600 border-t-transparent animate-spin" />
-      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Loading identities…</p>
+      <p className="eyebrow-tight animate-pulse">Loading identities…</p>
     </div>
   );
 
@@ -537,7 +537,7 @@ export default function UserManagementPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div>
           <h1 className="text-xl font-black text-slate-900 tracking-tight">User Management</h1>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5 flex items-center gap-2">
+          <p className="eyebrow-tight mt-0.5 flex items-center gap-2">
             <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
             {users.length} identities registered
           </p>
@@ -571,7 +571,7 @@ export default function UserManagementPage() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <table className="w-full text-left">
           <thead>
-            <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+            <tr className="bg-slate-50 border-b border-slate-200 label-form">
               {([
                 { col: 'name',    label: 'User' },
                 { col: 'role',    label: 'Role' },
@@ -615,14 +615,14 @@ export default function UserManagementPage() {
                 </td>
                 <td className="px-6 py-4">
                   {u.mfaEnabled ? (
-                    <span className="flex items-center gap-1.5 text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full uppercase tracking-widest w-fit">
+                    <span className="badge badge-success w-fit">
                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                       </svg>
                       Enabled
                     </span>
                   ) : (
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">—</span>
+                    <span className="label-form">—</span>
                   )}
                 </td>
                 <td className="px-6 py-4 text-[10px] font-bold text-slate-400">
@@ -671,7 +671,7 @@ export default function UserManagementPage() {
                 { label: 'Password',   key: 'password', type: 'password', placeholder: 'Min. 8 characters' },
               ].map(f => (
                 <div key={f.key}>
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">{f.label}</label>
+                  <label className="label-form block mb-1.5">{f.label}</label>
                   <input
                     type={f.type}
                     value={(newUser as Record<string, string>)[f.key]}
@@ -682,7 +682,7 @@ export default function UserManagementPage() {
                 </div>
               ))}
               <div>
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Role</label>
+                <label className="label-form block mb-1.5">Role</label>
                 <div className="relative">
                   <select
                     value={newUser.role}
