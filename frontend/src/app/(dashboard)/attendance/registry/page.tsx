@@ -119,6 +119,7 @@ function AdminAttendanceView({ userRole }: { userRole: string }) {
   const [roster, setRoster] = useState<RosterRow[]>([]);
   const [rosterLoading, setRosterLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const [rosterSort, setRosterSort] = useState<{ col: 'name' | 'dept' | 'clockIn' | 'clockOut' | 'hours' | 'status'; dir: 'asc' | 'desc' }>({ col: 'status', dir: 'asc' });
   const [locations, setLocations] = useState<WorkLocation[]>([]);
   const [locLoading, setLocLoading] = useState(false);
   const [locModal, setLocModal] = useState<'add' | 'edit' | null>(null);
@@ -170,10 +171,29 @@ function AdminAttendanceView({ userRole }: { userRole: string }) {
   useEffect(() => { if (tab === 'attendance' && employees.length) loadRoster(selectedDate, employees); }, [selectedDate, tab, employees, loadRoster]);
   useEffect(() => { loadLocations(); }, [loadLocations]);
 
+  const STATUS_ORDER = ['On Time', 'Late', 'Clocked Out', 'Absent'];
   const filtered = roster.filter(r => {
     const q = search.toLowerCase();
     return !q || r.name.toLowerCase().includes(q) || r.dept?.toLowerCase().includes(q);
   });
+  const sortedRoster = [...filtered].sort((a, b) => {
+    const d = rosterSort.dir === 'asc' ? 1 : -1;
+    switch (rosterSort.col) {
+      case 'name':    return d * a.name.localeCompare(b.name);
+      case 'dept':    return d * (a.dept || '').localeCompare(b.dept || '');
+      case 'clockIn': return d * ((a.clockIn ? new Date(a.clockIn).getTime() : 0) - (b.clockIn ? new Date(b.clockIn).getTime() : 0));
+      case 'clockOut':return d * ((a.clockOut ? new Date(a.clockOut).getTime() : 0) - (b.clockOut ? new Date(b.clockOut).getTime() : 0));
+      case 'hours':   return d * ((a.hoursWorked ?? -1) - (b.hoursWorked ?? -1));
+      case 'status':  return d * (STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status));
+      default: return 0;
+    }
+  });
+  function toggleRosterSort(col: typeof rosterSort.col) {
+    setRosterSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+  }
+  function RosterSortIcon({ col }: { col: typeof rosterSort.col }) {
+    return <span className="text-[8px] ml-1">{rosterSort.col === col ? (rosterSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  }
   const clockedIn  = roster.filter(r => r.clockIn && !r.clockOut).length;
   const late       = roster.filter(r => r.status === 'Late').length;
   const clockedOut = roster.filter(r => r.status === 'Clocked Out').length;
@@ -293,10 +313,24 @@ function AdminAttendanceView({ userRole }: { userRole: string }) {
             <table className="w-full text-left border-collapse">
               <thead className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] border-b border-slate-100 bg-slate-50/30">
                 <tr>
-                  <th className="px-8 py-5">Employee</th><th className="px-8 py-5">Department</th>
-                  <th className="px-8 py-5">Clock In</th><th className="px-8 py-5">Clock Out</th>
-                  <th className="px-8 py-5">Hours</th><th className="px-8 py-5">Location</th>
-                  <th className="px-8 py-5">Status</th><th className="px-8 py-5">Actions</th>
+                  {([
+                    { col: 'name',    label: 'Employee'   },
+                    { col: 'dept',    label: 'Department' },
+                    { col: 'clockIn', label: 'Clock In'   },
+                    { col: 'clockOut',label: 'Clock Out'  },
+                    { col: 'hours',   label: 'Hours'      },
+                    { col: null,      label: 'Location'   },
+                    { col: 'status',  label: 'Status'     },
+                    { col: null,      label: 'Actions'    },
+                  ] as const).map(h => (
+                    <th key={h.label} className="px-8 py-5">
+                      {h.col ? (
+                        <button onClick={() => toggleRosterSort(h.col!)} className="flex items-center hover:text-slate-600 transition-colors">
+                          {h.label}<RosterSortIcon col={h.col} />
+                        </button>
+                      ) : h.label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -306,7 +340,7 @@ function AdminAttendanceView({ userRole }: { userRole: string }) {
                   ))
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={8} className="px-8 py-16 text-center"><p className="text-sm font-black text-slate-300 uppercase tracking-widest">No records found</p></td></tr>
-                ) : filtered.map(row => (
+                ) : sortedRoster.map(row => (
                   <tr key={row.employeeId} className="hover:bg-slate-50/50 transition-all">
                     <td className="px-8 py-5">
                       <div className="flex items-center gap-3">
