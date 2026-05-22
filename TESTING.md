@@ -49,6 +49,10 @@ that catches those.
 - **`tests/auth.spec.ts`** — real `/login` flow (valid + invalid credentials)
 - **`tests/employee.spec.ts`** — HR browses employee list, opens profile; staff directory cards link to profile
 - **`tests/leave.spec.ts`** — apply-with-attachment → fetch detail → byte-identical download; foreign-employee 403 probe
+- **`tests/training.spec.ts`** — admin creates program + materials → employee completes DOCUMENT/VIDEO/QUIZ → enrollment auto-progresses; below-passing-score keeps IN_PROGRESS; EMPLOYEE-creates-program 403; foreign-employee completes-others-enrollment 403
+- **`tests/claims.spec.ts`** — employee submits → finance approves → status/timestamps; SUBMITTED-only amend guard; re-approve 400; category maxAmount enforcement (MEAL ≤ SGD 200); reject with reason; payroll-period report aggregation; EMPLOYEE/RECRUITER approve 403
+- **`tests/supervisor-approval.spec.ts`** — SEQUENTIAL chain step-1 advances + step-2 finalises; out-of-order approval 403; ANY_ONE flow immediate APPROVE; non-designated LINE_MANAGER 403; HR_ADMIN bypasses chain; `/me/subordinates` returns direct reports
+- **`tests/payroll.spec.ts`** — full DRAFT→compute→APPROVE→FINALISE lifecycle + CPF e-Submit file generation; **CPF Act rate matrix — one E2E per rate-table row**: SC ≤55 (20%/17%), SC 55–60 (16%/15%), SC 60–65 (10.5%/11.5%), SC 65–70 (7.5%/9%), SC 70+ (5%/7.5%, ageMax=null), PR_YEAR1 (5%/4%), PR_YEAR2 (15%/9%), FOREIGNER (0%/0%); OW ceiling SGD 8,000/month (Jan 2026); **AW annual ceiling SGD 102,000 — five scenarios**: under cap, partial cap (ytdOw), full exhaustion (ytdOw), ytdAw-only cap, OW-ceiling + AW partial cap together; **SDL Act bounds + boundaries**: floor ($2 min), linear regime, max cap ($11.25), zero-gross exemption, exact SGD 4,500 cap boundary; **EA s.20 pro-ration — four scenarios with rotating calendar**: mid-month starter (March, 31-day), mid-month leaver (February, 28/29-day leap-year-aware), short stint (June, 30-day), working-type change (November, FT → PT via terminate + rehire pattern with two employee records). Periods rotate by year per CI run (day-stable seed), so over time the formula gets tested against many different working-day counts; failures reproducible via `E2E_PAYROLL_SEED=<n>`; **EA s.38 overtime via paycode** (3 tests): OT_PAY component flows into effective OW + CPF base; OT + basic above SGD 6,800 ceiling → CPF capped; OIL (Off-In-Lieu, non-CPF OW paycode) adds to gross but escapes CPF base (pins `isCpfApplicable=false` branch); **DEDUCTION + REIMBURSEMENT paycodes** (3 tests): STAFF_LOAN deducts from net only (gross + CPF unchanged); `Math.abs()` semantics — negative entries still deduct; MED_REIMB adds to net only (IRAS: reimbursements not taxable, not CPF-able); mixed OT + loan + reimbursement in one payslip — all five compute-loop branches active without cross-contamination; duplicate-run 409; status guards (cannot compute FINALISED, cannot finalise unapproved); employee fetches own payslip via `/payslips/me`; EMPLOYEE/RECRUITER RBAC 403
 
 ### Infrastructure
 - `e2e/lib/roles.ts` — role → permission set, mirrors `seed-rbac.js`
@@ -133,9 +137,9 @@ Not yet automated; add as time permits. Each adds one or two test files:
 - **LV-15** Leave working-days calculation matches backend `totalDays` (known divergence today)
 - **LV-17/18** Attachment size + MIME validation
 - **EMP-13** Concurrent edit conflict detection
-- **CLM-01..07** Claims module happy paths + RBAC
+- ~~**CLM-01..07** Claims module happy paths + RBAC~~ — **covered** by `claims.spec.ts`
 - **ATT-01..10** Attendance + roster end-to-end
-- **PAY-01..13** Payroll cycle, CPF/GIRO/IR8A generation, maker-checker
+- ~~**PAY-01..13** Payroll cycle, CPF/GIRO/IR8A generation, maker-checker~~ — **covered** by `payroll.spec.ts` (CPF Act, SDL bounds, lifecycle, e-Submit file). IR8A generation + GIRO file formats still uncovered.
 - **REC-01..07** Recruitment + ATS pipeline
 - **X-04** Rate limiter (200 req/min) triggers 429
 - **X-06** Audit log entries appear for every mutation
@@ -198,6 +202,85 @@ A PR cannot merge unless both jobs pass.
 ---
 
 ## 11. Known Divergences Tracked in Tests
+
+### Payroll spec is COMPLIANCE-DRIVEN
+
+`e2e/tests/payroll.spec.ts` encodes the **statutory rule** (CPF Act, SDL Act, EA,
+IRAS e-Tax Guide) as the expected value — NOT what the system currently
+produces. Each assertion message starts with a `[SOURCE]` tag pointing back to
+the published source (e.g. `[CPF-RATES-2026]`, `[EA-SECT-20]`). For CPF rates,
+the source-of-truth is the official PDF "CPF Contribution Rate Table from 1
+January 2026" (at `/root/NEWHRMS/CPFcontributionratesfrom1Jan2026.pdf`).
+A test failure indicates one of:
+- the system has a compliance bug → re-seed data or fix the engine,
+- the statute has changed since the spec was written → update both the
+  expected value AND the cited source in the spec header,
+- the system intentionally diverges → record it below.
+
+**Do not make a failing payroll-compliance test pass by reading the system's
+output and pasting it back into the test** — that defeats the entire suite.
+
+### Active findings to investigate
+
+- **CPF rates and OW ceiling updated to Jan 2026 in `scripts/seed.js`** (RESOLVED for fresh deployments)
+  As of 2026-05-22, `scripts/seed.js` was updated to the official Jan 2026
+  values from `CPFcontributionratesfrom1Jan2026.pdf` (Tables 1, 2, 3):
+    - OW ceiling: $6,800 → **$8,000**
+    - 55-60: 16%/15% → **18%/16%**
+    - 60-65: 10.5%/11.5% → **12.5%/12.5%**
+    - PR_YEAR1: added age bracket (≤60: 5%/4%; 60+: 5%/3.5%)
+    - PR_YEAR2: added age brackets (≤55: 15%/9%; 55-60: 12.5%/6%; 60-65: 7.5%/3.5%; 65+: 5%/3.5%)
+    - 65-70, 70+, FOREIGNER: unchanged
+  Fresh deployments will pick these up via `node scripts/seed.js`.
+
+  **Existing deployments must run the migration**: `node scripts/migrate-cpf-jan2026.js`
+  This script replaces all rows in `cpf_rates` with the Jan 2026 values in one
+  transaction. Use `DRY_RUN=true` to preview. Required before any payroll run
+  for period 2026-01 or later — otherwise CPF will be under-contributed for
+  senior workers and high earners (>$6,800/month).
+
+- **CPF rounding methodology mismatch (verified against Jan 2026 PDF)**
+  Per CPF Board's Steps to Compute (printed at the bottom of every official
+  rate table): (1) round TOTAL contribution to nearest dollar; (2) round
+  EMPLOYEE share DOWN to nearest dollar; (3) EMPLOYER = TOTAL − EMPLOYEE.
+  The system's `cpfRound()` in `shared/payroll-utils/index.js:41` rounds each
+  share independently with `Math.round`. For most values this produces the
+  same result, but at fractional cents the employee/employer split can be off
+  by $1 vs the CPF Board method. Fix path: replace `cpfRound` calls with the
+  three-step algorithm. Low priority (cents-level) but technically non-
+  compliant for an audit.
+
+- **OIL (Off-In-Lieu) CPF treatment** — RESOLVED 2026-05-22.
+  Renamed in `scripts/seed.js` to "Off-In-Lieu (OIL) Cash-out" with
+  `isCpfApplicable=true, isIrasTaxable=true`. Per [CPF-WAGES-DEF], an OIL
+  cash payment is remuneration under contract of service and is therefore
+  CPF-able OW + IRAS-taxable. Test `[CPF-WAGES-DEF] OIL cash-out is wages →
+  subject to CPF as OW` now passes against fresh seeds. For existing
+  deployments, the migration script does not touch `pay_components` — apply
+  the OIL update manually with:
+  ```sql
+  UPDATE pay_components
+  SET name = 'Off-In-Lieu (OIL) Cash-out',
+      "isCpfApplicable" = true,
+      "isIrasTaxable"   = true
+  WHERE code = 'OIL';
+  ```
+  If your team uses a separate component for non-monetary OIL tracking
+  (no cash payout), keep that one as `isCpfApplicable=false`.
+
+- **CPF rounding methodology** — RESOLVED 2026-05-22.
+  `shared/payroll-utils/index.js` now implements the official CPF Board
+  3-step rounding (per the "Steps to compute CPF contribution" block printed
+  at the bottom of the Jan 2026 rate-table PDF):
+  1. TOTAL = round to nearest dollar
+  2. EMPLOYEE = round DOWN (floor)
+  3. EMPLOYER = TOTAL − EMPLOYEE (derived, not separately rounded)
+  Applied separately to OW and AW components. Default `OW_CEILING` also
+  updated from 6,800 to 8,000 when no rate row is provided. One unit test
+  in `payroll-utils.unit.test.js` (the OW=49 edge case) was updated to
+  match the new method. Full backend suite (263 tests) passes.
+
+### Other divergences (operational, not compliance)
 
 These are deliberately documented (not assertion failures) so they don't
 silently regress:

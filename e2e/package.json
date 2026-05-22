@@ -9,6 +9,10 @@
     "test:auth": "playwright test tests/auth.spec.ts",
     "test:leave": "playwright test tests/leave.spec.ts",
     "test:employee": "playwright test tests/employee.spec.ts",
+    "test:training": "playwright test tests/training.spec.ts",
+    "test:claims": "playwright test tests/claims.spec.ts",
+    "test:supervisor": "playwright test tests/supervisor-approval.spec.ts",
+    "test:payroll": "playwright test tests/payroll.spec.ts",
     "report": "playwright show-report",
     "seed-test-users": "node scripts/seed-test-users.js"
   },
