@@ -120,6 +120,41 @@ export default function RatesPage() {
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [cpfSort, setCpfSort] = useState<{ col: 'age' | 'emp' | 'ert' | 'tot' | 'ow'; dir: 'asc' | 'desc' }>({ col: 'age', dir: 'asc' });
+  const [fwlSort, setFwlSort] = useState<{ col: 'sector' | 'tier' | 'daily'; dir: 'asc' | 'desc' }>({ col: 'sector', dir: 'asc' });
+
+  function cmpCpf(a: CpfRate, b: CpfRate) {
+    const d = cpfSort.dir === 'asc' ? 1 : -1;
+    switch (cpfSort.col) {
+      case 'age': return d * (a.ageMin - b.ageMin);
+      case 'emp': return d * (a.employeeRate - b.employeeRate);
+      case 'ert': return d * (a.employerRate - b.employerRate);
+      case 'tot': return d * ((a.employeeRate + a.employerRate) - (b.employeeRate + b.employerRate));
+      case 'ow':  return d * (a.owCeiling - b.owCeiling);
+      default: return 0;
+    }
+  }
+  function cmpFwl(a: FwlRate, b: FwlRate) {
+    const d = fwlSort.dir === 'asc' ? 1 : -1;
+    switch (fwlSort.col) {
+      case 'sector': return d * (a.sector.localeCompare(b.sector) || a.tier.localeCompare(b.tier));
+      case 'tier':   return d * (a.tier.localeCompare(b.tier) || a.sector.localeCompare(b.sector));
+      case 'daily':  return d * (a.dailyRate - b.dailyRate);
+      default: return 0;
+    }
+  }
+  function toggleCpfSort(col: typeof cpfSort.col) {
+    setCpfSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+  }
+  function toggleFwlSort(col: typeof fwlSort.col) {
+    setFwlSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+  }
+  function CpfSortIcon({ col }: { col: typeof cpfSort.col }) {
+    return <span className="text-[8px] ml-1">{cpfSort.col === col ? (cpfSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  }
+  function FwlSortIcon({ col }: { col: typeof fwlSort.col }) {
+    return <span className="text-[8px] ml-1">{fwlSort.col === col ? (fwlSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  }
 
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
@@ -263,17 +298,25 @@ export default function RatesPage() {
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-slate-100">
-                        <th className="text-left px-5 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">Age Bracket</th>
-                        <th className="text-left px-5 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">Employee %</th>
-                        <th className="text-left px-5 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">Employer %</th>
-                        <th className="text-left px-5 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">Total %</th>
-                        <th className="text-left px-5 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">OW Ceiling (SGD)</th>
+                        {([
+                          { col: 'age', label: 'Age Bracket' },
+                          { col: 'emp', label: 'Employee %' },
+                          { col: 'ert', label: 'Employer %' },
+                          { col: 'tot', label: 'Total %' },
+                          { col: 'ow',  label: 'OW Ceiling (SGD)' },
+                        ] as const).map(h => (
+                          <th key={h.col} className="text-left px-5 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                            <button onClick={() => toggleCpfSort(h.col)} className="flex items-center hover:text-slate-600 transition-colors">
+                              {h.label}<CpfSortIcon col={h.col} />
+                            </button>
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
                       {cpfRates
                         .filter(r => r.citizenStatus === status)
-                        .sort((a, b) => a.ageMin - b.ageMin)
+                        .sort(cmpCpf)
                         .map(r => (
                           <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                             <td className="px-5 py-3 font-bold text-slate-700">
@@ -362,16 +405,24 @@ export default function RatesPage() {
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-slate-100">
-                        <th className="text-left px-5 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">Sector</th>
-                        <th className="text-left px-5 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">Tier</th>
-                        <th className="text-left px-5 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">Daily Rate (SGD)</th>
-                        <th className="text-left px-5 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">≈ Monthly (×26)</th>
+                        {([
+                          { col: 'sector', label: 'Sector' },
+                          { col: 'tier',   label: 'Tier' },
+                          { col: 'daily',  label: 'Daily Rate (SGD)' },
+                          { col: 'daily',  label: '≈ Monthly (×26)' },
+                        ] as const).map((h, i) => (
+                          <th key={i} className="text-left px-5 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                            <button onClick={() => toggleFwlSort(h.col)} className="flex items-center hover:text-slate-600 transition-colors">
+                              {h.label}<FwlSortIcon col={h.col} />
+                            </button>
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
                       {fwlRates
                         .filter(r => r.passType === passType)
-                        .sort((a, b) => a.sector.localeCompare(b.sector) || a.tier.localeCompare(b.tier))
+                        .sort(cmpFwl)
                         .map(r => (
                           <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                             <td className="px-5 py-3 font-bold text-slate-700">{SECTOR_LABELS[r.sector] ?? r.sector}</td>

@@ -228,11 +228,30 @@ export default function PerformancePage() {
 function OverviewTab({ notify }: { notify: (m: string) => void }) {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [cycles, setCycles] = useState<ReviewCycle[]>([]);
+  const [cycSort, setCycSort] = useState<{ col: 'name' | 'type' | 'period' | 'phase' | 'enrolled'; dir: 'asc' | 'desc' }>({ col: 'period', dir: 'desc' });
 
   useEffect(() => {
     apiFetch('/performance/summary').then(setSummary).catch(() => {});
     apiFetch('/performance/cycles?status=ACTIVE').then(setCycles).catch(() => {});
   }, []);
+
+  const sortedCycles = [...cycles].sort((a, b) => {
+    const d = cycSort.dir === 'asc' ? 1 : -1;
+    switch (cycSort.col) {
+      case 'name':     return d * a.name.localeCompare(b.name);
+      case 'type':     return d * a.type.localeCompare(b.type);
+      case 'period':   return d * a.startDate.localeCompare(b.startDate);
+      case 'phase':    return d * (phaseIndex(a.currentPhase) - phaseIndex(b.currentPhase));
+      case 'enrolled': return d * ((a._count?.appraisals ?? 0) - (b._count?.appraisals ?? 0));
+      default: return 0;
+    }
+  });
+  function toggleCycSort(col: typeof cycSort.col) {
+    setCycSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+  }
+  function CycSortIcon({ col }: { col: typeof cycSort.col }) {
+    return <span className="text-[8px] ml-1">{cycSort.col === col ? (cycSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  }
 
   const kpis = summary ? [
     { label: 'Active Cycles',    value: String(summary.activeCycles),      sub: 'In Progress', color: 'violet' },
@@ -278,16 +297,24 @@ function OverviewTab({ notify }: { notify: (m: string) => void }) {
             <table className="w-full text-left">
               <thead className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
                 <tr>
-                  <th className="px-8 py-5">Cycle</th>
-                  <th className="px-8 py-5">Type</th>
-                  <th className="px-8 py-5">Period</th>
-                  <th className="px-8 py-5">Current Phase</th>
-                  <th className="px-8 py-5">Progress</th>
-                  <th className="px-8 py-5">Enrolled</th>
+                  {([
+                    { col: 'name',     label: 'Cycle' },
+                    { col: 'type',     label: 'Type' },
+                    { col: 'period',   label: 'Period' },
+                    { col: 'phase',    label: 'Current Phase' },
+                    { col: 'phase',    label: 'Progress' },
+                    { col: 'enrolled', label: 'Enrolled' },
+                  ] as const).map((h, i) => (
+                    <th key={i} className="px-8 py-5">
+                      <button onClick={() => toggleCycSort(h.col)} className="flex items-center hover:text-slate-600 transition-colors">
+                        {h.label}<CycSortIcon col={h.col} />
+                      </button>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {cycles.map(c => {
+                {sortedCycles.map(c => {
                   const pct = Math.round((phaseIndex(c.currentPhase) / (PHASE_ORDER.length - 1)) * 100);
                   return (
                     <tr key={c.id} className="hover:bg-slate-50/50 transition-all">

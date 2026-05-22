@@ -449,6 +449,7 @@ export default function UserManagementPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [userSort, setUserSort] = useState<{ col: 'name' | 'role' | 'status' | 'mfa' | 'created'; dir: 'asc' | 'desc' }>({ col: 'name', dir: 'asc' });
 
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'EMPLOYEE' });
   const [createLoading, setCreateLoading] = useState(false);
@@ -492,11 +493,28 @@ export default function UserManagementPage() {
     setCreateLoading(false);
   };
 
-  const filtered = users.filter(u =>
+  const base = users.filter(u =>
     u.name.toLowerCase().includes(search.toLowerCase()) ||
     u.email.toLowerCase().includes(search.toLowerCase()) ||
     u.role.toLowerCase().includes(search.toLowerCase())
   );
+  const filtered = [...base].sort((a, b) => {
+    const d = userSort.dir === 'asc' ? 1 : -1;
+    switch (userSort.col) {
+      case 'name':    return d * a.name.localeCompare(b.name);
+      case 'role':    return d * a.role.localeCompare(b.role);
+      case 'status':  return d * (Number(a.isActive) - Number(b.isActive));
+      case 'mfa':     return d * (Number(a.mfaEnabled) - Number(b.mfaEnabled));
+      case 'created': return d * a.createdAt.localeCompare(b.createdAt);
+      default: return 0;
+    }
+  });
+  function toggleUserSort(col: typeof userSort.col) {
+    setUserSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+  }
+  function UserSortIcon({ col }: { col: typeof userSort.col }) {
+    return <span className="text-[8px] ml-1">{userSort.col === col ? (userSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  }
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center p-24 gap-4">
@@ -554,11 +572,19 @@ export default function UserManagementPage() {
         <table className="w-full text-left">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-              <th className="px-6 py-4">User</th>
-              <th className="px-6 py-4">Role</th>
-              <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4">MFA</th>
-              <th className="px-6 py-4">Created</th>
+              {([
+                { col: 'name',    label: 'User' },
+                { col: 'role',    label: 'Role' },
+                { col: 'status',  label: 'Status' },
+                { col: 'mfa',     label: 'MFA' },
+                { col: 'created', label: 'Created' },
+              ] as const).map(h => (
+                <th key={h.col} className="px-6 py-4">
+                  <button onClick={() => toggleUserSort(h.col)} className="flex items-center hover:text-slate-600 transition-colors">
+                    {h.label}<UserSortIcon col={h.col} />
+                  </button>
+                </th>
+              ))}
               <th className="px-6 py-4 text-right">Actions</th>
             </tr>
           </thead>

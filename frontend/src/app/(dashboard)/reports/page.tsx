@@ -466,6 +466,7 @@ function CustomReportModal({ onClose, onToast }: { onClose: () => void; onToast:
 export default function ReportsPage() {
   const [running, setRunning] = useState<ReportKey | null>(null);
   const [lastRun, setLastRun] = useState<Record<string, string>>({});
+  const [rptSort, setRptSort] = useState<{ col: 'name' | 'category' | 'freq'; dir: 'asc' | 'desc' }>({ col: 'category', dir: 'asc' });
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
   const [runSelector, setRunSelector] = useState<{ key: ReportKey; title: string } | null>(null);
   const [customOpen, setCustomOpen] = useState(false);
@@ -507,6 +508,22 @@ export default function ReportsPage() {
     if (r.needsRunSelector) { setRunSelector({ key: r.key, title: r.runSelectorTitle! }); return; }
     execute(r.key);
   };
+
+  const sortedReports = [...REPORTS].sort((a, b) => {
+    const d = rptSort.dir === 'asc' ? 1 : -1;
+    switch (rptSort.col) {
+      case 'name':     return d * a.name.localeCompare(b.name);
+      case 'category': return d * a.category.localeCompare(b.category);
+      case 'freq':     return d * a.freq.localeCompare(b.freq);
+      default: return 0;
+    }
+  });
+  function toggleRptSort(col: typeof rptSort.col) {
+    setRptSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+  }
+  function RptSortIcon({ col }: { col: typeof rptSort.col }) {
+    return <span className="text-[8px] ml-1">{rptSort.col === col ? (rptSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  }
 
   return (
     <div className="flex flex-col gap-10 max-w-[1400px] mx-auto pb-20 animate-in fade-in duration-700">
@@ -557,15 +574,23 @@ export default function ReportsPage() {
           <table className="w-full text-left border-collapse">
             <thead className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-50">
               <tr>
-                <th className="px-8 py-7">Report Name</th>
-                <th className="px-8 py-7">Category</th>
-                <th className="px-8 py-7">Frequency</th>
+                {([
+                  { col: 'name',     label: 'Report Name' },
+                  { col: 'category', label: 'Category' },
+                  { col: 'freq',     label: 'Frequency' },
+                ] as const).map(h => (
+                  <th key={h.col} className="px-8 py-7">
+                    <button onClick={() => toggleRptSort(h.col)} className="flex items-center hover:text-slate-600 transition-colors">
+                      {h.label}<RptSortIcon col={h.col} />
+                    </button>
+                  </th>
+                ))}
                 <th className="px-8 py-7">Last Generated</th>
                 <th className="px-8 py-7 text-center">Generate</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {REPORTS.map(r => (
+              {sortedReports.map(r => (
                 <tr key={r.key} className="group hover:bg-slate-50/50 transition-all duration-300">
                   <td className="px-8 py-5">
                     <div className="flex items-center gap-4">

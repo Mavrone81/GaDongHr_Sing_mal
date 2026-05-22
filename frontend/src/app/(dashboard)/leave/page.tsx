@@ -210,6 +210,7 @@ function EmployeeLeaveView() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'balance' | 'history'>('balance');
+  const [balSort, setBalSort] = useState<{ col: 'label' | 'total' | 'used' | 'balance' | 'pct'; dir: 'asc' | 'desc' }>({ col: 'label', dir: 'asc' });
 
   useEffect(() => {
     async function load() {
@@ -263,6 +264,24 @@ function EmployeeLeaveView() {
   }, [user?.employeeId]);
 
   const pendingCount = history.filter(h => h.status === 'Pending').length;
+
+  const sortedBalances = [...balances].sort((a, b) => {
+    const d = balSort.dir === 'asc' ? 1 : -1;
+    switch (balSort.col) {
+      case 'label':   return d * a.label.localeCompare(b.label);
+      case 'total':   return d * (a.total - b.total);
+      case 'used':    return d * (a.used - b.used);
+      case 'balance': return d * (a.balance - b.balance);
+      case 'pct':     return d * ((a.balance / (a.total || 1)) - (b.balance / (b.total || 1)));
+      default: return 0;
+    }
+  });
+  function toggleBalSort(col: typeof balSort.col) {
+    setBalSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+  }
+  function BalSortIcon({ col }: { col: typeof balSort.col }) {
+    return <span className="text-[8px] ml-1">{balSort.col === col ? (balSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  }
 
   const handleCreated = (req: LeaveRequest) => {
     setHistory(prev => [req, ...prev]);
@@ -340,15 +359,23 @@ function EmployeeLeaveView() {
               <table className="w-full text-left">
                 <thead>
                   <tr className="border-b border-slate-100 text-[10px] uppercase font-black tracking-[0.2em] text-slate-400">
-                    <th className="pb-5">Leave Type</th>
-                    <th className="pb-5 text-center">Entitlement</th>
-                    <th className="pb-5 text-center">Used</th>
-                    <th className="pb-5 text-center">Balance</th>
-                    <th className="pb-5">Utilisation</th>
+                    {([
+                      { col: 'label',   label: 'Leave Type',  cls: 'pb-5',              align: 'start' },
+                      { col: 'total',   label: 'Entitlement', cls: 'pb-5 text-center',  align: 'center' },
+                      { col: 'used',    label: 'Used',        cls: 'pb-5 text-center',  align: 'center' },
+                      { col: 'balance', label: 'Balance',     cls: 'pb-5 text-center',  align: 'center' },
+                      { col: 'pct',     label: 'Utilisation', cls: 'pb-5',              align: 'start' },
+                    ] as const).map(h => (
+                      <th key={h.col} className={h.cls}>
+                        <button onClick={() => toggleBalSort(h.col)} className={`flex items-center hover:text-slate-600 transition-colors ${h.align === 'center' ? 'mx-auto justify-center' : ''}`}>
+                          {h.label}<BalSortIcon col={h.col} />
+                        </button>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {balances.map(b => (
+                  {sortedBalances.map(b => (
                     <tr key={b.type} className="hover:bg-slate-50/50 transition-all">
                       <td className="py-5 font-black text-slate-900 text-sm">{b.label}</td>
                       <td className="py-5 text-center font-bold text-slate-500 text-sm">{b.total}d</td>

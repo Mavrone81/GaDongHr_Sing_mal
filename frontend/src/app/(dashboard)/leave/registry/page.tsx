@@ -238,6 +238,7 @@ function AdminLeaveView() {
   // Leave Types state
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [loadingTypes, setLoadingTypes] = useState(false);
+  const [typeSort, setTypeSort] = useState<{ col: 'code' | 'name' | 'entitlement' | 'carry' | 'paid' | 'statutory' | 'doc' | 'status'; dir: 'asc' | 'desc' }>({ col: 'code', dir: 'asc' });
   const [typeModal, setTypeModal] = useState(false);
   const [editingType, setEditingType] = useState<LeaveType | null>(null);
   const [typeForm, setTypeForm] = useState<Omit<LeaveType, 'id' | 'isActive'>>(BLANK_TYPE);
@@ -293,6 +294,27 @@ function AdminLeaveView() {
   }, [activeTab]);
 
   const showToast = (msg: string, type: 'success' | 'error') => setToast({ msg, type });
+
+  const sortedLeaveTypes = [...leaveTypes].sort((a, b) => {
+    const d = typeSort.dir === 'asc' ? 1 : -1;
+    switch (typeSort.col) {
+      case 'code':        return d * a.code.localeCompare(b.code);
+      case 'name':        return d * a.name.localeCompare(b.name);
+      case 'entitlement': return d * (a.annualEntitlement - b.annualEntitlement);
+      case 'carry':       return d * (a.maxCarryForward - b.maxCarryForward);
+      case 'paid':        return d * (Number(a.isPaid) - Number(b.isPaid));
+      case 'statutory':   return d * (Number(a.isStatutory) - Number(b.isStatutory));
+      case 'doc':         return d * (Number(a.requiresDocument) - Number(b.requiresDocument));
+      case 'status':      return d * (Number(a.isActive) - Number(b.isActive));
+      default: return 0;
+    }
+  });
+  function toggleTypeSort(col: typeof typeSort.col) {
+    setTypeSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+  }
+  function TypeSortIcon({ col }: { col: typeof typeSort.col }) {
+    return <span className="text-[8px] ml-1">{typeSort.col === col ? (typeSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  }
 
   // Fetch full detail when opening the modal
   useEffect(() => {
@@ -495,19 +517,27 @@ function AdminLeaveView() {
                   <table className="w-full text-left">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                        <th className="px-5 py-3">Code</th>
-                        <th className="px-5 py-3">Name</th>
-                        <th className="px-5 py-3">Entitlement</th>
-                        <th className="px-5 py-3">Carry Fwd</th>
-                        <th className="px-5 py-3">Paid</th>
-                        <th className="px-5 py-3">Statutory</th>
-                        <th className="px-5 py-3">Doc Req.</th>
-                        <th className="px-5 py-3">Status</th>
+                        {([
+                          { col: 'code',        label: 'Code' },
+                          { col: 'name',        label: 'Name' },
+                          { col: 'entitlement', label: 'Entitlement' },
+                          { col: 'carry',       label: 'Carry Fwd' },
+                          { col: 'paid',        label: 'Paid' },
+                          { col: 'statutory',   label: 'Statutory' },
+                          { col: 'doc',         label: 'Doc Req.' },
+                          { col: 'status',      label: 'Status' },
+                        ] as const).map(h => (
+                          <th key={h.col} className="px-5 py-3">
+                            <button onClick={() => toggleTypeSort(h.col)} className="flex items-center hover:text-slate-600 transition-colors">
+                              {h.label}<TypeSortIcon col={h.col} />
+                            </button>
+                          </th>
+                        ))}
                         <th className="px-5 py-3"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
-                      {leaveTypes.map(t => (
+                      {sortedLeaveTypes.map(t => (
                         <tr key={t.id} className={`hover:bg-slate-50 transition-all ${!t.isActive ? 'opacity-50' : ''}`}>
                           <td className="px-5 py-3"><span className="font-mono text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded uppercase">{t.code}</span></td>
                           <td className="px-5 py-3 font-black text-slate-800">{t.name}</td>

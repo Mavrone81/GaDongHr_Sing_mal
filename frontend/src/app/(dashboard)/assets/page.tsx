@@ -297,6 +297,7 @@ export default function AssetsPage() {
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [managing, setManaging] = useState<Asset | null>(null);
+  const [assetSort, setAssetSort] = useState<{ col: 'name' | 'category' | 'location' | 'value' | 'status'; dir: 'asc' | 'desc' }>({ col: 'name', dir: 'asc' });
 
   const showToast = (msg: string, type: 'ok' | 'err') => setToast({ msg, type });
 
@@ -311,8 +312,25 @@ export default function AssetsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const filtered = filter === 'All' ? assets : assets.filter(a => a.category === filter);
+  const base = filter === 'All' ? assets : assets.filter(a => a.category === filter);
+  const filtered = [...base].sort((a, b) => {
+    const d = assetSort.dir === 'asc' ? 1 : -1;
+    switch (assetSort.col) {
+      case 'name':     return d * a.name.localeCompare(b.name);
+      case 'category': return d * a.category.localeCompare(b.category);
+      case 'location': return d * (a.location ?? '').localeCompare(b.location ?? '');
+      case 'value':    return d * (a.currentValue - b.currentValue);
+      case 'status':   return d * a.status.localeCompare(b.status);
+      default: return 0;
+    }
+  });
   const totalValue = assets.reduce((s, a) => s + (a.currentValue ?? 0), 0);
+  function toggleAssetSort(col: typeof assetSort.col) {
+    setAssetSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+  }
+  function AssetSortIcon({ col }: { col: typeof assetSort.col }) {
+    return <span className="text-[8px] ml-1">{assetSort.col === col ? (assetSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  }
 
   const handleSaved = (a: Asset) => {
     setAssets(prev => [a, ...prev]);
@@ -415,11 +433,19 @@ export default function AssetsPage() {
             <table className="w-full text-left">
               <thead className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-50">
                 <tr>
-                  <th className="px-8 py-6">Asset</th>
-                  <th className="px-8 py-6">Category</th>
-                  <th className="px-8 py-6">Location</th>
-                  <th className="px-8 py-6 text-right">Value (SGD)</th>
-                  <th className="px-8 py-6">Status</th>
+                  {([
+                    { col: 'name',     label: 'Asset',       cls: 'px-8 py-6',            align: 'start' },
+                    { col: 'category', label: 'Category',    cls: 'px-8 py-6',            align: 'start' },
+                    { col: 'location', label: 'Location',    cls: 'px-8 py-6',            align: 'start' },
+                    { col: 'value',    label: 'Value (SGD)', cls: 'px-8 py-6 text-right', align: 'end' },
+                    { col: 'status',   label: 'Status',      cls: 'px-8 py-6',            align: 'start' },
+                  ] as const).map(h => (
+                    <th key={h.col} className={h.cls}>
+                      <button onClick={() => toggleAssetSort(h.col)} className={`flex items-center hover:text-slate-600 transition-colors ${h.align === 'end' ? 'ml-auto justify-end' : ''}`}>
+                        {h.label}<AssetSortIcon col={h.col} />
+                      </button>
+                    </th>
+                  ))}
                   <th className="px-8 py-6 text-right">Actions</th>
                 </tr>
               </thead>

@@ -172,6 +172,7 @@ export default function AuditPage() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate]     = useState('');
   const [draftSearch, setDraftSearch] = useState('');
+  const [logSort, setLogSort] = useState<{ col: 'timestamp' | 'action' | 'employee' | 'actor' | 'ip'; dir: 'asc' | 'desc' }>({ col: 'timestamp', dir: 'desc' });
 
   const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
@@ -209,6 +210,24 @@ export default function AuditPage() {
   const pages = Math.ceil(total / LIMIT);
 
   const actionCounts = logs.reduce((acc, l) => { acc[l.action] = (acc[l.action] || 0) + 1; return acc; }, {} as Record<string, number>);
+
+  const sortedLogs = [...logs].sort((a, b) => {
+    const d = logSort.dir === 'asc' ? 1 : -1;
+    switch (logSort.col) {
+      case 'timestamp': return d * a.createdAt.localeCompare(b.createdAt);
+      case 'action':    return d * a.action.localeCompare(b.action);
+      case 'employee':  return d * ((a.entityName ?? a.entityCode ?? a.entityId).localeCompare(b.entityName ?? b.entityCode ?? b.entityId));
+      case 'actor':     return d * ((a.actorEmail ?? '').localeCompare(b.actorEmail ?? ''));
+      case 'ip':        return d * ((a.ipAddress ?? '').localeCompare(b.ipAddress ?? ''));
+      default: return 0;
+    }
+  });
+  function toggleLogSort(col: typeof logSort.col) {
+    setLogSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+  }
+  function LogSortIcon({ col }: { col: typeof logSort.col }) {
+    return <span className="text-[8px] ml-1">{logSort.col === col ? (logSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  }
 
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto pb-12">
@@ -357,16 +376,28 @@ export default function AuditPage() {
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                    <th className="px-5 py-3.5">Timestamp</th>
-                    <th className="px-5 py-3.5">Action</th>
-                    <th className="px-5 py-3.5">Employee</th>
-                    <th className="px-5 py-3.5">Performed By</th>
+                    {([
+                      { col: 'timestamp', label: 'Timestamp' },
+                      { col: 'action',    label: 'Action' },
+                      { col: 'employee',  label: 'Employee' },
+                      { col: 'actor',     label: 'Performed By' },
+                    ] as const).map(h => (
+                      <th key={h.col} className="px-5 py-3.5">
+                        <button onClick={() => toggleLogSort(h.col)} className="flex items-center hover:text-slate-600 transition-colors">
+                          {h.label}<LogSortIcon col={h.col} />
+                        </button>
+                      </th>
+                    ))}
                     <th className="px-5 py-3.5">Changes</th>
-                    <th className="px-5 py-3.5">IP Address</th>
+                    <th className="px-5 py-3.5">
+                      <button onClick={() => toggleLogSort('ip')} className="flex items-center hover:text-slate-600 transition-colors">
+                        IP Address<LogSortIcon col="ip" />
+                      </button>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {logs.map(log => <LogRow key={log.id} log={log} />)}
+                  {sortedLogs.map(log => <LogRow key={log.id} log={log} />)}
                 </tbody>
               </table>
             </div>
