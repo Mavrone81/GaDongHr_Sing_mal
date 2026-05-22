@@ -121,7 +121,10 @@ router.get('/candidates', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_AD
     const [candidates, total] = await Promise.all([
       prisma.candidate.findMany({
         where, orderBy: { createdAt: 'desc' }, skip: (page - 1) * limit, take: Number(limit),
-        include: { job: { select: { title: true, department: true } } },
+        include: {
+          job: { select: { title: true, department: true } },
+          interviewRounds: { orderBy: { scheduledAt: 'asc' } },
+        },
       }),
       prisma.candidate.count({ where }),
     ]);
