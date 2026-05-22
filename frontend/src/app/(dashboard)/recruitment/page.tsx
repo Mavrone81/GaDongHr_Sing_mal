@@ -109,6 +109,11 @@ export default function RecruitmentPage() {
   const [tagJobSelected, setTagJobSelected] = useState('');
   const [tagJobSaving, setTagJobSaving] = useState(false);
 
+  const [jobSort, setJobSort]             = useState<{ col: 'title' | 'department' | 'status' | 'mcf' | 'count'; dir: 'asc' | 'desc' }>({ col: 'title', dir: 'asc' });
+  const [candidateSort, setCandidateSort] = useState<{ col: 'name' | 'stage' | 'job' | 'salary' | 'notice' | 'added'; dir: 'asc' | 'desc' }>({ col: 'added', dir: 'desc' });
+  const [pipelineSort, setPipelineSort]   = useState<{ col: 'name' | 'job' | 'stage' | 'salary' | 'notice' | 'applied'; dir: 'asc' | 'desc' }>({ col: 'applied', dir: 'desc' });
+  const [interviewSort, setInterviewSort] = useState<{ col: 'round' | 'candidate' | 'scheduled' | 'result'; dir: 'asc' | 'desc' }>({ col: 'scheduled', dir: 'asc' });
+
   const [pipelineJob, setPipelineJob] = useState('');
   const [pipelineStage, setPipelineStage] = useState('');
   const [candidateSearch, setCandidateSearch] = useState('');
@@ -261,6 +266,68 @@ export default function RecruitmentPage() {
     return `${c.firstName} ${c.lastName}`.toLowerCase().includes(q) || c.email.toLowerCase().includes(q) || (c.currentTitle || '').toLowerCase().includes(q) || (c.currentEmployer || '').toLowerCase().includes(q);
   });
 
+  function mkSort<T>(dir: 'asc' | 'desc', fn: (x: T) => string | number | null | undefined) {
+    return (a: T, b: T) => {
+      const va = fn(a) ?? ''; const vb = fn(b) ?? '';
+      const cmp = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb));
+      return dir === 'asc' ? cmp : -cmp;
+    };
+  }
+
+  const sortedJobs = [...jobs].sort(mkSort(jobSort.dir, j =>
+    jobSort.col === 'title'      ? j.title :
+    jobSort.col === 'department' ? j.department :
+    jobSort.col === 'status'     ? j.status :
+    jobSort.col === 'mcf'        ? (j.mcfPostedAt ? 1 : 0) :
+    /* count */                    (j._count?.candidates ?? 0)
+  ));
+
+  const sortedCandidates = [...filteredCandidates].sort(mkSort(candidateSort.dir, c =>
+    candidateSort.col === 'name'   ? `${c.firstName} ${c.lastName}` :
+    candidateSort.col === 'stage'  ? c.stage :
+    candidateSort.col === 'job'    ? (c.job?.title ?? '') :
+    candidateSort.col === 'salary' ? (c.expectedSalary ?? 0) :
+    candidateSort.col === 'notice' ? (c.noticePeriod ?? 0) :
+    /* added */                      new Date(c.createdAt).getTime()
+  ));
+
+  const sortedPipeline = [...filteredPipeline].sort(mkSort(pipelineSort.dir, c =>
+    pipelineSort.col === 'name'    ? `${c.firstName} ${c.lastName}` :
+    pipelineSort.col === 'job'     ? (c.job?.title ?? jobs.find(j => j.id === c.jobId)?.title ?? '') :
+    pipelineSort.col === 'stage'   ? c.stage :
+    pipelineSort.col === 'salary'  ? (c.expectedSalary ?? 0) :
+    pipelineSort.col === 'notice'  ? (c.noticePeriod ?? 0) :
+    /* applied */                    new Date(c.createdAt).getTime()
+  ));
+
+  function toggleSort<C extends string>(
+    current: { col: C; dir: 'asc' | 'desc' },
+    set: React.Dispatch<React.SetStateAction<{ col: C; dir: 'asc' | 'desc' }>>,
+    col: C,
+  ) {
+    set(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+  }
+
+  function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
+    return <span className="text-[8px]">{active ? (dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  }
+
+  const sortedInterviews = [...interviews].sort((a, b) => {
+    const dir = interviewSort.dir === 'asc' ? 1 : -1;
+    if (interviewSort.col === 'round') return dir * a.roundName.localeCompare(b.roundName);
+    if (interviewSort.col === 'scheduled') return dir * (new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+    if (interviewSort.col === 'result') return dir * (a.result || '').localeCompare(b.result || '');
+    if (interviewSort.col === 'candidate') {
+      const ca = candidates.find(c => c.id === a.candidateId);
+      const cb = candidates.find(c => c.id === b.candidateId);
+      const na = ca ? `${ca.firstName} ${ca.lastName}` : '';
+      const nb = cb ? `${cb.firstName} ${cb.lastName}` : '';
+      return dir * na.localeCompare(nb);
+    }
+    return 0;
+  });
+
+
   function fmtDate(d?: string | null) {
     if (!d) return '—';
     return new Date(d).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -355,16 +422,26 @@ export default function RecruitmentPage() {
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-slate-50/60 text-slate-400 text-[9px] font-black uppercase tracking-[0.18em] border-b border-slate-100">
-                    <th className="px-8 py-4">Title</th>
-                    <th className="px-4 py-4">Department</th>
-                    <th className="px-4 py-4">Status</th>
-                    <th className="px-4 py-4">MCF</th>
-                    <th className="px-4 py-4">Candidate Funnel</th>
-                    <th className="px-8 py-4 text-right">Actions</th>
+                    {([
+                      { key: 'title',      label: 'Title',            cls: 'px-8 py-4' },
+                      { key: 'department', label: 'Department',       cls: 'px-4 py-4' },
+                      { key: 'status',     label: 'Status',           cls: 'px-4 py-4' },
+                      { key: 'mcf',        label: 'MCF',              cls: 'px-4 py-4' },
+                      { key: 'count',      label: 'Candidate Funnel', cls: 'px-4 py-4' },
+                      { key: null,         label: 'Actions',          cls: 'px-8 py-4 text-right' },
+                    ] as const).map(col => (
+                      <th key={col.label} className={col.cls}>
+                        {col.key ? (
+                          <button onClick={() => toggleSort(jobSort, setJobSort, col.key!)} className="flex items-center gap-1 hover:text-slate-600 transition-colors">
+                            {col.label}<SortIcon active={jobSort.col === col.key} dir={jobSort.dir} />
+                          </button>
+                        ) : col.label}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {jobs.map(job => {
+                  {sortedJobs.map(job => {
                     const daysLeft = mcfDaysLeft(job);
                     const counts = jobStageCounts(job);
                     const total = job._count?.candidates ?? 0;
@@ -492,18 +569,28 @@ export default function RecruitmentPage() {
                 <table className="w-full text-left">
                   <thead>
                     <tr className="bg-slate-50/60 text-slate-400 text-[9px] font-black uppercase tracking-[0.18em] border-b border-slate-100">
-                      <th className="px-8 py-4">Candidate</th>
-                      <th className="px-4 py-4">Stage</th>
-                      <th className="px-4 py-4">Tagged Job</th>
-                      <th className="px-4 py-4">Expected Salary</th>
-                      <th className="px-4 py-4">Notice</th>
-                      <th className="px-4 py-4">Added</th>
-                      <th className="px-4 py-4">Resume</th>
-                      <th className="px-8 py-4 text-right">Actions</th>
+                      {([
+                        { key: 'name',   label: 'Candidate',       cls: 'px-8 py-4' },
+                        { key: 'stage',  label: 'Stage',           cls: 'px-4 py-4' },
+                        { key: 'job',    label: 'Tagged Job',      cls: 'px-4 py-4' },
+                        { key: 'salary', label: 'Expected Salary', cls: 'px-4 py-4' },
+                        { key: 'notice', label: 'Notice',          cls: 'px-4 py-4' },
+                        { key: 'added',  label: 'Added',           cls: 'px-4 py-4' },
+                        { key: null,     label: 'Resume',          cls: 'px-4 py-4' },
+                        { key: null,     label: 'Actions',         cls: 'px-8 py-4 text-right' },
+                      ] as const).map(col => (
+                        <th key={col.label} className={col.cls}>
+                          {col.key ? (
+                            <button onClick={() => toggleSort(candidateSort, setCandidateSort, col.key!)} className="flex items-center gap-1 hover:text-slate-600 transition-colors">
+                              {col.label}<SortIcon active={candidateSort.col === col.key} dir={candidateSort.dir} />
+                            </button>
+                          ) : col.label}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {filteredCandidates.map(c => (
+                    {sortedCandidates.map(c => (
                       <tr key={c.id} className="hover:bg-slate-50/60 transition-all cursor-pointer" onClick={() => loadCandidateDetail(c.id)}>
                         <td className="px-8 py-5">
                           <div className="flex items-center gap-3">
@@ -617,17 +704,27 @@ export default function RecruitmentPage() {
                 <table className="w-full text-left">
                   <thead>
                     <tr className="bg-slate-50/60 text-slate-400 text-[9px] font-black uppercase tracking-[0.18em] border-b border-slate-100">
-                      <th className="px-8 py-4">Candidate</th>
-                      <th className="px-4 py-4">Applied For</th>
-                      <th className="px-4 py-4">Stage</th>
-                      <th className="px-4 py-4">Salary</th>
-                      <th className="px-4 py-4">Notice</th>
-                      <th className="px-4 py-4">Applied</th>
-                      <th className="px-8 py-4 text-right">Actions</th>
+                      {([
+                        { key: 'name',    label: 'Candidate',  cls: 'px-8 py-4' },
+                        { key: 'job',     label: 'Applied For', cls: 'px-4 py-4' },
+                        { key: 'stage',   label: 'Stage',      cls: 'px-4 py-4' },
+                        { key: 'salary',  label: 'Salary',     cls: 'px-4 py-4' },
+                        { key: 'notice',  label: 'Notice',     cls: 'px-4 py-4' },
+                        { key: 'applied', label: 'Applied',    cls: 'px-4 py-4' },
+                        { key: null,      label: 'Actions',    cls: 'px-8 py-4 text-right' },
+                      ] as const).map(col => (
+                        <th key={col.label} className={col.cls}>
+                          {col.key ? (
+                            <button onClick={() => toggleSort(pipelineSort, setPipelineSort, col.key!)} className="flex items-center gap-1 hover:text-slate-600 transition-colors">
+                              {col.label}<SortIcon active={pipelineSort.col === col.key} dir={pipelineSort.dir} />
+                            </button>
+                          ) : col.label}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {filteredPipeline.map(c => (
+                    {sortedPipeline.map(c => (
                       <tr key={c.id} className="hover:bg-slate-50/60 transition-all cursor-pointer" onClick={() => loadCandidateDetail(c.id)}>
                         <td className="px-8 py-5">
                           <p className="text-sm font-black text-slate-900">{c.firstName} {c.lastName}</p>
@@ -677,15 +774,26 @@ export default function RecruitmentPage() {
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-slate-50/60 text-slate-400 text-[9px] font-black uppercase tracking-[0.18em] border-b border-slate-100">
-                    <th className="px-8 py-4">Round</th>
-                    <th className="px-4 py-4">Candidate</th>
-                    <th className="px-4 py-4">Scheduled</th>
-                    <th className="px-4 py-4">Notes</th>
-                    <th className="px-4 py-4">Result</th>
+                    {([
+                      { key: 'round', label: 'Round', cls: 'px-8 py-4' },
+                      { key: 'candidate', label: 'Candidate', cls: 'px-4 py-4' },
+                      { key: 'scheduled', label: 'Scheduled', cls: 'px-4 py-4' },
+                      { key: null, label: 'Notes', cls: 'px-4 py-4' },
+                      { key: 'result', label: 'Result', cls: 'px-4 py-4' },
+                    ] as const).map(col => (
+                      <th key={col.label} className={col.cls}>
+                        {col.key ? (
+                          <button onClick={() => toggleSort(interviewSort, setInterviewSort, col.key!)} className="flex items-center gap-1 hover:text-slate-600 transition-colors">
+                            {col.label}
+                            <SortIcon active={interviewSort.col === col.key} dir={interviewSort.dir} />
+                          </button>
+                        ) : col.label}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {interviews.map(ir => {
+                  {sortedInterviews.map(ir => {
                     const cand = candidates.find(c => c.id === ir.candidateId);
                     const isPast = new Date(ir.scheduledAt) < new Date();
                     return (
