@@ -6,6 +6,10 @@ node_modules/
 dist/
 build/
 .next/
+*.tsbuildinfo
+
+# Source archives (extract, then commit the extracted files)
+*.zip
 
 # Environment - DO NOT COMMIT .env WITH REAL CREDENTIALS AFTER DEV
 .env
