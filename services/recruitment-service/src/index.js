@@ -12,4 +12,5 @@ app.use(helmet()); app.use(cors()); app.use(express.json({ limit: '10kb' })); ap
 app.get('/health', (req, res) => res.json({ service: 'recruitment-service', status: 'ok', ts: new Date() }));
 app.use('/recruitment', recruitmentRoutes);
 app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: err.message || 'Internal server error' }); });
-app.listen(PORT, () => console.log(`[recruitment-service] Running on port ${PORT}`));
+if (require.main === module) app.listen(PORT, () => console.log(`[recruitment-service] Running on port ${PORT}`));
+module.exports = { app };
