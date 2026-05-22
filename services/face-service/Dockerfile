@@ -26,4 +26,4 @@ EXPOSE 5010
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:5010/health || exit 1
 
-CMD ["python3", "app.py"]
+CMD ["gunicorn", "-b", "0.0.0.0:5010", "-w", "2", "--timeout", "60", "--access-logfile", "-", "app:app"]

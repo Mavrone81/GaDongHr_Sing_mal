@@ -1,0 +1,21 @@
+{
+  "name": "@hrms/e2e",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:smoke": "playwright test tests/smoke.spec.ts",
+    "test:rbac": "playwright test tests/rbac-matrix.spec.ts",
+    "test:auth": "playwright test tests/auth.spec.ts",
+    "test:leave": "playwright test tests/leave.spec.ts",
+    "test:employee": "playwright test tests/employee.spec.ts",
+    "report": "playwright show-report",
+    "seed-test-users": "node scripts/seed-test-users.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^20.0.0",
+    "axios": "^1.7.7",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

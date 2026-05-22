@@ -86,8 +86,22 @@ model TrainingEnrollment {
   startedAt   DateTime?
   completedAt DateTime?
 
-  program TrainingProgram @relation(fields: [programId], references: [id])
+  program          TrainingProgram          @relation(fields: [programId], references: [id])
+  materialProgress TrainingMaterialProgress[]
 
   @@unique([programId, employeeId])
   @@map("training_enrollments")
+}
+
+model TrainingMaterialProgress {
+  id           String   @id @default(uuid())
+  enrollmentId String
+  materialId   String
+  score        Int?
+  completedAt  DateTime @default(now())
+
+  enrollment TrainingEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@unique([enrollmentId, materialId])
+  @@map("training_material_progress")
 }

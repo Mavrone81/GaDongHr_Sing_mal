@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       userEmail === 'admin@urbanwerkz.com';
 
     let normalizedRole = (userData.role || 'EMPLOYEE').toUpperCase().trim();
-    if (isSystemAdmin || normalizedRole === 'SUPER_ADMIN' || normalizedRole === 'ADMIN') {
+    if (isSystemAdmin || normalizedRole === 'SUPER_ADMIN') {
       normalizedRole = 'SUPER_ADMIN';
     }
 

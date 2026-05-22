@@ -20,13 +20,17 @@ interface Role { id: string; name: string; }
 type PanelTab = 'role' | 'password' | 'mfa';
 
 const ROLE_COLORS: Record<string, string> = {
-  SUPER_ADMIN:     'bg-indigo-50 text-indigo-700 border-indigo-200',
-  HR_ADMIN:        'bg-violet-50 text-violet-700 border-violet-200',
-  HR_MANAGER:      'bg-blue-50 text-blue-700 border-blue-200',
-  PAYROLL_OFFICER: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  RECRUITER:       'bg-amber-50 text-amber-700 border-amber-200',
-  LINE_MANAGER:    'bg-sky-50 text-sky-700 border-sky-200',
-  EMPLOYEE:        'bg-slate-50 text-slate-600 border-slate-200',
+  SUPER_ADMIN:      'bg-indigo-50 text-indigo-700 border-indigo-200',
+  ADMIN:            'bg-purple-50 text-purple-700 border-purple-200',
+  IT_ADMIN:         'bg-red-50 text-red-700 border-red-200',
+  HR_ADMIN:         'bg-violet-50 text-violet-700 border-violet-200',
+  HR_MANAGER:       'bg-blue-50 text-blue-700 border-blue-200',
+  PAYROLL_OFFICER:  'bg-emerald-50 text-emerald-700 border-emerald-200',
+  FINANCE_ADMIN:    'bg-teal-50 text-teal-700 border-teal-200',
+  RECRUITER:        'bg-amber-50 text-amber-700 border-amber-200',
+  TRAINING_MANAGER: 'bg-orange-50 text-orange-700 border-orange-200',
+  LINE_MANAGER:     'bg-sky-50 text-sky-700 border-sky-200',
+  EMPLOYEE:         'bg-slate-50 text-slate-600 border-slate-200',
 };
 
 // ─── Password strength ────────────────────────────────────────────────────────

@@ -42,6 +42,9 @@ jest.mock('@prisma/client', () => ({
 
 jest.mock('dotenv', () => ({ config: () => {} }));
 
+// Must be set before app is required so leave.routes.js captures a non-empty key
+process.env.INTERNAL_SERVICE_KEY = 'test-internal-key';
+
 const mockAxiosGet = jest.fn();
 jest.mock('axios', () => ({ get: mockAxiosGet }));
 
@@ -49,7 +52,7 @@ const request = require('supertest');
 const app = require('../src/index');
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  jest.resetAllMocks();
   mockPublicHolidayFindMany.mockResolvedValue([]);
   mockCurrentUser = { sub: 'emp-user-001', email: 'emp@test.com', role: 'EMPLOYEE', employeeId: 'emp-001' };
 });

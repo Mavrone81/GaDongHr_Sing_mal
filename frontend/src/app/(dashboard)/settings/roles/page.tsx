@@ -228,8 +228,8 @@ export default function RoleManagementPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
-        {/* Role sidebar */}
-        <div className="lg:col-span-4 flex flex-col gap-3">
+        {/* Role sidebar — hidden while editing so the permission grid gets full width */}
+        <div className={`lg:col-span-4 flex-col gap-3 ${isEditing ? 'hidden' : 'flex'}`}>
           {roles.map(role => {
             const icon = ROLE_ICONS[role.name] ?? '🔲';
             const active = selectedRole?.id === role.id;
@@ -279,8 +279,8 @@ export default function RoleManagementPage() {
           })}
         </div>
 
-        {/* Permission panel */}
-        <div className="lg:col-span-8 bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
+        {/* Permission panel — full width when editing, otherwise alongside the role sidebar */}
+        <div className={`bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden ${isEditing ? 'lg:col-span-12' : 'lg:col-span-8'}`}>
           {selectedRole ? (
             <div className="flex flex-col">
               {/* Panel header */}
@@ -350,7 +350,7 @@ export default function RoleManagementPage() {
                           </button>
                         )}
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className={`grid grid-cols-1 md:grid-cols-2 gap-3 ${isEditing ? 'xl:grid-cols-3' : ''}`}>
                         {modulePerms.map(p => {
                           const isGranted = selectedRole.permissions.includes(p.code);
                           return (

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { apiFetch } from '@/lib/api';
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 function StatCard({
@@ -64,28 +65,9 @@ interface DashboardStats {
   latestPayrollRun: { period: string; status: string } | null;
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
-
-function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  const cookie = document.cookie.split('; ').find(r => r.startsWith('vorkhive_token='));
-  return cookie ? cookie.split('=').slice(1).join('=') : null;
-}
-
-function getApiBase(): string {
-  if (typeof window === 'undefined') return API;
-  return process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:4000/api`;
-}
-
-async function apiFetch(path: string) {
-  const token = getToken();
-  const res = await fetch(`${getApiBase()}${path}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    cache: 'no-store',
-  });
-  if (!res.ok) throw new Error(`${res.status} ${path}`);
-  return res.json();
-}
+// 5-minute in-memory cache — avoids re-fetching 500 employees on every navigation
+let _statsCache: { data: DashboardStats; ts: number } | null = null;
+const CACHE_TTL = 5 * 60 * 1000;
 
 export default function ManagementDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -93,6 +75,12 @@ export default function ManagementDashboard() {
 
   useEffect(() => {
     async function load() {
+      if (_statsCache && Date.now() - _statsCache.ts < CACHE_TTL) {
+        setStats(_statsCache.data);
+        setLoading(false);
+        return;
+      }
+
       try {
         const now = new Date();
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
@@ -138,7 +126,9 @@ export default function ManagementDashboard() {
           }
         }
 
-        setStats({ activeEmployees, newThisMonth, pendingLeave, pendingClaims, departments, latestPayrollRun });
+        const computed = { activeEmployees, newThisMonth, pendingLeave, pendingClaims, departments, latestPayrollRun };
+        _statsCache = { data: computed, ts: Date.now() };
+        setStats(computed);
       } catch (err) {
         console.error('[Dashboard] stats load failed:', err);
       } finally {

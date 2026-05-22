@@ -246,22 +246,98 @@ router.get('/enrollments', authenticate, authorize(...ADMIN_ROLES), async (req, 
   } catch (err) { next(err); }
 });
 
-// ── GET /training/my-programs ── employee: own enrollments ───────────────────
+// ── GET /training/my-programs ── employee: own enrollments with material progress ──
 router.get('/my-programs', authenticate, async (req, res, next) => {
   try {
     const employeeId = req.headers['x-employee-id'];
     if (!employeeId) return res.status(400).json({ error: 'No employee context' });
 
     const enrollments = await prisma.trainingEnrollment.findMany({
-      where: { employeeId },
-      orderBy: { enrolledAt: 'desc' },
+      where: { employeeId, status: { not: 'DROPPED' } },
+      orderBy: [{ status: 'asc' }, { enrolledAt: 'desc' }],
       include: {
         program: {
           include: { materials: { orderBy: { orderIndex: 'asc' } }, _count: { select: { materials: true } } },
         },
+        materialProgress: true,
       },
     });
     res.json(enrollments);
+  } catch (err) { next(err); }
+});
+
+// ── POST /training/enrollments/:id/materials/:materialId/complete ── mark material done ──
+router.post('/enrollments/:id/materials/:materialId/complete', authenticate, async (req, res, next) => {
+  try {
+    const { id: enrollmentId, materialId } = req.params;
+    const { quizAnswers } = req.body;
+    const employeeId = req.headers['x-employee-id'];
+    const role = req.headers['x-user-role'];
+
+    const enrollment = await prisma.trainingEnrollment.findUnique({
+      where: { id: enrollmentId },
+      include: { program: { include: { materials: { orderBy: { orderIndex: 'asc' } } } } },
+    });
+    if (!enrollment) return res.status(404).json({ error: 'Enrollment not found' });
+    if (!isPrivileged(role) && enrollment.employeeId !== employeeId) return res.status(403).json({ error: 'Forbidden' });
+    if (enrollment.status === 'DROPPED') return res.status(400).json({ error: 'Enrollment is dropped' });
+
+    const material = enrollment.program.materials.find(m => m.id === materialId);
+    if (!material) return res.status(404).json({ error: 'Material not in this program' });
+
+    // Score quiz materials
+    let quizScore = null;
+    if (material.type === 'QUIZ' && material.content && quizAnswers) {
+      try {
+        const raw = JSON.parse(material.content);
+        const questions = Array.isArray(raw) ? raw : (raw.questions || []);
+        const correct = questions.filter(q => quizAnswers[q.id] === q.correct).length;
+        quizScore = questions.length > 0 ? Math.round((correct / questions.length) * 100) : 100;
+      } catch { quizScore = 100; }
+    }
+
+    await prisma.trainingMaterialProgress.upsert({
+      where: { enrollmentId_materialId: { enrollmentId, materialId } },
+      create: { id: uuidv4(), enrollmentId, materialId, score: quizScore },
+      update: { completedAt: new Date(), score: quizScore },
+    });
+
+    // Recalculate overall progress
+    const completedCount = await prisma.trainingMaterialProgress.count({ where: { enrollmentId } });
+    const totalCount = enrollment.program.materials.length;
+    const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 100;
+
+    const now = new Date();
+    let status = enrollment.status;
+    let startedAt = enrollment.startedAt;
+    let completedAt = enrollment.completedAt;
+    let finalScore = enrollment.score;
+
+    if (status === 'ENROLLED') { status = 'IN_PROGRESS'; startedAt = now; }
+
+    if (progress === 100) {
+      const passingScore = enrollment.program.passingScore || 70;
+      const quizMaterials = enrollment.program.materials.filter(m => m.type === 'QUIZ');
+      if (quizMaterials.length > 0) {
+        const quizRows = await prisma.trainingMaterialProgress.findMany({
+          where: { enrollmentId, materialId: { in: quizMaterials.map(m => m.id) } },
+        });
+        const avg = quizRows.length > 0
+          ? Math.round(quizRows.reduce((s, r) => s + (r.score ?? 0), 0) / quizRows.length)
+          : 0;
+        finalScore = avg;
+        if (avg >= passingScore) { status = 'COMPLETED'; completedAt = now; }
+      } else {
+        status = 'COMPLETED'; completedAt = now;
+      }
+    }
+
+    const updated = await prisma.trainingEnrollment.update({
+      where: { id: enrollmentId },
+      data: { progress, status, startedAt, completedAt, score: finalScore },
+    });
+
+    res.json({ enrollment: updated, materialScore: quizScore, progress, completedCount, totalCount });
   } catch (err) { next(err); }
 });
 

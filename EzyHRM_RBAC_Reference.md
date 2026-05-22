@@ -1,5 +1,5 @@
 # EzyHRM RBAC Reference
-**Version 3.0 — Updated May 2026**
+**Version 3.1 — Updated May 2026**
 
 > This document mirrors the actual permission set seeded by
 > `services/auth-service/scripts/seed-rbac.js` and the `ROLES` enum in
@@ -166,38 +166,44 @@ All 24 permissions.
 ---
 
 ### TRAINING_MANAGER
-> Defined in `ROLES` enum (`shared/auth-middleware/index.js`) but **no permissions are currently seeded** in `seed-rbac.js`. A user assigned this role will receive an empty permission set until permissions are added — see §8.
+> Training oversight role.
+
+`employee:view` · `report:view`
+
+**Notes:**
+- Seeded with a minimal permission set so the role is usable.
+- The Training module itself is still role-gated (no `training:*` permission codes exist yet) — see §8.1.
 
 ---
 
 ## 3. Role × Permission Matrix
 
-| Permission | SUPER_ADMIN | ADMIN | IT_ADMIN | HR_ADMIN | HR_MANAGER | PAYROLL_OFFICER | FINANCE_ADMIN | LINE_MANAGER | RECRUITER | EMPLOYEE |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| user:manage          | ✓ |   | ✓ |   |   |   |   |   |   |   |
-| role:manage          | ✓ |   | ✓ |   |   |   |   |   |   |   |
-| settings:manage      | ✓ |   | ✓ |   |   |   |   |   |   |   |
-| employee:view        | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| employee:manage      | ✓ | ✓ |   | ✓ | ✓ |   |   |   |   |   |
-| employee:sensitive   | ✓ |   |   | ✓ |   | ✓ |   |   |   |   |
-| document:manage      | ✓ |   |   | ✓ | ✓ |   |   |   |   |   |
-| payroll:view         | ✓ |   |   | ✓ |   | ✓ | ✓ |   |   |   |
-| payroll:run          | ✓ |   |   |   |   | ✓ |   |   |   |   |
-| leave:view           | ✓ | ✓ |   | ✓ | ✓ |   |   | ✓ |   | ✓ |
-| leave:approve        | ✓ | ✓ |   | ✓ | ✓ |   |   | ✓ |   |   |
-| claims:view          | ✓ | ✓ |   | ✓ | ✓ |   | ✓ | ✓ |   | ✓ |
-| claims:approve       | ✓ |   |   | ✓ | ✓ |   | ✓ | ✓ |   |   |
-| attendance:view      | ✓ | ✓ |   | ✓ | ✓ | ✓ |   | ✓ |   | ✓ |
-| attendance:manage    | ✓ |   |   | ✓ | ✓ |   |   |   |   |   |
-| roster:view          | ✓ | ✓ |   | ✓ | ✓ | ✓ |   | ✓ |   |   |
-| roster:manage        | ✓ | ✓ |   | ✓ | ✓ |   |   | ✓ |   |   |
-| recruitment:view     | ✓ |   |   | ✓ | ✓ |   |   |   | ✓ |   |
-| recruitment:manage   | ✓ |   |   | ✓ | ✓ |   |   |   | ✓ |   |
-| asset:view           | ✓ |   | ✓ | ✓ | ✓ |   | ✓ | ✓ |   | ✓ |
-| asset:manage         | ✓ |   | ✓ |   |   |   |   |   |   |   |
-| offboarding:manage   | ✓ |   |   | ✓ |   |   |   |   |   |   |
-| report:view          | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |   |   |   |
-| report:financial     | ✓ |   |   | ✓ |   | ✓ | ✓ |   |   |   |
+| Permission | SUPER_ADMIN | ADMIN | IT_ADMIN | HR_ADMIN | HR_MANAGER | PAYROLL_OFFICER | FINANCE_ADMIN | LINE_MANAGER | RECRUITER | TRAINING_MANAGER | EMPLOYEE |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| user:manage          | ✓ |   | ✓ |   |   |   |   |   |   |   |   |
+| role:manage          | ✓ |   | ✓ |   |   |   |   |   |   |   |   |
+| settings:manage      | ✓ |   | ✓ |   |   |   |   |   |   |   |   |
+| employee:view        | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| employee:manage      | ✓ | ✓ |   | ✓ | ✓ |   |   |   |   |   |   |
+| employee:sensitive   | ✓ |   |   | ✓ |   | ✓ |   |   |   |   |   |
+| document:manage      | ✓ |   |   | ✓ | ✓ |   |   |   |   |   |   |
+| payroll:view         | ✓ |   |   | ✓ |   | ✓ | ✓ |   |   |   |   |
+| payroll:run          | ✓ |   |   |   |   | ✓ |   |   |   |   |   |
+| leave:view           | ✓ | ✓ |   | ✓ | ✓ |   |   | ✓ |   |   | ✓ |
+| leave:approve        | ✓ | ✓ |   | ✓ | ✓ |   |   | ✓ |   |   |   |
+| claims:view          | ✓ | ✓ |   | ✓ | ✓ |   | ✓ | ✓ |   |   | ✓ |
+| claims:approve       | ✓ |   |   | ✓ | ✓ |   | ✓ | ✓ |   |   |   |
+| attendance:view      | ✓ | ✓ |   | ✓ | ✓ | ✓ |   | ✓ |   |   | ✓ |
+| attendance:manage    | ✓ |   |   | ✓ | ✓ |   |   |   |   |   |   |
+| roster:view          | ✓ | ✓ |   | ✓ | ✓ | ✓ |   | ✓ |   |   |   |
+| roster:manage        | ✓ | ✓ |   | ✓ | ✓ |   |   | ✓ |   |   |   |
+| recruitment:view     | ✓ |   |   | ✓ | ✓ |   |   |   | ✓ |   |   |
+| recruitment:manage   | ✓ |   |   | ✓ | ✓ |   |   |   | ✓ |   |   |
+| asset:view           | ✓ |   | ✓ | ✓ | ✓ |   | ✓ | ✓ |   |   | ✓ |
+| asset:manage         | ✓ |   | ✓ |   |   |   |   |   |   |   |   |
+| offboarding:manage   | ✓ |   |   | ✓ |   |   |   |   |   |   |   |
+| report:view          | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |   |   | ✓ |   |
+| report:financial     | ✓ |   |   | ✓ |   | ✓ | ✓ |   |   |   |   |
 
 ---
 
@@ -291,18 +297,11 @@ If these modules need finer-grained delegation in future, permission codes
   hide the run actions in the UI for HR_ADMIN or grant `payroll:run` to
   match.
 
-### 8.3 Role defined but unseeded
-- **TRAINING_MANAGER** appears in `ROLES` but `seed-rbac.js` does not
-  assign it any permissions. Until perms are seeded, users with this role
-  effectively have the same access as a user with no role assignment.
-
-### 8.4 Frontend role-to-nav mapping
-The sidebar nav matrix in `frontend/src/app/(dashboard)/layout.tsx`
-recognises only a subset of roles for custom nav (SUPER_ADMIN, HR_ADMIN,
-HR_MANAGER, PAYROLL_OFFICER) and falls back to the EMPLOYEE nav for
-others. `ADMIN`, `IT_ADMIN`, `FINANCE_ADMIN`, `LINE_MANAGER`, `RECRUITER`,
-and `TRAINING_MANAGER` need dedicated nav definitions to surface the
-correct menus.
+### 8.3 Frontend role-name normalisation (resolved in v3.1)
+Earlier revisions of `AuthContext` silently promoted any user with role
+`ADMIN` to `SUPER_ADMIN` on the frontend, contradicting this doc's
+scoped ADMIN definition. Fixed: only `SUPER_ADMIN` (and the literal
+system-admin emails) are now elevated.
 
 ---
 
@@ -314,3 +313,4 @@ correct menus.
 | 2.0 | Apr 2026 | Added HR_MANAGER, LINE_MANAGER, RECRUITER system roles; added `roster:view`, `roster:manage` permissions; added `claims:approve` to LINE_MANAGER |
 | 2.1 | May 2026 | Updated Recruiter scope to include Candidate Pool, ATS lifecycle tracking, and resume management; updated LINE_MANAGER to include Shift Scheduler access and tab visibility rules |
 | 3.0 | May 2026 | Rewrite to mirror `seed-rbac.js`. Added 6 missing permissions (`settings:manage`, `document:manage`, `recruitment:view`, `asset:view`, `asset:manage`, `offboarding:manage`). Added IT_ADMIN, FINANCE_ADMIN role rows and TRAINING_MANAGER note. Recorded ADMIN as a seeded role (added to backend in this revision). Expanded HR_ADMIN, HR_MANAGER, RECRUITER, EMPLOYEE, LINE_MANAGER, PAYROLL_OFFICER permission sets to match seed. Added §8 Known Divergences. |
+| 3.1 | May 2026 | Closed the four user-management divergences: TRAINING_MANAGER now seeded with `employee:view` + `report:view`; sidebar nav defined for ADMIN / IT_ADMIN / FINANCE_ADMIN / LINE_MANAGER / RECRUITER / TRAINING_MANAGER (was falling back to Employee nav); user-management role badge colours extended to cover all 10 seeded roles; AuthContext no longer silently promotes ADMIN to SUPER_ADMIN. |

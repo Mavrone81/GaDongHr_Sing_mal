@@ -14,14 +14,12 @@ export default function DashboardPage() {
     const stored = localStorage.getItem('vorkhive_admin_confirmed');
     if (stored === '1') setCachedAdmin(true);
 
-    // If user is confirmed admin, cache it
+    // Only cache the SUPER_ADMIN flag for true system admins —
+    // scoped roles (ADMIN, HR_ADMIN, etc.) must not be promoted.
     if (user) {
       const email = (user.email || '').toLowerCase().trim();
       const role = (user.role || '').toUpperCase().trim();
-      if (
-        role === 'SUPER_ADMIN' || role === 'HR_ADMIN' || role === 'ADMIN' ||
-        email === 'admin@vorkhive.sg' || email === 'admin@hrms.com'
-      ) {
+      if (role === 'SUPER_ADMIN' || email === 'admin@vorkhive.sg' || email === 'admin@hrms.com') {
         localStorage.setItem('vorkhive_admin_confirmed', '1');
         setCachedAdmin(true);
       }

@@ -1,0 +1,77 @@
+name: PR tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  backend-and-frontend:
+    name: Backend + frontend unit/integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run test:backend
+      - run: npm run test:frontend
+
+  e2e:
+    name: End-to-end (RBAC + smoke + happy paths)
+    runs-on: ubuntu-latest
+    needs: backend-and-frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Generate signing keys
+        run: |
+          mkdir -p certs
+          openssl genrsa -out certs/private.pem 2048
+          openssl rsa -in certs/private.pem -pubout -out certs/public.pem
+
+      - name: Boot stack with docker compose
+        env:
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY || 'dev-encryption-key-32-bytes-pad__' }}
+        run: docker compose up -d --build
+
+      - name: Wait for API gateway
+        run: |
+          for i in {1..60}; do
+            if curl -sf http://localhost:4000/health > /dev/null; then
+              echo "Gateway healthy"; exit 0
+            fi
+            sleep 5
+          done
+          echo "Gateway never came up"; docker compose logs api-gateway; exit 1
+
+      - name: Seed RBAC + test users
+        run: |
+          docker exec hrms-auth node scripts/seed-rbac.js
+          cd e2e && npm install --no-audit --no-fund && npm run seed-test-users
+
+      - name: Install Playwright browsers
+        run: cd e2e && npx playwright install --with-deps chromium
+
+      - name: Run e2e suite
+        run: npm run test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report
+          retention-days: 14
+
+      - name: Capture compose logs on failure
+        if: failure()
+        run: docker compose logs > compose.log && cat compose.log

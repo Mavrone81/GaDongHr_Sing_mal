@@ -177,6 +177,15 @@ async function main() {
         'asset:view',
       ],
     },
+    {
+      name: 'TRAINING_MANAGER',
+      description: 'Training oversight — view employees and manage training records (training-specific permissions pending)',
+      isSystem: true,
+      perms: [
+        'employee:view',
+        'report:view',
+      ],
+    },
   ];
 
   for (const r of roles) {

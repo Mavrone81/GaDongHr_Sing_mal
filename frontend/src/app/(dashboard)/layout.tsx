@@ -152,6 +152,115 @@ const PAYROLL_OFFICER_NAV: NavGroup[] = [
   ]},
 ];
 
+// General ADMIN nav — HR-adjacent oversight without payroll or sensitive data
+const ADMIN_NAV: NavGroup[] = [
+  { group: 'COMMAND',    color: 'text-indigo-400',  items: [{ name: 'Dashboard', path: '/', icon: '⬡' }] },
+  { group: 'WORKFORCE',  color: 'text-blue-400',    items: [
+    { name: 'Employees',  path: '/employees',           icon: '◈' },
+    { name: 'Attendance', path: '/attendance/registry', icon: '◉' },
+    { name: 'Leave',      path: '/leave/registry',      icon: '◌' },
+    { name: 'Claims',     path: '/claims/registry',     icon: '◫' },
+  ]},
+  { group: 'EMPLOYEE',   color: 'text-sky-400',     items: [
+    { name: 'My Attendance', path: '/attendance',          icon: '◉' },
+    { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
+    { name: 'My Leave',      path: '/leave',               icon: '◌' },
+    { name: 'My Claims',     path: '/claims',              icon: '◫' },
+    { name: 'My Training',   path: '/training',            icon: '◑' },
+  ]},
+  { group: 'COMPLIANCE', color: 'text-amber-400',   items: [{ name: 'Reports', path: '/reports', icon: '▤' }] },
+  { group: 'SUPPORT',    color: 'text-slate-400',   items: [{ name: 'Help & Support', path: '/support', icon: '◇' }] },
+];
+
+// IT Admin nav — user/role/settings + asset oversight
+const IT_ADMIN_NAV: NavGroup[] = [
+  { group: 'COMMAND',        color: 'text-indigo-400', items: [{ name: 'Dashboard', path: '/', icon: '⬡' }] },
+  { group: 'ADMINISTRATION', color: 'text-violet-400', items: [
+    { name: 'User Management',    path: '/settings/users',    icon: '◪' },
+    { name: 'Role & Permissions', path: '/settings/roles',    icon: '◧' },
+    { name: 'Security (SSO/MFA)', path: '/settings/security', icon: '◰' },
+    { name: 'Audit Logs',         path: '/settings/audit',    icon: '▤' },
+    { name: 'Tenancy & Config',   path: '/settings',          icon: '◎' },
+  ]},
+  { group: 'ASSETS',         color: 'text-emerald-400', items: [{ name: 'Assets', path: '/assets', icon: '◧' }] },
+  { group: 'COMPLIANCE',     color: 'text-amber-400',   items: [{ name: 'Reports', path: '/reports', icon: '▤' }] },
+  { group: 'EMPLOYEE',       color: 'text-sky-400',     items: [
+    { name: 'My Attendance', path: '/attendance', icon: '◉' },
+    { name: 'My Leave',      path: '/leave',      icon: '◌' },
+  ]},
+];
+
+// Finance Admin nav — claims approval + payroll visibility + financial reports
+const FINANCE_ADMIN_NAV: NavGroup[] = [
+  { group: 'COMMAND',    color: 'text-indigo-400',   items: [{ name: 'Dashboard', path: '/', icon: '⬡' }] },
+  { group: 'FINANCIAL',  color: 'text-emerald-400',  items: [
+    { name: 'Claims',  path: '/claims/registry', icon: '◫' },
+    { name: 'Payroll', path: '/payroll',         icon: '◆' },
+    { name: 'Assets',  path: '/assets',          icon: '◧' },
+  ]},
+  { group: 'COMPLIANCE', color: 'text-amber-400',    items: [{ name: 'Reports', path: '/reports', icon: '▤' }] },
+  { group: 'EMPLOYEE',   color: 'text-sky-400',      items: [
+    { name: 'My Attendance', path: '/attendance',          icon: '◉' },
+    { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
+    { name: 'My Leave',      path: '/leave',               icon: '◌' },
+    { name: 'My Claims',     path: '/claims',              icon: '◫' },
+    { name: 'My Payslips',   path: '/payroll/me',          icon: '◆' },
+  ]},
+];
+
+// Line Manager nav — team approvals + scheduling
+const LINE_MANAGER_NAV: NavGroup[] = [
+  { group: 'COMMAND',     color: 'text-indigo-400', items: [{ name: 'Dashboard', path: '/', icon: '⬡' }] },
+  { group: 'TEAM',        color: 'text-blue-400',   items: [
+    { name: 'Team Leave',      path: '/leave/registry',      icon: '◌' },
+    { name: 'Team Claims',     path: '/claims/registry',     icon: '◫' },
+    { name: 'Team Attendance', path: '/attendance/registry', icon: '◉' },
+    { name: 'Shift Scheduler', path: '/attendance/schedule', icon: '▦' },
+    { name: 'Assets',          path: '/assets',              icon: '◧' },
+  ]},
+  { group: 'EMPLOYEE',    color: 'text-sky-400',    items: [
+    { name: 'My Attendance', path: '/attendance',          icon: '◉' },
+    { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
+    { name: 'My Leave',      path: '/leave',               icon: '◌' },
+    { name: 'My Claims',     path: '/claims',              icon: '◫' },
+    { name: 'My Training',   path: '/training',            icon: '◑' },
+    { name: 'My Appraisal',  path: '/performance',         icon: '▣' },
+    { name: 'My Payslips',   path: '/payroll/me',          icon: '◆' },
+  ]},
+];
+
+// Recruiter nav — ATS/recruitment only + self-service
+const RECRUITER_NAV: NavGroup[] = [
+  { group: 'COMMAND',     color: 'text-indigo-400', items: [{ name: 'Dashboard', path: '/', icon: '⬡' }] },
+  { group: 'RECRUITMENT', color: 'text-blue-400',   items: [
+    { name: 'Recruitment', path: '/recruitment', icon: '◇' },
+    { name: 'Employees',   path: '/employees',   icon: '◈' },
+  ]},
+  { group: 'EMPLOYEE',    color: 'text-sky-400',    items: [
+    { name: 'My Attendance', path: '/attendance',          icon: '◉' },
+    { name: 'My Leave',      path: '/leave',               icon: '◌' },
+    { name: 'My Claims',     path: '/claims',              icon: '◫' },
+    { name: 'My Training',   path: '/training',            icon: '◑' },
+    { name: 'My Payslips',   path: '/payroll/me',          icon: '◆' },
+  ]},
+];
+
+// Training Manager nav — training oversight (training-specific perms still pending in seed)
+const TRAINING_MANAGER_NAV: NavGroup[] = [
+  { group: 'COMMAND',  color: 'text-indigo-400',   items: [{ name: 'Dashboard', path: '/', icon: '⬡' }] },
+  { group: 'TRAINING', color: 'text-orange-400',   items: [
+    { name: 'Training',  path: '/training',  icon: '◑' },
+    { name: 'Employees', path: '/employees', icon: '◈' },
+  ]},
+  { group: 'COMPLIANCE', color: 'text-amber-400',  items: [{ name: 'Reports', path: '/reports', icon: '▤' }] },
+  { group: 'EMPLOYEE', color: 'text-sky-400',      items: [
+    { name: 'My Attendance', path: '/attendance', icon: '◉' },
+    { name: 'My Leave',      path: '/leave',      icon: '◌' },
+    { name: 'My Training',   path: '/training',   icon: '◑' },
+    { name: 'My Payslips',   path: '/payroll/me', icon: '◆' },
+  ]},
+];
+
 // Employee ESS nav — default inherited role for all employees
 const EMPLOYEE_NAV: NavGroup[] = [
   { group: 'OVERVIEW',  color: 'text-indigo-400',  items: [{ name: 'Dashboard', path: '/', icon: '⬡' }] },
@@ -174,24 +283,31 @@ const EMPLOYEE_NAV: NavGroup[] = [
 
 const ROLE_LABELS: Record<string, { label: string; color: string; dot: string }> = {
   SUPER_ADMIN:      { label: 'Super Admin',      color: 'text-indigo-300', dot: 'bg-indigo-500' },
-  HR_ADMIN:         { label: 'HR Admin',          color: 'text-violet-300', dot: 'bg-violet-500' },
-  HR_MANAGER:       { label: 'HR Manager',        color: 'text-blue-300',   dot: 'bg-blue-500'   },
-  PAYROLL_OFFICER:  { label: 'Payroll Officer',   color: 'text-emerald-300',dot: 'bg-emerald-500'},
-  RECRUITER:        { label: 'Recruiter',         color: 'text-amber-300',  dot: 'bg-amber-500'  },
-  TRAINING_MANAGER: { label: 'Training Mgr',      color: 'text-orange-300', dot: 'bg-orange-500' },
-  LINE_MANAGER:     { label: 'Line Manager',      color: 'text-sky-300',    dot: 'bg-sky-500'    },
-  FINANCE_ADMIN:    { label: 'Finance Admin',     color: 'text-teal-300',   dot: 'bg-teal-500'   },
-  IT_ADMIN:         { label: 'IT Admin',          color: 'text-red-300',    dot: 'bg-red-500'    },
-  EMPLOYEE:         { label: 'Employee',          color: 'text-slate-400',  dot: 'bg-slate-600'  },
+  ADMIN:            { label: 'Admin',            color: 'text-purple-300', dot: 'bg-purple-500' },
+  IT_ADMIN:         { label: 'IT Admin',         color: 'text-red-300',    dot: 'bg-red-500'    },
+  HR_ADMIN:         { label: 'HR Admin',         color: 'text-violet-300', dot: 'bg-violet-500' },
+  HR_MANAGER:       { label: 'HR Manager',       color: 'text-blue-300',   dot: 'bg-blue-500'   },
+  PAYROLL_OFFICER:  { label: 'Payroll Officer',  color: 'text-emerald-300',dot: 'bg-emerald-500'},
+  FINANCE_ADMIN:    { label: 'Finance Admin',    color: 'text-teal-300',   dot: 'bg-teal-500'   },
+  RECRUITER:        { label: 'Recruiter',        color: 'text-amber-300',  dot: 'bg-amber-500'  },
+  TRAINING_MANAGER: { label: 'Training Mgr',     color: 'text-orange-300', dot: 'bg-orange-500' },
+  LINE_MANAGER:     { label: 'Line Manager',     color: 'text-sky-300',    dot: 'bg-sky-500'    },
+  EMPLOYEE:         { label: 'Employee',         color: 'text-slate-400',  dot: 'bg-slate-600'  },
 };
 
 function getNavGroups(role: string, email: string, cached: boolean) {
   const r = role.toUpperCase();
   const e = email.toLowerCase();
   if (r === 'SUPER_ADMIN' || e === 'admin@vorkhive.sg' || e === 'admin@hrms.com' || cached) return SUPER_ADMIN_NAV;
-  if (r === 'HR_ADMIN' || r === 'ADMIN') return HR_ADMIN_NAV;
-  if (r === 'HR_MANAGER') return HR_ADMIN_NAV;
-  if (r === 'PAYROLL_OFFICER') return PAYROLL_OFFICER_NAV;
+  if (r === 'HR_ADMIN')         return HR_ADMIN_NAV;
+  if (r === 'HR_MANAGER')       return HR_ADMIN_NAV;
+  if (r === 'PAYROLL_OFFICER')  return PAYROLL_OFFICER_NAV;
+  if (r === 'ADMIN')            return ADMIN_NAV;
+  if (r === 'IT_ADMIN')         return IT_ADMIN_NAV;
+  if (r === 'FINANCE_ADMIN')    return FINANCE_ADMIN_NAV;
+  if (r === 'LINE_MANAGER')     return LINE_MANAGER_NAV;
+  if (r === 'RECRUITER')        return RECRUITER_NAV;
+  if (r === 'TRAINING_MANAGER') return TRAINING_MANAGER_NAV;
   return EMPLOYEE_NAV;
 }
 
@@ -210,12 +326,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!user) return;
     const email = (user.email || '').toLowerCase().trim();
     const role = (user.role || '').toUpperCase().trim();
-    const isAdmin =
-      role === 'SUPER_ADMIN' || role === 'HR_ADMIN' || role === 'ADMIN' ||
+    // Only system-level super-admins get the SUPER_ADMIN nav cache.
+    // ADMIN is its own scoped role (per RBAC v3.0) and must not be auto-promoted.
+    const isSuperAdmin =
+      role === 'SUPER_ADMIN' ||
       email === 'admin@vorkhive.sg' || email === 'admin@hrms.com';
-    if (isAdmin) {
+    if (isSuperAdmin) {
       localStorage.setItem('vorkhive_admin_confirmed', '1');
-      localStorage.setItem('vorkhive_user_role', role === 'SUPER_ADMIN' || email === 'admin@vorkhive.sg' || email === 'admin@hrms.com' ? 'SUPER_ADMIN' : role);
+      localStorage.setItem('vorkhive_user_role', 'SUPER_ADMIN');
       setCachedAdmin(true);
     }
   }, [user]);
