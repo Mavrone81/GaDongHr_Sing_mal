@@ -187,7 +187,7 @@ export function EmployeePayslipsView() {
       <div className="flex items-center justify-center h-64">
         <div className="flex flex-col items-center gap-4">
           <div className="w-10 h-10 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin" />
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Loading payslips…</p>
+          <p className="eyebrow-tight animate-pulse">Loading payslips…</p>
         </div>
       </div>
     );
@@ -212,7 +212,7 @@ export function EmployeePayslipsView() {
           </div>
           <div className="flex items-center gap-4">
             <div className="px-6 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-center">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Records</p>
+              <p className="label-form">Total Records</p>
               <p className="text-2xl font-black text-slate-900 mt-1">{payslips.length}</p>
             </div>
           </div>
@@ -222,19 +222,19 @@ export function EmployeePayslipsView() {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+          <p className="eyebrow-tight mb-3">
             {selectedYear === 'all' ? 'All-Time' : selectedYear} Gross Pay
           </p>
           <p className="text-3xl font-black text-slate-900 tracking-tighter">SGD {fmtSGD(ytdStats.gross)}</p>
         </div>
         <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+          <p className="eyebrow-tight mb-3">
             {selectedYear === 'all' ? 'All-Time' : selectedYear} Net Pay
           </p>
           <p className="text-3xl font-black text-indigo-600 tracking-tighter">SGD {fmtSGD(ytdStats.net)}</p>
         </div>
         <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+          <p className="eyebrow-tight mb-3">
             {selectedYear === 'all' ? 'All-Time' : selectedYear} Employee CPF
           </p>
           <p className="text-3xl font-black text-slate-900 tracking-tighter">SGD {fmtSGD(ytdStats.cpf)}</p>
@@ -394,7 +394,7 @@ export function EmployeePayslipsView() {
 
         {filtered.length > 0 && (
           <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            <p className="eyebrow-tight">
               {filtered.length} payslip{filtered.length !== 1 ? 's' : ''} {selectedYear !== 'all' ? `in ${selectedYear}` : 'total'}
               {selected.size > 0 && ` · ${selected.size} selected`}
             </p>
@@ -800,7 +800,7 @@ function AdminPayrollDashboard() {
 
             {/* Existing Runs Summary */}
             <div className="px-8 py-4 border-b border-slate-100 shrink-0">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Existing Runs for This Period</p>
+              <p className="label-form mb-3">Existing Runs for This Period</p>
               <div className="flex flex-wrap gap-3">
                 {periodConflictRuns.map(r => (
                   <div key={r.id} className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl">
@@ -822,7 +822,7 @@ function AdminPayrollDashboard() {
             {/* Per-employee payslip comparison */}
             <div className="flex-1 overflow-y-auto px-8 py-4">
               <div className="flex items-start gap-2 mb-3">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                <p className="label-form">
                   Existing Payslips — Computed Values at Time of Run
                 </p>
                 <span className="shrink-0 text-[8px] font-black px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full uppercase tracking-widest">Stale salaries possible</span>
@@ -833,14 +833,14 @@ function AdminPayrollDashboard() {
               {conflictLoading ? (
                 <div className="flex items-center gap-3 py-8">
                   <div className="w-4 h-4 border-2 border-slate-300 border-t-indigo-600 rounded-full animate-spin" />
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Loading employee payslip data…</span>
+                  <span className="eyebrow-tight">Loading employee payslip data…</span>
                 </div>
               ) : conflictPayslips.length === 0 ? (
                 <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest py-6">No computed payslips yet for this period — new run will be the first.</p>
               ) : (
                 <div className="overflow-hidden border border-slate-100 rounded-2xl">
                   <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                    <thead className="bg-slate-50 label-form">
                       <tr>
                         <th className="px-5 py-3">Employee</th>
                         {periodConflictRuns.map(r => (
@@ -983,7 +983,7 @@ function AdminPayrollDashboard() {
         </div>
         <div className="flex items-center gap-6 relative z-10">
            <div className="hidden lg:flex flex-col items-end justify-center px-6 border-r border-slate-100">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Active Engine</span>
+              <span className="label-form">Active Engine</span>
               <span className="text-[10px] font-black text-indigo-600 uppercase mt-1">SG-CPF-STABLE-2026</span>
            </div>
            <button
@@ -998,7 +998,7 @@ function AdminPayrollDashboard() {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 group hover:border-indigo-600/20 transition-all">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Pending Disbursement</p>
+          <p className="eyebrow-tight mb-4">Pending Disbursement</p>
           <div className="flex items-end gap-3">
             <h3 className="text-4xl font-black text-slate-900 tracking-tighter">$245,600.00</h3>
             <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded uppercase mb-1.5">Live</span>
@@ -1017,7 +1017,7 @@ function AdminPayrollDashboard() {
         </div>
         <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-bl-full"></div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Metric: YTD Disbursed</p>
+          <p className="eyebrow-tight mb-4">Metric: YTD Disbursed</p>
           <h3 className="text-4xl font-black text-indigo-600 tracking-tighter">$1.2M</h3>
           <p className="text-[9px] font-black text-emerald-600 uppercase mt-8 flex items-center gap-2">
             <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
@@ -1096,13 +1096,13 @@ function AdminPayrollDashboard() {
                     </span>
                   </td>
                   <td className="px-8 py-6">
-                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{run.runType}</span>
+                     <span className="eyebrow-tight">{run.runType}</span>
                   </td>
                   <td className="px-8 py-6 text-right">
                      <span className="text-sm font-black text-slate-400 tracking-tighter italic">—</span>
                   </td>
                   <td className="px-8 py-6 text-right">
-                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">—</span>
+                     <span className="eyebrow-tight italic">—</span>
                   </td>
                   <td className="px-8 py-6">
                     <div className="flex justify-center items-center">
@@ -1119,7 +1119,7 @@ function AdminPayrollDashboard() {
                         <div className="flex items-center gap-3">
                           <button onClick={() => { const ref = generateGiroRef(run.period); setGiroRunId(run.id); setGiroBank('uob'); setGiroFields({ acct: '', companyName: 'VORKHIVE PTE LTD', valueDate: new Date().toISOString().slice(0,10), ref, batchNo: '001', payDesc: `SALARY ${run.period}` }); }} className="px-4 py-2 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-slate-800 transition-all">GIRO</button>
                           <button onClick={() => handleActionToast('Opening CPF E-Submit Portal…')} className="px-4 py-2 bg-emerald-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-emerald-700 transition-all">FTP</button>
-                          <button onClick={() => { setPayslipRunId(run.id); setPayslipRows([]); }} className="px-4 py-2 bg-white border border-slate-200 text-[9px] font-black text-slate-400 uppercase tracking-widest rounded-lg hover:text-indigo-600 hover:border-indigo-600 transition-all">Payslips</button>
+                          <button onClick={() => { setPayslipRunId(run.id); setPayslipRows([]); }} className="px-4 py-2 bg-white border border-slate-200 label-form rounded-lg hover:text-indigo-600 hover:border-indigo-600 transition-all">Payslips</button>
                           {runs.filter(r => r.period === run.period && r.id !== run.id && r.status === 'FINALISED').length > 0 && (
                             <button onClick={async () => {
                               try {
@@ -1159,7 +1159,7 @@ function AdminPayrollDashboard() {
               <div className="bg-slate-50 border-b border-slate-100 px-8 py-6 flex justify-between items-center shrink-0">
                 <div>
                   <h3 className="text-xl font-black text-slate-900 tracking-tighter uppercase">Generate GIRO File</h3>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                  <p className="label-form mt-1">
                     {run ? `Period: ${fmtPeriod(run.period)}` : ''} · Fill in your company&apos;s bank details
                   </p>
                 </div>
@@ -1265,7 +1265,7 @@ function AdminPayrollDashboard() {
 
               {/* Footer */}
               <div className="border-t border-slate-100 px-8 py-5 shrink-0 flex items-center justify-between gap-4 bg-slate-50/50">
-                <button onClick={() => setGiroRunId(null)} className="px-6 py-3 rounded-xl text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors">Cancel</button>
+                <button onClick={() => setGiroRunId(null)} className="px-6 py-3 rounded-xl eyebrow-tight hover:text-slate-600 transition-colors">Cancel</button>
                 <button
                   onClick={downloadGiro}
                   disabled={giroDownloading || !giroFields.acct}
@@ -1290,17 +1290,17 @@ function AdminPayrollDashboard() {
             <div className="bg-slate-50 border-b border-slate-100 p-10 flex justify-between items-center">
               <div>
                 <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">Initiate Engine</h3>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Fiscal Cycle Alignment v2.4</p>
+                <p className="eyebrow-tight mt-2">Fiscal Cycle Alignment v2.4</p>
               </div>
               <button onClick={() => setIsRunModalOpen(false)} className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-2xl text-slate-400 hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-all font-black">&times;</button>
             </div>
             <div className="p-10 flex flex-col gap-8">
               <div className="flex flex-col gap-3">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Accounting Period (YYYY-MM)</label>
+                <label className="eyebrow-tight">Accounting Period (YYYY-MM)</label>
                 <input type="month" value={selectedPeriod} onChange={e => setSelectedPeriod(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-sm font-black text-slate-900 outline-none focus:border-indigo-600 transition-all" />
               </div>
               <div className="flex flex-col gap-3">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Run Type</label>
+                <label className="eyebrow-tight">Run Type</label>
                 <select value={selectedRunType} onChange={e => setSelectedRunType(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-sm font-black text-slate-900 outline-none focus:border-indigo-600 appearance-none cursor-pointer">
                   <option value="MONTHLY">Monthly Payroll</option>
                   <option value="ADHOC">Ad-hoc / Supplemental</option>
@@ -1310,7 +1310,7 @@ function AdminPayrollDashboard() {
                 </select>
               </div>
               <div className="flex flex-col gap-3">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Workforce Partition</label>
+                <label className="eyebrow-tight">Workforce Partition</label>
                 <select value={processingGroup} onChange={e => setProcessingGroup(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-sm font-black text-slate-900 outline-none focus:border-indigo-600 appearance-none cursor-pointer">
                   <option value="all">Global Workforce (All Sectors)</option>
                   <option value="full_time">Personnel: Full-Time</option>
@@ -1322,7 +1322,7 @@ function AdminPayrollDashboard() {
               <div className="pt-4 border-t border-slate-50 flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Working Days — {fmtPeriod(selectedPeriod)}</p>
+                    <p className="eyebrow-tight">Working Days — {fmtPeriod(selectedPeriod)}</p>
                     <p className="text-[8px] font-bold text-slate-300 uppercase tracking-wide mt-0.5">MOM EA s.20 · Pro-ration basis for new joiners &amp; leavers</p>
                   </div>
                   {periodCfg && (
@@ -1380,7 +1380,7 @@ function AdminPayrollDashboard() {
                     </button>
                   </div>
                 ) : (
-                  <div className="bg-slate-50 rounded-2xl p-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">
+                  <div className="bg-slate-50 rounded-2xl p-4 label-form text-center">
                     Could not load period config
                   </div>
                 )}
@@ -1450,7 +1450,7 @@ function AdminPayrollDashboard() {
               <div className="grid grid-cols-3 gap-8">
                 <div className="bg-indigo-50/50 p-8 rounded-[2rem] border border-indigo-100/50"><p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest mb-3">Run Type</p><h4 className="text-3xl font-black text-slate-900 tracking-tighter">{reviewRunData.runType}</h4></div>
                 <div className="bg-emerald-50/50 p-8 rounded-[2rem] border border-emerald-100/50"><p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-3">Status</p><h4 className="text-2xl font-black text-slate-900 tracking-tighter">{fmtRunStatus(reviewRunData.status)}</h4></div>
-                <div className="bg-slate-50/50 p-8 rounded-[2rem] border border-slate-100"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Initiated</p><h4 className="text-sm font-black text-slate-700 tracking-tighter">{new Date(reviewRunData.createdAt).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}</h4></div>
+                <div className="bg-slate-50/50 p-8 rounded-[2rem] border border-slate-100"><p className="label-form mb-3">Initiated</p><h4 className="text-sm font-black text-slate-700 tracking-tighter">{new Date(reviewRunData.createdAt).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}</h4></div>
               </div>
 
               {/* Variance warning — shown when other finalised runs exist for same period */}
@@ -1699,7 +1699,7 @@ function AdminPayrollDashboard() {
               <div className="p-10 border-b border-slate-100 flex justify-between items-center">
                  <div>
                    <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase leading-none">Payslips</h3>
-                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-3">{payslipRunPeriod ? fmtPeriod(payslipRunPeriod) : 'Loading…'} · {payslipRows.length} records</p>
+                   <p className="eyebrow-tight mt-3">{payslipRunPeriod ? fmtPeriod(payslipRunPeriod) : 'Loading…'} · {payslipRows.length} records</p>
                  </div>
                  <button onClick={() => setPayslipRunId(null)} className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-red-500 transition-all font-black">&times;</button>
               </div>
@@ -1707,7 +1707,7 @@ function AdminPayrollDashboard() {
                  {payslipLoading ? (
                    <div className="py-16 flex items-center justify-center gap-3">
                      <div className="w-6 h-6 border-2 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin" />
-                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Loading payslips…</span>
+                     <span className="eyebrow-tight">Loading payslips…</span>
                    </div>
                  ) : payslipRows.length === 0 ? (
                    <div className="py-16 text-center">
@@ -1716,7 +1716,7 @@ function AdminPayrollDashboard() {
                    </div>
                  ) : (
                  <table className="w-full text-left text-sm border-collapse">
-                    <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest sticky top-0 z-10 backdrop-blur-md">
+                    <thead className="bg-slate-50/50 eyebrow-tight sticky top-0 z-10 backdrop-blur-md">
                        <tr>
                          {([
                            { col: 'name',  label: 'Employee', cls: 'px-10 py-5',            align: 'start' },
@@ -1757,7 +1757,7 @@ function AdminPayrollDashboard() {
                  )}
               </div>
               <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center">
-                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{payslipRows.filter(p => p.isPublished).length} published · {payslipRows.filter(p => !p.isPublished).length} pending</p>
+                 <p className="label-form">{payslipRows.filter(p => p.isPublished).length} published · {payslipRows.filter(p => !p.isPublished).length} pending</p>
                  <button
                    onClick={async () => {
                      const published = payslipRows.filter(p => p.isPublished);

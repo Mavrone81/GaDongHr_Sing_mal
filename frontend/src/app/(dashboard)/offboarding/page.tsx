@@ -142,7 +142,7 @@ function InitiateModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
           {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-bold text-red-600">{error}</div>}
 
           <div>
-            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">Employee *</label>
+            <label className="label-form block mb-2">Employee *</label>
             {loading ? (
               <div className="h-10 bg-slate-100 rounded-xl animate-pulse" />
             ) : (
@@ -160,7 +160,7 @@ function InitiateModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
           </div>
 
           <div>
-            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">Separation Reason *</label>
+            <label className="label-form block mb-2">Separation Reason *</label>
             <select
               value={form.reason}
               onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}
@@ -172,19 +172,19 @@ function InitiateModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">Last Working Date *</label>
+              <label className="label-form block mb-2">Last Working Date *</label>
               <input type="date" value={form.lastWorkingDate} onChange={e => setForm(f => ({ ...f, lastWorkingDate: e.target.value }))}
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500" />
             </div>
             <div>
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">Notice Given Date</label>
+              <label className="label-form block mb-2">Notice Given Date</label>
               <input type="date" value={form.noticeGivenDate} onChange={e => setForm(f => ({ ...f, noticeGivenDate: e.target.value }))}
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500" />
             </div>
           </div>
 
           <div>
-            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">Notice Period (Days)</label>
+            <label className="label-form block mb-2">Notice Period (Days)</label>
             <input type="number" min={0} value={form.noticePeriodDays} onChange={e => setForm(f => ({ ...f, noticePeriodDays: parseInt(e.target.value) || 0 }))}
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500" />
           </div>
@@ -283,7 +283,7 @@ function ManageModal({ caseId, onClose, onUpdate }: { caseId: string; onClose: (
             <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mt-1">
               {REASON_LABELS[offCase.reason] || offCase.reason} · Last Day: {new Date(offCase.lastWorkingDate).toLocaleDateString('en-SG')}
             </p>
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{offCase.department}</p>
+            <p className="label-form mt-1">{offCase.department}</p>
             {/* Progress bar */}
             <div className="flex items-center gap-3 mt-4">
               <div className="w-40 h-1.5 bg-slate-700 rounded-full overflow-hidden">
@@ -334,11 +334,11 @@ function ManageModal({ caseId, onClose, onUpdate }: { caseId: string; onClose: (
               {empAssets.length === 0 ? (
                 <div className="py-12 text-center">
                   <div className="text-3xl mb-3">📦</div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No assets currently assigned</p>
+                  <p className="eyebrow-tight">No assets currently assigned</p>
                 </div>
               ) : (
                 <>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                  <p className="label-form mb-3">
                     {empAssets.length} asset{empAssets.length !== 1 ? 's' : ''} must be returned before offboarding is complete
                   </p>
                   {empAssets.map(a => (
@@ -460,7 +460,7 @@ export default function OffboardingPage() {
           { label: 'Assets Pending',   value: assetsPending.toString(),       color: 'text-indigo-600',  bg: 'bg-indigo-50 border-indigo-100' },
         ].map((k) => (
           <div key={k.label} className={`p-8 rounded-[2rem] border shadow-2xl shadow-indigo-500/5 ${k.bg}`}>
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">{k.label}</p>
+            <p className="label-form mb-4">{k.label}</p>
             <h3 className={`text-3xl font-black tracking-tighter ${k.color}`}>{k.value}</h3>
           </div>
         ))}
@@ -471,14 +471,14 @@ export default function OffboardingPage() {
         <div className="p-8 border-b border-slate-50 flex items-center gap-4">
           <div className="w-2 h-8 bg-red-500 rounded-full" />
           <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest">Separation Cases</h3>
-          <span className="ml-auto text-[9px] font-black text-slate-400 uppercase tracking-widest">{cases.length} total</span>
+          <span className="ml-auto label-form">{cases.length} total</span>
         </div>
         <div className="overflow-x-auto">
           {loading ? (
             <div className="p-16 text-center text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse">Loading cases…</div>
           ) : cases.length === 0 ? (
             <div className="p-16 text-center">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No offboarding cases yet</p>
+              <p className="eyebrow-tight">No offboarding cases yet</p>
               <button onClick={() => setShowInitiate(true)} className="mt-4 px-6 py-2 bg-red-600 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-red-700 transition-all">
                 Initiate First Case
               </button>

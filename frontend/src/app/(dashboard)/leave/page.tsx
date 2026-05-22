@@ -327,7 +327,7 @@ function EmployeeLeaveView() {
             <div key={b.type} className="bg-white rounded-[1.5rem] border border-slate-100 shadow-lg shadow-indigo-500/5 overflow-hidden group hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300">
               <div className={`h-1.5 bg-gradient-to-r ${b.color}`} />
               <div className="p-6">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight mb-4">{b.label}</p>
+                <p className="eyebrow-tight leading-tight mb-4">{b.label}</p>
                 <div className="flex items-baseline gap-1.5 mb-3">
                   <span className={`text-4xl font-black tracking-tighter ${b.statColor}`}>{b.balance}</span>
                   <span className="text-[11px] font-black text-slate-400">/ {b.total}d</span>
@@ -411,7 +411,7 @@ function EmployeeLeaveView() {
                     <p className="text-[10px] font-bold text-slate-400 mt-1 truncate">"{req.reason}"</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Applied</p>
+                    <p className="label-form">Applied</p>
                     <p className="text-[11px] font-bold text-slate-600 mt-0.5">{fmtDate(req.appliedOn)}</p>
                   </div>
                 </div>

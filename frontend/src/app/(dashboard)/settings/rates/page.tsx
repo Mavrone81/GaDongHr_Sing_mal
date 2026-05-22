@@ -93,7 +93,7 @@ function EditableCell({ value, onSave, suffix = '' }: { value: string | number; 
         <button onClick={commit} disabled={saving} className="text-[9px] font-black text-green-600 uppercase tracking-widest hover:text-green-800">
           {saving ? '…' : 'Save'}
         </button>
-        <button onClick={() => setEditing(false)} className="text-[9px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600">✕</button>
+        <button onClick={() => setEditing(false)} className="label-form hover:text-slate-600">✕</button>
       </span>
     );
   }
@@ -237,7 +237,7 @@ export default function RatesPage() {
           <div className="w-2 h-8 bg-violet-500 rounded-full" />
           <div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tighter">Statutory Tables</h1>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">SuperAdmin Only · Singapore 2026 Rates</p>
+            <p className="eyebrow-tight mt-0.5">SuperAdmin Only · Singapore 2026 Rates</p>
           </div>
         </div>
         <button
@@ -293,7 +293,7 @@ export default function RatesPage() {
                 <div key={status} className="border border-slate-100 rounded-2xl overflow-hidden">
                   <div className="bg-slate-50 px-5 py-3 flex items-center justify-between">
                     <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">{STATUS_LABELS[status]}</span>
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">OW Ceiling: SGD {cpfRates.find(r => r.citizenStatus === status)?.owCeiling?.toLocaleString()}</span>
+                    <span className="label-form">OW Ceiling: SGD {cpfRates.find(r => r.citizenStatus === status)?.owCeiling?.toLocaleString()}</span>
                   </div>
                   <table className="w-full text-xs">
                     <thead>
@@ -305,7 +305,7 @@ export default function RatesPage() {
                           { col: 'tot', label: 'Total %' },
                           { col: 'ow',  label: 'OW Ceiling (SGD)' },
                         ] as const).map(h => (
-                          <th key={h.col} className="text-left px-5 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                          <th key={h.col} className="text-left px-5 py-2 label-form">
                             <button onClick={() => toggleCpfSort(h.col)} className="flex items-center hover:text-slate-600 transition-colors">
                               {h.label}<CpfSortIcon col={h.col} />
                             </button>
@@ -411,7 +411,7 @@ export default function RatesPage() {
                           { col: 'daily',  label: 'Daily Rate (SGD)' },
                           { col: 'daily',  label: '≈ Monthly (×26)' },
                         ] as const).map((h, i) => (
-                          <th key={i} className="text-left px-5 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                          <th key={i} className="text-left px-5 py-2 label-form">
                             <button onClick={() => toggleFwlSort(h.col)} className="flex items-center hover:text-slate-600 transition-colors">
                               {h.label}<FwlSortIcon col={h.col} />
                             </button>

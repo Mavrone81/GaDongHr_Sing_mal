@@ -66,7 +66,7 @@ function RegisterModal({ onClose, onSaved }: { onClose: () => void; onSaved: (a:
         <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
           <div>
             <h2 className="text-lg font-black text-slate-900 tracking-tighter">Register New Asset</h2>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Add to the asset registry</p>
+            <p className="eyebrow-tight mt-0.5">Add to the asset registry</p>
           </div>
           <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">✕</button>
         </div>
@@ -184,7 +184,7 @@ function ManageModal({ asset, onClose, onUpdated }: { asset: Asset; onClose: () 
           <div>
             <h2 className="text-base font-black text-slate-900 tracking-tighter">{asset.name}</h2>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{asset.assetCode}</span>
+              <span className="label-form">{asset.assetCode}</span>
               <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${STATUS_STYLE[asset.status]}`}>{STATUS_LABEL[asset.status]}</span>
             </div>
           </div>
@@ -387,7 +387,7 @@ export default function AssetsPage() {
           { label: 'Total Value (SGD)', value: loading ? '—' : `$${totalValue.toLocaleString()}`,                              color: 'text-teal-600' },
         ].map(k => (
           <div key={k.label} className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5">
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">{k.label}</p>
+            <p className="label-form mb-4">{k.label}</p>
             <h3 className={`text-3xl font-black tracking-tighter ${k.color}`}>{k.value}</h3>
           </div>
         ))}

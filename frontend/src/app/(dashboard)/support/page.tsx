@@ -70,13 +70,13 @@ function TicketThread({ ticket, onBack, onUpdated }: { ticket: Ticket; onBack: (
     <div className="flex flex-col gap-6">
       {/* Back + header */}
       <div className="flex items-center gap-4">
-        <button onClick={onBack} className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">← Back</button>
+        <button onClick={onBack} className="eyebrow-tight hover:text-indigo-600 transition-colors">← Back</button>
         <div className="flex-1">
           <h2 className="text-lg font-black text-slate-900 truncate">{ticket.subject}</h2>
           <div className="flex items-center gap-3 mt-1">
             <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${STATUS_COLORS[ticket.status]}`}>{ticket.status.replace('_', ' ')}</span>
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{CATEGORY_LABELS[ticket.category]}</span>
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{new Date(ticket.createdAt).toLocaleDateString()}</span>
+            <span className="label-form">{CATEGORY_LABELS[ticket.category]}</span>
+            <span className="label-form">{new Date(ticket.createdAt).toLocaleDateString()}</span>
           </div>
         </div>
       </div>
@@ -101,7 +101,7 @@ function TicketThread({ ticket, onBack, onUpdated }: { ticket: Ticket; onBack: (
       {/* Reply */}
       {ticket.status !== 'CLOSED' && (
         <div className="bg-white rounded-[2rem] border border-slate-100 p-6 flex flex-col gap-4">
-          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Add Reply</label>
+          <label className="label-form">Add Reply</label>
           <textarea
             value={reply}
             onChange={e => setReply(e.target.value)}
@@ -120,7 +120,7 @@ function TicketThread({ ticket, onBack, onUpdated }: { ticket: Ticket; onBack: (
         </div>
       )}
       {ticket.status === 'CLOSED' && (
-        <div className="bg-slate-50 rounded-2xl p-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest border border-slate-100">
+        <div className="bg-slate-50 rounded-2xl p-5 text-center eyebrow-tight border border-slate-100">
           This ticket is closed. Raise a new ticket if you need further assistance.
         </div>
       )}
@@ -214,17 +214,17 @@ export default function SupportPage() {
           </div>
           <div className="p-7 flex flex-col gap-5">
             <div className="flex flex-col gap-2">
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Category</label>
+              <label className="label-form">Category</label>
               <select value={category} onChange={e => setCategory(e.target.value as TicketCategory)} className="bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-xs font-black text-slate-900 outline-none focus:border-indigo-600 appearance-none cursor-pointer">
                 {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Subject</label>
+              <label className="label-form">Subject</label>
               <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Brief description of your issue…" className="bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-xs font-black text-slate-900 placeholder:text-slate-300 outline-none focus:border-indigo-600 transition-all" />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Details</label>
+              <label className="label-form">Details</label>
               <textarea value={body} onChange={e => setBody(e.target.value)} rows={5} placeholder="Describe the issue in detail…" className="bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-xs font-black text-slate-900 placeholder:text-slate-300 outline-none focus:border-indigo-600 transition-all resize-none" />
             </div>
             {formError && <p className="text-xs font-black text-red-500">{formError}</p>}
@@ -241,7 +241,7 @@ export default function SupportPage() {
           <div className="p-7 border-b border-slate-50 flex items-center gap-4">
             <div className="w-2 h-6 bg-indigo-600 rounded-full" />
             <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">My Tickets</h3>
-            <span className="ml-auto text-[9px] font-black text-slate-400 uppercase tracking-widest">{tickets.length} total</span>
+            <span className="ml-auto label-form">{tickets.length} total</span>
           </div>
           {loading ? (
             <div className="p-10 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest animate-pulse">Loading…</div>
@@ -254,7 +254,7 @@ export default function SupportPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-black text-slate-900 truncate">{t.subject}</p>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{CATEGORY_LABELS[t.category]} · {new Date(t.updatedAt).toLocaleDateString()}</p>
+                      <p className="label-form mt-1">{CATEGORY_LABELS[t.category]} · {new Date(t.updatedAt).toLocaleDateString()}</p>
                     </div>
                     <span className={`shrink-0 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${STATUS_COLORS[t.status]}`}>{t.status.replace('_', ' ')}</span>
                   </div>

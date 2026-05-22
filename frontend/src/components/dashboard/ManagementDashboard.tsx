@@ -47,7 +47,7 @@ function SectionHeader({ title, badge, href, color = 'indigo' }: { title: string
         {badge && <span className="text-[8px] font-black px-2.5 py-1 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-full uppercase tracking-widest">{badge}</span>}
       </div>
       {href && (
-        <Link href={href} className="text-[9px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors flex items-center gap-2">
+        <Link href={href} className="label-form hover:text-indigo-600 transition-colors flex items-center gap-2">
           View All <span>→</span>
         </Link>
       )}
@@ -363,7 +363,7 @@ export default function ManagementDashboard() {
             ].map((stage) => (
               <div key={stage.label} className="bg-slate-50 border border-slate-100 hover:border-indigo-200 rounded-2xl p-5 transition-all">
                 <span className={`text-2xl font-black ${stage.color} tracking-tighter block`}>{String(stage.count).padStart(2,'0')}</span>
-                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2 block">{stage.label}</span>
+                <span className="label-form mt-2 block">{stage.label}</span>
               </div>
             ))}
           </div>

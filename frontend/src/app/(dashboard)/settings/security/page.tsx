@@ -308,7 +308,7 @@ export default function SecurityPage() {
               {savingMfaMethod && (
                 <div className="flex items-center gap-2">
                   <svg className="animate-spin h-3.5 w-3.5 text-indigo-600" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Saving…</span>
+                  <span className="label-form">Saving…</span>
                 </div>
               )}
             </div>
@@ -370,7 +370,7 @@ export default function SecurityPage() {
               {usersLoading ? <div className="h-8 w-10 bg-amber-100 rounded-lg animate-pulse" /> : <p className="text-3xl font-black text-amber-600">{users.length - mfaCount}</p>}
             </div>
             <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Coverage</p>
+              <p className="eyebrow-tight mb-2">Coverage</p>
               {usersLoading ? <div className="h-8 w-14 bg-slate-100 rounded-lg animate-pulse" /> : (
                 <p className="text-3xl font-black text-slate-900">
                   {users.length > 0 ? Math.round((mfaCount / users.length) * 100) : 0}%
@@ -460,7 +460,7 @@ export default function SecurityPage() {
               </div>
               {users.filter(u => u.isActive).length > 50 && (
                 <div className="px-5 py-3 bg-slate-50 border-t border-slate-100">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Showing 50 of {users.filter(u => u.isActive).length} active users</p>
+                  <p className="label-form">Showing 50 of {users.filter(u => u.isActive).length} active users</p>
                 </div>
               )}
             </div>

@@ -112,7 +112,7 @@ function AdminClaimsView() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <div className="bg-white p-7 rounded-[1.5rem] border border-slate-100 shadow-lg shadow-indigo-500/5">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Pending Outflow</p>
+          <p className="eyebrow-tight mb-3">Pending Outflow</p>
           {loading
             ? <div className="h-10 w-32 bg-slate-100 rounded-xl animate-pulse" />
             : <p className="text-4xl font-black text-slate-900 tracking-tighter">SGD {fmtSGD(totalPending)}</p>

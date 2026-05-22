@@ -104,7 +104,7 @@ function Field({
   const spanCls = span === '2' ? 'md:col-span-2' : span === '3' ? 'col-span-full' : '';
   return (
     <div className={`flex flex-col gap-1.5 ${spanCls}`}>
-      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</label>
+      <label className="label-form">{label}</label>
       {editing && children ? children : (
         <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-bold text-slate-900 min-h-[42px] flex items-center">
           {value != null && value !== '' ? value : <span className="text-slate-400 italic text-xs font-normal">Not provided</span>}
@@ -398,7 +398,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
         </div>
         <div className="flex gap-3 items-center">
           <div className="hidden sm:flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Profile Health:</span>
+            <span className="eyebrow-tight">Profile Health:</span>
             <div className="w-24 h-1.5 bg-slate-200 rounded-full overflow-hidden">
               <div className="h-full bg-indigo-600 transition-all" style={{ width: `${completionRate}%` }} />
             </div>
@@ -463,7 +463,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                   { label: 'Tenure', val: `${tenureYrs} yrs` },
                 ].map(({ label, val }) => (
                   <div key={label}>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+                    <p className="label-form mb-1">{label}</p>
                     <p className="text-xs font-bold text-slate-900 truncate">{val}</p>
                   </div>
                 ))}
@@ -731,7 +731,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                         <div className="overflow-hidden border border-slate-200 rounded-xl">
                           <table className="w-full text-left">
                             <thead>
-                              <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                              <tr className="bg-slate-50 border-b border-slate-200 label-form">
                                 <th className="px-5 py-3">Leave Type</th>
                                 <th className="px-5 py-3">Entitlement</th>
                                 <th className="px-5 py-3">Used</th>
@@ -780,7 +780,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
 
                   <Section title="Compensation" accent="bg-violet-500">
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Basic Salary (SGD)</label>
+                      <label className="label-form">Basic Salary (SGD)</label>
                       {isEditing ? (
                         <input type="text" value={editData.basicSalaryEncrypted ?? ''} onChange={e => set('basicSalaryEncrypted', e.target.value)} className={IX} placeholder="e.g. 5000" />
                       ) : (
@@ -831,7 +831,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                         ))}
                       </div>
                       <div className="bg-white p-6 rounded-xl border border-slate-200">
-                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-4">Citizenship Category</label>
+                        <label className="label-form block mb-4">Citizenship Category</label>
                         <div className="flex flex-col gap-3">
                           {[
                             { label: 'SC / SPR 3rd Year+', note: 'Full rates', active: true },
@@ -942,7 +942,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                       <div className="overflow-hidden border border-slate-200 rounded-xl">
                         <table className="w-full text-left">
                           <thead>
-                            <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                            <tr className="bg-slate-50 border-b border-slate-200 label-form">
                               <th className="px-5 py-3">Asset</th>
                               <th className="px-5 py-3">Category</th>
                               <th className="px-5 py-3">Assigned</th>
@@ -1011,7 +1011,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                           <button onClick={() => { setUploadOpen(false); setUploadFile(null); setUploadError(''); }} className="text-slate-400 hover:text-slate-700 text-lg font-black">✕</button>
                         </div>
                         <div>
-                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">File</label>
+                          <label className="label-form block mb-2">File</label>
                           <label className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl py-6 cursor-pointer transition-all ${uploadFile ? 'border-indigo-300 bg-indigo-50/40' : 'border-slate-200 hover:border-indigo-300'}`}>
                             <svg className={`w-6 h-6 ${uploadFile ? 'text-indigo-500' : 'text-slate-300'}`} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
                             <span className="text-[10px] font-bold text-slate-500">{uploadFile ? uploadFile.name : 'Click to select file (max 10 MB)'}</span>
@@ -1019,7 +1019,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                           </label>
                         </div>
                         <div>
-                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">Document Type</label>
+                          <label className="label-form block mb-2">Document Type</label>
                           <select value={uploadDocType} onChange={e => setUploadDocType(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-indigo-500 appearance-none">
                             <option value="CONTRACT">Employment Contract</option>
                             <option value="NRIC_COPY">NRIC / FIN Copy</option>
@@ -1029,7 +1029,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                           </select>
                         </div>
                         <div>
-                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2">Expiry Date <span className="normal-case font-bold">(optional)</span></label>
+                          <label className="label-form block mb-2">Expiry Date <span className="normal-case font-bold">(optional)</span></label>
                           <input type="date" value={uploadExpiry} onChange={e => setUploadExpiry(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-indigo-500" />
                         </div>
                         {uploadError && <p className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-lg">{uploadError}</p>}
@@ -1069,7 +1069,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                   )}
 
                   <div className="flex justify-between items-center">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Secure Document Archive</h4>
+                    <h4 className="eyebrow-tight">Secure Document Archive</h4>
                     <button onClick={() => { setUploadOpen(true); setUploadError(''); }} className="text-[10px] font-black uppercase text-indigo-600 bg-indigo-50 px-4 py-2 rounded-lg hover:bg-indigo-100 transition-all">+ Upload Document</button>
                   </div>
 
@@ -1086,7 +1086,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                     <div className="overflow-hidden border border-slate-200 rounded-2xl shadow-sm">
                       <table className="w-full text-left">
                         <thead>
-                          <tr className="bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200">
+                          <tr className="bg-slate-50 label-form border-b border-slate-200">
                             <th className="px-6 py-4">Document</th>
                             <th className="px-6 py-4">Type</th>
                             <th className="px-6 py-4">Uploaded</th>
@@ -1204,7 +1204,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                         <>
                           {/* Flow type badge */}
                           <div className="flex items-center gap-3">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Approval Flow:</span>
+                            <span className="eyebrow-tight">Approval Flow:</span>
                             <span className={`text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-widest ${supervisorData?.flowType === 'SEQUENTIAL' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'}`}>
                               {supervisorData?.flowType === 'SEQUENTIAL' ? 'Sequential — Must approve in order' : 'Any One — Any supervisor can approve'}
                             </span>
@@ -1225,14 +1225,14 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                                     <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{s.fullName}</p>
                                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{s.designation || '—'} · {s.department || '—'}</p>
                                   </div>
-                                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{s.employeeCode}</span>
+                                  <span className="label-form">{s.employeeCode}</span>
                                 </div>
                               ))}
                             </div>
                           ) : (
                             <div className="py-12 flex flex-col items-center gap-3 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                               <div className="w-12 h-12 bg-white border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center text-slate-300 text-xl">👤</div>
-                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No supervisors assigned</p>
+                              <p className="eyebrow-tight">No supervisors assigned</p>
                               <p className="text-[9px] font-bold text-slate-300 text-center max-w-xs">Only HR Admin / Super Admin can approve this employee's leave requests</p>
                             </div>
                           )}

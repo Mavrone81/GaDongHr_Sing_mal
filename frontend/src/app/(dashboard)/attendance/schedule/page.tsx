@@ -135,7 +135,7 @@ export default function MySchedulePage() {
           </p>
         </div>
         <div className="bg-white p-7 rounded-[1.5rem] border border-slate-100 shadow-lg shadow-indigo-500/5">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Scheduled Hours</p>
+          <p className="eyebrow-tight mb-3">Scheduled Hours</p>
           {loading ? <div className="h-10 w-20 bg-slate-100 rounded-xl animate-pulse" /> : <p className="text-4xl font-black text-slate-900 tracking-tighter">{totalHours}h</p>}
         </div>
         <div className="bg-indigo-50/60 p-7 rounded-[1.5rem] border border-indigo-100">
@@ -165,7 +165,7 @@ export default function MySchedulePage() {
                   <div key={day.date} className={`p-4 flex flex-col gap-2 ${isWeekend ? 'bg-slate-50/40' : ''}`}>
                     {/* Day header */}
                     <div className="flex flex-col items-center mb-1">
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{DAY_NAMES[d.getDay()]}</span>
+                      <span className="label-form">{DAY_NAMES[d.getDay()]}</span>
                       <div className={`w-8 h-8 rounded-xl flex items-center justify-center mt-1 ${isToday ? 'bg-indigo-600 shadow-lg shadow-indigo-500/30' : ''}`}>
                         <span className={`text-sm font-black ${isToday ? 'text-white' : 'text-slate-700'}`}>{d.getDate()}</span>
                       </div>
@@ -180,7 +180,7 @@ export default function MySchedulePage() {
                         <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: day.shift.color }} />
                         <p className="text-[10px] font-black text-slate-900 leading-tight mt-0.5">{day.shift.name}</p>
                         <p className="text-[9px] font-bold text-slate-500 mt-1">{day.shift.startTime} – {day.shift.endTime}</p>
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-auto">{day.shift.hoursPerDay}h</p>
+                        <p className="label-form mt-auto">{day.shift.hoursPerDay}h</p>
                         {day.note && <p className="text-[8px] font-bold text-slate-400 italic truncate">{day.note}</p>}
                       </div>
                     ) : (

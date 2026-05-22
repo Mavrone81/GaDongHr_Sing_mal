@@ -270,7 +270,7 @@ function OverviewTab({ notify }: { notify: (m: string) => void }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
         {kpis.map(k => (
           <div key={k.label} className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5">
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">{k.label}</p>
+            <p className="label-form mb-4">{k.label}</p>
             <h3 className={`text-3xl font-black tracking-tighter ${colorMap[k.color]}`}>{k.value}</h3>
             <p className="text-[9px] font-black text-slate-400 uppercase mt-6">{k.sub}</p>
           </div>
@@ -295,7 +295,7 @@ function OverviewTab({ notify }: { notify: (m: string) => void }) {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left">
-              <thead className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
+              <thead className="eyebrow-tight border-b border-slate-50">
                 <tr>
                   {([
                     { col: 'name',     label: 'Cycle' },
@@ -440,12 +440,12 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
             <h3 className="text-xl font-black text-slate-900 mb-6 uppercase tracking-tight">New Appraisal Cycle</h3>
             <div className="flex flex-col gap-4">
               <div>
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Cycle Name *</label>
+                <label className="label-form mb-1 block">Cycle Name *</label>
                 <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Annual Review 2026" className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Type *</label>
+                  <label className="label-form mb-1 block">Type *</label>
                   <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value as CycleType }))} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600">
                     <option value="ANNUAL">Annual</option>
                     <option value="MID_YEAR">Mid-Year</option>
@@ -457,16 +457,16 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Start Date *</label>
+                  <label className="label-form mb-1 block">Start Date *</label>
                   <input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600" />
                 </div>
                 <div>
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">End Date *</label>
+                  <label className="label-form mb-1 block">End Date *</label>
                   <input type="date" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600" />
                 </div>
               </div>
               <div>
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Description</label>
+                <label className="label-form mb-1 block">Description</label>
                 <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600 resize-none" />
               </div>
             </div>
@@ -491,7 +491,7 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-6" onClick={() => setEnrollModal(null)}>
             <div className="bg-white rounded-[2rem] p-8 w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
               <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Enroll Employees</h3>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 mb-5">{enrollModal.name}</p>
+              <p className="eyebrow-tight mt-1 mb-5">{enrollModal.name}</p>
 
               {/* Search */}
               <input
@@ -516,7 +516,7 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
                 >
                   {allFilteredSelected ? 'Deselect All' : 'Select All'}
                 </button>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                <span className="eyebrow-tight">
                   {selectedIds.size} selected
                 </span>
               </div>
@@ -545,7 +545,7 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-black text-slate-900 truncate">{emp.fullName}</p>
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{emp.employeeCode}{emp.department ? ` · ${emp.department}` : ''}</p>
+                        <p className="label-form">{emp.employeeCode}{emp.department ? ` · ${emp.department}` : ''}</p>
                       </div>
                       {emp.designation && <span className="text-[9px] font-bold text-slate-400 truncate max-w-28">{emp.designation}</span>}
                     </label>
@@ -587,7 +587,7 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
                     </div>
                     <h4 className="text-lg font-black text-slate-900">{c.name}</h4>
                     {c.description && <p className="text-[11px] text-slate-400 mt-1">{c.description}</p>}
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-3">{fmtDate(c.startDate)} – {fmtDate(c.endDate)}</p>
+                    <p className="eyebrow-tight mt-3">{fmtDate(c.startDate)} – {fmtDate(c.endDate)}</p>
                   </div>
 
                   <div className="flex flex-col gap-3 min-w-60">
@@ -691,7 +691,7 @@ function MyAppraisalTab({ notify }: { notify: (m: string) => void }) {
     return (
       <div className="bg-white rounded-[2.5rem] border border-slate-100 p-16 text-center flex flex-col items-center gap-4">
         <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-3xl">📋</div>
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No appraisals yet</p>
+        <p className="eyebrow-tight">No appraisals yet</p>
         <p className="text-[11px] text-slate-300 font-medium">You have not been enrolled in any review cycle yet.<br />Contact your HR admin to get enrolled.</p>
       </div>
     );
@@ -701,7 +701,7 @@ function MyAppraisalTab({ notify }: { notify: (m: string) => void }) {
     <div className="grid lg:grid-cols-3 gap-6">
       {/* Cycle list */}
       <div className="flex flex-col gap-3">
-        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1 mb-1">Your Review Cycles</p>
+        <p className="label-form px-1 mb-1">Your Review Cycles</p>
         {appraisals.map(a => {
           const done = stepIndex(a.status);
           const isActive = a.status === 'PENDING' || a.status === 'SELF_SUBMITTED';
@@ -711,7 +711,7 @@ function MyAppraisalTab({ notify }: { notify: (m: string) => void }) {
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="text-sm font-black text-slate-900 leading-tight">{a.cycle?.name ?? a.cycleId}</p>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{a.cycle?.type ?? ''}</p>
+                  <p className="label-form mt-1">{a.cycle?.type ?? ''}</p>
                 </div>
                 {isActive && <span className="w-2 h-2 bg-violet-500 rounded-full mt-1 animate-pulse shrink-0" />}
               </div>
@@ -747,7 +747,7 @@ function MyAppraisalTab({ notify }: { notify: (m: string) => void }) {
             <div className="p-8 flex flex-col gap-8">
               {/* Workflow progress */}
               <div>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Progress</p>
+                <p className="label-form mb-4">Progress</p>
                 <div className="flex items-start gap-0">
                   {STEP_ORDER.map((step, i) => {
                     const done = stepIndex(selected.status);
@@ -785,14 +785,14 @@ function MyAppraisalTab({ notify }: { notify: (m: string) => void }) {
                     <p className="text-[8px] font-bold text-violet-400 mt-1">out of 5.0</p>
                   </div>
                   <div className={`rounded-2xl p-5 text-center border ${selected.managerScore ? 'bg-indigo-50 border-indigo-100' : 'bg-slate-50 border-slate-100'}`}>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Manager Score</p>
+                    <p className="label-form mb-2">Manager Score</p>
                     <p className={`text-3xl font-black ${selected.managerScore ? 'text-indigo-700' : 'text-slate-300'}`}>
                       {selected.managerScore?.toFixed(1) ?? '—'}
                     </p>
                     {!selected.managerScore && <p className="text-[8px] font-bold text-slate-300 mt-1">Pending review</p>}
                   </div>
                   <div className={`rounded-2xl p-5 text-center border ${selected.overallScore ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Final Score</p>
+                    <p className="label-form mb-2">Final Score</p>
                     <p className={`text-3xl font-black ${selected.overallScore ? 'text-emerald-700' : 'text-slate-300'}`}>
                       {selected.overallScore?.toFixed(1) ?? '—'}
                     </p>
@@ -812,13 +812,13 @@ function MyAppraisalTab({ notify }: { notify: (m: string) => void }) {
                   </div>
 
                   <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Your Overall Rating *</p>
+                    <p className="label-form mb-3">Your Overall Rating *</p>
                     <StarRating value={form.selfScore} onChange={v => setForm(f => ({ ...f, selfScore: v }))} />
                     <p className="text-[8px] font-bold text-slate-300 mt-2">1 = Needs improvement · 3 = Meets expectations · 5 = Exceptional</p>
                   </div>
 
                   <div>
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Key Achievements & Highlights</label>
+                    <label className="label-form mb-1 block">Key Achievements & Highlights</label>
                     <textarea value={form.selfComments} onChange={e => setForm(f => ({ ...f, selfComments: e.target.value }))}
                       rows={4} placeholder="Describe your key contributions, wins, and achievements this period…"
                       className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-500 resize-none placeholder:text-slate-300" />
@@ -826,13 +826,13 @@ function MyAppraisalTab({ notify }: { notify: (m: string) => void }) {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Strengths</label>
+                      <label className="label-form mb-1 block">Strengths</label>
                       <textarea value={form.strengths} onChange={e => setForm(f => ({ ...f, strengths: e.target.value }))}
                         rows={3} placeholder="What did you do really well?"
                         className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-500 resize-none placeholder:text-slate-300" />
                     </div>
                     <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Development Areas</label>
+                      <label className="label-form mb-1 block">Development Areas</label>
                       <textarea value={form.improvements} onChange={e => setForm(f => ({ ...f, improvements: e.target.value }))}
                         rows={3} placeholder="What would you like to develop or improve?"
                         className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-500 resize-none placeholder:text-slate-300" />
@@ -851,18 +851,18 @@ function MyAppraisalTab({ notify }: { notify: (m: string) => void }) {
               {/* ── Read-only view of own submission after manager has reviewed ── */}
               {selected.status !== 'PENDING' && selected.selfComments && (
                 <div className="border-t border-slate-50 pt-6 flex flex-col gap-4">
-                  <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Your Submission</h4>
+                  <h4 className="label-form">Your Submission</h4>
                   <div className="bg-slate-50 rounded-2xl p-5 flex flex-col gap-3">
                     <p className="text-sm text-slate-700 leading-relaxed">{selected.selfComments}</p>
                     {selected.strengths && (
                       <div>
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Strengths</p>
+                        <p className="label-form mb-1">Strengths</p>
                         <p className="text-sm text-slate-600">{selected.strengths}</p>
                       </div>
                     )}
                     {selected.improvements && (
                       <div>
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Development Areas</p>
+                        <p className="label-form mb-1">Development Areas</p>
                         <p className="text-sm text-slate-600">{selected.improvements}</p>
                       </div>
                     )}
@@ -949,7 +949,7 @@ function TeamTab({ notify }: { notify: (m: string) => void }) {
         ) : appraisals.map(a => (
           <button key={a.id} onClick={() => { setSelected(a); setForm({ managerScore: a.managerScore ?? 0, managerComments: a.managerComments ?? '' }); }}
             className={`w-full text-left bg-white p-6 rounded-2xl border transition-all ${selected?.id === a.id ? 'border-violet-600 shadow-lg shadow-violet-500/10' : 'border-slate-100 hover:border-slate-200'}`}>
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">EMP: {a.employeeId.slice(0, 8)}…</p>
+            <p className="label-form">EMP: {a.employeeId.slice(0, 8)}…</p>
             <p className="text-sm font-black text-slate-900 mt-1">{a.cycle?.name ?? a.cycleId}</p>
             <div className="mt-3 flex items-center justify-between">
               <span className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase ${STATUS_COLORS[a.status]}`}>{a.status.replace('_', ' ')}</span>
@@ -967,28 +967,28 @@ function TeamTab({ notify }: { notify: (m: string) => void }) {
         ) : (
           <div className="bg-white rounded-[2rem] border border-slate-100 p-8 flex flex-col gap-6">
             <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Employee: {selected.employeeId}</p>
+              <p className="label-form">Employee: {selected.employeeId}</p>
               <h3 className="text-xl font-black text-slate-900 mt-1">{selected.cycle?.name}</h3>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-slate-50 rounded-2xl p-4 text-center">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Self Score</p>
+                <p className="label-form mb-2">Self Score</p>
                 <p className="text-2xl font-black text-indigo-600">{selected.selfScore?.toFixed(1) ?? '—'}</p>
               </div>
               <div className="bg-slate-50 rounded-2xl p-4 text-center">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Mgr Score</p>
+                <p className="label-form mb-2">Mgr Score</p>
                 <p className="text-2xl font-black text-violet-600">{selected.managerScore?.toFixed(1) ?? '—'}</p>
               </div>
               <div className="bg-slate-50 rounded-2xl p-4 text-center">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Overall</p>
+                <p className="label-form mb-2">Overall</p>
                 <p className="text-2xl font-black text-emerald-600">{selected.overallScore?.toFixed(1) ?? '—'}</p>
               </div>
             </div>
 
             {selected.selfComments && (
               <div>
-                <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Employee's Self-Assessment</h4>
+                <h4 className="label-form mb-2">Employee's Self-Assessment</h4>
                 <p className="text-sm text-slate-600 bg-slate-50 rounded-xl p-4">{selected.selfComments}</p>
                 {selected.strengths && <p className="text-sm text-slate-500 mt-2"><strong className="text-[9px] uppercase tracking-widest">Strengths:</strong> {selected.strengths}</p>}
                 {selected.improvements && <p className="text-sm text-slate-500 mt-1"><strong className="text-[9px] uppercase tracking-widest">Improvements:</strong> {selected.improvements}</p>}
@@ -999,11 +999,11 @@ function TeamTab({ notify }: { notify: (m: string) => void }) {
               <div className="flex flex-col gap-4 border-t border-slate-50 pt-6">
                 <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Manager Review</h4>
                 <div>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Manager Rating *</p>
+                  <p className="label-form mb-2">Manager Rating *</p>
                   <StarRating value={form.managerScore} onChange={v => setForm(f => ({ ...f, managerScore: v }))} />
                 </div>
                 <div>
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Manager Feedback</label>
+                  <label className="label-form mb-1 block">Manager Feedback</label>
                   <textarea value={form.managerComments} onChange={e => setForm(f => ({ ...f, managerComments: e.target.value }))} rows={4} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-600 resize-none" />
                 </div>
                 <div className="flex justify-end">
@@ -1094,16 +1094,16 @@ function GoalsTab({ notify }: { notify: (m: string) => void }) {
             <h3 className="text-xl font-black text-slate-900 mb-6 uppercase tracking-tight">New Goal</h3>
             <div className="flex flex-col gap-4">
               <div>
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Title *</label>
+                <label className="label-form mb-1 block">Title *</label>
                 <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Goal title" className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600" />
               </div>
               <div>
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Description</label>
+                <label className="label-form mb-1 block">Description</label>
                 <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600 resize-none" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Category</label>
+                  <label className="label-form mb-1 block">Category</label>
                   <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value as GoalCategory }))} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600">
                     <option value="PERFORMANCE">Performance</option>
                     <option value="DEVELOPMENT">Development</option>
@@ -1111,7 +1111,7 @@ function GoalsTab({ notify }: { notify: (m: string) => void }) {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Target Date</label>
+                  <label className="label-form mb-1 block">Target Date</label>
                   <input type="date" value={form.targetDate} onChange={e => setForm(f => ({ ...f, targetDate: e.target.value }))} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600" />
                 </div>
               </div>
@@ -1142,7 +1142,7 @@ function GoalsTab({ notify }: { notify: (m: string) => void }) {
                   </div>
                   <h4 className="text-base font-black text-slate-900">{g.title}</h4>
                   {g.description && <p className="text-[11px] text-slate-400 mt-1">{g.description}</p>}
-                  {g.targetDate && <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2">Target: {fmtDate(g.targetDate)}</p>}
+                  {g.targetDate && <p className="label-form mt-2">Target: {fmtDate(g.targetDate)}</p>}
 
                   {/* Progress bar */}
                   <div className="flex items-center gap-3 mt-3">
@@ -1240,7 +1240,7 @@ function PipTab({ notify }: { notify: (m: string) => void }) {
         ) : pips.map(p => (
           <button key={p.id} onClick={() => { setSelected(p); setNotes(p.progressNotes ?? ''); }}
             className={`w-full text-left bg-white p-5 rounded-2xl border transition-all ${selected?.id === p.id ? 'border-violet-600 shadow-lg shadow-violet-500/10' : 'border-slate-100 hover:border-slate-200'}`}>
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">EMP: {p.employeeId.slice(0, 12)}…</p>
+            <p className="label-form">EMP: {p.employeeId.slice(0, 12)}…</p>
             <div className="flex items-center justify-between mt-2">
               <p className="text-[10px] font-black text-slate-600 uppercase">{fmtDate(p.startDate)} – {fmtDate(p.endDate)}</p>
               <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border uppercase ${PIP_COLORS[p.status]}`}>{p.status}</span>
@@ -1259,19 +1259,19 @@ function PipTab({ notify }: { notify: (m: string) => void }) {
           <div className="bg-white rounded-[2rem] border border-slate-100 p-8 flex flex-col gap-6">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Employee ID: {selected.employeeId}</p>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Period: {fmtDate(selected.startDate)} – {fmtDate(selected.endDate)}</p>
+                <p className="label-form">Employee ID: {selected.employeeId}</p>
+                <p className="label-form mt-1">Period: {fmtDate(selected.startDate)} – {fmtDate(selected.endDate)}</p>
               </div>
               <span className={`text-[9px] font-black px-3 py-1.5 rounded-xl border ${PIP_COLORS[selected.status]}`}>{selected.status}</span>
             </div>
 
             <div>
-              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Objectives</h4>
+              <h4 className="label-form mb-2">Objectives</h4>
               <p className="text-sm text-slate-700 bg-slate-50 rounded-xl p-4 leading-relaxed">{selected.objectives}</p>
             </div>
 
             <div>
-              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Progress Notes</h4>
+              <h4 className="label-form mb-2">Progress Notes</h4>
               <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={4} placeholder="Add progress notes…" className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-600 resize-none" />
               <div className="flex justify-end mt-2">
                 <button onClick={() => updatePip(selected.id, { progressNotes: notes })} disabled={updatingStatus} className="px-6 py-2 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all disabled:opacity-50">
@@ -1298,21 +1298,21 @@ function PipTab({ notify }: { notify: (m: string) => void }) {
             <h3 className="text-xl font-black text-slate-900 mb-6 uppercase tracking-tight">New PIP</h3>
             <div className="flex flex-col gap-4">
               <div>
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Employee ID *</label>
+                <label className="label-form mb-1 block">Employee ID *</label>
                 <input value={form.employeeId} onChange={e => setForm(f => ({ ...f, employeeId: e.target.value }))} placeholder="emp-..." className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Start Date *</label>
+                  <label className="label-form mb-1 block">Start Date *</label>
                   <input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600" />
                 </div>
                 <div>
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">End Date *</label>
+                  <label className="label-form mb-1 block">End Date *</label>
                   <input type="date" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600" />
                 </div>
               </div>
               <div>
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Objectives *</label>
+                <label className="label-form mb-1 block">Objectives *</label>
                 <textarea value={form.objectives} onChange={e => setForm(f => ({ ...f, objectives: e.target.value }))} rows={4} placeholder="Describe measurable objectives and expectations…" className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600 resize-none" />
               </div>
             </div>

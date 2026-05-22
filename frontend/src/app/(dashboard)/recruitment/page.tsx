@@ -381,7 +381,7 @@ export default function RecruitmentPage() {
           { label: 'MCF Compliance', value: `${mcfPct}%`, sub: `${mcfCompliant}/${openJobs} open ads listed`, color: mcfPct === 100 ? 'text-emerald-600' : 'text-orange-600' },
         ].map(kpi => (
           <div key={kpi.label} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{kpi.label}</p>
+            <p className="label-form">{kpi.label}</p>
             <p className={`text-3xl font-black mt-2 ${kpi.color}`}>{loading ? '—' : kpi.value}</p>
             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-2">{kpi.sub}</p>
           </div>
@@ -553,7 +553,7 @@ export default function RecruitmentPage() {
               <input value={candidateSearch} onChange={e => setCandidateSearch(e.target.value)}
                 placeholder="Search candidates by name, email, title…"
                 className="text-[10px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 w-72" />
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-auto">{filteredCandidates.length} candidates</span>
+              <span className="label-form ml-auto">{filteredCandidates.length} candidates</span>
               <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">{candidates.filter(c => !c.jobId).length} unassigned</span>
             </div>
             {loading ? (
@@ -673,7 +673,7 @@ export default function RecruitmentPage() {
                 <option value="">All Stages</option>
                 {PIPELINE_STAGES.map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
               </select>
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-auto">{filteredPipeline.length} candidates</span>
+              <span className="label-form ml-auto">{filteredPipeline.length} candidates</span>
             </div>
 
             {/* Stage funnel summary */}
@@ -867,7 +867,7 @@ export default function RecruitmentPage() {
                 <div className="p-8 flex flex-col gap-7">
                   {/* Stage Lifecycle Tracker */}
                   <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Stage Tracker</p>
+                    <p className="label-form mb-4">Stage Tracker</p>
                     <div className="relative">
                       {/* Connector line */}
                       <div className="absolute left-[9px] top-2 bottom-2 w-px bg-slate-100" />
@@ -911,7 +911,7 @@ export default function RecruitmentPage() {
 
                   {/* Move Stage */}
                   <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Move Stage</p>
+                    <p className="label-form mb-3">Move Stage</p>
                     <div className="flex flex-wrap gap-2">
                       {PIPELINE_STAGES.map(s => (
                         <button key={s} onClick={() => updateStage(detailCandidate.id, s)}
@@ -924,7 +924,7 @@ export default function RecruitmentPage() {
 
                   {/* Employment Details */}
                   <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Employment Details</p>
+                    <p className="label-form mb-3">Employment Details</p>
                     <div className="grid grid-cols-2 gap-3">
                       {[
                         ['Current Title', detailCandidate.currentTitle || '—'],
@@ -933,7 +933,7 @@ export default function RecruitmentPage() {
                         ['Notice Period', detailCandidate.noticePeriod ? `${detailCandidate.noticePeriod} days` : '—'],
                       ].map(([label, value]) => (
                         <div key={label}>
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                          <p className="label-form">{label}</p>
                           <p className="text-xs font-bold text-slate-700 mt-0.5">{value}</p>
                         </div>
                       ))}
@@ -943,7 +943,7 @@ export default function RecruitmentPage() {
                   {/* Tagged job */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tagged Job</p>
+                      <p className="label-form">Tagged Job</p>
                       <button onClick={() => { setTagJobSelected(detailCandidate.jobId || ''); setTagJobModal(detailCandidate.id); }}
                         className="text-[9px] font-black text-indigo-600 border border-indigo-200 bg-indigo-50 px-2 py-1 rounded-lg uppercase tracking-widest hover:bg-indigo-100">
                         {detailCandidate.jobId ? 'Change' : 'Tag Job'}
@@ -960,7 +960,7 @@ export default function RecruitmentPage() {
                   {/* Resume */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Resume</p>
+                      <p className="label-form">Resume</p>
                       {detailCandidate.resumeName && (
                         <button onClick={() => deleteResume(detailCandidate.id)}
                           className="text-[9px] font-black text-red-400 hover:text-red-600 uppercase tracking-widest transition-colors">
@@ -993,7 +993,7 @@ export default function RecruitmentPage() {
 
                   {detailCandidate.notes && (
                     <div>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Notes</p>
+                      <p className="label-form mb-2">Notes</p>
                       <p className="text-xs text-slate-600 leading-relaxed">{detailCandidate.notes}</p>
                     </div>
                   )}
@@ -1001,7 +1001,7 @@ export default function RecruitmentPage() {
                   {/* Interview Rounds */}
                   <div>
                     <div className="flex justify-between items-center mb-3">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Interview Rounds</p>
+                      <p className="label-form">Interview Rounds</p>
                       <button onClick={() => { setInterviewCandidateId(detailCandidate.id); setInterviewForm(EMPTY_INTERVIEW); setInterviewModal(true); }}
                         className="text-[9px] font-black text-indigo-600 border border-indigo-200 bg-indigo-50 px-2.5 py-1 rounded-lg uppercase tracking-widest hover:bg-indigo-100">
                         + Schedule
@@ -1030,7 +1030,7 @@ export default function RecruitmentPage() {
                   {/* Stage History */}
                   {detailCandidate.stageEvents && detailCandidate.stageEvents.length > 1 && (
                     <div>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Activity Log</p>
+                      <p className="label-form mb-3">Activity Log</p>
                       <div className="flex flex-col gap-2">
                         {[...detailCandidate.stageEvents].reverse().map(ev => (
                           <div key={ev.id} className="flex items-start gap-3">

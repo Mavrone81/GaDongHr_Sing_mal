@@ -189,7 +189,7 @@ function AttendanceCard({ employeeId }: { employeeId: string }) {
               { label: 'Hours', val: record?.hoursWorked ? `${record.hoursWorked.toFixed(1)}h` : '—' },
             ].map(item => (
               <div key={item.label} className="bg-slate-50 rounded-2xl p-4 text-center">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{item.label}</p>
+                <p className="label-form mb-1">{item.label}</p>
                 <p className="text-lg font-black text-slate-900">{item.val}</p>
               </div>
             ))}
@@ -216,7 +216,7 @@ function AttendanceCard({ employeeId }: { employeeId: string }) {
         </>
       )}
 
-      <Link href="/attendance" className="text-center text-[9px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">
+      <Link href="/attendance" className="text-center label-form hover:text-indigo-600 transition-colors">
         View history →
       </Link>
     </div>
@@ -261,7 +261,7 @@ function LeaveRequestsCard({ employeeId }: { employeeId: string }) {
       ) : leaves.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 py-8">
           <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-xl">🏖️</div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">No leave requests yet</p>
+          <p className="eyebrow-tight text-center">No leave requests yet</p>
           <Link href="/leave" className="text-[9px] font-black text-indigo-600 uppercase tracking-widest hover:underline">
             Apply for leave →
           </Link>

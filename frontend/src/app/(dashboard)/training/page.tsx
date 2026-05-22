@@ -177,14 +177,14 @@ function StatsTab({ stats }: { stats: Stats | null }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map(k => (
           <div key={k.label} className="bg-white rounded-2xl border border-slate-100 p-6 shadow-lg shadow-indigo-500/5">
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">{k.label}</p>
+            <p className="label-form mb-3">{k.label}</p>
             <p className={`text-3xl font-black tracking-tighter ${k.color}`}>{k.value}</p>
           </div>
         ))}
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-lg shadow-indigo-500/5">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-5">Programs by Category</p>
+        <p className="eyebrow-tight mb-5">Programs by Category</p>
         <div className="flex flex-col gap-4">
           {stats.byCategory.map(b => (
             <div key={b.category} className="flex items-center gap-4">
@@ -420,7 +420,7 @@ function MaterialsModal({ program, onClose }: { program: TrainingProgram; onClos
                     />
 
                     <div className="flex flex-col gap-2">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Answer options — click the circle to mark the correct answer</p>
+                      <p className="label-form">Answer options — click the circle to mark the correct answer</p>
                       {q.options.map((opt, oi) => (
                         <div key={oi} className="flex items-center gap-3">
                           <button
@@ -453,7 +453,7 @@ function MaterialsModal({ program, onClose }: { program: TrainingProgram; onClos
                       <button
                         type="button"
                         onClick={() => addOption(qi)}
-                        className="self-start text-[9px] font-black text-slate-400 uppercase tracking-widest hover:text-amber-600 transition-colors"
+                        className="self-start label-form hover:text-amber-600 transition-colors"
                       >
                         + Add option
                       </button>
@@ -568,7 +568,7 @@ function EnrollModal({ program, onClose, onDone }: { program: TrainingProgram; o
                 >
                   {allFilteredSelected ? 'Deselect All' : 'Select All'}
                 </button>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{selectedIds.size} selected</span>
+                <span className="eyebrow-tight">{selectedIds.size} selected</span>
               </div>
 
               {/* Employee list */}
@@ -589,7 +589,7 @@ function EnrollModal({ program, onClose, onDone }: { program: TrainingProgram; o
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-black text-slate-900 truncate">{emp.fullName}</p>
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{emp.employeeCode}{emp.department ? ` · ${emp.department}` : ''}</p>
+                        <p className="label-form">{emp.employeeCode}{emp.department ? ` · ${emp.department}` : ''}</p>
                       </div>
                       {emp.designation && <span className="text-[9px] font-bold text-slate-400 truncate max-w-28">{emp.designation}</span>}
                     </label>
@@ -599,7 +599,7 @@ function EnrollModal({ program, onClose, onDone }: { program: TrainingProgram; o
 
               {/* Due date */}
               <div className="shrink-0">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Due Date (optional)</label>
+                <label className="eyebrow-tight block mb-2">Due Date (optional)</label>
                 <input
                   type="date"
                   className="w-full border border-slate-200 rounded-xl px-4 py-3 text-xs font-black text-slate-700 focus:outline-none focus:border-amber-400"
@@ -803,7 +803,7 @@ function AdminProgramsTab({ onRefreshStats }: { onRefreshStats: () => void }) {
       ) : (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-lg overflow-hidden">
           <table className="w-full text-left border-collapse">
-            <thead className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
+            <thead className="label-form border-b border-slate-50">
               <tr>
                 {([
                   { col: 'title',    label: 'Program',   cls: 'px-6 py-5' },
@@ -945,7 +945,7 @@ function AdminEnrollmentsTab() {
       ) : (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-lg overflow-hidden">
           <table className="w-full text-left border-collapse">
-            <thead className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
+            <thead className="label-form border-b border-slate-50">
               <tr>
                 {([
                   { col: 'employee', label: 'Employee ID', cls: 'px-6 py-5' },
@@ -1158,7 +1158,7 @@ function CoursePlayer({
         {/* Material list */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-lg overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-50">
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Course Materials</p>
+            <p className="label-form">Course Materials</p>
           </div>
           <div className="divide-y divide-slate-50">
             {materials.length === 0 && (
@@ -1308,7 +1308,7 @@ function CoursePlayer({
                       </button>
                     )}
                     {!isMaterialDone(activeMaterial.id) && activeMaterial.url && !linkVisited && (
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Open the resource above to mark as complete</p>
+                      <p className="label-form">Open the resource above to mark as complete</p>
                     )}
                   </div>
                 )}
@@ -1386,7 +1386,7 @@ function CoursePlayer({
                   const allAnswered = questions.every(q => quizAnswers[q.id] !== undefined);
                   return (
                     <div className="flex flex-col gap-5">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{questions.length} Question{questions.length !== 1 ? 's' : ''}</p>
+                      <p className="eyebrow-tight">{questions.length} Question{questions.length !== 1 ? 's' : ''}</p>
                       {questions.map((q, qi) => (
                         <div key={q.id} className="flex flex-col gap-3">
                           <p className="text-sm font-black text-slate-900">{qi + 1}. {q.text}</p>
@@ -1416,7 +1416,7 @@ function CoursePlayer({
                       >
                         {completing ? 'Submitting…' : 'Submit Quiz →'}
                       </button>
-                      {!allAnswered && <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Answer all questions to submit</p>}
+                      {!allAnswered && <p className="label-form">Answer all questions to submit</p>}
                     </div>
                   );
                 })()}
@@ -1507,7 +1507,7 @@ function MyTrainingTab() {
         ].map(s => (
           <div key={s.label} className={`rounded-2xl border p-5 ${s.bg}`}>
             <p className={`text-3xl font-black tracking-tighter ${s.color}`}>{s.value}</p>
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{s.label}</p>
+            <p className="label-form mt-1">{s.label}</p>
           </div>
         ))}
       </div>
@@ -1528,7 +1528,7 @@ function MyTrainingTab() {
       {/* In progress */}
       {inProgress.length > 0 && (
         <div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Continue Learning</p>
+          <p className="eyebrow-tight mb-4">Continue Learning</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {inProgress.map(e => <EnrollmentCard key={e.id} e={e} onOpen={() => setActiveEnrollment(e)} />)}
           </div>
@@ -1538,7 +1538,7 @@ function MyTrainingTab() {
       {/* Not started */}
       {notStarted.length > 0 && (
         <div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Start Learning</p>
+          <p className="eyebrow-tight mb-4">Start Learning</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {notStarted.map(e => <EnrollmentCard key={e.id} e={e} onOpen={() => setActiveEnrollment(e)} />)}
           </div>
@@ -1548,7 +1548,7 @@ function MyTrainingTab() {
       {/* Completed */}
       {completed.length > 0 && (
         <div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Completed ({completed.length})</p>
+          <p className="eyebrow-tight mb-4">Completed ({completed.length})</p>
           <div className="flex flex-col gap-3">
             {completed.map(e => (
               <div key={e.id} className="bg-white rounded-2xl border border-slate-100 p-5 flex items-center gap-4 group">
@@ -1597,7 +1597,7 @@ function EnrollmentCard({ e, onOpen }: { e: EnrollmentWithProgress; onOpen: () =
 
       <div className="flex flex-col gap-1.5">
         <div className="flex justify-between items-center">
-          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{done}/{total} materials</span>
+          <span className="label-form">{done}/{total} materials</span>
           <span className="text-[10px] font-black text-slate-600">{e.progress}%</span>
         </div>
         <ProgressBar pct={e.progress} color={isOverdue ? 'bg-red-400' : 'bg-amber-500'} />

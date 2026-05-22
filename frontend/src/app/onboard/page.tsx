@@ -211,7 +211,7 @@ export default function OnboardPage() {
             </p>
           </div>
           <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 w-full text-left">
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">What happens next?</p>
+            <p className="label-form mb-2">What happens next?</p>
             <ul className="flex flex-col gap-2">
               {['HR reviews your profile', 'Employee record is created', 'You receive confirmation email', 'Access full HR system'].map((s, i) => (
                 <li key={s} className="flex items-center gap-3">
@@ -263,7 +263,7 @@ export default function OnboardPage() {
         <div className="bg-white rounded-b-[2rem] shadow-2xl p-8">
           {step === 1 && (
             <div className="flex flex-col gap-4">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-3">Step 1 · Personal Details</p>
+              <p className="label-form border-b border-slate-100 pb-3">Step 1 · Personal Details</p>
               {field('fullName', 'Full Legal Name', { placeholder: 'As per NRIC/FIN' })}
               {field('preferredName', 'Preferred / Display Name', { required: false, placeholder: 'Optional' })}
               <div className="flex flex-col gap-1.5">
@@ -284,7 +284,7 @@ export default function OnboardPage() {
 
           {step === 2 && (
             <div className="flex flex-col gap-4">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-3">Step 2 · Contact & Identity</p>
+              <p className="label-form border-b border-slate-100 pb-3">Step 2 · Contact & Identity</p>
               <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 flex items-start gap-2.5">
                 <svg className="w-4 h-4 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -304,7 +304,7 @@ export default function OnboardPage() {
 
           {step === 3 && (
             <div className="flex flex-col gap-4">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-3">Step 3 · Employment Details</p>
+              <p className="label-form border-b border-slate-100 pb-3">Step 3 · Employment Details</p>
               <p className="text-[10px] font-bold text-slate-500">Fill in what you know — HR will confirm the final details.</p>
               {field('department', 'Department', { required: false, placeholder: 'e.g. Engineering, Sales' })}
               {field('designation', 'Designation / Job Title', { required: false, placeholder: 'e.g. Software Engineer' })}

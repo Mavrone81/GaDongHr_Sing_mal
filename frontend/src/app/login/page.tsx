@@ -341,7 +341,7 @@ export default function LoginPage() {
                   {ssoError && <p className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-4 py-3 rounded-xl">{ssoError}</p>}
                   <div className="flex items-center gap-3 py-1">
                     <div className="flex-1 h-px bg-slate-200" />
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">or</span>
+                    <span className="eyebrow-tight">or</span>
                     <div className="flex-1 h-px bg-slate-200" />
                   </div>
                 </div>
@@ -380,7 +380,7 @@ export default function LoginPage() {
           {step === 'mfa-challenge' && (
             <>
               <div>
-                <button onClick={() => { setStep('credentials'); setMfaCode(''); setError(''); }} className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 mb-4 flex items-center gap-1">← Back</button>
+                <button onClick={() => { setStep('credentials'); setMfaCode(''); setError(''); }} className="eyebrow-tight hover:text-slate-600 mb-4 flex items-center gap-1">← Back</button>
                 <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl mb-4 ${mfaMethod === 'EMAIL_OTP' ? 'bg-sky-50 border-2 border-sky-200' : 'bg-indigo-50 border-2 border-indigo-200'}`}>
                   {mfaMethod === 'EMAIL_OTP' ? '📧' : '🔐'}
                 </div>
@@ -440,7 +440,7 @@ export default function LoginPage() {
                 {loading && (
                   <div className="flex items-center justify-center gap-3 py-2">
                     <div className="w-4 h-4 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Verifying…</span>
+                    <span className="eyebrow-tight">Verifying…</span>
                   </div>
                 )}
               </div>
@@ -465,7 +465,7 @@ export default function LoginPage() {
                   : <div className="w-44 h-44 rounded-xl bg-slate-100 animate-pulse" />
                 }
                 <div className="text-center">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Can't scan? Enter manually</p>
+                  <p className="label-form mb-1">Can't scan? Enter manually</p>
                   <p className="text-[10px] font-mono font-black text-slate-600 tracking-widest break-all select-all">{mfaSecret}</p>
                 </div>
               </div>
@@ -514,7 +514,7 @@ export default function LoginPage() {
               {loading && (
                 <div className="flex items-center justify-center gap-3 py-3">
                   <div className="w-4 h-4 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Activating MFA…</span>
+                  <span className="eyebrow-tight">Activating MFA…</span>
                 </div>
               )}
             </>

@@ -84,15 +84,15 @@ function AdminThread({ ticket: initial, onBack, onUpdated }: { ticket: Ticket; o
     <div className="flex flex-col gap-6 max-w-[860px]">
       {/* Back + meta */}
       <div className="flex items-start gap-4">
-        <button onClick={onBack} className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors mt-1">← Back</button>
+        <button onClick={onBack} className="eyebrow-tight hover:text-indigo-600 transition-colors mt-1">← Back</button>
         <div className="flex-1">
           <h2 className="text-xl font-black text-slate-900">{ticket.subject}</h2>
           <div className="flex flex-wrap items-center gap-3 mt-2">
             <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${STATUS_COLORS[ticket.status]}`}>{ticket.status.replace('_', ' ')}</span>
             <span className={`text-[9px] font-black uppercase tracking-widest ${PRIORITY_COLORS[ticket.priority]}`}>{ticket.priority}</span>
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{CATEGORY_LABELS[ticket.category]}</span>
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Emp: {ticket.employeeId.slice(0, 8)}…</span>
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{new Date(ticket.createdAt).toLocaleDateString()}</span>
+            <span className="label-form">{CATEGORY_LABELS[ticket.category]}</span>
+            <span className="label-form">Emp: {ticket.employeeId.slice(0, 8)}…</span>
+            <span className="label-form">{new Date(ticket.createdAt).toLocaleDateString()}</span>
           </div>
         </div>
 
@@ -137,7 +137,7 @@ function AdminThread({ ticket: initial, onBack, onUpdated }: { ticket: Ticket; o
       {/* Reply */}
       {ticket.status !== 'CLOSED' && (
         <div className="bg-white rounded-[2rem] border border-slate-100 p-6 flex flex-col gap-4">
-          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Reply to Employee</label>
+          <label className="label-form">Reply to Employee</label>
           <textarea
             value={reply}
             onChange={e => setReply(e.target.value)}
@@ -226,7 +226,7 @@ export default function SupportAdminPage() {
           ].map(k => (
             <div key={k.label}>
               <p className={`text-3xl font-black ${k.color ?? 'text-slate-900'}`}>{k.value}</p>
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{k.label}</p>
+              <p className="label-form mt-1">{k.label}</p>
             </div>
           ))}
         </div>
@@ -260,7 +260,7 @@ export default function SupportAdminPage() {
             {/* Column header */}
             <div className="grid grid-cols-[1fr_120px_100px_80px_100px] gap-4 px-7 py-3 bg-slate-50">
               {['Subject / Employee', 'Category', 'Priority', 'Status', 'Updated'].map(h => (
-                <span key={h} className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{h}</span>
+                <span key={h} className="label-form">{h}</span>
               ))}
             </div>
             {tickets.map(t => (
@@ -271,14 +271,14 @@ export default function SupportAdminPage() {
               >
                 <div className="min-w-0">
                   <p className="text-sm font-black text-slate-900 truncate">{t.subject}</p>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">{t.messages.length} msg{t.messages.length !== 1 ? 's' : ''}</p>
+                  <p className="label-form mt-0.5">{t.messages.length} msg{t.messages.length !== 1 ? 's' : ''}</p>
                 </div>
                 <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{CATEGORY_LABELS[t.category]}</span>
                 <span className={`text-[9px] font-black uppercase tracking-widest ${PRIORITY_COLORS[t.priority]}`}>{t.priority}</span>
                 <span className={`inline-flex justify-center px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${STATUS_COLORS[t.status]}`}>
                   {t.status.replace('_', ' ')}
                 </span>
-                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{new Date(t.updatedAt).toLocaleDateString()}</span>
+                <span className="label-form">{new Date(t.updatedAt).toLocaleDateString()}</span>
               </button>
             ))}
           </div>

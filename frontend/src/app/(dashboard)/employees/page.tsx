@@ -376,7 +376,7 @@ export default function EmployeeDirectoryPage() {
             <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
               <div>
                 <h2 className="text-lg font-black text-slate-900 tracking-tighter">Bulk Employee Import</h2>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">CSV · Max 500 records per batch</p>
+                <p className="eyebrow-tight mt-0.5">CSV · Max 500 records per batch</p>
               </div>
               <button onClick={resetModal} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all text-lg">✕</button>
             </div>
@@ -402,7 +402,7 @@ export default function EmployeeDirectoryPage() {
 
               {/* Step 2 — upload */}
               <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Step 2 — Upload Completed CSV</p>
+                <p className="eyebrow-tight mb-2">Step 2 — Upload Completed CSV</p>
                 <label className={`flex flex-col items-center justify-center gap-3 border-2 border-dashed rounded-2xl py-8 cursor-pointer transition-all ${csvFile ? 'border-indigo-300 bg-indigo-50/50' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'}`}>
                   <svg className={`w-8 h-8 ${csvFile ? 'text-indigo-500' : 'text-slate-300'}`} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
@@ -417,7 +417,7 @@ export default function EmployeeDirectoryPage() {
               {/* Preview */}
               {csvRows.length > 0 && !uploadResult && (
                 <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Preview — first {Math.min(3, csvRows.length)} of {csvRows.length} rows</p>
+                  <p className="eyebrow-tight mb-2">Preview — first {Math.min(3, csvRows.length)} of {csvRows.length} rows</p>
                   <div className="rounded-2xl border border-slate-100 overflow-hidden">
                     <div className="overflow-x-auto">
                       <table className="w-full text-[10px]">
@@ -462,7 +462,7 @@ export default function EmployeeDirectoryPage() {
 
             {/* Modal footer */}
             <div className="flex items-center justify-between px-8 py-5 border-t border-slate-100 bg-slate-50/50">
-              <button onClick={resetModal} className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors">
+              <button onClick={resetModal} className="eyebrow-tight hover:text-slate-600 transition-colors">
                 {uploadResult ? 'Close' : 'Cancel'}
               </button>
               {!uploadResult && (
@@ -636,7 +636,7 @@ export default function EmployeeDirectoryPage() {
 
         <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Global Aggregation</span>
+            <span className="eyebrow-tight">Global Aggregation</span>
             <div className="h-6 w-[1px] bg-slate-200" />
             <span className="text-[10px] font-black text-slate-900 uppercase">Total Workforce: <span className="text-indigo-600">{total} Entities</span></span>
           </div>
@@ -660,7 +660,7 @@ export default function EmployeeDirectoryPage() {
             <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
               <div>
                 <h2 className="text-lg font-black text-slate-900 tracking-tighter">Provision Identity</h2>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Create login credentials for an employee</p>
+                <p className="eyebrow-tight mt-0.5">Create login credentials for an employee</p>
               </div>
               <button onClick={resetProvision} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all text-lg">✕</button>
             </div>
@@ -837,7 +837,7 @@ export default function EmployeeDirectoryPage() {
             {/* Header */}
             <div className="px-8 pt-8 pb-6 border-b border-slate-100 flex items-start justify-between flex-shrink-0">
               <div>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Pending HR Verification</p>
+                <p className="label-form mb-1">Pending HR Verification</p>
                 <h2 className="text-xl font-black text-slate-900 tracking-tighter">{reviewingApp.fullName}</h2>
                 <p className="text-xs font-bold text-slate-400 mt-0.5">{reviewingApp.email} · Submitted {new Date(reviewingApp.createdAt).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
               </div>
@@ -849,7 +849,7 @@ export default function EmployeeDirectoryPage() {
 
               {/* Personal Details */}
               <section>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-100 pb-2">Personal Details</p>
+                <p className="label-form mb-3 border-b border-slate-100 pb-2">Personal Details</p>
                 <div className="grid grid-cols-2 gap-x-8 gap-y-3">
                   {[
                     ['Full Legal Name', reviewingApp.fullName],
@@ -860,7 +860,7 @@ export default function EmployeeDirectoryPage() {
                     ['NRIC / FIN', reviewingApp.nricFin || '—'],
                   ].map(([label, val]) => (
                     <div key={label}>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                      <p className="label-form">{label}</p>
                       <p className="text-sm font-bold text-slate-800 mt-0.5">{val}</p>
                     </div>
                   ))}
@@ -869,14 +869,14 @@ export default function EmployeeDirectoryPage() {
 
               {/* Contact */}
               <section>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-100 pb-2">Contact & Address</p>
+                <p className="label-form mb-3 border-b border-slate-100 pb-2">Contact & Address</p>
                 <div className="grid grid-cols-2 gap-x-8 gap-y-3">
                   {[
                     ['Mobile', reviewingApp.personalPhone || '—'],
                     ['Home Address', reviewingApp.homeAddress || '—'],
                   ].map(([label, val]) => (
                     <div key={label} className={label === 'Home Address' ? 'col-span-2' : ''}>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                      <p className="label-form">{label}</p>
                       <p className="text-sm font-bold text-slate-800 mt-0.5">{val}</p>
                     </div>
                   ))}
@@ -885,7 +885,7 @@ export default function EmployeeDirectoryPage() {
 
               {/* Employment */}
               <section>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-100 pb-2">Employment</p>
+                <p className="label-form mb-3 border-b border-slate-100 pb-2">Employment</p>
                 <div className="grid grid-cols-2 gap-x-8 gap-y-3">
                   {[
                     ['Department', reviewingApp.department || '—'],
@@ -894,7 +894,7 @@ export default function EmployeeDirectoryPage() {
                     ['Start Date', reviewingApp.startDate ? new Date(reviewingApp.startDate).toLocaleDateString('en-SG') : '—'],
                   ].map(([label, val]) => (
                     <div key={label}>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                      <p className="label-form">{label}</p>
                       <p className="text-sm font-bold text-slate-800 mt-0.5">{val}</p>
                     </div>
                   ))}
@@ -903,14 +903,14 @@ export default function EmployeeDirectoryPage() {
 
               {/* Banking */}
               <section>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-100 pb-2">Banking</p>
+                <p className="label-form mb-3 border-b border-slate-100 pb-2">Banking</p>
                 <div className="grid grid-cols-2 gap-x-8 gap-y-3">
                   {[
                     ['Bank', reviewingApp.bankName || '—'],
                     ['Account Number', reviewingApp.bankAccount || '—'],
                   ].map(([label, val]) => (
                     <div key={label}>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                      <p className="label-form">{label}</p>
                       <p className="text-sm font-bold text-slate-800 mt-0.5">{val}</p>
                     </div>
                   ))}
@@ -919,7 +919,7 @@ export default function EmployeeDirectoryPage() {
 
               {reviewingApp.notes && (
                 <section>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Notes from Employee</p>
+                  <p className="label-form mb-2">Notes from Employee</p>
                   <p className="text-sm font-bold text-slate-700 bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">{reviewingApp.notes}</p>
                 </section>
               )}
@@ -956,7 +956,7 @@ export default function EmployeeDirectoryPage() {
             <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100 flex-shrink-0">
               <div>
                 <h2 className="text-lg font-black text-slate-900 tracking-tighter">Fill on Behalf</h2>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">{hrFillUser.name} · {hrFillUser.email}</p>
+                <p className="eyebrow-tight mt-0.5">{hrFillUser.name} · {hrFillUser.email}</p>
               </div>
               <button onClick={() => { setHrFillUser(null); setHrFillData({}); setHrFillError(''); }} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all text-lg">✕</button>
             </div>
@@ -964,7 +964,7 @@ export default function EmployeeDirectoryPage() {
             <div className="overflow-y-auto flex-1 px-8 py-6 flex flex-col gap-6">
               {/* Personal */}
               <section>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">Personal Details</p>
+                <p className="label-form mb-4 border-b border-slate-100 pb-2">Personal Details</p>
                 <div className="grid grid-cols-2 gap-4">
                   {[
                     { key: 'fullName', label: 'Full Legal Name', required: true },
@@ -975,7 +975,7 @@ export default function EmployeeDirectoryPage() {
                     { key: 'personalPhone', label: 'Mobile' },
                   ].map(f => (
                     <div key={f.key}>
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">{f.label}{f.required && <span className="text-red-500 ml-0.5">*</span>}</label>
+                      <label className="label-form block mb-1.5">{f.label}{f.required && <span className="text-red-500 ml-0.5">*</span>}</label>
                       <input
                         type={f.type || 'text'}
                         value={hrFillData[f.key] || ''}
@@ -986,7 +986,7 @@ export default function EmployeeDirectoryPage() {
                     </div>
                   ))}
                   <div>
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Gender</label>
+                    <label className="label-form block mb-1.5">Gender</label>
                     <select value={hrFillData.gender || ''} onChange={e => setHrFillData(p => ({ ...p, gender: e.target.value }))} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-indigo-500 appearance-none">
                       <option value="">— Select —</option>
                       <option value="MALE">Male</option>
@@ -995,7 +995,7 @@ export default function EmployeeDirectoryPage() {
                     </select>
                   </div>
                   <div className="col-span-2">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Home Address</label>
+                    <label className="label-form block mb-1.5">Home Address</label>
                     <input type="text" value={hrFillData.homeAddress || ''} onChange={e => setHrFillData(p => ({ ...p, homeAddress: e.target.value }))} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all" placeholder="Block, Street, Unit, Postal Code" />
                   </div>
                 </div>
@@ -1003,7 +1003,7 @@ export default function EmployeeDirectoryPage() {
 
               {/* Employment */}
               <section>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">Employment</p>
+                <p className="label-form mb-4 border-b border-slate-100 pb-2">Employment</p>
                 <div className="grid grid-cols-2 gap-4">
                   {[
                     { key: 'department', label: 'Department' },
@@ -1011,12 +1011,12 @@ export default function EmployeeDirectoryPage() {
                     { key: 'startDate', label: 'Start Date', type: 'date' },
                   ].map(f => (
                     <div key={f.key}>
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">{f.label}</label>
+                      <label className="label-form block mb-1.5">{f.label}</label>
                       <input type={f.type || 'text'} value={hrFillData[f.key] || ''} onChange={e => setHrFillData(p => ({ ...p, [f.key]: e.target.value }))} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all" placeholder="Optional" />
                     </div>
                   ))}
                   <div>
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Employment Type</label>
+                    <label className="label-form block mb-1.5">Employment Type</label>
                     <select value={hrFillData.employmentType || ''} onChange={e => setHrFillData(p => ({ ...p, employmentType: e.target.value }))} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-indigo-500 appearance-none">
                       <option value="">— Select —</option>
                       <option value="FULL_TIME">Full Time</option>
@@ -1030,14 +1030,14 @@ export default function EmployeeDirectoryPage() {
 
               {/* Banking */}
               <section>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">Banking</p>
+                <p className="label-form mb-4 border-b border-slate-100 pb-2">Banking</p>
                 <div className="grid grid-cols-2 gap-4">
                   {[
                     { key: 'bankName', label: 'Bank Name' },
                     { key: 'bankAccount', label: 'Account Number' },
                   ].map(f => (
                     <div key={f.key}>
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">{f.label}</label>
+                      <label className="label-form block mb-1.5">{f.label}</label>
                       <input type="text" value={hrFillData[f.key] || ''} onChange={e => setHrFillData(p => ({ ...p, [f.key]: e.target.value }))} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all" placeholder="Optional" />
                     </div>
                   ))}
@@ -1046,7 +1046,7 @@ export default function EmployeeDirectoryPage() {
 
               {/* Notes */}
               <section>
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Notes</label>
+                <label className="label-form block mb-1.5">Notes</label>
                 <textarea value={hrFillData.notes || ''} onChange={e => setHrFillData(p => ({ ...p, notes: e.target.value }))} rows={2} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all resize-none" placeholder="Optional notes for HR" />
               </section>
 
@@ -1054,7 +1054,7 @@ export default function EmployeeDirectoryPage() {
             </div>
 
             <div className="px-8 py-5 border-t border-slate-100 flex items-center justify-between flex-shrink-0">
-              <button onClick={() => { setHrFillUser(null); setHrFillData({}); setHrFillError(''); }} className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors">Cancel</button>
+              <button onClick={() => { setHrFillUser(null); setHrFillData({}); setHrFillError(''); }} className="eyebrow-tight hover:text-slate-600 transition-colors">Cancel</button>
               <button
                 onClick={submitHrFill}
                 disabled={hrFillSubmitting || !hrFillData.fullName}
@@ -1075,7 +1075,7 @@ export default function EmployeeDirectoryPage() {
             <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
               <div>
                 <h2 className="text-lg font-black text-slate-900 tracking-tighter">Pending Employee Profiles</h2>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                <p className="label-form mt-1">
                   {pendingInvites.length} awaiting submission · {applications.length} awaiting HR verification
                 </p>
               </div>
@@ -1257,7 +1257,7 @@ export default function EmployeeDirectoryPage() {
                 <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500" /> Pending HR Verification — HR action required</span>
               </div>
               <button onClick={() => setApplicationsOpen(false)}
-                className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors">
+                className="eyebrow-tight hover:text-slate-600 transition-colors">
                 Close
               </button>
             </div>

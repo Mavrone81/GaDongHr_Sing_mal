@@ -294,7 +294,7 @@ function AdminAttendanceView({ userRole }: { userRole: string }) {
             { label: 'Out of Zone', count: outOfBound,  color: 'text-rose-700',    dot: 'bg-rose-600'    },
           ].map(s => (
             <div key={s.label} className="bg-white p-7 rounded-[1.5rem] border border-slate-100 shadow-lg shadow-indigo-500/5">
-              <div className="flex items-center gap-2 mb-4"><div className={`w-2 h-2 rounded-full ${s.dot}`} /><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{s.label}</p></div>
+              <div className="flex items-center gap-2 mb-4"><div className={`w-2 h-2 rounded-full ${s.dot}`} /><p className="eyebrow-tight">{s.label}</p></div>
               <p className={`text-4xl font-black tracking-tighter ${s.color}`}>{rosterLoading ? '—' : s.count}</p>
             </div>
           ))}
@@ -304,7 +304,7 @@ function AdminAttendanceView({ userRole }: { userRole: string }) {
             <div className="flex items-center gap-4">
               <div className="w-2 h-8 bg-indigo-600 rounded-full" />
               <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Attendance Records</h3>
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{filtered.length} records</span>
+              <span className="label-form">{filtered.length} records</span>
             </div>
             <input type="text" placeholder="Filter by name or department…" value={search} onChange={e => setSearch(e.target.value)}
               className="w-full sm:w-64 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-900 placeholder:text-slate-300 outline-none focus:border-indigo-500 transition-all" />
@@ -392,7 +392,7 @@ function AdminAttendanceView({ userRole }: { userRole: string }) {
             <div className="flex items-center gap-4">
               <div className="w-2 h-8 bg-indigo-600 rounded-full" />
               <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Work Locations</h3>
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{locations.length} locations</span>
+              <span className="label-form">{locations.length} locations</span>
             </div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 ml-6">Geofence zones — employees must clock in within the configured radius</p>
           </div>
@@ -481,7 +481,7 @@ function AdminAttendanceView({ userRole }: { userRole: string }) {
             <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
               <div>
                 <h2 className="text-lg font-black text-slate-900 tracking-tighter">Work Locations</h2>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">{assignModal.empName}</p>
+                <p className="eyebrow-tight mt-0.5">{assignModal.empName}</p>
               </div>
               <button onClick={() => setAssignModal(null)} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 transition-all text-lg">✕</button>
             </div>
@@ -838,7 +838,7 @@ const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: 
               <option value="">All Departments</option>
               {depts.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-auto">{filteredEmps.length} employees</span>
+            <span className="label-form ml-auto">{filteredEmps.length} employees</span>
           </div>
 
           {loading ? (
@@ -851,7 +851,7 @@ const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: 
                     <th className="w-10 px-4 py-4">
                       <input type="checkbox" checked={allSelected} onChange={e => setSelectedEmps(e.target.checked ? new Set(filteredEmps.map(x => x.id)) : new Set())} className="w-3.5 h-3.5 accent-indigo-600" />
                     </th>
-                    <th className="px-4 py-4 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest min-w-[180px]">Employee</th>
+                    <th className="px-4 py-4 text-left label-form min-w-[180px]">Employee</th>
                     {viewDays.map((d, i) => {
                       const todayStr = isoDate(new Date());
                       const isToday = isoDate(d) === todayStr;
@@ -867,7 +867,7 @@ const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: 
                         </th>
                       );
                     })}
-                    <th className="px-4 py-4 text-center text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                    <th className="px-4 py-4 text-center label-form">
                       {viewMode === 'monthly' ? 'Hrs/Mo' : viewMode === 'biweekly' ? 'Hrs/2Wk' : 'Hrs/Wk'}
                     </th>
                   </tr>
@@ -995,7 +995,7 @@ const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: 
       {/* Cell Popover */}
       {cellPopover && (
         <div ref={popoverRef} className="fixed z-50 bg-white rounded-2xl shadow-2xl border border-slate-100 p-3 w-56" style={{ top: Math.min(cellPopover.y, window.innerHeight - 260), left: Math.min(cellPopover.x, window.innerWidth - 240) }}>
-          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Assign Shift</p>
+          <p className="label-form mb-2">Assign Shift</p>
           <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
             {shifts.filter(s => s._type === 'template').length > 0 && (
               <p className="text-[8px] font-black text-slate-300 uppercase tracking-widest px-3 pt-1">Templates</p>
@@ -1411,9 +1411,9 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
                 <p className="text-base font-black text-slate-900 tracking-tight group-hover:text-indigo-600 transition-colors">{p.name}</p>
                 {p.description && <p className="text-[10px] font-bold text-slate-400 mt-1 line-clamp-2">{p.description}</p>}
                 <div className="flex gap-4 mt-5">
-                  <div><p className="text-xl font-black text-slate-900">{p._count?.workingShifts ?? 0}</p><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Working Shifts</p></div>
-                  <div><p className="text-xl font-black text-slate-900">{p._count?.shiftPatterns ?? 0}</p><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Patterns</p></div>
-                  <div><p className="text-xl font-black text-slate-900">{p._count?.members ?? 0}</p><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Members</p></div>
+                  <div><p className="text-xl font-black text-slate-900">{p._count?.workingShifts ?? 0}</p><p className="label-form">Working Shifts</p></div>
+                  <div><p className="text-xl font-black text-slate-900">{p._count?.shiftPatterns ?? 0}</p><p className="label-form">Patterns</p></div>
+                  <div><p className="text-xl font-black text-slate-900">{p._count?.members ?? 0}</p><p className="label-form">Members</p></div>
                 </div>
               </button>
             ))}
@@ -1455,7 +1455,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
       {/* Breadcrumb header */}
       <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 px-8 py-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => setSelProject(null)} className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors">← Projects</button>
+          <button onClick={() => setSelProject(null)} className="eyebrow-tight hover:text-indigo-600 transition-colors">← Projects</button>
           <span className="text-slate-200">/</span>
           <h2 className="text-base font-black text-slate-900 tracking-tight">{selProject.name}</h2>
         </div>
@@ -1479,7 +1479,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
       {subTab === 'working' && (
         <div className="flex flex-col gap-4">
           <div className="flex justify-between items-center">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Define specific working days and hours for this project</p>
+            <p className="eyebrow-tight">Define specific working days and hours for this project</p>
             <button onClick={openAddWs} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all">+ New Working Shift</button>
           </div>
           {wsLoading ? <div className="p-12 text-center"><div className="w-7 h-7 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin mx-auto" /></div>
@@ -1504,7 +1504,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{assigned} assigned</span>
+                        <span className="label-form">{assigned} assigned</span>
                         <button onClick={() => openAssign('working', ws.id, ws.name)} className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all">Assign Employees</button>
                         <button onClick={() => openEditWs(ws)} className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest border border-slate-200 text-slate-500 rounded-lg hover:border-indigo-300 hover:text-indigo-600 transition-all">Edit</button>
                         <button onClick={() => deleteWs(ws.id)} className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest border border-red-100 text-red-400 rounded-lg hover:bg-red-50 transition-all">Delete</button>
@@ -1527,7 +1527,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
       {subTab === 'patterns' && (
         <div className="flex flex-col gap-4">
           <div className="flex justify-between items-center">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cyclical rotation patterns — define work days and off days</p>
+            <p className="eyebrow-tight">Cyclical rotation patterns — define work days and off days</p>
             <button onClick={openAddPat} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all">+ New Pattern</button>
           </div>
           {patLoading ? <div className="p-12 text-center"><div className="w-7 h-7 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin mx-auto" /></div>
@@ -1553,7 +1553,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{assigned} assigned</span>
+                      <span className="label-form">{assigned} assigned</span>
                       <button onClick={() => openAssign('pattern', pat.id, pat.name)} className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all">Assign Employees</button>
                       <button onClick={() => openEditPat(pat)} className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest border border-slate-200 text-slate-500 rounded-lg hover:border-indigo-300 hover:text-indigo-600 transition-all">Edit</button>
                       <button onClick={() => deletePat(pat.id)} className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest border border-red-100 text-red-400 rounded-lg hover:bg-red-50 transition-all">Delete</button>
@@ -1570,7 +1570,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
       {subTab === 'members' && (
         <div className="flex flex-col gap-4">
           <div className="flex justify-between items-center">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Employees assigned to this project</p>
+            <p className="eyebrow-tight">Employees assigned to this project</p>
             <button onClick={() => { setMemberForm({ employeeId: '', shiftId: '', shiftType: '', startDate: new Date().toISOString().slice(0, 10), autoPopulate: true }); setMemberModal(true); }}
               className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all">+ Add Member</button>
           </div>
@@ -1867,7 +1867,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
             <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100 shrink-0">
               <div>
                 <h3 className="text-base font-black text-slate-900 tracking-tighter">Assign Employees</h3>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">{assignTarget.name}</p>
+                <p className="eyebrow-tight mt-0.5">{assignTarget.name}</p>
               </div>
               <button onClick={() => setAssignTarget(null)} className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 transition-all">✕</button>
             </div>

@@ -304,7 +304,7 @@ export default function RoleManagementPage() {
                   <div className="flex gap-3">
                     <button
                       onClick={() => { setIsEditing(false); fetchAll().then(() => {}); }}
-                      className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-700 transition-colors px-4"
+                      className="eyebrow-tight hover:text-slate-700 transition-colors px-4"
                     >
                       Cancel
                     </button>

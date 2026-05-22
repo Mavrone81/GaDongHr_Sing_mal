@@ -426,12 +426,12 @@ function EmployeeClaimsView() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white p-7 rounded-[1.5rem] border border-slate-100 shadow-lg shadow-indigo-500/5">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Approved (MTD)</p>
+          <p className="eyebrow-tight mb-3">Approved (MTD)</p>
           <p className="text-4xl font-black text-emerald-600 tracking-tighter">SGD {totalApproved.toFixed(2)}</p>
-          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-3">Approved &amp; ready for payout</p>
+          <p className="label-form mt-3">Approved &amp; ready for payout</p>
         </div>
         <div className="bg-white p-7 rounded-[1.5rem] border border-slate-100 shadow-lg shadow-indigo-500/5">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Pending Review</p>
+          <p className="eyebrow-tight mb-3">Pending Review</p>
           <p className="text-4xl font-black text-amber-500 tracking-tighter">SGD {totalPending.toFixed(2)}</p>
           <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mt-3 flex items-center gap-2">
             <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
@@ -439,7 +439,7 @@ function EmployeeClaimsView() {
           </p>
         </div>
         <div className="bg-white p-7 rounded-[1.5rem] border border-slate-100 shadow-lg shadow-indigo-500/5">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">GST Recoverable</p>
+          <p className="eyebrow-tight mb-3">GST Recoverable</p>
           <p className="text-4xl font-black text-indigo-600 tracking-tighter">SGD {totalGst.toFixed(2)}</p>
           <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mt-3">IRAS 9% auto-captured</p>
         </div>
@@ -447,7 +447,7 @@ function EmployeeClaimsView() {
 
       {categories.length > 0 && (
         <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 p-6">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Your Eligible Claim Categories</p>
+          <p className="eyebrow-tight mb-4">Your Eligible Claim Categories</p>
           <div className="flex flex-wrap gap-2">
             {categories.map(c => (
               <span key={c.id} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 uppercase tracking-wider">
@@ -461,7 +461,7 @@ function EmployeeClaimsView() {
       <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 overflow-hidden">
         <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">My Submissions</h3>
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{claims.length} total</span>
+          <span className="eyebrow-tight">{claims.length} total</span>
         </div>
         {claims.length === 0 ? (
           <div className="py-20 flex flex-col items-center gap-4">

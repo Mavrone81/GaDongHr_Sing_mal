@@ -7,7 +7,7 @@ export default function AttendanceCard() {
     <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 p-10 transition-all hover:shadow-md relative overflow-hidden group">
       <div className="absolute top-0 right-0 p-4 bg-indigo-50/50 rounded-bl-2xl border-b border-l border-indigo-100 flex items-center gap-2">
          <span className="w-1.5 h-1.5 bg-slate-300 rounded-full"></span>
-         <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Standby</span>
+         <span className="label-form leading-none">Standby</span>
       </div>
       <h3 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em] mb-10">Attendance Signal</h3>
       <div className="flex flex-col gap-8 relative z-10">

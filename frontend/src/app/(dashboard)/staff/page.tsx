@@ -176,26 +176,26 @@ export default function StaffDirectoryPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-black text-slate-900 uppercase tracking-tight group-hover:text-indigo-600 transition-colors truncate">{emp.fullName}</p>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1 truncate">{emp.designation || '—'}</p>
+                  <p className="label-form mt-1 truncate">{emp.designation || '—'}</p>
                 </div>
               </div>
 
               <div className="space-y-2.5 pt-4 border-t border-slate-50">
                 <div className="flex justify-between items-center gap-2">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest shrink-0">Dept</span>
+                  <span className="label-form shrink-0">Dept</span>
                   <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-lg border ${deptColor(emp.department)}`}>{emp.department || '—'}</span>
                 </div>
                 <div className="flex justify-between items-center gap-2">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest shrink-0">Employee ID</span>
+                  <span className="label-form shrink-0">Employee ID</span>
                   <span className="text-[9px] font-black text-slate-600 uppercase">{emp.employeeCode}</span>
                 </div>
                 <div className="flex justify-between items-center gap-2">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest shrink-0">Contract</span>
+                  <span className="label-form shrink-0">Contract</span>
                   <span className="text-[9px] font-bold text-slate-500 uppercase">{emp.employmentType?.replace('_', ' ') ?? '—'}</span>
                 </div>
                 {emp.workEmail && (
                   <div className="flex justify-between items-center gap-2">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest shrink-0">Email</span>
+                    <span className="label-form shrink-0">Email</span>
                     <a
                       href={`mailto:${emp.workEmail}`}
                       onClick={e => e.stopPropagation()}

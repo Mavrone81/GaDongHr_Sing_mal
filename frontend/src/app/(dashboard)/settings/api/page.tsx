@@ -592,7 +592,7 @@ export default function ApiPage() {
         <div className="w-2 h-8 bg-violet-500 rounded-full" />
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tighter">API & Webhooks</h1>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">SuperAdmin Only · Integration & Connectivity</p>
+          <p className="eyebrow-tight mt-1">SuperAdmin Only · Integration & Connectivity</p>
         </div>
       </div>
 

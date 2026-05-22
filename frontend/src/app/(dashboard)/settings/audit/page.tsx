@@ -147,7 +147,7 @@ function LogRow({ log }: { log: AuditLog }) {
         <tr className="bg-indigo-50/20 border-b border-indigo-100">
           <td colSpan={6} className="px-8 py-4">
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm max-w-3xl">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Field Changes</p>
+              <p className="label-form mb-3">Field Changes</p>
               {Object.entries(log.changedFields).map(([field, change]) => (
                 <FieldDiff key={field} field={field} change={change} />
               ))}
@@ -242,7 +242,7 @@ export default function AuditPage() {
           </div>
           <div>
             <h1 className="text-xl font-black text-slate-900 tracking-tight">Employee Data Audit Log</h1>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
+            <p className="eyebrow-tight mt-0.5">
               Immutable · All creates, updates & deletes to employee records
             </p>
           </div>
@@ -280,7 +280,7 @@ export default function AuditPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Search */}
           <div className="lg:col-span-2">
-            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Search (employee / actor email)</label>
+            <label className="label-form block mb-1.5">Search (employee / actor email)</label>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -303,7 +303,7 @@ export default function AuditPage() {
 
           {/* Action filter */}
           <div>
-            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Action</label>
+            <label className="label-form block mb-1.5">Action</label>
             <div className="relative">
               <select
                 value={action}
@@ -324,7 +324,7 @@ export default function AuditPage() {
 
           {/* Date range */}
           <div>
-            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Date Range</label>
+            <label className="label-form block mb-1.5">Date Range</label>
             <div className="flex gap-1.5 items-center">
               <input
                 type="date"
@@ -358,7 +358,7 @@ export default function AuditPage() {
         {loading ? (
           <div className="flex items-center justify-center py-20 gap-4">
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-violet-600" />
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Loading audit records…</p>
+            <p className="eyebrow-tight animate-pulse">Loading audit records…</p>
           </div>
         ) : logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -375,7 +375,7 @@ export default function AuditPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                  <tr className="bg-slate-50 border-b border-slate-200 label-form">
                     {([
                       { col: 'timestamp', label: 'Timestamp' },
                       { col: 'action',    label: 'Action' },
@@ -405,7 +405,7 @@ export default function AuditPage() {
             {/* Pagination */}
             {pages > 1 && (
               <div className="flex items-center justify-between px-5 py-4 border-t border-slate-100 bg-slate-50/50">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                <p className="eyebrow-tight">
                   Showing {((page - 1) * LIMIT) + 1}–{Math.min(page * LIMIT, total)} of {total.toLocaleString()}
                 </p>
                 <div className="flex items-center gap-2">

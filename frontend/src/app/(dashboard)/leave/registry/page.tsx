@@ -175,7 +175,7 @@ function TeamCalendar({ subordinates }: { subordinates: TeamMember[] }) {
           {/* Day labels */}
           <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-100">
             {DAY_LABELS.map(d => (
-              <div key={d} className="py-2 text-center text-[9px] font-black text-slate-400 uppercase tracking-widest">{d}</div>
+              <div key={d} className="py-2 text-center label-form">{d}</div>
             ))}
           </div>
           {/* Weeks */}
@@ -206,7 +206,7 @@ function TeamCalendar({ subordinates }: { subordinates: TeamMember[] }) {
       {/* On-leave list for selected month */}
       {teamLeaves.length > 0 && (
         <div className="flex flex-col gap-2">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Approved Leave This Month</p>
+          <p className="eyebrow-tight">Approved Leave This Month</p>
           {teamLeaves.map(lv => {
             const member = subordinates.find(s => s.id === lv.employeeId);
             return (
@@ -432,7 +432,7 @@ function AdminLeaveView() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <div className="bg-white p-7 rounded-[1.5rem] border border-slate-100 shadow-lg shadow-indigo-500/5">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Pending Approval</p>
+          <p className="eyebrow-tight mb-3">Pending Approval</p>
           {loadingApprovals ? <div className="h-10 w-16 bg-slate-100 rounded-xl animate-pulse" /> : <p className="text-4xl font-black text-amber-500">{pending.length}</p>}
           <p className="text-[9px] font-black text-amber-600 mt-4 uppercase tracking-widest flex items-center gap-2">
             <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
@@ -516,7 +516,7 @@ function AdminLeaveView() {
                 <div className="overflow-hidden border border-slate-200 rounded-2xl">
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                      <tr className="bg-slate-50 border-b border-slate-200 label-form">
                         {([
                           { col: 'code',        label: 'Code' },
                           { col: 'name',        label: 'Name' },
@@ -586,7 +586,7 @@ function AdminLeaveView() {
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Your Team</p>
+                  <p className="eyebrow-tight">Your Team</p>
                   <p className="text-sm font-black text-slate-900 mt-0.5">{loadingSubordinates ? '…' : `${subordinates.length} direct report${subordinates.length !== 1 ? 's' : ''}`}</p>
                 </div>
                 {subordinates.length > 0 && (
@@ -617,7 +617,7 @@ function AdminLeaveView() {
             <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
               <div>
                 <h2 className="text-lg font-black text-slate-900 tracking-tighter">{editingType ? 'Edit Leave Type' : 'New Leave Type'}</h2>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">{editingType ? `Editing ${editingType.code}` : 'Create a new leave policy'}</p>
+                <p className="eyebrow-tight mt-0.5">{editingType ? `Editing ${editingType.code}` : 'Create a new leave policy'}</p>
               </div>
               <button onClick={() => setTypeModal(false)} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all text-lg">✕</button>
             </div>
@@ -683,7 +683,7 @@ function AdminLeaveView() {
             <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
               <div>
                 <h2 className="text-lg font-black text-slate-900 tracking-tighter">Leave Application</h2>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
+                <p className="eyebrow-tight mt-0.5">
                   {loadingDetail ? 'Loading…' : detail ? `${detail.leaveType?.name ?? '—'} · ${detail.totalDays} day${detail.totalDays !== 1 ? 's' : ''}` : ''}
                 </p>
               </div>
@@ -721,18 +721,18 @@ function AdminLeaveView() {
                   {/* Leave summary */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div className="p-4 bg-white border border-slate-100 rounded-xl">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Leave Type</p>
+                      <p className="label-form">Leave Type</p>
                       <p className="text-sm font-black text-slate-900 mt-1">{detail.leaveType?.name ?? '—'}</p>
                       {detail.leaveType && (
                         <p className="text-[9px] font-bold text-slate-400 mt-0.5">{detail.leaveType.isPaid ? 'Paid' : 'Unpaid'}</p>
                       )}
                     </div>
                     <div className="p-4 bg-white border border-slate-100 rounded-xl">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Start</p>
+                      <p className="label-form">Start</p>
                       <p className="text-sm font-black text-slate-900 mt-1">{fmtDate(detail.startDate.slice(0, 10))}</p>
                     </div>
                     <div className="p-4 bg-white border border-slate-100 rounded-xl">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">End</p>
+                      <p className="label-form">End</p>
                       <p className="text-sm font-black text-slate-900 mt-1">{fmtDate(detail.endDate.slice(0, 10))}</p>
                     </div>
                     <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
@@ -743,7 +743,7 @@ function AdminLeaveView() {
 
                   {/* Reason */}
                   <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Reason</p>
+                    <p className="label-form mb-2">Reason</p>
                     <p className="text-sm font-bold text-slate-700 leading-relaxed whitespace-pre-wrap">
                       {detail.reason?.trim() ? detail.reason : <span className="text-slate-400 italic">No reason provided</span>}
                     </p>
@@ -752,7 +752,7 @@ function AdminLeaveView() {
                   {/* Attachment */}
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Supporting Document</p>
+                      <p className="label-form">Supporting Document</p>
                       {detail.attachment && (
                         <button onClick={downloadAttachment} className="text-[9px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest">
                           Download ↓
@@ -769,7 +769,7 @@ function AdminLeaveView() {
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={attachmentObjectUrl} alt={detail.attachment.fileName} className="w-full max-h-[400px] object-contain" />
                         ) : (
-                          <div className="h-40 flex items-center justify-center text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Loading image…</div>
+                          <div className="h-40 flex items-center justify-center eyebrow-tight animate-pulse">Loading image…</div>
                         )}
                         <p className="text-[9px] font-bold text-slate-500 text-center py-2 border-t border-slate-100">{detail.attachment.fileName}</p>
                       </div>
@@ -801,7 +801,7 @@ function AdminLeaveView() {
                   {/* Approval chain (if multi-step) */}
                   {detail.approvalSteps && detail.approvalSteps.length > 0 && (
                     <div className="flex flex-col gap-2">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Approval Trail</p>
+                      <p className="label-form">Approval Trail</p>
                       {detail.approvalSteps.map(s => (
                         <div key={s.step} className="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
                           <span className="text-[9px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded">Step {s.step}</span>

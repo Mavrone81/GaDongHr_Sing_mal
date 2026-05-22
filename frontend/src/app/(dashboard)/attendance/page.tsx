@@ -448,7 +448,7 @@ function EmployeeAttendanceView() {
           {/* UPLOAD PHOTO state */}
           {clockState === 'upload_photo' && (
             <div className="flex flex-col items-center gap-6 py-4 max-w-sm mx-auto">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+              <p className="label-form">
                 {profilePhoto ? 'Update Profile Photo' : 'Add Profile Photo'}
               </p>
 
@@ -840,7 +840,7 @@ function EmployeeAttendanceView() {
               <div className="p-6">
                 <div className="grid grid-cols-7 gap-1.5 mb-1.5">
                   {dayHeaders.map(d => (
-                    <div key={d} className="text-center text-[9px] font-black text-slate-400 uppercase tracking-widest py-1">{d}</div>
+                    <div key={d} className="text-center label-form py-1">{d}</div>
                   ))}
                 </div>
                 {weekLoading ? (
@@ -942,15 +942,15 @@ function EmployeeAttendanceView() {
                     ) : (
                       <div className="flex-1 flex items-center gap-6">
                         <div className="flex flex-col">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Clock In</p>
+                          <p className="label-form">Clock In</p>
                           <p className="text-xs font-black text-slate-900 mt-0.5">{rec.clockIn ?? '—'}</p>
                         </div>
                         <div className="flex flex-col">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Clock Out</p>
+                          <p className="label-form">Clock Out</p>
                           <p className="text-xs font-black text-slate-900 mt-0.5">{rec.clockOut ?? '—'}</p>
                         </div>
                         <div className="flex flex-col">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Duration</p>
+                          <p className="label-form">Duration</p>
                           <p className="text-xs font-bold text-indigo-600 mt-0.5">{rec.duration ?? '—'}</p>
                         </div>
                       </div>

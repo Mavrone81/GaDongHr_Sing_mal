@@ -46,7 +46,7 @@ function RunSelectorModal({ title, onSelect, onClose }: { title: string; onSelec
         <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
           <div>
             <h2 className="text-base font-black text-slate-900 tracking-tighter">{title}</h2>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Select a payroll run</p>
+            <p className="eyebrow-tight mt-0.5">Select a payroll run</p>
           </div>
           <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">✕</button>
         </div>
@@ -60,7 +60,7 @@ function RunSelectorModal({ title, onSelect, onClose }: { title: string; onSelec
               className="flex items-center justify-between px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition-all text-left">
               <div>
                 <span className="text-sm font-black text-slate-900">{r.period}</span>
-                <span className="ml-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">{r.runType}</span>
+                <span className="ml-3 label-form">{r.runType}</span>
               </div>
               <span className={`text-[9px] font-black px-2.5 py-1 rounded-lg uppercase tracking-widest border ${
                 r.status === 'FINALISED' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
@@ -262,7 +262,7 @@ function PayrollBreakdownModal({ runId, period, onClose, onToast }: { runId: str
         <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100 flex-shrink-0">
           <div>
             <h2 className="text-base font-black text-slate-900 tracking-tighter">Payroll Breakdown — {period}</h2>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">All payroll calculations per employee (Singapore MOM/CPF/EA)</p>
+            <p className="eyebrow-tight mt-0.5">All payroll calculations per employee (Singapore MOM/CPF/EA)</p>
           </div>
           <div className="flex items-center gap-3">
             <button onClick={handleCsv} disabled={loading || rows.length === 0}
@@ -309,7 +309,7 @@ function PayrollBreakdownModal({ runId, period, onClose, onToast }: { runId: str
             <div className="flex items-center justify-center h-40 text-slate-400 text-sm font-bold">No payslips found for this run</div>
           ) : (
             <table className="w-full text-left border-collapse text-[11px]">
-              <thead className="sticky top-0 bg-slate-50 border-b border-slate-100 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+              <thead className="sticky top-0 bg-slate-50 border-b border-slate-100 label-form">
                 <tr>
                   {['Code', 'Employee', 'Basic Salary (OW)', 'Gross Pay', 'Emp CPF', 'Emplr CPF', 'SDL', 'FWL', 'NPL Days', 'NPL Deduct', 'Govt Days', 'Govt Amt', 'Net Pay', 'YTD Gross', 'YTD Emp CPF'].map(h => (
                     <th key={h} className="px-4 py-3 whitespace-nowrap">{h}</th>
@@ -425,7 +425,7 @@ function CustomReportModal({ onClose, onToast }: { onClose: () => void; onToast:
         <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
           <div>
             <h2 className="text-base font-black text-slate-900 tracking-tighter">Custom Report Builder</h2>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Pick dataset and fields → download CSV</p>
+            <p className="eyebrow-tight mt-0.5">Pick dataset and fields → download CSV</p>
           </div>
           <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">✕</button>
         </div>
@@ -558,7 +558,7 @@ export default function ReportsPage() {
           { label: 'Runs This Session', value: String(Object.keys(lastRun).length), status: 'text-indigo-600', bg: 'bg-indigo-50 border-indigo-100' },
         ].map(s => (
           <div key={s.label} className={`p-8 rounded-[2rem] border shadow-2xl shadow-indigo-500/5 ${s.bg}`}>
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">{s.label}</p>
+            <p className="label-form mb-4">{s.label}</p>
             <h3 className={`text-3xl font-black tracking-tighter ${s.status}`}>{s.value}</h3>
           </div>
         ))}
@@ -610,7 +610,7 @@ export default function ReportsPage() {
                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{r.freq}</span>
                   </td>
                   <td className="px-8 py-5">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <span className="eyebrow-tight">
                       {lastRun[r.key] ?? '—'}
                     </span>
                   </td>

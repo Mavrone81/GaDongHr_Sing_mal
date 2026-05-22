@@ -264,7 +264,7 @@ export default function PdpaPage() {
             <table className="w-full min-w-[900px]">
               <thead>
                 <tr className="border-b border-slate-100">
-                  <th className="text-left px-6 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest w-56">Data Category</th>
+                  <th className="text-left px-6 py-3 label-form w-56">Data Category</th>
                   {ALL_ROLES.map(r => (
                     <th key={r.id} className="px-2 py-3 text-center w-20">
                       <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md ${r.color}`}>{r.label.split(' ')[0]}</span>
@@ -359,7 +359,7 @@ export default function PdpaPage() {
                 <div key={i} className="flex items-center gap-5 px-8 py-4 hover:bg-slate-50/50 transition-all">
                   <div className={`w-2 h-2 rounded-full shrink-0 ${f.status === 'active' ? 'bg-emerald-500' : f.status === 'transit' ? 'bg-sky-400' : 'bg-amber-400'}`} />
                   <div className="w-36 shrink-0">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{f.service}</span>
+                    <span className="label-form">{f.service}</span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-black text-slate-900 font-mono">{f.field}</p>
@@ -470,7 +470,7 @@ export default function PdpaPage() {
                           ))}
                         </select>
                         <div className="text-right min-w-[72px]">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Purge records before</p>
+                          <p className="label-form">Purge records before</p>
                           <p className="text-[10px] font-black text-slate-600 font-mono">{cutoff.toISOString().slice(0, 10)}</p>
                         </div>
                       </div>
