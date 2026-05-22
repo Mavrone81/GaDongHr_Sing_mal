@@ -312,13 +312,20 @@ describe('cpfRound — CPF Board rounding (nearest dollar)', () => {
 
 // ── J) Edge cases — IRAS-relevant scenarios ──────────────────────────────────
 describe('J) Edge and IRAS-compliance cases', () => {
-  test('CPF on salary just below S$50 threshold (no contribution required)', () => {
-    // CPF contribution not required if monthly wages < SGD 50 (CPF Act)
-    // (The engine applies rates as given; floor logic is at payroll level)
+  test('CPF on salary just below S$50 threshold — bracket logic NOT implemented (system simplification)', () => {
+    // Per CPF Board, wages ≤ S$50 require NIL contribution (both sides).
+    // The engine doesn't implement the bracket structure — it always applies
+    // the full rate. Documented as a known simplification; the figures asserted
+    // below are what the engine produces, NOT what CPF Board mandates.
+    //
+    // Per CPF Board rounding (Jan 2026 PDF "Steps to compute CPF contribution"):
+    //   total    = round nearest    = round(49 × 0.37) = round(18.13) = 18
+    //   employee = floor             = floor(49 × 0.20) = floor(9.80) = 9
+    //   employer = total − employee  = 18 − 9 = 9
     const result = computeCpf({ ow: 49, citizenStatus: 'SC', age: 35, rates: { ...STD_RATES, employeeRate: 0.20, employerRate: 0.17 } });
-    // Mathematically: 49 * 0.20 = 9.8 → rounds to 10; 49 * 0.17 = 8.33 → rounds to 8
-    expect(result.employeeOw).toBe(cpfRound(49 * 0.20));
-    expect(result.employerOw).toBe(cpfRound(49 * 0.17));
+    expect(result.employeeOw).toBe(9);
+    expect(result.employerOw).toBe(9);
+    expect(result.totalEmployee + result.totalEmployer).toBe(18);
   });
 
   test('PR Year 1 graduated rates (lower contribution)', () => {

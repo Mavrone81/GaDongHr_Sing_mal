@@ -64,27 +64,38 @@ async function seedPayroll() {
   const db = client('hrms_payroll');
   await db.connect();
   try {
-    // CPF Rates (Jan 2025)
+    // CPF Rates — per CPF Board "CPF Contribution Rate Table from 1 January 2026"
+    // (official PDF: CPFcontributionratesfrom1Jan2026.pdf, Tables 1-3)
+    // OW ceiling raised from $6,800 to $8,000 (final step of Budget 2023 4-year ramp).
+    // Senior worker rates enhanced for 55-60 and 60-65 brackets.
     const cpfCount = await db.query(`SELECT COUNT(*) FROM cpf_rates`);
     if (cpfCount.rows[0].count === '0') {
       const rates = [
-        ['SC_PR',    0,  55,   0.20, 0.17],
-        ['SC_PR',   55,  60,   0.16, 0.15],
-        ['SC_PR',   60,  65,   0.105,0.115],
-        ['SC_PR',   65,  70,   0.075,0.09],
-        ['SC_PR',   70,  null, 0.05, 0.075],
-        ['PR_YEAR1', 0,  null, 0.05, 0.04],
-        ['PR_YEAR2', 0,  null, 0.15, 0.09],
-        ['FOREIGNER',0,  null, 0.0,  0.0],
+        // SC and PR Year 3+ — Table 1
+        ['SC_PR',    0,  55,   0.20,  0.17 ],   // ≤55:    20% / 17%      (Total 37%)
+        ['SC_PR',   55,  60,   0.18,  0.16 ],   // 55-60:  18% / 16%      (Total 34%, Jan 2026 enhanced)
+        ['SC_PR',   60,  65,   0.125, 0.125],   // 60-65:  12.5% / 12.5%  (Total 25%, Jan 2026 enhanced, even split)
+        ['SC_PR',   65,  70,   0.075, 0.09 ],   // 65-70:  7.5% / 9%      (Total 16.5%, unchanged)
+        ['SC_PR',   70,  null, 0.05,  0.075],   // 70+:    5% / 7.5%      (Total 12.5%, floor)
+        // PR Year 1 graduated (G/G) — Table 2
+        ['PR_YEAR1', 0,  60,   0.05,  0.04 ],   // ≤60:    5% / 4%
+        ['PR_YEAR1', 60, null, 0.05,  0.035],   // 60+:    5% / 3.5%      (employer rate drops)
+        // PR Year 2 graduated (G/G) — Table 3
+        ['PR_YEAR2', 0,  55,   0.15,  0.09 ],   // ≤55:    15% / 9%
+        ['PR_YEAR2', 55, 60,   0.125, 0.06 ],   // 55-60:  12.5% / 6%
+        ['PR_YEAR2', 60, 65,   0.075, 0.035],   // 60-65:  7.5% / 3.5%
+        ['PR_YEAR2', 65, null, 0.05,  0.035],   // 65+:    5% / 3.5%
+        // Foreigner — exempt per CPF Act s.7
+        ['FOREIGNER', 0, null, 0.0,   0.0  ],
       ];
       for (const [cs, amin, amax, er, emr] of rates) {
         await db.query(
           `INSERT INTO cpf_rates (id, "citizenStatus", "ageMin", "ageMax", "employeeRate", "employerRate", "owCeiling", "awCeiling", "effectiveDate", "isActive", "createdAt")
-           VALUES ($1,$2,$3,$4,$5,$6,6800,102000,'2025-01-01',true,NOW())`,
+           VALUES ($1,$2,$3,$4,$5,$6,8000,102000,'2026-01-01',true,NOW())`,
           [uuidv4(), cs, amin, amax, er, emr]
         );
       }
-      console.log('✅ CPF rates seeded (Jan 2025)');
+      console.log('✅ CPF rates seeded (Jan 2026)');
     } else { console.log('ℹ️  CPF rates already exist'); }
 
     // SDL config
@@ -140,7 +151,7 @@ async function seedPayroll() {
         ['REST_DAY_EMP',   'Rest Day Pay (Employee Request)',   'OT',               true, true, 'OW', 16],
         ['REST_DAY_ER',    'Rest Day Pay (Employer Request)',   'OT',               true, true, 'OW', 17],
         ['PH_WORK',        'Public Holiday Work Pay',           'OT',               true, true, 'OW', 18],
-        ['OIL',            'Off-In-Lieu (OIL)',                 'OT',              false,false, 'OW', 19],
+        ['OIL',            'Off-In-Lieu (OIL) Cash-out',        'OT',               true, true, 'OW', 19],
         ['AWS',            'Annual Wage Supplement (AWS)',      'ADDITIONAL_WAGES', true, true, 'AW', 20],
         ['PERF_BONUS',     'Performance Bonus',                'ADDITIONAL_WAGES', true, true, 'AW', 21],
         ['COMMISSION',     'Commission',                        'ADDITIONAL_WAGES', true, true, 'AW', 22],

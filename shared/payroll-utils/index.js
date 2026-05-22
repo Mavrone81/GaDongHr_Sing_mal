@@ -2,7 +2,15 @@
 
 /**
  * Singapore CPF Computation Engine
- * Compliant with CPF Act (Cap. 36) and CPF Board published rates (Jan 2025)
+ * Compliant with CPF Act (Cap. 36) and CPF Board published rates (Jan 2026)
+ *
+ * Rounding methodology per CPF Board "Steps to compute CPF contribution"
+ * (printed at the bottom of every official rate table PDF):
+ *   1) Total CPF contribution: round to nearest dollar (< $0.50 → down, ≥ $0.50 → up)
+ *   2) Employee's share:        round DOWN to nearest dollar
+ *   3) Employer's share:        Total − Employee's share (derived, not separately rounded)
+ *
+ * OW and AW are computed separately and summed (per the same instructions).
  */
 
 function computeCpf({ ow, aw = 0, ytdOw = 0, ytdAw = 0, citizenStatus, age, rates }) {
@@ -10,20 +18,26 @@ function computeCpf({ ow, aw = 0, ytdOw = 0, ytdAw = 0, citizenStatus, age, rate
     return { employeeOw: 0, employerOw: 0, employeeAw: 0, employerAw: 0, totalEmployee: 0, totalEmployer: 0 };
   }
 
-  const OW_CEILING = rates?.owCeiling || 6800;
+  const OW_CEILING = rates?.owCeiling || 8000;
   const AW_CEILING_ANNUAL = rates?.awCeiling || 102000;
 
   const employeeRate = rates?.employeeRate || 0;
   const employerRate = rates?.employerRate || 0;
+  const totalRate    = employeeRate + employerRate;
 
   const owSubjectToCpf = Math.min(ow, OW_CEILING);
   const awCeilingRemaining = Math.max(AW_CEILING_ANNUAL - ytdOw - owSubjectToCpf, 0);
   const awSubjectToCpf = Math.min(aw, Math.min(awCeilingRemaining, AW_CEILING_ANNUAL - ytdAw));
 
-  const employeeOw = cpfRound(owSubjectToCpf * employeeRate);
-  const employerOw = cpfRound(owSubjectToCpf * employerRate);
-  const employeeAw = cpfRound(awSubjectToCpf * employeeRate);
-  const employerAw = cpfRound(awSubjectToCpf * employerRate);
+  // CPF Board 3-step rounding (OW): total = round nearest; employee = floor; employer = total − employee
+  const owTotal    = Math.round(owSubjectToCpf * totalRate);
+  const employeeOw = Math.floor(owSubjectToCpf * employeeRate);
+  const employerOw = owTotal - employeeOw;
+
+  // Same rounding rules applied to AW component
+  const awTotal    = Math.round(awSubjectToCpf * totalRate);
+  const employeeAw = Math.floor(awSubjectToCpf * employeeRate);
+  const employerAw = awTotal - employeeAw;
 
   return {
     employeeOw,
@@ -37,6 +51,8 @@ function computeCpf({ ow, aw = 0, ytdOw = 0, ytdAw = 0, citizenStatus, age, rate
   };
 }
 
+// Legacy helper retained for backward compatibility. Prefer the explicit
+// 3-step rounding pattern in computeCpf above for new code.
 function cpfRound(amount) {
   return Math.round(amount);
 }
