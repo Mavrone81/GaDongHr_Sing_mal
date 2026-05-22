@@ -77,6 +77,7 @@ export function EmployeePayslipsView() {
   const [downloading, setDownloading] = useState<string | null>(null);
   const [bulkDownloading, setBulkDownloading] = useState(false);
   const [dlToast, setDlToast] = useState<string | null>(null);
+  const [psSort, setPsSort] = useState<{ col: 'period' | 'basic' | 'gross' | 'cpf' | 'net'; dir: 'asc' | 'desc' }>({ col: 'period', dir: 'desc' });
 
   useEffect(() => {
     const load = async () => {
@@ -98,9 +99,26 @@ export function EmployeePayslipsView() {
   }, [payslips]);
 
   const filtered = useMemo(() => {
-    if (selectedYear === 'all') return payslips;
-    return payslips.filter(p => p.period.startsWith(selectedYear));
-  }, [payslips, selectedYear]);
+    const base = selectedYear === 'all' ? payslips : payslips.filter(p => p.period.startsWith(selectedYear));
+    const d = psSort.dir === 'asc' ? 1 : -1;
+    return [...base].sort((a, b) => {
+      switch (psSort.col) {
+        case 'period': return d * a.period.localeCompare(b.period);
+        case 'basic':  return d * (a.basicSalary - b.basicSalary);
+        case 'gross':  return d * (a.grossPay - b.grossPay);
+        case 'cpf':    return d * (a.employeeCpf - b.employeeCpf);
+        case 'net':    return d * (a.netPay - b.netPay);
+        default: return 0;
+      }
+    });
+  }, [payslips, selectedYear, psSort]);
+
+  function togglePsSort(col: typeof psSort.col) {
+    setPsSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+  }
+  function PsSortIcon({ col }: { col: typeof psSort.col }) {
+    return <span className="text-[8px] ml-1">{psSort.col === col ? (psSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  }
 
   const ytdStats = useMemo(() => {
     const list = selectedYear === 'all' ? payslips : filtered;
@@ -302,11 +320,19 @@ export function EmployeePayslipsView() {
                       )}
                     </button>
                   </th>
-                  <th className="px-6 py-5">Pay Period</th>
-                  <th className="px-6 py-5 text-right">Basic Salary</th>
-                  <th className="px-6 py-5 text-right">Gross Pay</th>
-                  <th className="px-6 py-5 text-right">CPF (Employee)</th>
-                  <th className="px-6 py-5 text-right">Net Pay</th>
+                  {([
+                    { col: 'period', label: 'Pay Period',      cls: 'px-6 py-5',            align: 'start' },
+                    { col: 'basic',  label: 'Basic Salary',    cls: 'px-6 py-5 text-right', align: 'end' },
+                    { col: 'gross',  label: 'Gross Pay',       cls: 'px-6 py-5 text-right', align: 'end' },
+                    { col: 'cpf',    label: 'CPF (Employee)',  cls: 'px-6 py-5 text-right', align: 'end' },
+                    { col: 'net',    label: 'Net Pay',         cls: 'px-6 py-5 text-right', align: 'end' },
+                  ] as const).map(h => (
+                    <th key={h.col} className={h.cls}>
+                      <button onClick={() => togglePsSort(h.col)} className={`flex items-center hover:text-slate-600 transition-colors ${h.align === 'end' ? 'ml-auto justify-end' : ''}`}>
+                        {h.label}<PsSortIcon col={h.col} />
+                      </button>
+                    </th>
+                  ))}
                   <th className="px-6 py-5 text-center">Download</th>
                 </tr>
               </thead>
@@ -404,6 +430,7 @@ function AdminPayrollDashboard() {
   const [payslipRunPeriod, setPayslipRunPeriod] = useState<string>('');
   const [payslipRows, setPayslipRows] = useState<any[]>([]);
   const [payslipLoading, setPayslipLoading] = useState(false);
+  const [payslipSort, setPayslipSort] = useState<{ col: 'name' | 'gross' | 'net'; dir: 'asc' | 'desc' }>({ col: 'name', dir: 'asc' });
   const [reviewPayslips, setReviewPayslips] = useState<any[]>([]);
   const [empNameMap, setEmpNameMap] = useState<Map<string, string>>(new Map());
   const [dlProgress, setDlProgress] = useState<string | null>(null);
@@ -433,6 +460,7 @@ function AdminPayrollDashboard() {
 
   const [runs, setRuns] = useState<PayrollRun[]>([]);
   const [runsLoading, setRunsLoading] = useState(true);
+  const [runSort, setRunSort] = useState<{ col: 'period' | 'status' | 'type'; dir: 'asc' | 'desc' }>({ col: 'period', dir: 'desc' });
   const [selectedPeriod, setSelectedPeriod] = useState('2026-04');
   const [processingGroup, setProcessingGroup] = useState('all');
   const [selectedRunType, setSelectedRunType] = useState('MONTHLY');
@@ -510,6 +538,24 @@ function AdminPayrollDashboard() {
   useEffect(() => { loadRuns(); }, []);
   useEffect(() => { if (isRunModalOpen && selectedPeriod) loadPeriodConfig(selectedPeriod); }, [isRunModalOpen, selectedPeriod]);
 
+  const sortedRuns = useMemo(() => {
+    const d = runSort.dir === 'asc' ? 1 : -1;
+    return [...runs].sort((a, b) => {
+      switch (runSort.col) {
+        case 'period': return d * a.period.localeCompare(b.period);
+        case 'status': return d * a.status.localeCompare(b.status);
+        case 'type':   return d * a.runType.localeCompare(b.runType);
+        default: return 0;
+      }
+    });
+  }, [runs, runSort]);
+  function toggleRunSort(col: typeof runSort.col) {
+    setRunSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+  }
+  function RunSortIcon({ col }: { col: typeof runSort.col }) {
+    return <span className="text-[8px] ml-1">{runSort.col === col ? (runSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  }
+
   const fetchPayslipsForRun = async (runId: string) => {
     try {
       const [psData, empData] = await Promise.allSettled([
@@ -559,10 +605,48 @@ function AdminPayrollDashboard() {
     }
   }, [reviewRunData?.id]);
 
+  const [reviewSort, setReviewSort] = useState<{ col: 'name' | 'gross' | 'selfCpf' | 'firmCpf' | 'net'; dir: 'asc' | 'desc' }>({ col: 'name', dir: 'asc' });
+
   const filteredEmployees = useMemo(() => {
     const q = searchQuery.toLowerCase();
-    return reviewPayslips.filter(ps => !q || (empNameMap.get(ps.employeeId) ?? ps.employeeId).toLowerCase().includes(q));
-  }, [reviewPayslips, searchQuery, empNameMap]);
+    const base = reviewPayslips.filter(ps => !q || (empNameMap.get(ps.employeeId) ?? ps.employeeId).toLowerCase().includes(q));
+    const d = reviewSort.dir === 'asc' ? 1 : -1;
+    return [...base].sort((a, b) => {
+      switch (reviewSort.col) {
+        case 'name':    return d * (empNameMap.get(a.employeeId) ?? a.employeeId).localeCompare(empNameMap.get(b.employeeId) ?? b.employeeId);
+        case 'gross':   return d * ((a.grossPay ?? 0) - (b.grossPay ?? 0));
+        case 'selfCpf': return d * ((a.employeeCpf ?? 0) - (b.employeeCpf ?? 0));
+        case 'firmCpf': return d * ((a.employerCpf ?? 0) - (b.employerCpf ?? 0));
+        case 'net':     return d * ((a.netPay ?? 0) - (b.netPay ?? 0));
+        default: return 0;
+      }
+    });
+  }, [reviewPayslips, searchQuery, empNameMap, reviewSort]);
+
+  function toggleReviewSort(col: typeof reviewSort.col) {
+    setReviewSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+  }
+  function ReviewSortIcon({ col }: { col: typeof reviewSort.col }) {
+    return <span className="text-[8px] ml-1">{reviewSort.col === col ? (reviewSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  }
+
+  const sortedPayslipRows = useMemo(() => {
+    const d = payslipSort.dir === 'asc' ? 1 : -1;
+    return [...payslipRows].sort((a, b) => {
+      switch (payslipSort.col) {
+        case 'name':  return d * (empNameMap.get(a.employeeId) ?? a.employeeId).localeCompare(empNameMap.get(b.employeeId) ?? b.employeeId);
+        case 'gross': return d * ((a.grossPay ?? 0) - (b.grossPay ?? 0));
+        case 'net':   return d * ((a.netPay ?? 0) - (b.netPay ?? 0));
+        default: return 0;
+      }
+    });
+  }, [payslipRows, payslipSort, empNameMap]);
+  function togglePayslipSort(col: typeof payslipSort.col) {
+    setPayslipSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+  }
+  function PayslipSortIcon({ col }: { col: typeof payslipSort.col }) {
+    return <span className="text-[8px] ml-1">{payslipSort.col === col ? (payslipSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  }
 
   const downloadPayslipPdf = async (employeeId: string, period: string, name: string) => {
     setDlProgress(`Downloading ${name}…`);
@@ -971,9 +1055,17 @@ function AdminPayrollDashboard() {
           <table className="w-full text-left border-collapse">
             <thead className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] border-b border-slate-100">
               <tr>
-                <th className="px-8 py-8">Accounting Period</th>
-                <th className="px-8 py-8">Status Registry</th>
-                <th className="px-8 py-8">Population</th>
+                {([
+                  { col: 'period', label: 'Accounting Period', cls: 'px-8 py-8' },
+                  { col: 'status', label: 'Status Registry',   cls: 'px-8 py-8' },
+                  { col: 'type',   label: 'Population',        cls: 'px-8 py-8' },
+                ] as const).map(h => (
+                  <th key={h.col} className={h.cls}>
+                    <button onClick={() => toggleRunSort(h.col)} className="flex items-center hover:text-slate-600 transition-colors">
+                      {h.label}<RunSortIcon col={h.col} />
+                    </button>
+                  </th>
+                ))}
                 <th className="px-8 py-8 text-right">Net Liquidity</th>
                 <th className="px-8 py-8 text-right">Statutory (CPF)</th>
                 <th className="px-8 py-8 text-center">Governance Actions</th>
@@ -988,7 +1080,7 @@ function AdminPayrollDashboard() {
                 <tr><td colSpan={6} className="px-8 py-16 text-center">
                   <span className="text-sm font-black text-slate-300 uppercase tracking-widest">No payroll runs yet</span>
                 </td></tr>
-              ) : runs.map((run) => (
+              ) : sortedRuns.map((run) => (
                 <tr key={run.id} className="group hover:bg-slate-50/50 transition-all duration-300">
                   <td className="px-8 py-6">
                      <span className="text-sm font-black text-slate-900 uppercase tracking-tighter group-hover:text-indigo-600 transition-colors">{fmtPeriod(run.period)}</span>
@@ -1414,7 +1506,21 @@ function AdminPayrollDashboard() {
                   <div className="max-h-72 overflow-y-auto">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead className="bg-slate-50/50 border-b border-slate-100 font-black text-slate-400 uppercase tracking-widest sticky top-0 z-10 backdrop-blur-md">
-                        <tr><th className="px-8 py-5">Entity</th><th className="px-8 py-5 text-right">Gross Exposure</th><th className="px-8 py-5 text-right">Self CPF</th><th className="px-8 py-5 text-right">Firm CPF</th><th className="px-8 py-5 text-right">Liquid Net</th></tr>
+                        <tr>
+                          {([
+                            { col: 'name',    label: 'Entity',         cls: 'px-8 py-5',            align: 'start' },
+                            { col: 'gross',   label: 'Gross Exposure', cls: 'px-8 py-5 text-right', align: 'end' },
+                            { col: 'selfCpf', label: 'Self CPF',       cls: 'px-8 py-5 text-right', align: 'end' },
+                            { col: 'firmCpf', label: 'Firm CPF',       cls: 'px-8 py-5 text-right', align: 'end' },
+                            { col: 'net',     label: 'Liquid Net',     cls: 'px-8 py-5 text-right', align: 'end' },
+                          ] as const).map(h => (
+                            <th key={h.col} className={h.cls}>
+                              <button onClick={() => toggleReviewSort(h.col)} className={`flex items-center hover:text-slate-600 transition-colors ${h.align === 'end' ? 'ml-auto justify-end' : ''}`}>
+                                {h.label}<ReviewSortIcon col={h.col} />
+                              </button>
+                            </th>
+                          ))}
+                        </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                         {filteredEmployees.length === 0 && reviewPayslips.length === 0 ? (
@@ -1611,10 +1717,23 @@ function AdminPayrollDashboard() {
                  ) : (
                  <table className="w-full text-left text-sm border-collapse">
                     <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest sticky top-0 z-10 backdrop-blur-md">
-                       <tr><th className="px-10 py-5">Employee</th><th className="px-10 py-5 text-right">Gross</th><th className="px-10 py-5 text-right">Net Pay</th><th className="px-10 py-5 text-center">PDF</th></tr>
+                       <tr>
+                         {([
+                           { col: 'name',  label: 'Employee', cls: 'px-10 py-5',            align: 'start' },
+                           { col: 'gross', label: 'Gross',    cls: 'px-10 py-5 text-right', align: 'end' },
+                           { col: 'net',   label: 'Net Pay',  cls: 'px-10 py-5 text-right', align: 'end' },
+                         ] as const).map(h => (
+                           <th key={h.col} className={h.cls}>
+                             <button onClick={() => togglePayslipSort(h.col)} className={`flex items-center hover:text-slate-600 transition-colors ${h.align === 'end' ? 'ml-auto justify-end' : ''}`}>
+                               {h.label}<PayslipSortIcon col={h.col} />
+                             </button>
+                           </th>
+                         ))}
+                         <th className="px-10 py-5 text-center">PDF</th>
+                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                       {payslipRows.map((ps, i) => {
+                       {sortedPayslipRows.map((ps, i) => {
                          const name = empNameMap.get(ps.employeeId) ?? `Employee ${ps.employeeId.slice(0, 8)}`;
                          return (
                            <tr key={i} className="hover:bg-slate-50 transition-all group">
