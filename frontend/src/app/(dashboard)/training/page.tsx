@@ -637,6 +637,7 @@ function AdminProgramsTab({ onRefreshStats }: { onRefreshStats: () => void }) {
   const [filter, setFilter] = useState<ProgramStatus | ''>('');
   const [form, setForm] = useState({ title: '', description: '', category: 'TECHNICAL' as ProgramCategory, durationMins: '', passingScore: '', isMandatory: false });
   const [saving, setSaving] = useState(false);
+  const [progSort, setProgSort] = useState<{ col: 'title' | 'category' | 'status' | 'materials' | 'enrolled'; dir: 'asc' | 'desc' }>({ col: 'title', dir: 'asc' });
 
   const load = useCallback(() => {
     setError('');
@@ -685,6 +686,23 @@ function AdminProgramsTab({ onRefreshStats }: { onRefreshStats: () => void }) {
   }
 
   const filteredPrograms = programs.filter(p => p.status !== 'ARCHIVED' || filter === 'ARCHIVED');
+  const sortedPrograms = [...filteredPrograms].sort((a, b) => {
+    const d = progSort.dir === 'asc' ? 1 : -1;
+    switch (progSort.col) {
+      case 'title':    return d * a.title.localeCompare(b.title);
+      case 'category': return d * a.category.localeCompare(b.category);
+      case 'status':   return d * a.status.localeCompare(b.status);
+      case 'materials':return d * ((a._count?.materials ?? 0) - (b._count?.materials ?? 0));
+      case 'enrolled': return d * ((a._count?.enrollments ?? 0) - (b._count?.enrollments ?? 0));
+      default: return 0;
+    }
+  });
+  function toggleProgSort(col: typeof progSort.col) {
+    setProgSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+  }
+  function ProgSortIcon({ col }: { col: typeof progSort.col }) {
+    return <span className="text-[8px] ml-1">{progSort.col === col ? (progSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -787,16 +805,26 @@ function AdminProgramsTab({ onRefreshStats }: { onRefreshStats: () => void }) {
           <table className="w-full text-left border-collapse">
             <thead className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
               <tr>
-                <th className="px-6 py-5">Program</th>
-                <th className="px-6 py-5">Category</th>
-                <th className="px-6 py-5">Status</th>
-                <th className="px-6 py-5">Materials</th>
-                <th className="px-6 py-5">Enrolled</th>
-                <th className="px-6 py-5 text-right">Actions</th>
+                {([
+                  { col: 'title',    label: 'Program',   cls: 'px-6 py-5' },
+                  { col: 'category', label: 'Category',  cls: 'px-6 py-5' },
+                  { col: 'status',   label: 'Status',    cls: 'px-6 py-5' },
+                  { col: 'materials',label: 'Materials', cls: 'px-6 py-5' },
+                  { col: 'enrolled', label: 'Enrolled',  cls: 'px-6 py-5' },
+                  { col: null,       label: 'Actions',   cls: 'px-6 py-5 text-right' },
+                ] as const).map(h => (
+                  <th key={h.label} className={h.cls}>
+                    {h.col ? (
+                      <button onClick={() => toggleProgSort(h.col!)} className="flex items-center hover:text-slate-600 transition-colors">
+                        {h.label}<ProgSortIcon col={h.col} />
+                      </button>
+                    ) : h.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {filteredPrograms.map(p => (
+              {sortedPrograms.map(p => (
                 <tr key={p.id} className="hover:bg-slate-50/50 transition-all group">
                   <td className="px-6 py-4">
                     <div className="flex flex-col gap-1">
@@ -859,6 +887,7 @@ function AdminEnrollmentsTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<EnrollmentStatus | ''>('');
+  const [enrSort, setEnrSort] = useState<{ col: 'employee' | 'program' | 'status' | 'progress' | 'score' | 'enrolled' | 'due'; dir: 'asc' | 'desc' }>({ col: 'enrolled', dir: 'desc' });
 
   useEffect(() => {
     setError('');
@@ -868,6 +897,26 @@ function AdminEnrollmentsTab() {
       .then(d => { setEnrollments(Array.isArray(d) ? d : []); setLoading(false); })
       .catch((e: any) => { setError(e.message || 'Failed to load enrollments'); setLoading(false); });
   }, [filter]);
+
+  const sortedEnrollments = [...enrollments].sort((a, b) => {
+    const d = enrSort.dir === 'asc' ? 1 : -1;
+    switch (enrSort.col) {
+      case 'employee': return d * a.employeeId.localeCompare(b.employeeId);
+      case 'program':  return d * (a.program?.title ?? '').localeCompare(b.program?.title ?? '');
+      case 'status':   return d * a.status.localeCompare(b.status);
+      case 'progress': return d * (a.progress - b.progress);
+      case 'score':    return d * ((a.score ?? -1) - (b.score ?? -1));
+      case 'enrolled': return d * (new Date(a.enrolledAt).getTime() - new Date(b.enrolledAt).getTime());
+      case 'due':      return d * ((a.dueDate ? new Date(a.dueDate).getTime() : Infinity) - (b.dueDate ? new Date(b.dueDate).getTime() : Infinity));
+      default: return 0;
+    }
+  });
+  function toggleEnrSort(col: typeof enrSort.col) {
+    setEnrSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+  }
+  function EnrSortIcon({ col }: { col: typeof enrSort.col }) {
+    return <span className="text-[8px] ml-1">{enrSort.col === col ? (enrSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -898,17 +947,25 @@ function AdminEnrollmentsTab() {
           <table className="w-full text-left border-collapse">
             <thead className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
               <tr>
-                <th className="px-6 py-5">Employee ID</th>
-                <th className="px-6 py-5">Program</th>
-                <th className="px-6 py-5">Status</th>
-                <th className="px-6 py-5">Progress</th>
-                <th className="px-6 py-5">Score</th>
-                <th className="px-6 py-5">Enrolled</th>
-                <th className="px-6 py-5">Due</th>
+                {([
+                  { col: 'employee', label: 'Employee ID', cls: 'px-6 py-5' },
+                  { col: 'program',  label: 'Program',     cls: 'px-6 py-5' },
+                  { col: 'status',   label: 'Status',      cls: 'px-6 py-5' },
+                  { col: 'progress', label: 'Progress',    cls: 'px-6 py-5' },
+                  { col: 'score',    label: 'Score',       cls: 'px-6 py-5' },
+                  { col: 'enrolled', label: 'Enrolled',    cls: 'px-6 py-5' },
+                  { col: 'due',      label: 'Due',         cls: 'px-6 py-5' },
+                ] as const).map(h => (
+                  <th key={h.label} className={h.cls}>
+                    <button onClick={() => toggleEnrSort(h.col)} className="flex items-center hover:text-slate-600 transition-colors">
+                      {h.label}<EnrSortIcon col={h.col} />
+                    </button>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {enrollments.map(e => (
+              {sortedEnrollments.map(e => (
                 <tr key={e.id} className="hover:bg-slate-50/50">
                   <td className="px-6 py-4">
                     <span className="text-[10px] font-black text-slate-500 font-mono">{e.employeeId.slice(0, 8)}…</span>

@@ -384,6 +384,7 @@ export default function OffboardingPage() {
   const [loading, setLoading] = useState(true);
   const [showInitiate, setShowInitiate] = useState(false);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [caseSort, setCaseSort] = useState<{ col: 'name' | 'type' | 'lastDay' | 'progress' | 'status'; dir: 'asc' | 'desc' }>({ col: 'lastDay', dir: 'asc' });
 
   const loadCases = useCallback(async () => {
     try {
@@ -405,6 +406,24 @@ export default function OffboardingPage() {
   }).length;
   const ir21Due = cases.filter(c => c.isForeignEmployee && (!c.ir21Status || c.ir21Status === 'PENDING')).length;
   const assetsPending = cases.filter(c => c.status !== 'COMPLETED').reduce((sum, c) => sum + (c.clearanceItems?.filter(i => !i.isDone && i.itemName.toLowerCase().includes('equipment')).length || 0), 0);
+
+  const sortedCases = [...cases].sort((a, b) => {
+    const d = caseSort.dir === 'asc' ? 1 : -1;
+    switch (caseSort.col) {
+      case 'name':     return d * (a.employeeName || '').localeCompare(b.employeeName || '');
+      case 'type':     return d * (a.reason || '').localeCompare(b.reason || '');
+      case 'lastDay':  return d * (new Date(a.lastWorkingDate).getTime() - new Date(b.lastWorkingDate).getTime());
+      case 'progress': return d * (calcProgress(a.clearanceItems) - calcProgress(b.clearanceItems));
+      case 'status':   return d * (a.status || '').localeCompare(b.status || '');
+      default: return 0;
+    }
+  });
+  function toggleCaseSort(col: typeof caseSort.col) {
+    setCaseSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+  }
+  function CaseSortIcon({ col }: { col: typeof caseSort.col }) {
+    return <span className="text-[8px] ml-1">{caseSort.col === col ? (caseSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  }
 
   return (
     <div className="flex flex-col gap-8 max-w-[1400px] mx-auto pb-20 animate-in fade-in duration-700">
@@ -468,16 +487,26 @@ export default function OffboardingPage() {
             <table className="w-full text-left">
               <thead className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-50">
                 <tr>
-                  <th className="px-8 py-6">Employee</th>
-                  <th className="px-8 py-6">Separation Type</th>
-                  <th className="px-8 py-6">Last Day</th>
-                  <th className="px-8 py-6">Progress</th>
-                  <th className="px-8 py-6">Status</th>
-                  <th className="px-8 py-6 text-right">Actions</th>
+                  {([
+                    { col: 'name',     label: 'Employee',        cls: 'px-8 py-6' },
+                    { col: 'type',     label: 'Separation Type', cls: 'px-8 py-6' },
+                    { col: 'lastDay',  label: 'Last Day',        cls: 'px-8 py-6' },
+                    { col: 'progress', label: 'Progress',        cls: 'px-8 py-6' },
+                    { col: 'status',   label: 'Status',          cls: 'px-8 py-6' },
+                    { col: null,       label: 'Actions',         cls: 'px-8 py-6 text-right' },
+                  ] as const).map(h => (
+                    <th key={h.label} className={h.cls}>
+                      {h.col ? (
+                        <button onClick={() => toggleCaseSort(h.col!)} className="flex items-center hover:text-slate-600 transition-colors">
+                          {h.label}<CaseSortIcon col={h.col} />
+                        </button>
+                      ) : h.label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {cases.map((c) => {
+                {sortedCases.map((c) => {
                   const progress = calcProgress(c.clearanceItems);
                   const initials = (c.employeeName || c.employeeId).split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
                   return (

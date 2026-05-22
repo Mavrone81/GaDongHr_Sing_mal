@@ -105,6 +105,7 @@ export default function EmployeeDirectoryPage() {
   type Application = { id: string; fullName: string; preferredName?: string; email: string; userId: string; gender?: string; dateOfBirth?: string; nationality?: string; nricFin?: string; personalPhone?: string; homeAddress?: string; department?: string; designation?: string; employmentType?: string; startDate?: string; bankName?: string; bankAccount?: string; basicSalary?: string; notes?: string; status: string; createdAt: string };
   const [applications, setApplications] = useState<Application[]>([]);
   const [pendingInvites, setPendingInvites] = useState<{ id: string; name: string; email: string; inviteExpiry: string; createdAt: string }[]>([]);
+  const [pendingSort, setPendingSort] = useState<{ col: 'name' | 'dept' | 'date'; dir: 'asc' | 'desc' }>({ col: 'date', dir: 'desc' });
   const [appLoading, setAppLoading] = useState(false);
   const [approvingId, setApprovingId] = useState('');
   const [retriggeringId, setRetriggeringId] = useState('');
@@ -1081,6 +1082,29 @@ export default function EmployeeDirectoryPage() {
               <button onClick={() => setApplicationsOpen(false)} className="text-slate-400 hover:text-slate-600 text-xl font-black transition-colors">✕</button>
             </div>
 
+            {(() => {
+              const sortInvites = (arr: typeof pendingInvites) => [...arr].sort((a, b) => {
+                const d = pendingSort.dir === 'asc' ? 1 : -1;
+                if (pendingSort.col === 'name') return d * a.name.localeCompare(b.name);
+                if (pendingSort.col === 'date') return d * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+                return 0;
+              });
+              const sortApps = (arr: typeof applications) => [...arr].sort((a, b) => {
+                const d = pendingSort.dir === 'asc' ? 1 : -1;
+                if (pendingSort.col === 'name') return d * (a.fullName || '').localeCompare(b.fullName || '');
+                if (pendingSort.col === 'dept') return d * (a.department || '').localeCompare(b.department || '');
+                if (pendingSort.col === 'date') return d * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+                return 0;
+              });
+              const sortedInvites = sortInvites(pendingInvites);
+              const sortedApps = sortApps(applications);
+              function togglePendingSort(col: typeof pendingSort.col) {
+                setPendingSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+              }
+              function PendingSortIcon({ col }: { col: typeof pendingSort.col }) {
+                return <span className="text-[8px] ml-1">{pendingSort.col === col ? (pendingSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+              }
+              return (
             <div className="overflow-y-auto flex-1">
               {appLoading ? (
                 <div className="p-16 text-center text-slate-400 text-sm font-bold">Loading…</div>
@@ -1094,17 +1118,27 @@ export default function EmployeeDirectoryPage() {
                 <table className="w-full text-left">
                   <thead>
                     <tr className="bg-slate-50 text-slate-400 text-[9px] font-black uppercase tracking-[0.18em] border-b border-slate-100">
-                      <th className="px-8 py-4">Name / Email</th>
-                      <th className="px-4 py-4">Status</th>
-                      <th className="px-4 py-4">Department</th>
-                      <th className="px-4 py-4">Date</th>
-                      <th className="px-8 py-4 text-right">Actions</th>
+                      {([
+                        { col: 'name', label: 'Name / Email', cls: 'px-8 py-4' },
+                        { col: null,   label: 'Status',       cls: 'px-4 py-4' },
+                        { col: 'dept', label: 'Department',   cls: 'px-4 py-4' },
+                        { col: 'date', label: 'Date',         cls: 'px-4 py-4' },
+                        { col: null,   label: 'Actions',      cls: 'px-8 py-4 text-right' },
+                      ] as const).map(h => (
+                        <th key={h.label} className={h.cls}>
+                          {h.col ? (
+                            <button onClick={() => togglePendingSort(h.col!)} className="flex items-center hover:text-slate-600 transition-colors">
+                              {h.label}<PendingSortIcon col={h.col} />
+                            </button>
+                          ) : h.label}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
 
                     {/* ── Pending User Submission (invited, not yet filled form) ── */}
-                    {pendingInvites.map(u => (
+                    {sortedInvites.map(u => (
                       <tr key={u.id} className="hover:bg-slate-50/60 transition-all">
                         <td className="px-8 py-5">
                           <p className="text-sm font-black text-slate-900">{u.name}</p>
@@ -1148,7 +1182,7 @@ export default function EmployeeDirectoryPage() {
                     ))}
 
                     {/* ── Pending HR Verification (submitted, waiting for HR) ── */}
-                    {applications.map(app => (
+                    {sortedApps.map(app => (
                       <tr key={app.id} className="hover:bg-slate-50/60 transition-all">
                         <td className="px-8 py-5">
                           <p className="text-sm font-black text-slate-900">{app.fullName}</p>
@@ -1215,6 +1249,7 @@ export default function EmployeeDirectoryPage() {
                 </table>
               )}
             </div>
+              ); })()}
 
             <div className="px-8 py-5 border-t border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-6 text-[9px] font-black uppercase tracking-widest text-slate-400">
