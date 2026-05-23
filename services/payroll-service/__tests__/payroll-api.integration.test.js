@@ -64,6 +64,9 @@ const mockPublicHolidayFindMany = jest.fn().mockResolvedValue([]);   // default:
 const mockPeriodConfigUpsert = jest.fn().mockResolvedValue({});
 const mockPublicHolidayCreate = jest.fn();
 const mockPublicHolidayDelete = jest.fn();
+const mockPayComponentFindUnique = jest.fn();
+const mockLineItemCreate = jest.fn();
+const mockLineItemDelete = jest.fn();
 
 jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({
@@ -79,13 +82,15 @@ jest.mock('@prisma/client', () => ({
       deleteMany: mockLineItemDeleteMany,
       createMany: mockLineItemCreateMany,
       findMany: mockLineItemFindMany,
+      create: mockLineItemCreate,
+      delete: mockLineItemDelete,
     },
     payslip: { deleteMany: mockPayslipDeleteMany, createMany: mockPayslipCreateMany, upsert: mockPayslipUpsert, findMany: mockPayslipFindMany, update: mockPayslipUpdate, updateMany: mockPayslipUpdateMany },
     cpfRate: { findMany: mockCpfRateFindMany },
     sdlConfig: { findFirst: mockSdlConfigFindFirst },
     payrollComponent: { findMany: jest.fn().mockResolvedValue([]) },
     payrollOverride: { findMany: mockPayrollOverrideFindMany },
-    payComponent: { findMany: jest.fn().mockResolvedValue([]) },
+    payComponent: { findMany: jest.fn().mockResolvedValue([]), findUnique: mockPayComponentFindUnique },
     payrollPeriodConfig: { findUnique: mockPeriodConfigFindUnique, upsert: mockPeriodConfigUpsert },
     publicHoliday: { findMany: mockPublicHolidayFindMany, create: mockPublicHolidayCreate, delete: mockPublicHolidayDelete },
   })),
@@ -882,5 +887,177 @@ describe('H) Deductible leave — working-day rate + cross-month pro-ration', ()
     const data = mockPayslipUpsert.mock.calls[0][0].create;
     expect(data.nplDays).toBeFalsy();
     expect(parseFloat(data.netPayEnc)).toBeCloseTo(5000 - 1000, 2);
+  });
+});
+
+// ── I) Reimbursement paycodes — claims integration ────────────────────────────
+describe('I) Reimbursement paycodes (claims integration)', () => {
+  const draftRun     = { id: 'run-001', period: '2026-05', runType: 'MONTHLY', status: 'DRAFT', employeeGroup: null, initiatedBy: 'admin-001' };
+  const finalisedRun = { ...draftRun, status: 'FINALISED' };
+  const reimbComponent = { id: 'comp-reimb', name: 'Claims Reimbursement', wageType: 'REIMBURSEMENT', isCpfApplicable: false, isIrasTaxable: false };
+
+  // ── POST /payroll/runs/:id/paycodes ────────────────────────────────────────
+  describe('POST /payroll/runs/:id/paycodes', () => {
+    test('I1 — 201: adds REIMBURSEMENT paycode and returns decrypted amount', async () => {
+      mockRunFindUnique.mockResolvedValue(draftRun);
+      mockPayComponentFindUnique.mockResolvedValue(reimbComponent);
+      mockLineItemCreate.mockResolvedValue({
+        id: 'item-001', runId: 'run-001', employeeId: 'emp-001',
+        componentId: 'comp-reimb', description: 'Claims Reimbursement',
+        wageType: 'REIMBURSEMENT', isCpfApplicable: false, isIrasTaxable: false,
+        amountEncrypted: '500',
+      });
+
+      const res = await request(app)
+        .post('/payroll/runs/run-001/paycodes')
+        .send({ employeeId: 'emp-001', componentId: 'comp-reimb', amount: 500 });
+
+      expect(res.status).toBe(201);
+      expect(res.body.wageType).toBe('REIMBURSEMENT');
+      expect(res.body.amount).toBe(500);
+    });
+
+    test('I2 — 404: run not found', async () => {
+      mockRunFindUnique.mockResolvedValue(null);
+
+      const res = await request(app)
+        .post('/payroll/runs/run-missing/paycodes')
+        .send({ employeeId: 'emp-001', componentId: 'comp-reimb', amount: 500 });
+
+      expect(res.status).toBe(404);
+    });
+
+    test('I3 — 400: run is FINALISED — cannot add paycodes', async () => {
+      mockRunFindUnique.mockResolvedValue(finalisedRun);
+
+      const res = await request(app)
+        .post('/payroll/runs/run-001/paycodes')
+        .send({ employeeId: 'emp-001', componentId: 'comp-reimb', amount: 500 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/finalised/i);
+    });
+
+    test('I4 — 400: missing required fields (componentId and amount absent)', async () => {
+      mockRunFindUnique.mockResolvedValue(draftRun);
+
+      const res = await request(app)
+        .post('/payroll/runs/run-001/paycodes')
+        .send({ employeeId: 'emp-001' });
+
+      expect(res.status).toBe(400);
+    });
+
+    test('I5 — 404: pay component not found', async () => {
+      mockRunFindUnique.mockResolvedValue(draftRun);
+      mockPayComponentFindUnique.mockResolvedValue(null);
+
+      const res = await request(app)
+        .post('/payroll/runs/run-001/paycodes')
+        .send({ employeeId: 'emp-001', componentId: 'comp-missing', amount: 500 });
+
+      expect(res.status).toBe(404);
+    });
+  });
+
+  // ── GET /payroll/runs/:id/paycodes ─────────────────────────────────────────
+  describe('GET /payroll/runs/:id/paycodes', () => {
+    test('I6 — 200: returns paycodes with decrypted amounts', async () => {
+      mockLineItemFindMany.mockResolvedValue([{
+        id: 'item-001', runId: 'run-001', employeeId: 'emp-001',
+        wageType: 'REIMBURSEMENT', amountEncrypted: '500', createdAt: new Date(),
+      }]);
+
+      const res = await request(app).get('/payroll/runs/run-001/paycodes');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0].amount).toBe(500);
+      expect(res.body[0].wageType).toBe('REIMBURSEMENT');
+    });
+  });
+
+  // ── DELETE /payroll/runs/:id/paycodes/:itemId ──────────────────────────────
+  describe('DELETE /payroll/runs/:id/paycodes/:itemId', () => {
+    test('I7 — 200: removes paycode successfully', async () => {
+      mockRunFindUnique.mockResolvedValue(draftRun);
+      mockLineItemDelete.mockResolvedValue({});
+
+      const res = await request(app).delete('/payroll/runs/run-001/paycodes/item-001');
+
+      expect(res.status).toBe(200);
+      expect(mockLineItemDelete).toHaveBeenCalledWith({ where: { id: 'item-001' } });
+    });
+
+    test('I8 — 400: run is FINALISED — cannot remove paycodes', async () => {
+      mockRunFindUnique.mockResolvedValue(finalisedRun);
+
+      const res = await request(app).delete('/payroll/runs/run-001/paycodes/item-001');
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/finalised/i);
+    });
+  });
+
+  // ── Compute: reimbursement correctly raises net pay ────────────────────────
+  describe('compute with REIMBURSEMENT paycode', () => {
+    const cpfRates  = [{ id: 'rate-1', citizenStatus: 'SC_PR', ageMin: 0, ageMax: 55, employeeRate: 0.20, employerRate: 0.17, owCeiling: 6800, awCeiling: 102000, isActive: true }];
+    const sdlConfig = { rate: 0.0025, minAmount: 2.00, maxAmount: 11.25, salaryCap: 4500, isActive: true };
+    const baseEmp   = { employeeId: 'emp-001', employeeCode: 'EMP-001', fullName: 'Alice', ow: 5000, grossPay: 5000, citizenStatus: 'SC', age: 35, startDate: null, endDate: null, ytdOw: 0, ytdAw: 0, ytdGross: 0, ytdEmployeeCpf: 0, ytdEmployerCpf: 0 };
+
+    let savedFetch;
+    beforeAll(() => { savedFetch = global.fetch; });
+    afterAll(()  => { global.fetch = savedFetch; });
+
+    beforeEach(() => {
+      mockRunFindUnique.mockResolvedValue(draftRun);
+      mockCpfRateFindMany.mockResolvedValue(cpfRates);
+      mockSdlConfigFindFirst.mockResolvedValue(sdlConfig);
+      mockPayslipFindMany.mockResolvedValue([]);
+      mockRunUpdate.mockResolvedValue({});
+      mockPeriodConfigFindUnique.mockResolvedValue(null);
+      mockPublicHolidayFindMany.mockResolvedValue([]);
+      global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ applications: [] }) });
+    });
+
+    afterEach(() => { global.fetch = savedFetch; });
+
+    test('I9 — REIMBURSEMENT paycode raises net pay; gross and CPF are unaffected', async () => {
+      // $300 travel claims reimbursement — not CPF-liable, not part of gross
+      mockLineItemFindMany.mockResolvedValue([{
+        employeeId: 'emp-001',
+        amountEncrypted: '300',
+        wageType: 'REIMBURSEMENT',
+        isCpfApplicable: false,
+      }]);
+
+      const res = await request(app)
+        .post('/payroll/runs/run-001/compute')
+        .send({ employees: [baseEmp] });
+
+      expect(res.status).toBe(200);
+      const data = mockPayslipUpsert.mock.calls[0][0].create;
+
+      expect(parseFloat(data.grossPayEnc)).toBe(5000);        // gross unchanged
+      expect(parseFloat(data.employeeCpfEnc)).toBe(1000);     // CPF on $5000 @ 20% = $1000
+      expect(parseFloat(data.netPayEnc)).toBe(4300);          // 5000 - 1000 + 300
+    });
+
+    test('I10 — multiple REIMBURSEMENT paycodes accumulate into net pay', async () => {
+      mockLineItemFindMany.mockResolvedValue([
+        { employeeId: 'emp-001', amountEncrypted: '200', wageType: 'REIMBURSEMENT', isCpfApplicable: false },
+        { employeeId: 'emp-001', amountEncrypted: '150', wageType: 'REIMBURSEMENT', isCpfApplicable: false },
+      ]);
+
+      const res = await request(app)
+        .post('/payroll/runs/run-001/compute')
+        .send({ employees: [baseEmp] });
+
+      expect(res.status).toBe(200);
+      const data = mockPayslipUpsert.mock.calls[0][0].create;
+
+      expect(parseFloat(data.grossPayEnc)).toBe(5000);        // gross unchanged
+      expect(parseFloat(data.netPayEnc)).toBe(4350);          // 5000 - 1000 + 200 + 150
+    });
   });
 });
