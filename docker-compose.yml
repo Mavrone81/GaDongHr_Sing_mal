@@ -18,6 +18,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
 
   api-gateway:
     build:
@@ -47,6 +53,12 @@ services:
       - shared_certs:/app/certs:ro
     depends_on:
       - auth-service
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 64m
 
   auth-service:
     build:
@@ -82,6 +94,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
 
   face-service:
     build:
@@ -127,6 +145,12 @@ services:
         condition: service_healthy
       face-service:
         condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
 
   payroll-service:
     build:
@@ -162,6 +186,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
 
   leave-service:
     build:
@@ -186,6 +216,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
 
   claims-service:
     build:
@@ -208,6 +244,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
 
   recruitment-service:
     build:
@@ -230,6 +272,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
 
   attendance-service:
     build:
@@ -250,6 +298,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 64m
 
   offboarding-service:
     build:
@@ -272,6 +326,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 64m
 
   notification-service:
     build:
@@ -297,6 +357,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 64m
 
   reporting-service:
     build:
@@ -320,6 +386,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
 
   performance-service:
     build:
@@ -339,6 +411,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 64m
 
   training-service:
     build:
@@ -358,6 +436,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 64m
 
   asset-service:
     build:
@@ -378,6 +462,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 64m
 
   frontend:
     build:
@@ -391,6 +481,12 @@ services:
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
 
 volumes:
   shared_certs:
