@@ -29,6 +29,8 @@ const {
   computeFwl,
   computeNetPay,
   cpfRound,
+  countWorkingDays,
+  countPeriodLeaveWorkingDays,
 } = require('/app/shared/payroll-utils');
 
 // ── Standard CPF rates for SC/PR Yr3+, age ≤55 ──────────────────────────────
@@ -355,5 +357,128 @@ describe('J) Edge and IRAS-compliance cases', () => {
     const total = result.totalEmployee + result.totalEmployer;
     const expected = result.employeeOw + result.employerOw + result.employeeAw + result.employerAw;
     expect(total).toBe(expected);
+  });
+});
+
+// ── I) countWorkingDays ──────────────────────────────────────────────────────
+// Calendar dates used: Jan 2026 (22 working days), Feb 2026 (20 working days)
+// Jan 20 = Tue, Jan 26 = Mon, Jan 31 = Sat
+// Feb 1 = Sun, Feb 2 = Mon, Feb 8 = Sun
+describe('countWorkingDays', () => {
+  const NO_HOLIDAYS = new Set();
+
+  test('I1 — FIVE_DAY: Mon–Fri within one week, excludes weekend', () => {
+    // May 4–10 2026: Mon(4), Tue(5), Wed(6), Thu(7), Fri(8) = 5; Sat(9), Sun(10) = 0
+    expect(countWorkingDays(new Date('2026-05-04'), new Date('2026-05-10'), NO_HOLIDAYS)).toBe(5);
+  });
+
+  test('I2 — SIX_DAY: Mon–Sat, excludes Sunday only', () => {
+    // May 4–10 2026: Mon–Sat = 6; Sun = 0
+    expect(countWorkingDays(new Date('2026-05-04'), new Date('2026-05-10'), NO_HOLIDAYS, 'SIX_DAY')).toBe(6);
+  });
+
+  test('I3 — public holiday reduces count by 1', () => {
+    // May 4–8 = 5 working days; mark May 5 (Tue) as holiday → 4
+    const holidays = new Set(['2026-05-05']);
+    expect(countWorkingDays(new Date('2026-05-04'), new Date('2026-05-08'), holidays)).toBe(4);
+  });
+
+  test('I4 — full January 2026: 22 working days (FIVE_DAY, no holidays)', () => {
+    // Jan 1=Thu, Jan 2=Fri, then 4 full Mon–Fri weeks (Jan 5–30) + Jan 1–2 = 2+20 = 22
+    expect(countWorkingDays(new Date('2026-01-01'), new Date('2026-01-31'), NO_HOLIDAYS)).toBe(22);
+  });
+
+  test('I5 — full February 2026: 20 working days (FIVE_DAY, no holidays)', () => {
+    // Feb 1=Sun; 4 Mon–Fri weeks = 20
+    expect(countWorkingDays(new Date('2026-02-01'), new Date('2026-02-28'), NO_HOLIDAYS)).toBe(20);
+  });
+});
+
+// ── J) countPeriodLeaveWorkingDays — cross-month pro-ration ─────────────────
+// User example: leave Jan 20 – Feb 8, 2026
+//   Jan portion (Jan 20–31): Jan 20(Tue)–23(Fri)=4, Jan 26(Mon)–30(Fri)=5, Jan 31=Sat → 9 days
+//   Feb portion (Feb 1–8):   Feb 1=Sun, Feb 2(Mon)–6(Fri)=5, Feb 7=Sat, Feb 8=Sun   → 5 days
+describe('countPeriodLeaveWorkingDays', () => {
+  const NO_HOLIDAYS = new Set();
+  const MAY_START   = new Date('2026-05-01');
+  const MAY_END     = new Date('2026-05-31');
+  const JAN_START   = new Date('2026-01-01');
+  const JAN_END     = new Date('2026-01-31');
+  const FEB_START   = new Date('2026-02-01');
+  const FEB_END     = new Date('2026-02-28');
+
+  test('J1 — same-month leave returns working days in range', () => {
+    // May 5 (Mon) – May 6 (Tue) = 2 working days
+    expect(countPeriodLeaveWorkingDays(
+      new Date('2026-05-05'), new Date('2026-05-06'), MAY_START, MAY_END, NO_HOLIDAYS
+    )).toBe(2);
+  });
+
+  test('J2 — cross-month start (Apr 28 → May 3): only May working days counted', () => {
+    // May portion: May 1(Fri)=1; May 2(Sat), May 3(Sun)=0 → 1
+    expect(countPeriodLeaveWorkingDays(
+      new Date('2026-04-28'), new Date('2026-05-03'), MAY_START, MAY_END, NO_HOLIDAYS
+    )).toBe(1);
+  });
+
+  test('J3 — cross-month end (May 28 → Jun 5): only May working days counted', () => {
+    // May 28(Thu)=1, May 29(Fri)=1, May 30(Sat), May 31(Sun)=0 → 2
+    expect(countPeriodLeaveWorkingDays(
+      new Date('2026-05-28'), new Date('2026-06-05'), MAY_START, MAY_END, NO_HOLIDAYS
+    )).toBe(2);
+  });
+
+  test('J4 — leave entirely before period: returns 0', () => {
+    expect(countPeriodLeaveWorkingDays(
+      new Date('2026-01-05'), new Date('2026-01-10'), MAY_START, MAY_END, NO_HOLIDAYS
+    )).toBe(0);
+  });
+
+  test('J5 — leave entirely after period: returns 0', () => {
+    expect(countPeriodLeaveWorkingDays(
+      new Date('2026-06-01'), new Date('2026-06-10'), MAY_START, MAY_END, NO_HOLIDAYS
+    )).toBe(0);
+  });
+
+  test('J6 — half-day on Monday: returns 0.5', () => {
+    // May 12 (Mon), half-day
+    expect(countPeriodLeaveWorkingDays(
+      new Date('2026-05-12'), new Date('2026-05-12'), MAY_START, MAY_END, NO_HOLIDAYS, 'FIVE_DAY', true
+    )).toBe(0.5);
+  });
+
+  test('J7 — half-day on Saturday (FIVE_DAY): returns 0', () => {
+    // May 9 (Sat) is not a working day
+    expect(countPeriodLeaveWorkingDays(
+      new Date('2026-05-09'), new Date('2026-05-09'), MAY_START, MAY_END, NO_HOLIDAYS, 'FIVE_DAY', true
+    )).toBe(0);
+  });
+
+  test('J8 — half-day on Saturday (SIX_DAY): returns 0.5', () => {
+    expect(countPeriodLeaveWorkingDays(
+      new Date('2026-05-09'), new Date('2026-05-09'), MAY_START, MAY_END, NO_HOLIDAYS, 'SIX_DAY', true
+    )).toBe(0.5);
+  });
+
+  test('J9 — public holiday within leave range: not counted as working day', () => {
+    // May 1 (Fri) is a holiday; leave May 1–2: 0 working days (holiday + Sat)
+    const holidays = new Set(['2026-05-01']);
+    expect(countPeriodLeaveWorkingDays(
+      new Date('2026-05-01'), new Date('2026-05-02'), MAY_START, MAY_END, holidays
+    )).toBe(0);
+  });
+
+  test('J10 — user example: Jan 20–Feb 8 counted from Jan period = 9 working days', () => {
+    // Jan 20(Tue)–23(Fri)=4, Jan 26(Mon)–30(Fri)=5, Jan 31(Sat)=0 → 9
+    expect(countPeriodLeaveWorkingDays(
+      new Date('2026-01-20'), new Date('2026-02-08'), JAN_START, JAN_END, NO_HOLIDAYS
+    )).toBe(9);
+  });
+
+  test('J11 — user example: Jan 20–Feb 8 counted from Feb period = 5 working days', () => {
+    // Feb 1(Sun)=0, Feb 2(Mon)–6(Fri)=5, Feb 7(Sat)=0, Feb 8(Sun)=0 → 5
+    expect(countPeriodLeaveWorkingDays(
+      new Date('2026-01-20'), new Date('2026-02-08'), FEB_START, FEB_END, NO_HOLIDAYS
+    )).toBe(5);
   });
 });

@@ -92,6 +92,41 @@ function computeNetPay({ grossPay, employeeCpf, nplDeduction = 0, absenceDeducti
   return Math.round((grossPay - employeeCpf - nplDeduction - absenceDeduction - loanRepayment - advanceRecovery - garnishment + reimbursements) * 100) / 100;
 }
 
+// Count Mon-Fri (or Mon-Sat for SIX_DAY) working days between two dates, inclusive.
+// holidaySet: Set of 'YYYY-MM-DD' strings for public holidays.
+function countWorkingDays(from, to, holidaySet = new Set(), workDayType = 'FIVE_DAY') {
+  const maxDow = workDayType === 'SIX_DAY' ? 6 : 5;
+  let count = 0;
+  const d = new Date(from);
+  d.setHours(0, 0, 0, 0);
+  const end = new Date(to);
+  end.setHours(23, 59, 59, 999);
+  while (d <= end) {
+    const dow = d.getDay();
+    if (dow >= 1 && dow <= maxDow && !holidaySet.has(d.toISOString().slice(0, 10))) count++;
+    d.setDate(d.getDate() + 1);
+  }
+  return count;
+}
+
+// Working days of a leave application that fall inside a payroll period.
+// Cross-month leaves are clamped to [periodStart, periodEnd].
+// isHalfDay=true returns 0.5 if the single day is a working day in the period, else 0.
+function countPeriodLeaveWorkingDays(leaveStart, leaveEnd, periodStart, periodEnd, holidaySet = new Set(), workDayType = 'FIVE_DAY', isHalfDay = false) {
+  const effStart = leaveStart < periodStart ? periodStart : leaveStart;
+  const effEnd   = leaveEnd   > periodEnd   ? periodEnd   : leaveEnd;
+  if (effStart > effEnd) return 0;
+
+  if (isHalfDay) {
+    const ds  = effStart.toISOString().slice(0, 10);
+    const dow = effStart.getDay();
+    const maxDow = workDayType === 'SIX_DAY' ? 6 : 5;
+    return (dow >= 1 && dow <= maxDow && !holidaySet.has(ds)) ? 0.5 : 0;
+  }
+
+  return countWorkingDays(effStart, effEnd, holidaySet, workDayType);
+}
+
 module.exports = {
   computeCpf,
   computeSdl,
@@ -101,4 +136,6 @@ module.exports = {
   computeFwl,
   computeNetPay,
   cpfRound,
+  countWorkingDays,
+  countPeriodLeaveWorkingDays,
 };

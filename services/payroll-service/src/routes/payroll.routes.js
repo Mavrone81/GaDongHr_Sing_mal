@@ -8,33 +8,12 @@ const fs = require('fs');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
 const { encrypt, decrypt, encryptNumber, decryptNumber } = require('/app/shared/crypto');
-const { computeCpf, computeSdl, computeNetPay } = require('../engines/cpf.engine');
+const { computeCpf, computeSdl, computeNetPay, countWorkingDays, countPeriodLeaveWorkingDays } = require('../engines/cpf.engine');
 
 const prisma = new PrismaClient();
 
 // ─── Helper: safe decrypt to float ───────────────────────────────────────────
 const decSafe = (enc) => { try { return enc ? parseFloat(decrypt(enc)) || 0 : 0; } catch { return 0; } };
-
-// ─── Helper: count working days between two dates (inclusive) ─────────────────
-// workDayType 'FIVE_DAY' = Mon–Fri; 'SIX_DAY' = Mon–Sat
-// holidaySet: Set of date strings 'YYYY-MM-DD' that are public holidays
-function countWorkingDays(from, to, holidaySet, workDayType = 'FIVE_DAY') {
-  const maxDow = workDayType === 'SIX_DAY' ? 6 : 5; // 0=Sun … 6=Sat
-  let count = 0;
-  const d = new Date(from);
-  d.setHours(0, 0, 0, 0);
-  const end = new Date(to);
-  end.setHours(23, 59, 59, 999);
-  while (d <= end) {
-    const dow = d.getDay();
-    if (dow >= 1 && dow <= maxDow) {
-      const ds = d.toISOString().slice(0, 10);
-      if (!holidaySet.has(ds)) count++;
-    }
-    d.setDate(d.getDate() + 1);
-  }
-  return count;
-}
 
 // ─── Helper: consolidatePeriod ────────────────────────────────────────────────
 // Merges all published payslips for a period into the primary run's payslips.
@@ -258,12 +237,15 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
     const sdlConfig = await prisma.sdlConfig.findFirst({ where: { isActive: true } });
     const savedLineItems = await prisma.payrollLineItem.findMany({ where: { runId: run.id } });
 
-    // Fetch all approved leave applications in the period from leave service
+    // Fetch all approved leave applications overlapping this period from leave service.
+    // Overlap condition: startDate <= periodEnd AND endDate >= periodStart — catches cross-month leaves.
     const LEAVE_SERVICE_URL = process.env.LEAVE_SERVICE_URL || 'http://leave-service:4004';
     let approvedLeaves = [];
     try {
       const leaveRes = await fetch(
-        `${LEAVE_SERVICE_URL}/leave/applications?status=APPROVED&limit=2000&startDateFrom=${periodStart.toISOString().slice(0,10)}&startDateTo=${periodEnd.toISOString().slice(0,10)}`,
+        `${LEAVE_SERVICE_URL}/leave/applications?status=APPROVED&limit=5000` +
+        `&startDateTo=${periodEnd.toISOString().slice(0,10)}` +
+        `&endDateFrom=${periodStart.toISOString().slice(0,10)}`,
         { headers: { 'Authorization': req.headers.authorization || '' } }
       );
       if (leaveRes.ok) {
@@ -274,14 +256,25 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
       console.warn('[payroll] Could not fetch leave data:', e.message);
     }
 
-    // Build per-employee leave summary: { employeeId -> { nplDays, govtPaidDays } }
+    // Build per-employee deductible leave summary for this period.
+    // Cross-month leaves are clamped to the period boundaries; working days (MOM) are counted.
+    // isPaid=false  → NPL-type: deducted from employee salary
+    // isGovtPaid=true → NS/GPML-type: no employee deduction; employer claims reimbursement
     const leaveSummary = {};
     for (const app of approvedLeaves) {
       const lt = app.leaveType;
-      if (!lt) continue;
+      if (!lt || (lt.isPaid && !lt.isGovtPaid)) continue; // paid non-govt leave = no deduction
+
+      const appStart = new Date(app.startDate);
+      const appEnd   = new Date(app.endDate);
+      const daysInPeriod = countPeriodLeaveWorkingDays(
+        appStart, appEnd, periodStart, periodEnd, holidaySet, workDayType, !!app.isHalfDay
+      );
+      if (daysInPeriod === 0) continue;
+
       if (!leaveSummary[app.employeeId]) leaveSummary[app.employeeId] = { nplDays: 0, govtPaidDays: 0 };
-      if (!lt.isPaid)     leaveSummary[app.employeeId].nplDays      += app.totalDays;
-      if (lt.isGovtPaid)  leaveSummary[app.employeeId].govtPaidDays += app.totalDays;
+      if (!lt.isPaid)    leaveSummary[app.employeeId].nplDays      += daysInPeriod;
+      if (lt.isGovtPaid) leaveSummary[app.employeeId].govtPaidDays += daysInPeriod;
     }
 
     let totalGross = 0, totalNet = 0, totalEmployee = 0, totalEmployer = 0, totalSdl = 0;
@@ -307,9 +300,9 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
       const effectiveAw    = (emp.aw || 0) + awAdj;
       const effectiveGross = (emp.grossPay || emp.ow || 0) + owAdj + awAdj + nonCpfAdj;
 
-      // ── NPL auto-deduction (EA formula: monthly gross / days in month × NPL days) ──
+      // ── Deductible leave: daily rate = gross / working days in period (MOM EA s.23) ──
       const leave = leaveSummary[emp.employeeId] || { nplDays: 0, govtPaidDays: 0 };
-      const dailyRate   = daysInMonth > 0 ? effectiveGross / daysInMonth : 0;
+      const dailyRate   = workingDaysInPeriod > 0 ? effectiveGross / workingDaysInPeriod : 0;
       const autoNpl     = Math.round(dailyRate * leave.nplDays * 100) / 100;
       const govtPaidAmt = Math.round(dailyRate * leave.govtPaidDays * 100) / 100;
 

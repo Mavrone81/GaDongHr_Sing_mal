@@ -333,7 +333,7 @@ router.get('/balances/:employeeId', authenticate, authorizeSelfOrRole('employeeI
 // ── GET /leave/applications ───────────────────────────────────────────────────
 router.get('/applications', authenticate, async (req, res, next) => {
   try {
-    const { employeeId, status, page = 1, limit = 20, startDateFrom, startDateTo } = req.query;
+    const { employeeId, status, page = 1, limit = 20, startDateFrom, startDateTo, endDateFrom } = req.query;
     const where = {};
     // Employees see only their own; managers see their team
     if (req.user.role === 'employee') where.employeeId = req.user.employeeId;
@@ -344,12 +344,17 @@ router.get('/applications', authenticate, async (req, res, next) => {
       if (startDateFrom) where.startDate.gte = new Date(startDateFrom);
       if (startDateTo)   where.startDate.lte = new Date(startDateTo);
     }
+    // endDateFrom enables overlap queries: startDate <= X (via startDateTo) AND endDate >= Y (via endDateFrom)
+    // Used by payroll service to fetch all leaves that touch a given pay period, including cross-month ones.
+    if (endDateFrom) {
+      where.endDate = { gte: new Date(endDateFrom) };
+    }
 
     const [apps, total] = await Promise.all([
       prisma.leaveApplication.findMany({
         where, orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit, take: Number(limit),
-        include: { leaveType: { select: { code: true, name: true, isPaid: true } } },
+        include: { leaveType: { select: { code: true, name: true, isPaid: true, isGovtPaid: true } } },
       }),
       prisma.leaveApplication.count({ where }),
     ]);

@@ -691,3 +691,196 @@ describe('G) Pro-rating — EA s.20 working-day salary (MOM guidelines)', () => 
     expect(res.body.autoRemovedIds).toBeUndefined();
   });
 });
+
+// ── H) Deductible leave pro-ration (MOM working-day rate, cross-month) ────────
+// May 2026: 21 working days (Fri May 1 + Mon-Fri weeks 2–5 = 1+5+5+5+5 = 21)
+// Cross-month cases:
+//   Apr 28 (Tue) → May 3 (Sun): May portion = May 1(Fri) only = 1 working day
+//   May 28 (Thu) → Jun 5 (Fri): May portion = May 28(Thu) + May 29(Fri)   = 2 working days
+describe('H) Deductible leave — working-day rate + cross-month pro-ration', () => {
+  const MAY_WORKING_DAYS = 21;
+  // findCpfRate maps 'SC' → 'SC_PR'; fields are ageMin/ageMax (not ageFrom/ageTo)
+  const cpfRates = [
+    { id: 'rate-1', citizenStatus: 'SC_PR', ageMin: 0, ageMax: 55, employeeRate: 0.20, employerRate: 0.17, owCeiling: 6800, awCeiling: 102000, isActive: true },
+  ];
+  const sdlConfig = { rate: 0.0025, minAmount: 2.00, maxAmount: 11.25, salaryCap: 4500, isActive: true };
+  const draftRun = { id: 'run-001', period: '2026-05', runType: 'MONTHLY', status: 'DRAFT', employeeGroup: null, initiatedBy: 'admin-001' };
+  const baseEmp = {
+    employeeId: 'emp-001', employeeCode: 'EMP-001', fullName: 'Alice',
+    ow: 5000, grossPay: 5000, citizenStatus: 'SC', age: 35,
+    startDate: null, endDate: null,
+    ytdOw: 0, ytdAw: 0, ytdGross: 0, ytdEmployeeCpf: 0, ytdEmployerCpf: 0,
+  };
+
+  let savedFetch;
+  beforeAll(() => { savedFetch = global.fetch; });
+  afterAll(()  => { global.fetch = savedFetch; });
+
+  beforeEach(() => {
+    mockRunFindUnique.mockResolvedValue(draftRun);
+    mockCpfRateFindMany.mockResolvedValue(cpfRates);
+    mockSdlConfigFindFirst.mockResolvedValue(sdlConfig);
+    mockLineItemFindMany.mockResolvedValue([]);
+    mockPayslipFindMany.mockResolvedValue([]);
+    mockRunUpdate.mockResolvedValue({});
+    mockPeriodConfigFindUnique.mockResolvedValue(null);
+    mockPublicHolidayFindMany.mockResolvedValue([]);
+  });
+
+  afterEach(() => { global.fetch = savedFetch; });
+
+  function mockLeaveService(applications) {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ applications }),
+    });
+  }
+
+  function makeLeave(overrides = {}) {
+    return {
+      id: 'leave-001', employeeId: 'emp-001',
+      startDate: '2026-05-05T00:00:00.000Z', endDate: '2026-05-06T00:00:00.000Z',
+      totalDays: 2, isHalfDay: false,
+      leaveType: { code: 'NPL', name: 'No Pay Leave', isPaid: false, isGovtPaid: false },
+      ...overrides,
+    };
+  }
+
+  test('H1 — NPL within period: deducted at working-day daily rate', async () => {
+    // May 5 (Mon) – May 6 (Tue) = 2 working days
+    mockLeaveService([makeLeave()]);
+
+    const res = await request(app)
+      .post('/payroll/runs/run-001/compute')
+      .send({ employees: [baseEmp] });
+
+    expect(res.status).toBe(200);
+    const data = mockPayslipUpsert.mock.calls[0][0].create;
+    const expectedDeduction = Math.round(5000 / MAY_WORKING_DAYS * 2 * 100) / 100;
+    expect(parseFloat(data.nplDeductionEnc)).toBeCloseTo(expectedDeduction, 2);
+    expect(data.nplDays).toBe(2);
+    // Net = gross − CPF(20%) − deduction
+    const expectedNet = Math.round((5000 - 1000 - expectedDeduction) * 100) / 100;
+    expect(parseFloat(data.netPayEnc)).toBeCloseTo(expectedNet, 2);
+  });
+
+  test('H2 — cross-month NPL (Apr 28 → May 3): only May 1 (Fri) counted in May run', async () => {
+    mockLeaveService([makeLeave({
+      startDate: '2026-04-28T00:00:00.000Z', endDate: '2026-05-03T00:00:00.000Z', totalDays: 6,
+    })]);
+
+    const res = await request(app)
+      .post('/payroll/runs/run-001/compute')
+      .send({ employees: [baseEmp] });
+
+    expect(res.status).toBe(200);
+    const data = mockPayslipUpsert.mock.calls[0][0].create;
+    // Only May 1 (Fri) falls in May and is a working day
+    const expectedDeduction = Math.round(5000 / MAY_WORKING_DAYS * 1 * 100) / 100;
+    expect(parseFloat(data.nplDeductionEnc)).toBeCloseTo(expectedDeduction, 2);
+    expect(data.nplDays).toBe(1);
+  });
+
+  test('H3 — cross-month NPL (May 28 → Jun 5): only May 28–29 (Thu–Fri) in May run', async () => {
+    mockLeaveService([makeLeave({
+      startDate: '2026-05-28T00:00:00.000Z', endDate: '2026-06-05T00:00:00.000Z', totalDays: 9,
+    })]);
+
+    const res = await request(app)
+      .post('/payroll/runs/run-001/compute')
+      .send({ employees: [baseEmp] });
+
+    expect(res.status).toBe(200);
+    const data = mockPayslipUpsert.mock.calls[0][0].create;
+    const expectedDeduction = Math.round(5000 / MAY_WORKING_DAYS * 2 * 100) / 100;
+    expect(parseFloat(data.nplDeductionEnc)).toBeCloseTo(expectedDeduction, 2);
+    expect(data.nplDays).toBe(2);
+  });
+
+  test('H4 — govt-paid leave (NS): no employee deduction; govtPaidDays tracked', async () => {
+    // May 12 (Mon) – May 14 (Wed) = 3 working days
+    mockLeaveService([makeLeave({
+      startDate: '2026-05-12T00:00:00.000Z', endDate: '2026-05-14T00:00:00.000Z', totalDays: 3,
+      leaveType: { code: 'NS', name: 'NS Leave', isPaid: true, isGovtPaid: true },
+    })]);
+
+    const res = await request(app)
+      .post('/payroll/runs/run-001/compute')
+      .send({ employees: [baseEmp] });
+
+    expect(res.status).toBe(200);
+    const data = mockPayslipUpsert.mock.calls[0][0].create;
+    // Employee receives full salary — no NPL deduction
+    expect(data.nplDays).toBeFalsy();
+    expect(data.nplDeductionEnc).toBeFalsy();
+    // GovtPaid amount: daily rate × 3
+    expect(data.govtPaidDays).toBe(3);
+    const expectedGovtAmt = Math.round(5000 / MAY_WORKING_DAYS * 3 * 100) / 100;
+    expect(parseFloat(data.govtPaidAmountEnc)).toBeCloseTo(expectedGovtAmt, 2);
+    // Net = gross − CPF only (no NPL deduction)
+    expect(parseFloat(data.netPayEnc)).toBeCloseTo(5000 - 1000, 2);
+  });
+
+  test('H5 — paid annual leave (isPaid=true, isGovtPaid=false): no deduction, no tracking', async () => {
+    mockLeaveService([makeLeave({
+      leaveType: { code: 'AL', name: 'Annual Leave', isPaid: true, isGovtPaid: false },
+    })]);
+
+    const res = await request(app)
+      .post('/payroll/runs/run-001/compute')
+      .send({ employees: [baseEmp] });
+
+    expect(res.status).toBe(200);
+    const data = mockPayslipUpsert.mock.calls[0][0].create;
+    expect(data.nplDays).toBeFalsy();
+    expect(data.nplDeductionEnc).toBeFalsy();
+    expect(data.govtPaidDays).toBeFalsy();
+    expect(parseFloat(data.netPayEnc)).toBeCloseTo(5000 - 1000, 2); // full net pay
+  });
+
+  test('H6 — half-day NPL on working day: deducts 0.5 working-day rate', async () => {
+    // May 12 (Mon) half-day
+    mockLeaveService([makeLeave({
+      startDate: '2026-05-12T00:00:00.000Z', endDate: '2026-05-12T00:00:00.000Z',
+      totalDays: 0.5, isHalfDay: true,
+    })]);
+
+    const res = await request(app)
+      .post('/payroll/runs/run-001/compute')
+      .send({ employees: [baseEmp] });
+
+    expect(res.status).toBe(200);
+    const data = mockPayslipUpsert.mock.calls[0][0].create;
+    const expectedDeduction = Math.round(5000 / MAY_WORKING_DAYS * 0.5 * 100) / 100;
+    expect(parseFloat(data.nplDeductionEnc)).toBeCloseTo(expectedDeduction, 2);
+    expect(data.nplDays).toBe(0.5);
+  });
+
+  test('H7 — leave entirely outside period (Jan): zero deduction in May run', async () => {
+    mockLeaveService([makeLeave({
+      startDate: '2026-01-05T00:00:00.000Z', endDate: '2026-01-10T00:00:00.000Z', totalDays: 4,
+    })]);
+
+    const res = await request(app)
+      .post('/payroll/runs/run-001/compute')
+      .send({ employees: [baseEmp] });
+
+    expect(res.status).toBe(200);
+    const data = mockPayslipUpsert.mock.calls[0][0].create;
+    expect(data.nplDays).toBeFalsy();
+    expect(data.nplDeductionEnc).toBeFalsy();
+  });
+
+  test('H8 — leave service unreachable: payroll completes with zero deductions', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('fetch failed'));
+
+    const res = await request(app)
+      .post('/payroll/runs/run-001/compute')
+      .send({ employees: [baseEmp] });
+
+    expect(res.status).toBe(200); // graceful degradation
+    const data = mockPayslipUpsert.mock.calls[0][0].create;
+    expect(data.nplDays).toBeFalsy();
+    expect(parseFloat(data.netPayEnc)).toBeCloseTo(5000 - 1000, 2);
+  });
+});
