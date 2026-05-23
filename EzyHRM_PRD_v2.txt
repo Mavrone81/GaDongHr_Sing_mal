@@ -1,7 +1,7 @@
 PRODUCT REQUIREMENTS DOCUMENT
 Human Resource Management System (EzyHRM)
 Singapore – Full Statutory Compliance Edition
-Document Reference: PRD-HRMS-001  │  Version 1.0  │  March 2025
+Document Reference: PRD-HRMS-001  │  Version 2.0  │  May 2026
 Classification: Confidential
 Prepared by: RMA DEV TEAM
 
@@ -14,9 +14,9 @@ PRD-HRMS-001
 Based on URD
 URD-HRMS-001 v1.0
 Version
-1.0 (Draft)
+2.0 (Updated)
 Status
-Draft – For Review
+Active – In Development
 Prepared By
 [Name / Department]
 Reviewed By
@@ -35,9 +35,13 @@ Date
 Author
 Summary of Changes
 1.0
-[Date]
-[Author]
+March 2025
+RMA Dev Team
 Initial PRD derived from URD-HRMS-001 with full statutory detail embedded
+2.0
+May 2026
+RMA Dev Team
+Updated to reflect implemented features: CPF OW Ceiling updated to SGD 7,400 (Jan 2026); supervisor approval chain (ANY_ONE/SEQUENTIAL); face recognition clock-in; Performance and Training modules moved to Phase 1 (implemented); Support & Ticketing module added (Module 11); payroll period consolidation; NPL auto-deduction from leave; EA s.20 pro-rating
 
 2. Executive Summary
 This Product Requirements Document (PRD) defines the complete feature set, workflows, acceptance criteria, and compliance obligations for EzyHRM – a cloud-native Human Resource Management System purpose-built for Singapore organisations. The system covers the full employee lifecycle from recruitment to offboarding and is designed for scalability across SMEs, large enterprises, government bodies, and non-profit organisations.
@@ -71,11 +75,15 @@ Phase 1
 Must Have
 Performance Management
 KPI setting, appraisal cycles, 360 feedback, calibration, probation
-Phase 2
-Should Have
+Phase 1
+Must Have
 Training & Development
 LMS, SDL tracking, SkillsFuture, government grants, competency framework
-Phase 2
+Phase 1
+Must Have
+Support & Ticketing
+Employee help desk, ticket lifecycle management, HR inbox, FAQ self-service
+Phase 1
 Should Have
 Asset Management
 Asset register, handover forms, logistics requests, offboarding return
@@ -159,7 +167,7 @@ Rest Day – Employer Request (EA s.37): Up to half day worked: employee paid on
 Public Holiday Work (EA s.88): Employee required to work on gazetted public holiday: paid normal salary for the day plus one additional day’s basic pay; alternatively, one day off-in-lieu by mutual agreement. Off-in-lieu is credited as a leave balance, not monetary payment.
 Singapore Gazetted Public Holidays (11 per year): New Year’s Day, Chinese New Year (2 days), Good Friday, Labour Day, Hari Raya Puasa, National Day, Hari Raya Haji, Deepavali, Christmas Day. Plus any additional public holidays declared by the Government. System is pre-loaded and updated annually by vendor by 1 November for the following year.
 4.5 CPF Contribution Rules
-Ordinary Wages (OW): Wages due in the month: basic salary, fixed allowances, overtime pay. OW Ceiling: SGD 6,800 per month (effective 1 January 2025; subject to annual CPF Board review).
+Ordinary Wages (OW): Wages due in the month: basic salary, fixed allowances, overtime pay. OW Ceiling: SGD 7,400 per month (effective 1 January 2026; subject to annual CPF Board review).
 Additional Wages (AW): Wages not due every month: bonuses, AWS, commissions paid irregularly. AW Ceiling per year: SGD 102,000 minus total OW subject to CPF for the year.
 CPF Formula: CPF Contribution = (OW subject to CPF × Rate) + (AW subject to CPF × Rate). OW subject to CPF = min(OW, OW Ceiling). AW subject to CPF = min(AW, AW Ceiling for the year).
 Rounding: CPF contributions rounded to the nearest dollar. If cents ≥ 50 cents, round up; otherwise round down.
@@ -209,11 +217,11 @@ Foreigner (non-SC, non-PR)
 0%
 0%
 CPF not applicable
-OW Ceiling (Jan 2025)
+OW Ceiling (Jan 2026)
 —
 —
-SGD 6,800/mth
-Subject to annual CPF Board update (needs to be able to modify by payroll) 
+SGD 7,400/mth
+Subject to annual CPF Board update (modifiable by Payroll Officer via admin UI)
 AW Ceiling
 —
 —
@@ -274,7 +282,7 @@ ORDINARY WAGES (OW)
 
 1
 Basic Salary
-Monthly fixed salary per employment contract. Monthly Basic = Annual Salary ÷ 12. OW Ceiling SGD 6,800/month from Jan 2025.
+Monthly fixed salary per employment contract. Monthly Basic = Annual Salary ÷ 12. OW Ceiling SGD 7,400/month from Jan 2026.
 Yes
 Yes
 OW
@@ -692,11 +700,13 @@ System shall support monthly, bi-monthly, and ad-hoc off-cycle payroll runs.
 Monthly: initiated by Payroll Officer for selected period and employee group. System locks attendance, leave, and claims data. Computes gross pay, CPF, SDL, FWL, and net pay per employee. Payroll Officer reviews exception and variance report. Maker submits for Checker approval (different user mandatory). Checker approves. System generates payslips, GIRO file, CPF e-Submit file, SDL file, and journal entries. Payroll finalised and locked.
 Off-cycle: for terminations, corrections, and supplementary payments. Each off-cycle run requires full maker-checker approval and is logged in audit trail. Cannot modify a finalised payroll run directly – must raise an ad-hoc correction run.
 Variance Report: auto-generated before approval showing current period vs prior period per pay component. Variance > configurable threshold (default 10%) flagged for reviewer explanation.
+Period Consolidation: if multiple runs exist for the same period (e.g., regular + supplemental), system detects overlap and prompts Payroll Officer with a consolidation prompt before finalisation. Overlapping runs are auto-merged into a single payslip per employee for the period. Consolidation action is immutably recorded in audit trail with merged-from run IDs.
+EA s.20 Pro-Rating: system supports working-day-based pro-rating for partial-month joiners and leavers. Period working-day count is configurable per pay period (actual calendar working days excluding weekends and gazetted public holidays). Supplemental runs are auto-trimmed to avoid double-counting OW for days already included in the primary run.
 Must Have
 Employment Act
 PAY-002
 CPF Auto-Calculation
-System automatically calculates employee and employer CPF for every payroll run based on: employee date of birth (auto-determines age band), citizenship / PR status and PR year, OW and AW classification of each pay component, OW ceiling (SGD 6,800/month), AW ceiling (SGD 102,000 minus year-to-date OW subject to CPF).
+System automatically calculates employee and employer CPF for every payroll run based on: employee date of birth (auto-determines age band), citizenship / PR status and PR year, OW and AW classification of each pay component, OW ceiling (SGD 7,400/month effective Jan 2026), AW ceiling (SGD 102,000 minus year-to-date OW subject to CPF).
 Contribution rates applied per CPF Board table: SC/PR 3+ yrs ≤55: Employee 20%, Employer 17%, Total 37%. Ages 55-60: 16% / 15% / 31%. Ages 60-65: 10.5% / 11.5% / 22%. Ages 65-70: 7.5% / 9% / 16.5%. Above 70: 5% / 7.5% / 12.5%.
 PR Year 1 graduated: Employee 5%, Employer 4% (or full rates if jointly elected at CPF Board). PR Year 2: Employee 15%, Employer 9%.
 Rounding: round up if cents ≥ 50, else round down. CPF rates must be updateable by Super Admin without code deployment (rate table in admin UI).
@@ -775,6 +785,8 @@ System tracks all government-paid leave (GPML, GPPL, CCL, SPL, Infant Care Leave
 For each government-reimbursable leave period, system auto-generates reimbursement claim: employee name, NRIC, leave type, leave dates, daily rate of pay, total reimbursable amount. Claim submitted to MSF/CPF Board per scheme requirements.
 CPF applies on employer-paid leave pay portions at normal OW rates. Government-reimbursed portions are processed as pass-through (employer pays employee first, then claims back from government).
 NS Make-Up Pay: Make-Up Pay = (Civilian Daily Rate − NS Daily Allowance) × NS Days. Civilian Daily Rate = Monthly Basic ÷ 26. CPF contributions on civilian pay rate. System generates NS Make-Up Pay report for each NS period.
+NPL Auto-Deduction: approved No-Pay Leave records in the leave module are automatically passed to payroll at period close. System computes NPL deduction = (Monthly Basic ÷ Working Days in Month) × NPL Days taken and creates a deduction line item in the payroll run without manual re-entry. Statutory minimum leave balances enforced per EA before any NPL deduction can be applied.
+Govt-Paid Leave Tracking: leave module flags each approved leave application with a govt-paid indicator. Payroll retrieves the flag and applies the correct CPF treatment (employer-paid CPF vs pass-through) automatically per leave type.
 Must Have
 CDCA / Enlistment Act
 PAY-012
@@ -1008,7 +1020,9 @@ EA s.88A
 LEA-003
 Approval Workflow
 Configurable multi-level approval: Employee submits > L1 Approver (Line Manager) > L2 Approver (HOD or HR, if configured). Approver views team calendar before approving to check coverage.
-Escalation: if L1 approver takes no action within configured SLA (default 2 working days), reminder sent. After second reminder (another working day), escalated to L2 or HR Admin.
+Supervisor Approval Chain: each employee may have multiple designated supervisors configured by HR Admin (EmployeeSupervisor model). Approval flow type is configurable per employee: ANY_ONE (any one designated supervisor may approve — leave is immediately approved upon first approval) or SEQUENTIAL (supervisors must approve in a defined order; each intermediate step is recorded and the chain advances to the next supervisor; final approver in chain triggers APPROVED status). HR Admin and Super Admin bypass the supervisor chain entirely. If no supervisors are configured for a non-admin employee, the system returns a 403 and HR Admin is notified to configure the chain.
+Team Calendar: Managers and approved supervisors can view a monthly team calendar showing all approved leave for their direct reports and subordinates, colour-coded by leave type, to assess coverage before approving.
+Escalation: if the active approver in the chain takes no action within configured SLA (default 2 working days), reminder sent. After second reminder (another working day), escalated to HR Admin.
 Blocked dates: HR can configure blackout dates (e.g., year-end closing) during which certain leave types cannot be applied. System blocks submission on blackout dates.
 Notice period restriction: configurable option to block leave application during notice period. Cancellation of approved leave also subject to approval workflow.
 Must Have
@@ -1247,7 +1261,8 @@ Priority
 Compliance
 TAT-001
 Multi-Method Time Capture
-Biometric: fingerprint or facial recognition at physical device. Device pushes clock event to HRMS via REST API or file sync every 5 minutes. Tamper-proof timestamp. Device ID and location recorded per clock event.
+Biometric (Fingerprint): fingerprint reader at physical device. Device pushes clock event to HRMS via REST API or file sync every 5 minutes. Tamper-proof timestamp. Device ID and location recorded per clock event.
+Face Recognition (Server-Side): employee clocks in/out via mobile app or HRMS web portal using camera. Still image or video frame captured and sent to server-side face recognition engine. Engine matches face against employee profile photo stored securely in the system. On successful match, clock event recorded with recognition confidence score. Failed matches (score below threshold) are rejected and flagged for manual review. Profile photo enrollment required before first face clock-in; enrollment managed by HR Admin or self-service with approval.
 Mobile with Geofencing: employee clocks in/out via mobile app. GPS coordinates verified against configured work locations (multiple locations supported). Clock-in rejected if outside geofence radius (configurable, default 200m). Useful for field staff, construction sites, remote locations.
 Web-based: employee clicks Clock In/Out on HRMS portal. IP address logged. Suitable for office-based staff on company network or VPN.
 Manual Entry: HR Admin or Line Manager enters time with mandatory justification and supporting document upload. Manual entries flagged distinctly in reports. Requires L2 approval. Auto-generates exception flag in attendance audit log.
@@ -1287,7 +1302,7 @@ Payroll Officer reviews all attendance-linked payroll components in variance rep
 Must Have
 
 
-9. Module 6: Performance Management (Phase 2)
+9. Module 6: Performance Management
 Req. ID
 Feature
 Requirement (Full Detail)
@@ -1298,7 +1313,8 @@ Review Cycles & Goal Setting
 Configurable appraisal cycles: Annual (Jan–Dec or financial year), Mid-Year (interim check-in, no formal rating), Quarterly (lightweight OKR check-in), Probation (at end of probation period). Each cycle type has its own timeline, participants, and rating scale.
 Goal setting: employee sets SMART goals at start of cycle. Manager reviews and approves or modifies. Goals cascaded from organisation OKRs (configurable) to department to individual. Goal weightings configurable per goal (must sum to 100%). Goals can be updated mid-cycle with mutual agreement.
 Probation review: auto-triggered 30, 14, and 7 days before probation end date. Reminder to Line Manager and HR. Outcome: Confirm / Extend Probation (with new end date) / Terminate (with reason). Confirmation triggers permanent employee status in system.
-Should Have
+Role-based appraisal views: employees see only their own appraisal (My Appraisal view); managers see their direct reports' appraisals; HR Admin sees all.
+Must Have
 
 PMS-002
 Appraisal Workflow
@@ -1306,14 +1322,14 @@ Self-assessment: employee rates own performance against each goal and competency
 Notification timeline: cycle opens > notification to all participants. 7 days before deadline: reminder to incomplete actions. 3 days before: urgent reminder. Deadline passed: escalation to HR Admin with list of overdue items.
 Rating scale configurable (e.g., 1–5 numeric, or Exceeds / Meets / Partially Meets / Does Not Meet). Overall rating computed as weighted average of goal ratings.
 Employee acknowledgement: employee reviews finalised appraisal, adds optional response, clicks Acknowledge. Acknowledgement date and comments recorded. Dispute: employee can flag for HR escalation within 5 working days. HR mediates; outcome documented.
-Should Have
+Must Have
 
 PMS-003
 Calibration & Bell Curve
 Calibration workflow: managers submit preliminary ratings > HR Admin opens calibration view (all employees with proposed ratings by department/level) > HR facilitates calibration session > managers adjust ratings for consistency.
 Bell curve enforcement: configurable distribution targets (e.g., max 20% Exceeds Expectations, max 10% Below Expectations). Formula: Count per Band = Round(Total Employees × Band Target %). System warns if actual distribution deviates from target by > configured tolerance (e.g., 5%).
 Calibrated ratings locked by HR Admin. Managers informed of final ratings. Historical ratings non-editable once locked.
-Should Have
+Must Have
 
 PMS-004
 Salary Increment Linkage
@@ -1321,7 +1337,7 @@ Salary review cycle triggered after performance ratings finalised. System presen
 Increment formula: New Salary = Current Salary × (1 + Increment %). Increment % = Base Increment % + Performance Modifier %. Example: Rating “Exceeds” = Base 4% + 2% = 6%. “Meets” = Base 4% + 0% = 4%. “Below” = Base 0% + 0% = 0%.
 Budget envelope: Total Increment Budget = Total Payroll × Budget %. System flags if total manager recommendations exceed budget envelope. Manager adjusts within envelope before HR approval.
 Approved increments fed to payroll module as salary revision entries with effective date.
-Should Have
+Must Have
 
 PMS-005
 Probation Management
@@ -1338,7 +1354,7 @@ Feedback form configurable per question type (rating scale, open text). Aggregat
 Nice to Have
 
 
-10. Module 7: Training & Development (Phase 2)
+10. Module 7: Training & Development
 10.1 Government Training Grants (Singapore)
 Enhanced Training Support for SMEs (ETS): SMEs (< 200 employees or < SGD 100M annual turnover) receive enhanced course fee subsidy up to 90% for eligible courses funded by SSG. System tracks ETS-eligible training for grant claim reports.
 Absentee Payroll (AP): Employers claim AP grant from SSG for salary of employees attending eligible SSG-funded training. AP Rate: SGD 7.50/hour (for employees earning < SGD 4,500/month). System computes AP claimable amount: AP Amount = Hours Trained × SGD 7.50 (or applicable rate). Tracks training hours per employee per course.
@@ -1557,7 +1573,38 @@ Workforce analytics pre-built reports: headcount trend, attrition by department/
 Should Have
 
 
-15. Singapore Regulatory Compliance Matrix
+15. Module 11: Support & Ticketing
+The support module provides an employee help-desk within the HRMS portal. Employees raise tickets for HR, payroll, leave, IT access, and general queries. HR Admin and Super Admin manage the inbox, triage, and respond to tickets. A self-service FAQ panel provides instant answers for common questions without requiring a ticket.
+Req. ID
+Feature
+Requirement (Full Detail)
+Priority
+Compliance
+SUP-001
+Ticket Submission (Employee)
+Employee submits a support ticket via ESS portal or mobile app. Fields: category (General / Payroll Issue / Leave Problem / Claims Issue / IT / System Access / Other), subject (brief description), body (detailed description). Duplicate detection: if a similar open ticket exists for the same employee and category, system warns before submission.
+Ticket lifecycle statuses: OPEN > IN_PROGRESS > RESOLVED > CLOSED. Ticket ID auto-generated. Employee receives in-app and email confirmation on submission.
+Must Have
+
+SUP-002
+HR Admin Inbox & Triage
+HR Admin and Super Admin access a full-featured ticket inbox: view all tickets with filters by status (OPEN / IN_PROGRESS / RESOLVED / CLOSED), category, and priority (LOW / NORMAL / HIGH / URGENT). Summary stats shown: total tickets, open count, in-progress count, urgent count.
+Admin can update ticket status and priority at any time. Status and priority changes are logged in the ticket audit trail.
+Thread-based messaging: HR Admin can send replies to the employee. All messages (employee and admin) displayed in chronological thread view. Each message records author name, role, and timestamp.
+Must Have
+
+SUP-003
+Ticket Replies & Resolution
+Employee may reply to any ticket that is not CLOSED. HR Admin may reply to any ticket in any status. Once CLOSED, ticket is read-only; employee is prompted to raise a new ticket if further assistance is needed.
+Must Have
+
+SUP-004
+Self-Service FAQ
+Pre-loaded common questions visible in a self-service panel: how to apply for leave, view payslip, submit expense claim, update personal details, who approves leave. HR Admin can extend FAQ items. Reduces ticket volume for routine queries.
+Should Have
+
+
+16. Singapore Regulatory Compliance Matrix
 Legislation
 Governing Body
 Key HRMS Obligations (Full Detail)
@@ -1568,7 +1615,7 @@ Minimum AL entitlement (7–14 days). SL 14 days outpatient + 60 days hospitalis
 Payroll, Leave, T&A, Offboarding
 CPF Act (Cap. 36)
 CPF Board
-CPF contribution rates by age band and citizenship/PR status. OW ceiling SGD 6,800/month. AW ceiling SGD 102,000 minus OW for year. CPF rounding (cents ≥50 round up). e-Submit@cpf monthly by 14th. PR graduated rates (Year 1/2/3+). CPF on salary-in-lieu of notice and leave encashment. Late payment interest 1.5%/month.
+CPF contribution rates by age band and citizenship/PR status. OW ceiling SGD 7,400/month (Jan 2026). AW ceiling SGD 102,000 minus OW for year. CPF rounding (cents ≥50 round up). e-Submit@cpf monthly by 14th. PR graduated rates (Year 1/2/3+). CPF on salary-in-lieu of notice and leave encashment. Late payment interest 1.5%/month.
 Payroll, Offboarding
 Personal Data Protection Act 2012
 PDPC
@@ -1607,7 +1654,7 @@ IRAS
 Cash long service awards exempt up to SGD 200 × completed years of service (e.g., 10 years = SGD 2,000 exempt). Excess amount taxable. System auto-applies exemption in IRAS reporting.
 Payroll
 
-16. Non-Functional Requirements
+17. Non-Functional Requirements
 Ref.
 Category
 Requirement (Full Detail)
@@ -1674,7 +1721,7 @@ Date format DD/MM/YYYY throughout. Currency SGD with thousands separator (SGD 1,
 Must Have
 SGT / SGD
 
-17. Acceptance Criteria
+18. Acceptance Criteria
 Ref.
 Acceptance Criterion
 Test Method
@@ -1727,9 +1774,22 @@ AC-012
 Onboarding workflow: new hire pre-boarding portal accessible from Day 0. All mandatory documents collected and stored. IT provisioning request auto-created. Employee record activated on start date.
 UAT onboarding scenario walkthrough
 HR Admin / IT
+AC-013
+Supervisor approval chain verified: ANY_ONE flow — any single designated supervisor can approve a leave application. SEQUENTIAL flow — supervisors must approve in configured order; intermediate steps recorded; final step triggers APPROVED. Non-admin employee with no supervisors configured receives 403. HR Admin and Super Admin bypass chain.
+UAT leave approval scenario (any-one + sequential)
+HR Admin
+AC-014
+Face recognition clock-in: employee face matched against enrolled profile photo with confidence score above configured threshold. Clock-in rejected and flagged for manual review if score below threshold. Enrollment managed by HR Admin before first use.
+UAT attendance clock-in via face recognition
+IT Admin / HR
+AC-015
+Support ticketing: employee can submit ticket, view reply from HR Admin, and reply back. HR Admin can update status and priority. Closed ticket is read-only. Ticket thread displays all messages with author name, role, and timestamp.
+UAT support module end-to-end flow
+HR Admin / IT
+
 
-18. Assumptions & Constraints
-18.1 Assumptions
+19. Assumptions & Constraints
+19.1 Assumptions
 	•	The organisation has a stable broadband internet connection (minimum 10 Mbps per concurrent user) suitable for cloud HRMS access.
 	•	Existing employee data is available in structured format (Excel/CSV) for data migration. Vendor provides data migration template and validation tool.
 	•	The vendor is responsible for maintaining statutory compliance updates (CPF Board rates, MOM Employment Act changes, IRAS format changes, SDL rates, FWL rates) as part of the subscription, at no additional charge.
@@ -1737,14 +1797,14 @@ HR Admin / IT
 	•	The organisation will designate at least one Super Admin and one HR Admin as primary system contacts during implementation.
 	•	Integration with third-party systems (accounting software, biometric devices) is subject to separate scoping. Core HRMS go-live does not depend on integration completion.
 	•	For government-paid leave reimbursement (GPML, GPPL, CCL, SPL): the organisation will submit claims to MSF/CPF Board through the prescribed government portals. HRMS provides the claim data and amounts.
-18.2 Constraints
+19.2 Constraints
 	•	All employee personal data must reside in Singapore or PDPA-approved jurisdictions under the Second Schedule of the PDPA.
 	•	Implementation timeline and budget are subject to organisational approval processes.
 	•	Third-party integrations are subject to existing IT security policies and approval by the organisation’s IT department.
 	•	The HRMS must not require proprietary hardware beyond standard end-user devices (PC, laptop, smartphone).
 	•	The system must comply with MAS Technology Risk Management Guidelines where the organisation is a regulated financial entity.
 	•	CPF rates, IRAS formats, and MOM statutory requirements are set by Singapore government authorities and may change annually; the system must be updated to reflect changes before they take effect.
-19. Document Approval
+20. Document Approval
 Name
 Role
 Signature
