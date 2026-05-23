@@ -91,6 +91,12 @@ services:
     restart: unless-stopped
     expose:
       - "5010"
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
 
   employee-service:
     build:
