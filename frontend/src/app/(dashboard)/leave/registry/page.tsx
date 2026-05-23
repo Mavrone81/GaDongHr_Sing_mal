@@ -491,7 +491,7 @@ function AdminLeaveView() {
                     </div>
                     <p className="text-[10px] font-bold text-slate-500 mt-0.5 uppercase tracking-widest">{req.dept} · {req.leaveTypeName} · {req.days} day{req.days > 1 ? 's' : ''}</p>
                     <p className="text-[10px] font-bold text-slate-400 mt-0.5">{fmtDate(req.from)} → {fmtDate(req.to)}</p>
-                    {req.reason && <p className="text-[9px] font-bold text-slate-400 mt-0.5 truncate">"{req.reason}"</p>}
+                    {req.reason && <p className="text-[9px] font-bold text-slate-400 mt-0.5 truncate">&quot;{req.reason}&quot;</p>}
                   </div>
                   <div className="flex gap-3 shrink-0" onClick={e => e.stopPropagation()}>
                     <button onClick={() => handleReject(req.id)} className="px-5 py-2 bg-red-50 text-red-600 border border-red-100 text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-red-100 transition-all">Reject</button>

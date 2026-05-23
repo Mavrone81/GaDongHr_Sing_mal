@@ -480,7 +480,7 @@ function EmployeeClaimsView() {
                     <p className="text-sm font-black text-slate-900 truncate">{c.merchant}</p>
                     <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-slate-100 text-slate-500 rounded-lg tracking-wider">{c.category}</span>
                   </div>
-                  <p className="text-[10px] font-bold text-slate-400 mt-0.5">{fmtDate(c.date)} · "{c.description}"</p>
+                  <p className="text-[10px] font-bold text-slate-400 mt-0.5">{fmtDate(c.date)} · &quot;{c.description}&quot;</p>
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-sm font-black text-slate-900">SGD {c.amount.toFixed(2)}</p>

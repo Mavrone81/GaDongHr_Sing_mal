@@ -216,7 +216,7 @@ export default function MySchedulePage() {
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
                       {day.shift!.startTime} – {day.shift!.endTime} · {day.shift!.hoursPerDay}h
                     </p>
-                    {day.note && <p className="text-[9px] font-bold text-slate-400 italic mt-0.5">"{day.note}"</p>}
+                    {day.note && <p className="text-[9px] font-bold text-slate-400 italic mt-0.5">&quot;{day.note}&quot;</p>}
                   </div>
                   {isToday && (
                     <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-lg uppercase tracking-widest shrink-0">Today</span>

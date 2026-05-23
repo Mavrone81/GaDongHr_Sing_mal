@@ -447,7 +447,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-3">
                 <h3 className="text-2xl font-black text-slate-900">{emp.fullName}</h3>
-                {emp.preferredName && <span className="text-slate-400 font-bold text-sm">"{emp.preferredName}"</span>}
+                {emp.preferredName && <span className="text-slate-400 font-bold text-sm">&quot;{emp.preferredName}&quot;</span>}
                 <span className={`px-3 py-1 rounded-full text-[9px] font-black border uppercase tracking-widest ${emp.isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                   {emp.isActive ? 'Active' : 'Inactive'}
                 </span>
@@ -1180,7 +1180,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                       <div className="flex items-center justify-between">
                         <div>
                           <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Leave Approval Supervisors</h3>
-                          <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">Supervisors assigned for this employee's leave requests</p>
+                          <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">Supervisors assigned for this employee&apos;s leave requests</p>
                         </div>
                         {hasPermission('employee:manage') && !editingSupervisors && (
                           <button
@@ -1233,7 +1233,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                             <div className="py-12 flex flex-col items-center gap-3 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                               <div className="w-12 h-12 bg-white border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center text-slate-300 text-xl">👤</div>
                               <p className="eyebrow-tight">No supervisors assigned</p>
-                              <p className="text-[9px] font-bold text-slate-300 text-center max-w-xs">Only HR Admin / Super Admin can approve this employee's leave requests</p>
+                              <p className="text-[9px] font-bold text-slate-300 text-center max-w-xs">Only HR Admin / Super Admin can approve this employee&apos;s leave requests</p>
                             </div>
                           )}
                         </>

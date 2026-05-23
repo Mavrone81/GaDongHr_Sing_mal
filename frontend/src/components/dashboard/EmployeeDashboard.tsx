@@ -168,7 +168,7 @@ function AttendanceCard({ employeeId }: { employeeId: string }) {
     <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-8 flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-black text-slate-900">Today's Attendance</h3>
+          <h3 className="text-sm font-black text-slate-900">Today&apos;s Attendance</h3>
           <p className="text-[10px] font-bold text-slate-400 mt-0.5">{todayLabel()}</p>
         </div>
         {record?.status && (
@@ -353,7 +353,7 @@ export default function EmployeeDashboard() {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <div className="w-16 h-16 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-center text-2xl">⚠️</div>
-        <p className="text-sm font-black text-slate-500">Your account isn't linked to an employee profile yet.</p>
+        <p className="text-sm font-black text-slate-500">Your account isn&apos;t linked to an employee profile yet.</p>
         <p className="text-[10px] font-bold text-slate-400 text-center max-w-xs">Contact your HR administrator to complete your profile setup.</p>
       </div>
     );

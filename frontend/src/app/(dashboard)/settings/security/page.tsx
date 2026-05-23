@@ -50,6 +50,13 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
   );
 }
 
+const SESSION_OPTS = [
+  { label: 'Enforce HTTPS only', desc: 'Block all non-TLS connections', defaultOn: true },
+  { label: 'Log all login events', desc: 'Write to audit trail on every auth', defaultOn: true },
+  { label: 'Block concurrent sessions', desc: 'One active session per user', defaultOn: false },
+  { label: 'Send login alerts', desc: 'Email notification on new device login', defaultOn: false },
+] as const;
+
 export default function SecurityPage() {
   const { user } = useAuth();
 
@@ -73,6 +80,15 @@ export default function SecurityPage() {
   // Session policy
   const [sessionTimeout, setSessionTimeout] = useState('60');
   const [ipWhitelist, setIpWhitelist] = useState('');
+  const [securityToggles, setSecurityToggles] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {};
+    for (const opt of SESSION_OPTS) {
+      const key = `session_${opt.label.replace(/\s/g, '_')}`;
+      const stored = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
+      init[key] = stored !== null ? stored === 'true' : opt.defaultOn;
+    }
+    return init;
+  });
 
   // UI
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -631,24 +647,17 @@ export default function SecurityPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {[
-              { label: 'Enforce HTTPS only', desc: 'Block all non-TLS connections', defaultOn: true },
-              { label: 'Log all login events', desc: 'Write to audit trail on every auth', defaultOn: true },
-              { label: 'Block concurrent sessions', desc: 'One active session per user', defaultOn: false },
-              { label: 'Send login alerts', desc: 'Email notification on new device login', defaultOn: false },
-            ].map(opt => {
+            {SESSION_OPTS.map(opt => {
               const key = `session_${opt.label.replace(/\s/g, '_')}`;
-              const stored = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
-              const [on, setOn] = useState(stored !== null ? stored === 'true' : opt.defaultOn);
               return (
                 <div key={opt.label} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
                   <div>
                     <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{opt.label}</p>
                     <p className="text-[9px] font-bold text-slate-400 mt-0.5 uppercase tracking-widest">{opt.desc}</p>
                   </div>
-                  <Toggle on={on} onChange={v => {
+                  <Toggle on={securityToggles[key]} onChange={v => {
                     if (!canEdit) return;
-                    setOn(v);
+                    setSecurityToggles(prev => ({ ...prev, [key]: v }));
                     if (typeof window !== 'undefined') localStorage.setItem(key, String(v));
                   }} />
                 </div>

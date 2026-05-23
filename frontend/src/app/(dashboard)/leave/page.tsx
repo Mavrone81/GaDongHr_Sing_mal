@@ -408,7 +408,7 @@ function EmployeeLeaveView() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-black text-slate-900">{req.type}</p>
                     <p className="text-[11px] font-bold text-slate-500 mt-0.5">{fmtDate(req.from)} → {fmtDate(req.to)} · {req.days} day{req.days !== 1 ? 's' : ''}</p>
-                    <p className="text-[10px] font-bold text-slate-400 mt-1 truncate">"{req.reason}"</p>
+                    <p className="text-[10px] font-bold text-slate-400 mt-1 truncate">&quot;{req.reason}&quot;</p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="label-form">Applied</p>

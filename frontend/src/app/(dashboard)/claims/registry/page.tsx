@@ -162,7 +162,7 @@ function AdminClaimsView() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{c.employeeName}</p>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{c.dept} · {c.claimDate}</p>
-                {c.title && <p className="text-[9px] font-bold text-slate-400 mt-0.5 truncate">"{c.title}"</p>}
+                {c.title && <p className="text-[9px] font-bold text-slate-400 mt-0.5 truncate">&quot;{c.title}&quot;</p>}
               </div>
               <div className="text-center shrink-0">
                 <span className="text-[9px] font-black uppercase px-2.5 py-1 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-lg tracking-widest">

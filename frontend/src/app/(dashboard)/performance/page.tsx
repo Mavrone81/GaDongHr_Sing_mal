@@ -988,7 +988,7 @@ function TeamTab({ notify }: { notify: (m: string) => void }) {
 
             {selected.selfComments && (
               <div>
-                <h4 className="label-form mb-2">Employee's Self-Assessment</h4>
+                <h4 className="label-form mb-2">Employee&apos;s Self-Assessment</h4>
                 <p className="text-sm text-slate-600 bg-slate-50 rounded-xl p-4">{selected.selfComments}</p>
                 {selected.strengths && <p className="text-sm text-slate-500 mt-2"><strong className="text-[9px] uppercase tracking-widest">Strengths:</strong> {selected.strengths}</p>}
                 {selected.improvements && <p className="text-sm text-slate-500 mt-1"><strong className="text-[9px] uppercase tracking-widest">Improvements:</strong> {selected.improvements}</p>}

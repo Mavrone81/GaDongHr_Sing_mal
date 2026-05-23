@@ -904,7 +904,7 @@ function AdminPayrollDashboard() {
                   <p className="text-[9px] font-black text-red-700 uppercase tracking-widest leading-relaxed">
                     ⛔ A <strong>{conflictingRun.runType}</strong> run for {fmtPeriod(selectedPeriod)} is already DISBURSED.
                     You cannot create another {selectedRunType} run until the existing one is voided.
-                    Use "Void &amp; Replace" to delete the old run and create a corrected one — or choose a different run type.
+                    Use &quot;Void &amp; Replace&quot; to delete the old run and create a corrected one — or choose a different run type.
                   </p>
                 </div>
               )}

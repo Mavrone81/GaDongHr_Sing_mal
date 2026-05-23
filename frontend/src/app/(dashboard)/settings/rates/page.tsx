@@ -267,7 +267,7 @@ export default function RatesPage() {
         <div className="flex flex-col items-center gap-3 py-12 text-center">
           <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-2xl">◎</div>
           <p className="text-sm font-black text-slate-700">Statutory tables are empty</p>
-          <p className="text-xs text-slate-400">Click "Load Singapore 2026 Defaults" to populate CPF rates, SDL config and FWL levy rates.</p>
+          <p className="text-xs text-slate-400">Click &quot;Load Singapore 2026 Defaults&quot; to populate CPF rates, SDL config and FWL levy rates.</p>
         </div>
       )}
 

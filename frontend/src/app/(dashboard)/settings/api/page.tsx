@@ -284,7 +284,7 @@ function ApiKeysTab() {
             <code className="flex-1 text-xs font-mono text-slate-800 break-all">{justCreated}</code>
             <CopyButton value={justCreated} />
           </div>
-          <button onClick={() => setJustCreated(null)} className="self-end text-xs text-amber-600 font-bold hover:underline">I've copied it — dismiss</button>
+          <button onClick={() => setJustCreated(null)} className="self-end text-xs text-amber-600 font-bold hover:underline">I&apos;ve copied it — dismiss</button>
         </div>
       )}
 

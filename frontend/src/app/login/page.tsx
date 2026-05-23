@@ -465,7 +465,7 @@ export default function LoginPage() {
                   : <div className="w-44 h-44 rounded-xl bg-slate-100 animate-pulse" />
                 }
                 <div className="text-center">
-                  <p className="label-form mb-1">Can't scan? Enter manually</p>
+                  <p className="label-form mb-1">Can&apos;t scan? Enter manually</p>
                   <p className="text-[10px] font-mono font-black text-slate-600 tracking-widest break-all select-all">{mfaSecret}</p>
                 </div>
               </div>
