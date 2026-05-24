@@ -1,7 +1,7 @@
 # Implementation Status
 
 **PRD Reference:** PRD-HRMS-001 v2.0  
-**Last Updated:** 2026-05-24 _(AST-002 + AST-003 completion — logistics requests, inventory, auto purchase requests, asset maintenance, software licences, daily alert sweep)_  
+**Last Updated:** 2026-05-24 _(SUP-004 completion — self-service FAQ with admin CRUD, helpfulness feedback, idempotent seed)_  
 **Legend:** ✅ Done · ⚠️ Partial · ❌ Not Done
 
 ---
@@ -20,8 +20,8 @@
 | Asset Management | 4 | 0 | 0 | 4 |
 | Offboarding | 5 | 0 | 0 | 5 |
 | Reporting & Analytics | 1 | 2 | 0 | 3 |
-| Support & Ticketing | 3 | 0 | 1 | 4 |
-| **Total** | **39** | **17** | **3** | **59** |
+| Support & Ticketing | 4 | 0 | 0 | 4 |
+| **Total** | **40** | **17** | **2** | **59** |
 
 ---
 
@@ -463,12 +463,25 @@ Full inbox with filters (status, category, priority), summary stats (total, open
 **Status:** Done  
 Employee replies to non-CLOSED tickets. HR Admin replies to any ticket. CLOSED tickets are read-only. All messages in chronological thread.
 
-### ❌ SUP-004 — Self-Service FAQ
-**Status:** Not Done  
-**Outstanding:**
-- Pre-loaded FAQ panel with common HR questions (leave application, payslip access, expense claim, personal details update, approval queries)
-- HR Admin extensible FAQ management (add/edit/remove questions)
-- FAQ panel visible before ticket submission to reduce ticket volume
+### ✅ SUP-004 — Self-Service FAQ
+**Status:** Done _(completed 2026-05-24)_  
+Curated FAQ panel browsable before ticket submission, with admin CRUD + helpfulness analytics + idempotent seed of 6 common questions.
+
+**Schema:** `FaqEntry` model (question, answer in markdown, category reusing `TicketCategory` enum, `isPublished`, `displayOrder`, `viewCount`, `helpfulCount`, `notHelpfulCount`, `createdBy`, `updatedBy`, timestamps) indexed on `[category, isPublished]` + `displayOrder`.
+
+**Employee endpoints (all authenticated):**
+- `GET /support/faqs?category=&search=` — published FAQs only, ordered by `displayOrder`; case-insensitive OR-match on question/answer for keyword search; validates category against the enum (400 on bogus)
+- `GET /support/faqs/:id` — returns single entry, fire-and-forget viewCount increment; 404 hides unpublished entries from employees but lets admins see them
+- `POST /support/faqs/:id/feedback` — `{ wasHelpful: true|false }` increments the corresponding aggregate counter; rejects non-boolean
+
+**Admin endpoints (HR Admin / Super Admin):**
+- `GET /support/faqs/admin/all` — full list including unpublished
+- `POST /support/faqs` — create with category validation
+- `PUT /support/faqs/:id` — edit any field; stamps `updatedBy`
+- `DELETE /support/faqs/:id` — soft-delete via `isPublished=false`
+- `POST /support/faqs/seed` — idempotent insert of 6 pre-loaded common questions: leave application, payslip access/download, expense claims with GST + receipts, personal details / bank account updates, approval queue follow-up, IT access (lockout / password / MFA). Already-existing questions (matched on question + category) are skipped.
+
+**Tests:** 20 integration tests (F1-F20: list filters, search OR, category validation, viewCount increment, employee vs admin visibility of unpublished, helpful/not-helpful feedback, missing-fields rejection, edit + stamp, soft-delete, seed idempotency, 403 regression for non-admin POST). Full support suite: **38 tests green** (18 pre-existing + 20 new).
 
 ---
 
@@ -479,7 +492,6 @@ _(all resolved)_
 
 ### Should Have (high value)
 10. **PMS-006** — 360-degree feedback
-11. **SUP-004** — Self-service FAQ (reduces support ticket volume)
 12. **RPT-002 (completion)** — FWL Report, MOM Manpower Survey, SDL summary report
 13. **REC-005 (completion)** — Full auto-trigger on employee record approval
 

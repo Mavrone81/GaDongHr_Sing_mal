@@ -61,3 +61,27 @@ model TicketMessage {
   @@index([ticketId])
   @@map("ticket_messages")
 }
+
+// ─── SUP-004 Self-Service FAQ ─────────────────────────────────────────────────
+// HR-curated questions employees can browse / search before submitting a ticket.
+// Visibility gate is `isPublished`; soft-delete sets it to false.
+
+model FaqEntry {
+  id              String         @id @default(uuid())
+  question        String
+  answer          String         // markdown allowed
+  category        TicketCategory @default(GENERAL)
+  isPublished     Boolean        @default(true)
+  displayOrder    Int            @default(0)
+  viewCount       Int            @default(0)
+  helpfulCount    Int            @default(0)
+  notHelpfulCount Int            @default(0)
+  createdBy       String
+  updatedBy       String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([category, isPublished])
+  @@index([displayOrder])
+  @@map("faq_entries")
+}
