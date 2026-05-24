@@ -34,6 +34,9 @@ const mockDb = {
     create: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(),
     update: jest.fn(), count: jest.fn().mockResolvedValue(0),
   },
+  incrementProposal: {
+    upsert: jest.fn(), findMany: jest.fn(), update: jest.fn(),
+  },
   $disconnect: jest.fn(),
 };
 
@@ -405,6 +408,299 @@ describe('E) PIPs', () => {
     mockDb.pipRecord.update.mockRejectedValue(err);
     const r = await request(app).put('/performance/pips/bad').set('Authorization', 'Bearer test')
       .send({ status: 'COMPLETED' });
+    expect(r.status).toBe(404);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// F) Calibration — review/edit calibrated scores, lock calibration
+// ─────────────────────────────────────────────────────────────────────────────
+describe('F) Calibration', () => {
+  const FINALISED = { ...APPRAISAL, status: 'FINALISED', overallScore: 4.2, finalisedAt: new Date() };
+
+  test('GET /performance/cycles/:id/calibration — 200 returns appraisals + locked flag', async () => {
+    mockDb.reviewCycle.findUnique.mockResolvedValue(CYCLE);
+    mockDb.appraisal.findMany.mockResolvedValue([{ ...FINALISED, incrementProposal: null }]);
+    const r = await request(app).get('/performance/cycles/cycle-001/calibration').set('Authorization', 'Bearer test');
+    expect(r.status).toBe(200);
+    expect(r.body.cycle.id).toBe('cycle-001');
+    expect(r.body.locked).toBe(false);
+    expect(Array.isArray(r.body.appraisals)).toBe(true);
+    // Must only fetch FINALISED appraisals, sorted by overallScore desc
+    expect(mockDb.appraisal.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { cycleId: 'cycle-001', status: 'FINALISED' },
+      orderBy: { overallScore: 'desc' },
+      include: { incrementProposal: true },
+    }));
+  });
+
+  test('GET /performance/cycles/:id/calibration — locked=true when calibrationLockedAt set', async () => {
+    mockDb.reviewCycle.findUnique.mockResolvedValue({ ...CYCLE, calibrationLockedAt: new Date() });
+    mockDb.appraisal.findMany.mockResolvedValue([]);
+    const r = await request(app).get('/performance/cycles/cycle-001/calibration').set('Authorization', 'Bearer test');
+    expect(r.status).toBe(200);
+    expect(r.body.locked).toBe(true);
+  });
+
+  test('GET /performance/cycles/:id/calibration — 404 cycle not found', async () => {
+    mockDb.reviewCycle.findUnique.mockResolvedValue(null);
+    const r = await request(app).get('/performance/cycles/bad/calibration').set('Authorization', 'Bearer test');
+    expect(r.status).toBe(404);
+  });
+
+  test('PUT calibrate — 200 sets calibratedScore + audit fields', async () => {
+    mockDb.reviewCycle.findUnique.mockResolvedValue(CYCLE);
+    mockDb.appraisal.update.mockResolvedValue({ ...FINALISED, calibratedScore: 4.5, calibratedBy: 'admin-001', calibratedAt: new Date() });
+    const r = await request(app).put('/performance/cycles/cycle-001/appraisals/apr-001/calibrate').set('Authorization', 'Bearer test')
+      .send({ calibratedScore: 4.5 });
+    expect(r.status).toBe(200);
+    expect(r.body.calibratedScore).toBe(4.5);
+    expect(mockDb.appraisal.update).toHaveBeenCalledWith({
+      where: { id: 'apr-001' },
+      data: expect.objectContaining({ calibratedScore: 4.5, calibratedBy: 'admin-001' }),
+    });
+  });
+
+  test('PUT calibrate — 400 cycle is locked', async () => {
+    mockDb.reviewCycle.findUnique.mockResolvedValue({ ...CYCLE, calibrationLockedAt: new Date() });
+    const r = await request(app).put('/performance/cycles/cycle-001/appraisals/apr-001/calibrate').set('Authorization', 'Bearer test')
+      .send({ calibratedScore: 4.5 });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/locked/i);
+    expect(mockDb.appraisal.update).not.toHaveBeenCalled();
+  });
+
+  test('PUT calibrate — 400 missing calibratedScore', async () => {
+    mockDb.reviewCycle.findUnique.mockResolvedValue(CYCLE);
+    const r = await request(app).put('/performance/cycles/cycle-001/appraisals/apr-001/calibrate').set('Authorization', 'Bearer test')
+      .send({});
+    expect(r.status).toBe(400);
+  });
+
+  test('PUT calibrate — 404 cycle not found', async () => {
+    mockDb.reviewCycle.findUnique.mockResolvedValue(null);
+    const r = await request(app).put('/performance/cycles/bad/appraisals/apr-001/calibrate').set('Authorization', 'Bearer test')
+      .send({ calibratedScore: 4.5 });
+    expect(r.status).toBe(404);
+  });
+
+  test('PUT calibrate — 404 appraisal not found (P2025)', async () => {
+    mockDb.reviewCycle.findUnique.mockResolvedValue(CYCLE);
+    mockDb.appraisal.update.mockRejectedValue(Object.assign(new Error('not found'), { code: 'P2025' }));
+    const r = await request(app).put('/performance/cycles/cycle-001/appraisals/bad/calibrate').set('Authorization', 'Bearer test')
+      .send({ calibratedScore: 4.5 });
+    expect(r.status).toBe(404);
+  });
+
+  test('POST lock-calibration — 200 sets calibrationLockedAt', async () => {
+    mockDb.reviewCycle.findUnique.mockResolvedValue(CYCLE);
+    mockDb.reviewCycle.update.mockResolvedValue({ ...CYCLE, calibrationLockedAt: new Date() });
+    const r = await request(app).post('/performance/cycles/cycle-001/lock-calibration').set('Authorization', 'Bearer test');
+    expect(r.status).toBe(200);
+    expect(r.body.calibrationLockedAt).toBeTruthy();
+  });
+
+  test('POST lock-calibration — 409 already locked', async () => {
+    mockDb.reviewCycle.findUnique.mockResolvedValue({ ...CYCLE, calibrationLockedAt: new Date() });
+    const r = await request(app).post('/performance/cycles/cycle-001/lock-calibration').set('Authorization', 'Bearer test');
+    expect(r.status).toBe(409);
+    expect(mockDb.reviewCycle.update).not.toHaveBeenCalled();
+  });
+
+  test('POST lock-calibration — 404 cycle not found', async () => {
+    mockDb.reviewCycle.findUnique.mockResolvedValue(null);
+    const r = await request(app).post('/performance/cycles/bad/lock-calibration').set('Authorization', 'Bearer test');
+    expect(r.status).toBe(404);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G) Increment Proposals — generate from matrix, list, approve/reject
+// ─────────────────────────────────────────────────────────────────────────────
+describe('G) Increment Proposals', () => {
+  const CALIBRATED_HIGH = { ...APPRAISAL, id: 'apr-high', status: 'FINALISED', overallScore: 4.0, calibratedScore: 4.5, employeeId: 'emp-high' };
+  const CALIBRATED_MID  = { ...APPRAISAL, id: 'apr-mid',  status: 'FINALISED', overallScore: 3.0, calibratedScore: 3.2, employeeId: 'emp-mid' };
+  const MATRIX = [
+    { minScore: 0,   maxScore: 2.9, pct: 0 },
+    { minScore: 3.0, maxScore: 3.9, pct: 3 },
+    { minScore: 4.0, maxScore: 5.0, pct: 7 },
+  ];
+
+  beforeEach(() => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ basicSalary: 5000 }) });
+  });
+  afterEach(() => { delete global.fetch; });
+
+  test('POST increment-proposals — 201 creates proposals using calibrated score & tier', async () => {
+    mockDb.appraisal.findMany.mockResolvedValue([CALIBRATED_HIGH, CALIBRATED_MID]);
+    mockDb.incrementProposal.upsert
+      .mockResolvedValueOnce({ id: 'p1', cycleId: 'cycle-001', appraisalId: 'apr-high', employeeId: 'emp-high', proposedPct: 7,   proposedAmount: 5350,  status: 'DRAFT' })
+      .mockResolvedValueOnce({ id: 'p2', cycleId: 'cycle-001', appraisalId: 'apr-mid',  employeeId: 'emp-mid',  proposedPct: 3,   proposedAmount: 5150,  status: 'DRAFT' });
+
+    const r = await request(app).post('/performance/cycles/cycle-001/increment-proposals').set('Authorization', 'Bearer test')
+      .send({ incrementMatrix: MATRIX });
+
+    expect(r.status).toBe(201);
+    expect(r.body.created).toBe(2);
+    expect(mockDb.incrementProposal.upsert).toHaveBeenCalledTimes(2);
+
+    // High-scorer must land in the 4.0–5.0 tier with pct=7
+    const highCall = mockDb.incrementProposal.upsert.mock.calls.find(c => c[0].create.appraisalId === 'apr-high');
+    expect(highCall[0].create.proposedPct).toBe(7);
+    expect(highCall[0].create.proposedAmount).toBe(5350); // 5000 * 1.07
+    // Mid-scorer must land in 3.0–3.9 tier with pct=3
+    const midCall = mockDb.incrementProposal.upsert.mock.calls.find(c => c[0].create.appraisalId === 'apr-mid');
+    expect(midCall[0].create.proposedPct).toBe(3);
+    expect(midCall[0].create.proposedAmount).toBe(5150);
+  });
+
+  test('POST increment-proposals — tier=0 when score falls outside all bands', async () => {
+    mockDb.appraisal.findMany.mockResolvedValue([{ ...CALIBRATED_HIGH, calibratedScore: 5.5 }]); // above all tiers
+    mockDb.incrementProposal.upsert.mockResolvedValue({});
+    const r = await request(app).post('/performance/cycles/cycle-001/increment-proposals').set('Authorization', 'Bearer test')
+      .send({ incrementMatrix: MATRIX });
+    expect(r.status).toBe(201);
+    expect(mockDb.incrementProposal.upsert.mock.calls[0][0].create.proposedPct).toBe(0);
+  });
+
+  test('POST increment-proposals — re-run upserts existing proposal back to DRAFT', async () => {
+    mockDb.appraisal.findMany.mockResolvedValue([CALIBRATED_HIGH]);
+    mockDb.incrementProposal.upsert.mockResolvedValue({});
+    await request(app).post('/performance/cycles/cycle-001/increment-proposals').set('Authorization', 'Bearer test')
+      .send({ incrementMatrix: MATRIX });
+    const call = mockDb.incrementProposal.upsert.mock.calls[0][0];
+    expect(call.update).toMatchObject({ status: 'DRAFT', approvedBy: null, approvedAt: null });
+  });
+
+  test('POST increment-proposals — proposedAmount null when employee lookup fails', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false });
+    mockDb.appraisal.findMany.mockResolvedValue([CALIBRATED_HIGH]);
+    mockDb.incrementProposal.upsert.mockResolvedValue({});
+    const r = await request(app).post('/performance/cycles/cycle-001/increment-proposals').set('Authorization', 'Bearer test')
+      .send({ incrementMatrix: MATRIX });
+    expect(r.status).toBe(201);
+    expect(mockDb.incrementProposal.upsert.mock.calls[0][0].create.proposedAmount).toBeNull();
+  });
+
+  test('POST increment-proposals — 400 missing/empty matrix', async () => {
+    const r1 = await request(app).post('/performance/cycles/cycle-001/increment-proposals').set('Authorization', 'Bearer test').send({});
+    expect(r1.status).toBe(400);
+    const r2 = await request(app).post('/performance/cycles/cycle-001/increment-proposals').set('Authorization', 'Bearer test').send({ incrementMatrix: [] });
+    expect(r2.status).toBe(400);
+  });
+
+  test('POST increment-proposals — 400 no calibrated appraisals', async () => {
+    mockDb.appraisal.findMany.mockResolvedValue([]);
+    const r = await request(app).post('/performance/cycles/cycle-001/increment-proposals').set('Authorization', 'Bearer test')
+      .send({ incrementMatrix: MATRIX });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/no finalised appraisals/i);
+  });
+
+  test('GET increment-proposals — 200 lists proposals', async () => {
+    mockDb.incrementProposal.findMany.mockResolvedValue([{ id: 'p1', cycleId: 'cycle-001' }]);
+    const r = await request(app).get('/performance/cycles/cycle-001/increment-proposals').set('Authorization', 'Bearer test');
+    expect(r.status).toBe(200);
+    expect(r.body).toHaveLength(1);
+  });
+
+  test('PUT proposal — 200 APPROVED sets approvedBy + approvedAt', async () => {
+    mockDb.incrementProposal.update.mockResolvedValue({ id: 'p1', status: 'APPROVED', approvedBy: 'admin-001' });
+    const r = await request(app).put('/performance/cycles/cycle-001/increment-proposals/p1').set('Authorization', 'Bearer test')
+      .send({ status: 'APPROVED', notes: 'lgtm' });
+    expect(r.status).toBe(200);
+    expect(r.body.status).toBe('APPROVED');
+    const data = mockDb.incrementProposal.update.mock.calls[0][0].data;
+    expect(data).toMatchObject({ status: 'APPROVED', notes: 'lgtm', approvedBy: 'admin-001' });
+    expect(data.approvedAt).toBeInstanceOf(Date);
+  });
+
+  test('PUT proposal — 200 REJECTED does not set approval fields', async () => {
+    mockDb.incrementProposal.update.mockResolvedValue({ id: 'p1', status: 'REJECTED' });
+    const r = await request(app).put('/performance/cycles/cycle-001/increment-proposals/p1').set('Authorization', 'Bearer test')
+      .send({ status: 'REJECTED' });
+    expect(r.status).toBe(200);
+    const data = mockDb.incrementProposal.update.mock.calls[0][0].data;
+    expect(data.status).toBe('REJECTED');
+    expect(data.approvedBy).toBeUndefined();
+    expect(data.approvedAt).toBeUndefined();
+  });
+
+  test('PUT proposal — 400 invalid status', async () => {
+    const r = await request(app).put('/performance/cycles/cycle-001/increment-proposals/p1').set('Authorization', 'Bearer test')
+      .send({ status: 'PENDING' });
+    expect(r.status).toBe(400);
+    expect(mockDb.incrementProposal.update).not.toHaveBeenCalled();
+  });
+
+  test('PUT proposal — 404 not found (P2025)', async () => {
+    mockDb.incrementProposal.update.mockRejectedValue(Object.assign(new Error('not found'), { code: 'P2025' }));
+    const r = await request(app).put('/performance/cycles/cycle-001/increment-proposals/bad').set('Authorization', 'Bearer test')
+      .send({ status: 'APPROVED' });
+    expect(r.status).toBe(404);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// H) Apply Increments — push approved proposals to employee-service
+// ─────────────────────────────────────────────────────────────────────────────
+describe('H) Apply Increments', () => {
+  const APPROVED_A = { id: 'p1', cycleId: 'cycle-001', appraisalId: 'apr-a', employeeId: 'emp-a', proposedPct: 7, proposedAmount: 5350, status: 'APPROVED' };
+  const APPROVED_B = { id: 'p2', cycleId: 'cycle-001', appraisalId: 'apr-b', employeeId: 'emp-b', proposedPct: 3, proposedAmount: 5150, status: 'APPROVED' };
+
+  afterEach(() => { delete global.fetch; });
+
+  test('POST apply-increments — 200 patches each approved employee and reports counts', async () => {
+    mockDb.reviewCycle.findUnique.mockResolvedValue(CYCLE);
+    mockDb.incrementProposal.findMany.mockResolvedValue([APPROVED_A, APPROVED_B]);
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+
+    const r = await request(app).post('/performance/cycles/cycle-001/apply-increments').set('Authorization', 'Bearer test');
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ applied: 2, skipped: 0, total: 2 });
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+
+    // Verify PATCH body includes new salary & reason referencing cycle name
+    const firstCallInit = global.fetch.mock.calls[0][1];
+    expect(firstCallInit.method).toBe('PATCH');
+    const body = JSON.parse(firstCallInit.body);
+    expect(body.basicSalary).toBe(5350);
+    expect(body.salaryChangeReason).toMatch(new RegExp(CYCLE.name));
+  });
+
+  test('POST apply-increments — skipped when employee PATCH fails', async () => {
+    mockDb.reviewCycle.findUnique.mockResolvedValue(CYCLE);
+    mockDb.incrementProposal.findMany.mockResolvedValue([APPROVED_A, APPROVED_B]);
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: false });
+
+    const r = await request(app).post('/performance/cycles/cycle-001/apply-increments').set('Authorization', 'Bearer test');
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ applied: 1, skipped: 1, total: 2 });
+  });
+
+  test('POST apply-increments — proposals without proposedAmount are skipped without HTTP call', async () => {
+    mockDb.reviewCycle.findUnique.mockResolvedValue(CYCLE);
+    mockDb.incrementProposal.findMany.mockResolvedValue([{ ...APPROVED_A, proposedAmount: null }]);
+    global.fetch = jest.fn();
+
+    const r = await request(app).post('/performance/cycles/cycle-001/apply-increments').set('Authorization', 'Bearer test');
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ applied: 0, skipped: 1, total: 1 });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test('POST apply-increments — 400 no approved proposals', async () => {
+    mockDb.reviewCycle.findUnique.mockResolvedValue(CYCLE);
+    mockDb.incrementProposal.findMany.mockResolvedValue([]);
+    const r = await request(app).post('/performance/cycles/cycle-001/apply-increments').set('Authorization', 'Bearer test');
+    expect(r.status).toBe(400);
+  });
+
+  test('POST apply-increments — 404 cycle not found', async () => {
+    mockDb.reviewCycle.findUnique.mockResolvedValue(null);
+    const r = await request(app).post('/performance/cycles/bad/apply-increments').set('Authorization', 'Bearer test');
     expect(r.status).toBe(404);
   });
 });

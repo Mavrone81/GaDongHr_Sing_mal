@@ -55,6 +55,12 @@ enum PipStatus {
   TERMINATED
 }
 
+enum IncrementStatus {
+  DRAFT
+  APPROVED
+  REJECTED
+}
+
 model ReviewCycle {
   id           String      @id @default(uuid())
   name         String
@@ -68,7 +74,10 @@ model ReviewCycle {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
-  appraisals   Appraisal[]
+  appraisals          Appraisal[]
+  calibrationLockedAt DateTime?
+  incrementBudgetPct  Float?
+  incrementProposals  IncrementProposal[]
 
   @@map("review_cycles")
 }
@@ -88,14 +97,38 @@ model Appraisal {
   status           AppraisalStatus @default(PENDING)
   selfSubmittedAt  DateTime?
   managerSubmittedAt DateTime?
-  finalisedAt      DateTime?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  finalisedAt        DateTime?
+  calibratedScore    Float?
+  calibratedAt       DateTime?
+  calibratedBy       String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
-  cycle            ReviewCycle     @relation(fields: [cycleId], references: [id])
+  cycle             ReviewCycle       @relation(fields: [cycleId], references: [id])
+  incrementProposal IncrementProposal?
 
   @@unique([cycleId, employeeId])
   @@map("appraisals")
+}
+
+model IncrementProposal {
+  id             String          @id @default(uuid())
+  cycleId        String
+  appraisalId    String          @unique
+  employeeId     String
+  proposedPct    Float
+  proposedAmount Float?
+  status         IncrementStatus @default(DRAFT)
+  approvedBy     String?
+  approvedAt     DateTime?
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  cycle     ReviewCycle @relation(fields: [cycleId], references: [id])
+  appraisal Appraisal   @relation(fields: [appraisalId], references: [id])
+
+  @@map("increment_proposals")
 }
 
 model Goal {

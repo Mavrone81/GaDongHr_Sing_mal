@@ -466,4 +466,161 @@ router.put('/pips/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMI
   }
 });
 
+// ── GET /performance/cycles/:id/calibration ──────────────────────────────────
+router.get('/cycles/:id/calibration', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER), async (req, res, next) => {
+  try {
+    const cycle = await prisma.reviewCycle.findUnique({ where: { id: req.params.id } });
+    if (!cycle) return res.status(404).json({ error: 'Cycle not found' });
+
+    const appraisals = await prisma.appraisal.findMany({
+      where: { cycleId: req.params.id, status: 'FINALISED' },
+      orderBy: { overallScore: 'desc' },
+      include: { incrementProposal: true },
+    });
+
+    res.json({ cycle, appraisals, locked: !!cycle.calibrationLockedAt });
+  } catch (err) { next(err); }
+});
+
+// ── PUT /performance/cycles/:id/appraisals/:appraisalId/calibrate ─────────────
+router.put('/cycles/:id/appraisals/:appraisalId/calibrate', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER), async (req, res, next) => {
+  try {
+    const cycle = await prisma.reviewCycle.findUnique({ where: { id: req.params.id } });
+    if (!cycle) return res.status(404).json({ error: 'Cycle not found' });
+    if (cycle.calibrationLockedAt) return res.status(400).json({ error: 'Calibration is locked for this cycle' });
+
+    const { calibratedScore } = req.body;
+    if (calibratedScore === undefined) return res.status(400).json({ error: 'calibratedScore is required' });
+
+    const updated = await prisma.appraisal.update({
+      where: { id: req.params.appraisalId },
+      data: { calibratedScore: parseFloat(calibratedScore), calibratedAt: new Date(), calibratedBy: req.user.sub },
+    });
+    res.json(updated);
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Appraisal not found' });
+    next(err);
+  }
+});
+
+// ── POST /performance/cycles/:id/lock-calibration ─────────────────────────────
+router.post('/cycles/:id/lock-calibration', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const cycle = await prisma.reviewCycle.findUnique({ where: { id: req.params.id } });
+    if (!cycle) return res.status(404).json({ error: 'Cycle not found' });
+    if (cycle.calibrationLockedAt) return res.status(409).json({ error: 'Already locked' });
+
+    const updated = await prisma.reviewCycle.update({
+      where: { id: req.params.id },
+      data: { calibrationLockedAt: new Date() },
+    });
+    res.json(updated);
+  } catch (err) { next(err); }
+});
+
+// ── POST /performance/cycles/:id/increment-proposals ─────────────────────────
+router.post('/cycles/:id/increment-proposals', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const { incrementMatrix } = req.body;
+    if (!Array.isArray(incrementMatrix) || incrementMatrix.length === 0) {
+      return res.status(400).json({ error: 'incrementMatrix array is required (e.g. [{minScore,maxScore,pct}])' });
+    }
+
+    const appraisals = await prisma.appraisal.findMany({
+      where: { cycleId: req.params.id, status: 'FINALISED', calibratedScore: { not: null } },
+    });
+    if (!appraisals.length) return res.status(400).json({ error: 'No finalised appraisals with calibrated scores found' });
+
+    const EMPLOYEE_URL = process.env.EMPLOYEE_SERVICE_URL || 'http://employee-service:4002';
+    const authHeader = req.headers.authorization;
+
+    const results = [];
+    for (const ap of appraisals) {
+      const score = ap.calibratedScore ?? ap.overallScore ?? 0;
+      const tier = incrementMatrix.find(t => score >= t.minScore && score <= t.maxScore);
+      const proposedPct = tier ? tier.pct : 0;
+
+      let proposedAmount = null;
+      try {
+        const empRes = await fetch(`${EMPLOYEE_URL}/employees/${ap.employeeId}`, { headers: { Authorization: authHeader } });
+        if (empRes.ok) {
+          const emp = await empRes.json();
+          if (emp.basicSalary) proposedAmount = Math.round(emp.basicSalary * (1 + proposedPct / 100) * 100) / 100;
+        }
+      } catch {}
+
+      const proposal = await prisma.incrementProposal.upsert({
+        where: { appraisalId: ap.id },
+        create: { id: require('crypto').randomUUID(), cycleId: req.params.id, appraisalId: ap.id, employeeId: ap.employeeId, proposedPct, proposedAmount },
+        update: { proposedPct, proposedAmount, status: 'DRAFT', approvedBy: null, approvedAt: null },
+      });
+      results.push(proposal);
+    }
+    res.status(201).json({ created: results.length, proposals: results });
+  } catch (err) { next(err); }
+});
+
+// ── GET /performance/cycles/:id/increment-proposals ──────────────────────────
+router.get('/cycles/:id/increment-proposals', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER), async (req, res, next) => {
+  try {
+    const proposals = await prisma.incrementProposal.findMany({
+      where: { cycleId: req.params.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json(proposals);
+  } catch (err) { next(err); }
+});
+
+// ── PUT /performance/cycles/:id/increment-proposals/:pid ─────────────────────
+router.put('/cycles/:id/increment-proposals/:pid', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const { status, notes } = req.body;
+    if (!['APPROVED', 'REJECTED'].includes(status)) return res.status(400).json({ error: 'status must be APPROVED or REJECTED' });
+
+    const updated = await prisma.incrementProposal.update({
+      where: { id: req.params.pid },
+      data: {
+        status,
+        notes: notes ?? undefined,
+        ...(status === 'APPROVED' ? { approvedBy: req.user.sub, approvedAt: new Date() } : {}),
+      },
+    });
+    res.json(updated);
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Proposal not found' });
+    next(err);
+  }
+});
+
+// ── POST /performance/cycles/:id/apply-increments ────────────────────────────
+router.post('/cycles/:id/apply-increments', authenticate, authorize(ROLES.SUPER_ADMIN), async (req, res, next) => {
+  try {
+    const cycle = await prisma.reviewCycle.findUnique({ where: { id: req.params.id } });
+    if (!cycle) return res.status(404).json({ error: 'Cycle not found' });
+
+    const proposals = await prisma.incrementProposal.findMany({
+      where: { cycleId: req.params.id, status: 'APPROVED' },
+    });
+    if (!proposals.length) return res.status(400).json({ error: 'No approved proposals found' });
+
+    const EMPLOYEE_URL = process.env.EMPLOYEE_SERVICE_URL || 'http://employee-service:4002';
+    const authHeader = req.headers.authorization;
+    let applied = 0; let skipped = 0;
+
+    for (const p of proposals) {
+      if (!p.proposedAmount) { skipped++; continue; }
+      try {
+        const r = await fetch(`${EMPLOYEE_URL}/employees/${p.employeeId}`, {
+          method: 'PATCH',
+          headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ basicSalary: p.proposedAmount, salaryChangeReason: `Performance increment — ${cycle.name}` }),
+        });
+        if (r.ok) applied++;
+        else skipped++;
+      } catch { skipped++; }
+    }
+    res.json({ applied, skipped, total: proposals.length });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
