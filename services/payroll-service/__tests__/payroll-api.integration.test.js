@@ -98,6 +98,26 @@ jest.mock('@prisma/client', () => ({
 
 jest.mock('dotenv', () => ({ config: () => {} }));
 
+// ── TAT-005 fetch dispatcher ─────────────────────────────────────────────────
+// payroll-service /runs/:id/compute now makes TWO external calls:
+//   1) GET /attendance/internal/period-summary/:period (must be APPROVED_FOR_PAYROLL)
+//   2) GET /leave/applications?... (existing behaviour)
+// installFetchMock() returns a single fetch jest.fn() that routes by URL:
+//   - attendance URL → APPROVED_FOR_PAYROLL + empty per-employee summary
+//   - leave URL      → { applications } from the second arg
+// individual tests can override the leave half via mockLeaveService(applications)
+// or the attendance half via the optional `attendance` override.
+function installFetchMock({ applications = [], attendance } = {}) {
+  const defaultAttendance = { periodStatus: 'APPROVED_FOR_PAYROLL', summary: {}, expectedWorkDays: 22 };
+  global.fetch = jest.fn().mockImplementation((url) => {
+    if (typeof url === 'string' && url.includes('/attendance/internal/period-summary')) {
+      return Promise.resolve({ ok: true, json: async () => ({ ...defaultAttendance, ...(attendance || {}) }) });
+    }
+    return Promise.resolve({ ok: true, json: async () => ({ applications }) });
+  });
+  return global.fetch;
+}
+
 // Mock fs to avoid actual file operations
 jest.mock('fs', () => ({
   mkdirSync: jest.fn(),
@@ -241,6 +261,8 @@ describe('D) POST /payroll/runs/:id/compute — CPF + SDL integration', () => {
     mockRunUpdate.mockResolvedValue({ ...draftRun, status: 'PENDING_APPROVAL' });
     mockPeriodConfigFindUnique.mockResolvedValue(null); // no period config override
     mockPublicHolidayFindMany.mockResolvedValue([]);    // no public holidays
+    // TAT-005: attendance period defaults to APPROVED_FOR_PAYROLL so compute proceeds.
+    installFetchMock();
   });
 
   test('200 — computes payroll with CPF and SDL when employees provided in body', async () => {
@@ -735,10 +757,9 @@ describe('H) Deductible leave — working-day rate + cross-month pro-ration', ()
   afterEach(() => { global.fetch = savedFetch; });
 
   function mockLeaveService(applications) {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ applications }),
-    });
+    // TAT-005: route both attendance + leave through the URL dispatcher so
+    // the attendance gate stays APPROVED_FOR_PAYROLL while we vary leaves.
+    installFetchMock({ applications });
   }
 
   function makeLeave(overrides = {}) {
@@ -877,7 +898,13 @@ describe('H) Deductible leave — working-day rate + cross-month pro-ration', ()
   });
 
   test('H8 — leave service unreachable: payroll completes with zero deductions', async () => {
-    global.fetch = jest.fn().mockRejectedValue(new Error('fetch failed'));
+    // TAT-005: keep the attendance side happy; only the leave call fails.
+    global.fetch = jest.fn().mockImplementation((url) => {
+      if (typeof url === 'string' && url.includes('/attendance/internal/period-summary')) {
+        return Promise.resolve({ ok: true, json: async () => ({ periodStatus: 'APPROVED_FOR_PAYROLL', summary: {}, expectedWorkDays: 22 }) });
+      }
+      return Promise.reject(new Error('fetch failed'));
+    });
 
     const res = await request(app)
       .post('/payroll/runs/run-001/compute')
@@ -1017,7 +1044,8 @@ describe('I) Reimbursement paycodes (claims integration)', () => {
       mockRunUpdate.mockResolvedValue({});
       mockPeriodConfigFindUnique.mockResolvedValue(null);
       mockPublicHolidayFindMany.mockResolvedValue([]);
-      global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ applications: [] }) });
+      // TAT-005: URL-aware mock — attendance APPROVED_FOR_PAYROLL, leave [].
+      installFetchMock({ applications: [] });
     });
 
     afterEach(() => { global.fetch = savedFetch; });

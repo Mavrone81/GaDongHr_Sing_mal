@@ -50,7 +50,9 @@ jest.mock('@prisma/client', () => ({
     employeeWorkLocation: { findMany: mockEWLFindMany },
     shiftTemplate:        { findMany: jest.fn().mockResolvedValue([]) },
     workingShift:         { findMany: jest.fn().mockResolvedValue([]) },
-    rosterEntry:          { findMany: jest.fn().mockResolvedValue([]) },
+    // TAT-005 clock-in/out resolves the roster via findUnique — return null
+    // so the route falls through to the "no schedule" branch (no reconciliation).
+    rosterEntry:          { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null) },
     workLocation:         { findMany: jest.fn().mockResolvedValue([]) },
   })),
 }));

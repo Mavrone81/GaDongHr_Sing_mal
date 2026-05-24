@@ -9,11 +9,13 @@ const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
 const { encrypt, decrypt, encryptNumber, decryptNumber } = require('/app/shared/crypto');
 const { computeCpf, computeSdl, computeNetPay, countWorkingDays, countPeriodLeaveWorkingDays } = require('../engines/cpf.engine');
+const { buildEntriesForEmployee, summariseEntries } = require('../engines/journal.engine');
 
 const prisma = new PrismaClient();
 
 // ─── Helper: safe decrypt to float ───────────────────────────────────────────
 const decSafe = (enc) => { try { return enc ? parseFloat(decrypt(enc)) || 0 : 0; } catch { return 0; } };
+const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 // ─── Helper: consolidatePeriod ────────────────────────────────────────────────
 // Merges all published payslips for a period into the primary run's payslips.
@@ -256,6 +258,59 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
       console.warn('[payroll] Could not fetch leave data:', e.message);
     }
 
+    // ── TAT-005: fetch attendance period summary for the auto-feed ─────────
+    // The attendance-service exposes /attendance/internal/period-summary/:period
+    // behind INTERNAL_SERVICE_KEY. It returns periodStatus so we can enforce
+    // the APPROVED_FOR_PAYROLL gate, and per-employee billable hours/OT/absent
+    // days for materializing OT_PAY, ABSENT_DEDUCT, PH_WORK_PAY line items.
+    //
+    // Hard gate: if the period isn't APPROVED_FOR_PAYROLL and the caller
+    // didn't pass attendanceOverride:true, refuse compute with 409.
+    // "Manual Wins": if an employee already has a manual line item for one of
+    // the auto-fed codes (OT_PAY, ABSENT_DEDUCT, PH_WORK_PAY) we skip the
+    // auto-add for that employee/code — manual entries are authoritative.
+    const ATTENDANCE_SERVICE_URL = process.env.ATTENDANCE_SERVICE_URL || 'http://attendance-service:4007';
+    const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY || 'dev-internal-key';
+    let attendanceSummary = {};
+    let attendancePeriodStatus = 'OPEN';
+    let attendanceFetchFailed = false;
+    try {
+      const attRes = await fetch(
+        `${ATTENDANCE_SERVICE_URL}/attendance/internal/period-summary/${run.period}`,
+        { headers: { 'x-internal-service-key': INTERNAL_KEY } },
+      );
+      if (attRes.ok) {
+        const body = await attRes.json();
+        attendanceSummary = body.summary || {};
+        attendancePeriodStatus = body.periodStatus || 'OPEN';
+      } else {
+        attendanceFetchFailed = true;
+        console.warn('[payroll] attendance fetch returned', attRes.status);
+      }
+    } catch (e) {
+      attendanceFetchFailed = true;
+      console.warn('[payroll] Could not fetch attendance summary:', e.message);
+    }
+
+    if (attendancePeriodStatus !== 'APPROVED_FOR_PAYROLL' && !req.body.attendanceOverride) {
+      return res.status(409).json({
+        error: 'Attendance period not approved for payroll',
+        details: `Period ${run.period} status is ${attendancePeriodStatus}. Lock and approve it in the Attendance module, or pass attendanceOverride:true to bypass (the attendance auto-feed will be skipped).`,
+        attendancePeriodStatus,
+      });
+    }
+    // If override is in play, do not apply the auto-feed — leave Payroll
+    // Officer responsible for any manual OT/Absent paycodes they want.
+    const applyAttendanceFeed = attendancePeriodStatus === 'APPROVED_FOR_PAYROLL' && !attendanceFetchFailed;
+
+    // Look up the pay component IDs we materialize. Codes are pre-seeded.
+    // Missing codes silently skip that side of the auto-feed.
+    const AUTO_FEED_CODES = ['OT_PAY', 'ABSENCE_DED', 'PH_WORK'];
+    const autoFeedComponents = await prisma.payComponent.findMany({
+      where: { code: { in: AUTO_FEED_CODES }, isActive: true },
+    });
+    const componentByCode = Object.fromEntries(autoFeedComponents.map(c => [c.code, c]));
+
     // Build per-employee deductible leave summary for this period.
     // Cross-month leaves are clamped to the period boundaries; working days (MOM) are counted.
     // isPaid=false  → NPL-type: deducted from employee salary
@@ -281,8 +336,55 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
     const zeroSalaryWarnings = [];
     const computedResults = []; // { employeeId, effectiveOw, effectiveGross, net, hasPaycodes }
 
+    // Track auto-feed line items we create here so we can include them in
+    // empItems when computing CPF/net for THIS run (without re-querying).
+    const autoFeedItemsByEmp = {};
+    const autoFeedSkips = []; // { employeeId, code, reason } for debug
+
     for (const emp of employees) {
-      const empItems = savedLineItems.filter(li => li.employeeId === emp.employeeId);
+      let empItems = savedLineItems.filter(li => li.employeeId === emp.employeeId);
+
+      // ── TAT-005 attendance auto-feed: OT_PAY, ABSENT_DEDUCT, PH_WORK_PAY ─
+      // Manual Wins: skip any code where an existing line item exists.
+      if (applyAttendanceFeed) {
+        const att = attendanceSummary[emp.employeeId];
+        if (att) {
+          const monthlyOw = emp.ow || 0;
+          // EA s.20 daily rate uses working days in the period
+          const dailyRate  = workingDaysInPeriod > 0 ? monthlyOw / workingDaysInPeriod : 0;
+          const hourlyRate = workingDaysInPeriod > 0 ? monthlyOw / (workingDaysInPeriod * 8) : 0;
+          const existingCodes = new Set(
+            empItems.map(li => autoFeedComponents.find(c => c.id === li.componentId)?.code).filter(Boolean)
+          );
+
+          const candidates = [
+            { code: 'OT_PAY',      amount: round2(hourlyRate * 1.5 * (att.otHours || 0)),  wageType: 'OW',        isCpfApplicable: true,  description: `Auto OT: ${att.otHours || 0}h × 1.5 × hourly rate` },
+            { code: 'ABSENCE_DED', amount: -round2(dailyRate * (att.absentDays || 0)),     wageType: 'DEDUCTION', isCpfApplicable: false, description: `Auto absent deduction: ${att.absentDays || 0} day(s)` },
+            { code: 'PH_WORK',     amount: round2(dailyRate * (att.phWorkedDays || 0)),    wageType: 'OW',        isCpfApplicable: true,  description: `Auto PH work pay: ${att.phWorkedDays || 0} day(s)` },
+          ];
+          for (const cand of candidates) {
+            const comp = componentByCode[cand.code];
+            if (!comp) { autoFeedSkips.push({ employeeId: emp.employeeId, code: cand.code, reason: 'pay component not configured' }); continue; }
+            if (existingCodes.has(cand.code)) { autoFeedSkips.push({ employeeId: emp.employeeId, code: cand.code, reason: 'manual line item present' }); continue; }
+            if (cand.amount === 0) continue;
+            const created = await prisma.payrollLineItem.create({
+              data: {
+                id: uuidv4(),
+                runId: run.id,
+                employeeId: emp.employeeId,
+                componentId: comp.id,
+                description: cand.description,
+                amountEncrypted: encrypt(String(cand.amount)),
+                wageType: cand.wageType,
+                isCpfApplicable: cand.isCpfApplicable,
+                isIrasTaxable: true,
+              },
+            });
+            empItems.push(created);
+            (autoFeedItemsByEmp[emp.employeeId] ||= []).push({ code: cand.code, amount: cand.amount });
+          }
+        }
+      }
 
       const empFactor = prorationFactors.get(emp.employeeId) || 1;
       let owAdj = 0, awAdj = 0, nonCpfAdj = 0, deductions = 0, reimbursements = 0;
@@ -385,6 +487,13 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
       total: { gross: totalGross, net: totalNet, employeeCpf: totalEmployee, employerCpf: totalEmployer, sdl: totalSdl },
       ...(zeroSalaryWarnings.length > 0 && { warnings: { zeroOrdinaryWages: zeroSalaryWarnings } }),
       ...(autoRemovedIds.length > 0 && { autoRemovedIds }),
+      attendance: {
+        periodStatus: attendancePeriodStatus,
+        applied: applyAttendanceFeed,
+        autoFeedItemsByEmployee: autoFeedItemsByEmp,
+        skipped: autoFeedSkips,
+        ...(attendanceFetchFailed && { fetchFailed: true }),
+      },
     });
   } catch (err) { next(err); }
 });
@@ -493,7 +602,64 @@ router.post('/runs/:id/finalise', authenticate, authorize(ROLES.SUPER_ADMIN, ROL
     // Auto-consolidate: merge any duplicate payslips for this period across runs
     const consolidatedCount = await consolidatePeriod(run.period, run.id);
 
-    res.json({ message: 'Payroll finalised. Payslips published.', consolidated: consolidatedCount > 0, consolidatedEmployees: consolidatedCount });
+    // Auto-generate payroll journal (best-effort — never block finalisation)
+    let journalResult = null;
+    try {
+      const payslips = await prisma.payslip.findMany({ where: { runId: run.id } });
+      const allocs = await prisma.employeeCostCentre.findMany({
+        where: {
+          employeeId: { in: payslips.map(p => p.employeeId) },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gt: new Date() } }],
+        },
+        include: { costCentre: true },
+      });
+      const allocByEmp = {};
+      for (const a of allocs) {
+        (allocByEmp[a.employeeId] ||= []).push({
+          costCentreId: a.costCentreId, percentage: a.percentage, costCentre: a.costCentre,
+        });
+      }
+      const allEntries = [];
+      for (const ps of payslips) {
+        const decoded = {
+          employeeId: ps.employeeId, period: ps.period,
+          grossPay:    decSafe(ps.grossPayEnc),
+          netPay:      decSafe(ps.netPayEnc),
+          employeeCpf: decSafe(ps.employeeCpfEnc),
+          employerCpf: decSafe(ps.employerCpfEnc),
+          sdl:         decSafe(ps.sdlAmountEnc),
+          fwl:         decSafe(ps.fwlAmountEnc),
+        };
+        allEntries.push(...buildEntriesForEmployee(decoded, allocByEmp[ps.employeeId] || []));
+      }
+      const totals = summariseEntries(allEntries);
+
+      await prisma.$transaction(async (tx) => {
+        const existing = await tx.payrollJournal.findUnique({ where: { runId: run.id } });
+        if (existing) await tx.payrollJournal.delete({ where: { id: existing.id } });
+        const journal = await tx.payrollJournal.create({
+          data: { runId: run.id, period: run.period, totalDebit: totals.debit, totalCredit: totals.credit, status: 'DRAFT' },
+        });
+        await tx.payrollJournalEntry.createMany({
+          data: allEntries.map(e => ({
+            journalId: journal.id, account: e.account, accountName: e.accountName,
+            side: e.side, description: e.description, amountEnc: encrypt(String(e.amount)),
+            costCentreId: e.costCentreId || null, employeeId: e.employeeId || null,
+          })),
+        });
+      });
+      journalResult = { balanced: totals.balanced, totalDebit: totals.debit, totalCredit: totals.credit, entries: allEntries.length };
+    } catch (jerr) {
+      console.error('[finalise] journal generation failed:', jerr.message);
+      journalResult = { error: jerr.message };
+    }
+
+    res.json({
+      message: 'Payroll finalised. Payslips published.',
+      consolidated: consolidatedCount > 0,
+      consolidatedEmployees: consolidatedCount,
+      journal: journalResult,
+    });
   } catch (err) { next(err); }
 });
 
@@ -1209,6 +1375,165 @@ router.post('/purge', authenticate, authorize(ROLES.SUPER_ADMIN), async (req, re
     }
 
     res.json({ purged: Number(purged), cutoff: cutoff.toISOString().slice(0, 10) });
+  } catch (err) { next(err); }
+});
+
+// ── GET /payroll/ir8a-data/:year ───────────────────────────────────────────────
+router.get('/ir8a-data/:year', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const { year } = req.params;
+    const EMPLOYEE_URL = process.env.EMPLOYEE_SERVICE_URL || 'http://employee-service:4002';
+
+    // All finalised payslips for the year, one per employee (last in year by period)
+    const payslips = await prisma.payslip.findMany({
+      where: { period: { startsWith: year }, isPublished: true },
+      orderBy: { period: 'desc' },
+    });
+
+    // Deduplicate: keep last finalised payslip per employee (max YTD)
+    const byEmp = {};
+    for (const ps of payslips) {
+      if (!byEmp[ps.employeeId] || decSafe(ps.ytdGrossEnc) > decSafe(byEmp[ps.employeeId].ytdGrossEnc)) {
+        byEmp[ps.employeeId] = ps;
+      }
+    }
+
+    // Sum AW line items across all runs in the year (bonus/AWS)
+    const awItems = await prisma.payrollLineItem.findMany({
+      where: { wageType: 'AW', isIrasTaxable: true, run: { period: { startsWith: year } } },
+    });
+    const awByEmp = {};
+    for (const item of awItems) {
+      const amt = decSafe(item.amountEnc);
+      awByEmp[item.employeeId] = (awByEmp[item.employeeId] || 0) + amt;
+    }
+
+    // Appendix 8A — sum BIK items per employee for the year
+    const bikItems = await prisma.bikItem.findMany({ where: { year: parseInt(year, 10) } });
+    const bikByEmp = {};
+    for (const it of bikItems) {
+      bikByEmp[it.employeeId] = (bikByEmp[it.employeeId] || 0) + decSafe(it.annualValueEnc);
+    }
+
+    // Appendix 8B — sum stock option exercise gains per employee for the year
+    const yearStart = new Date(`${year}-01-01T00:00:00Z`);
+    const yearEnd   = new Date(`${parseInt(year, 10) + 1}-01-01T00:00:00Z`);
+    const exercises = await prisma.stockOptionExercise.findMany({
+      where: { exerciseDate: { gte: yearStart, lt: yearEnd } },
+      include: { grant: { select: { employeeId: true } } },
+    });
+    const esopByEmp = {};
+    for (const e of exercises) {
+      esopByEmp[e.grant.employeeId] = (esopByEmp[e.grant.employeeId] || 0) + decSafe(e.taxableGainEnc);
+    }
+
+    // Union of all employees mentioned (payslips + BIK-only + ESOP-only)
+    const allEmpIds = new Set([
+      ...Object.keys(byEmp),
+      ...Object.keys(bikByEmp),
+      ...Object.keys(esopByEmp),
+    ]);
+
+    // Fetch employee master for name/NRIC (best-effort; mask NRIC)
+    const empLookup = {};
+    try {
+      const { data } = await require('axios').get(`${EMPLOYEE_URL}/employees?limit=1000`, { headers: { Authorization: req.headers.authorization } });
+      for (const e of (data.employees || [])) empLookup[e.id] = e;
+    } catch {}
+
+    const records = Array.from(allEmpIds).map(empId => {
+      const ps  = byEmp[empId];
+      const emp = empLookup[empId] || {};
+      const ytdGross       = ps ? decSafe(ps.ytdGrossEnc) : 0;
+      const ytdEmployeeCpf = ps ? decSafe(ps.ytdEmployeeCpfEnc) : 0;
+      const ytdEmployerCpf = ps ? decSafe(ps.ytdEmployerCpfEnc) : 0;
+      const awIncome       = Math.round((awByEmp[empId] || 0) * 100) / 100;
+      const bikValue       = Math.round((bikByEmp[empId] || 0) * 100) / 100;
+      const stockGain      = Math.round((esopByEmp[empId] || 0) * 100) / 100;
+      const nric           = emp.nric ? `${emp.nric.slice(0, 1)}XXXX${emp.nric.slice(-4)}` : null;
+      return {
+        employeeId: empId,
+        employeeCode: emp.employeeCode || null,
+        fullName: emp.fullName || empId,
+        nric, citizenshipStatus: emp.citizenshipStatus || null,
+        employmentIncome: Math.round(ytdGross * 100) / 100,
+        employeeCpf: Math.round(ytdEmployeeCpf * 100) / 100,
+        employerCpf: Math.round(ytdEmployerCpf * 100) / 100,
+        awIncome,
+        benefitsInKind: bikValue,         // Appendix 8A total
+        stockOptionGain: stockGain,        // Appendix 8B total
+        otherTaxableIncome: 0,
+      };
+    });
+
+    res.json({ year, generatedAt: new Date().toISOString(), count: records.length, records });
+  } catch (err) { next(err); }
+});
+
+// ── GET /payroll/ir8a-file/:year ─ IRAS AIS flat-file ─────────────────────────
+router.get('/ir8a-file/:year', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const { year } = req.params;
+    const UEN = process.env.COMPANY_UEN || 'UNKNOWN';
+
+    // Reuse the data endpoint logic inline
+    const payslips = await prisma.payslip.findMany({
+      where: { period: { startsWith: year }, isPublished: true },
+      orderBy: { period: 'desc' },
+    });
+    const byEmp = {};
+    for (const ps of payslips) {
+      if (!byEmp[ps.employeeId] || decSafe(ps.ytdGrossEnc) > decSafe(byEmp[ps.employeeId].ytdGrossEnc)) {
+        byEmp[ps.employeeId] = ps;
+      }
+    }
+    const awItems = await prisma.payrollLineItem.findMany({
+      where: { wageType: 'AW', isIrasTaxable: true, run: { period: { startsWith: year } } },
+    });
+    const awByEmp = {};
+    for (const item of awItems) awByEmp[item.employeeId] = (awByEmp[item.employeeId] || 0) + decSafe(item.amountEnc);
+
+    // Appendix 8A — BIK totals per employee
+    const bikItems = await prisma.bikItem.findMany({ where: { year: parseInt(year, 10) } });
+    const bikByEmp = {};
+    for (const it of bikItems) bikByEmp[it.employeeId] = (bikByEmp[it.employeeId] || 0) + decSafe(it.annualValueEnc);
+
+    // Appendix 8B — stock option exercise gains per employee for the year
+    const yearStart = new Date(`${year}-01-01T00:00:00Z`);
+    const yearEnd   = new Date(`${parseInt(year, 10) + 1}-01-01T00:00:00Z`);
+    const exercises = await prisma.stockOptionExercise.findMany({
+      where: { exerciseDate: { gte: yearStart, lt: yearEnd } },
+      include: { grant: { select: { employeeId: true } } },
+    });
+    const esopByEmp = {};
+    for (const e of exercises) esopByEmp[e.grant.employeeId] = (esopByEmp[e.grant.employeeId] || 0) + decSafe(e.taxableGainEnc);
+
+    const empLookup = {};
+    try {
+      const { data } = await require('axios').get(`${process.env.EMPLOYEE_SERVICE_URL || 'http://employee-service:4002'}/employees?limit=1000`, { headers: { Authorization: req.headers.authorization } });
+      for (const e of (data.employees || [])) empLookup[e.id] = e;
+    } catch {}
+
+    const allEmpIds = new Set([...Object.keys(byEmp), ...Object.keys(bikByEmp), ...Object.keys(esopByEmp)]);
+
+    const lines = [`IR8A|${year}|${UEN}`];
+    for (const empId of allEmpIds) {
+      const ps   = byEmp[empId];
+      const emp  = empLookup[empId] || {};
+      const nric = emp.nric || 'UNKNOWN';
+      const name = (emp.fullName || empId).replace(/\|/g, ' ');
+      const income = ps ? Math.round(decSafe(ps.ytdGrossEnc) * 100) / 100 : 0;
+      const empCpf = ps ? Math.round(decSafe(ps.ytdEmployeeCpfEnc) * 100) / 100 : 0;
+      const erlCpf = ps ? Math.round(decSafe(ps.ytdEmployerCpfEnc) * 100) / 100 : 0;
+      const aw     = Math.round((awByEmp[empId] || 0) * 100) / 100;
+      const bik    = Math.round((bikByEmp[empId] || 0) * 100) / 100;
+      const esop   = Math.round((esopByEmp[empId] || 0) * 100) / 100;
+      lines.push([nric, name, income, empCpf, erlCpf, aw, bik, esop].join('|'));
+    }
+
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename=IR8A-${year}.txt`);
+    res.send(lines.join('\n'));
   } catch (err) { next(err); }
 });
 

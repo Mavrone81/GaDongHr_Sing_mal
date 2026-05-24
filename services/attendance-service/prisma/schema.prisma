@@ -26,11 +26,49 @@ model AttendanceRecord {
   clockOutLng    Float?
   withinGeofence Boolean?
   locationName   String?   // name of the matched location
-  createdAt      DateTime  @default(now())
+  // ── TAT-005 scheduled-time reconciliation ────────────────────────────────
+  // Captured from the matching RosterEntry → Shift{Template,WorkingShift} at
+  // clock-in / clock-out time. If the employee has no roster entry for the
+  // date, scheduledStart/End stay null and both delta statuses are NOT_APPLICABLE.
+  scheduledStart    DateTime?
+  scheduledEnd      DateTime?
+  // Minutes the employee clocked in BEFORE scheduledStart, or clocked out
+  // AFTER scheduledEnd. Always non-negative — short hours (clocking in late
+  // or out early) count automatically against the employee and are not
+  // captured here.
+  earlyMinutes      Int          @default(0)
+  lateMinutes       Int          @default(0)
+  // Per-side delta status. AUTO_APPROVED = within shift grace; PENDING =
+  // outside grace, manager review required; APPROVED/DENIED = manager
+  // decision; NOT_APPLICABLE = no delta on that side.
+  earlyStatus       DeltaStatus  @default(NOT_APPLICABLE)
+  lateStatus        DeltaStatus  @default(NOT_APPLICABLE)
+  earlyApprovedBy   String?
+  earlyApprovedAt   DateTime?
+  earlyDenyReason   String?
+  lateApprovedBy    String?
+  lateApprovedAt    DateTime?
+  lateDenyReason    String?
+  // Billable hours after clipping unapproved early/late time to scheduled
+  // bounds. Recomputed by the reconciliation engine on every status change.
+  // Payroll auto-feed reads these (NOT raw hoursWorked / otHours).
+  billableHours     Float?
+  billableOtHours   Float        @default(0)
+  createdAt         DateTime     @default(now())
 
   @@unique([employeeId, date])
   @@index([employeeId])
+  @@index([earlyStatus])
+  @@index([lateStatus])
   @@map("attendance_records")
+}
+
+enum DeltaStatus {
+  NOT_APPLICABLE
+  AUTO_APPROVED
+  PENDING
+  APPROVED
+  DENIED
 }
 
 model WorkLocation {
@@ -64,15 +102,19 @@ model EmployeeWorkLocation {
 }
 
 model ShiftTemplate {
-  id            String   @id @default(uuid())
-  name          String
-  startTime     String   // HH:mm
-  endTime       String   // HH:mm
-  breakMinutes  Int      @default(60)
-  hoursPerDay   Float    @default(8)
-  color         String   @default("#6366f1") // hex colour for calendar display
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
+  id                String   @id @default(uuid())
+  name              String
+  startTime         String   // HH:mm
+  endTime           String   // HH:mm
+  breakMinutes      Int      @default(60)
+  hoursPerDay       Float    @default(8)
+  color             String   @default("#6366f1") // hex colour for calendar display
+  // TAT-005: time within ± grace of scheduled bounds is auto-approved (no
+  // manager workflow). Default 15 min each side — tunable per shift.
+  graceMinutesEarly Int      @default(15)
+  graceMinutesLate  Int      @default(15)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
 
   rosterEntries RosterEntry[]
   @@map("shift_templates")
@@ -130,25 +172,28 @@ model ShiftProject {
 }
 
 model WorkingShift {
-  id           String    @id @default(uuid())
-  projectId    String
-  name         String
-  workMon      Boolean   @default(false)
-  workTue      Boolean   @default(false)
-  workWed      Boolean   @default(false)
-  workThu      Boolean   @default(false)
-  workFri      Boolean   @default(false)
-  workSat      Boolean   @default(false)
-  workSun      Boolean   @default(false)
-  startTime    String
-  endTime      String
-  breakMinutes Int       @default(60)
-  hoursPerDay  Float     @default(8)
-  color        String    @default("#6366f1")
-  isRecurring  Boolean   @default(true)
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                String    @id @default(uuid())
+  projectId         String
+  name              String
+  workMon           Boolean   @default(false)
+  workTue           Boolean   @default(false)
+  workWed           Boolean   @default(false)
+  workThu           Boolean   @default(false)
+  workFri           Boolean   @default(false)
+  workSat           Boolean   @default(false)
+  workSun           Boolean   @default(false)
+  startTime         String
+  endTime           String
+  breakMinutes      Int       @default(60)
+  hoursPerDay       Float     @default(8)
+  color             String    @default("#6366f1")
+  // TAT-005: per-shift grace window — see ShiftTemplate.graceMinutesEarly.
+  graceMinutesEarly Int       @default(15)
+  graceMinutesLate  Int       @default(15)
+  isRecurring       Boolean   @default(true)
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   project        ShiftProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignments    ShiftAssignment[]
@@ -243,4 +288,29 @@ enum AttStatus {
   HALF_DAY
   ON_LEAVE
   PUBLIC_HOLIDAY
+}
+
+// TAT-005: Attendance period lock + HR approval gate.
+// One row per "YYYY-MM" period. Drives the payroll auto-feed handshake.
+// Lifecycle: OPEN → LOCKED → APPROVED_FOR_PAYROLL. Unlocking goes back to OPEN.
+model AttendancePeriod {
+  id          String         @id @default(uuid())
+  period      String         @unique          // "YYYY-MM"
+  status      PeriodStatus   @default(OPEN)
+  lockedBy    String?
+  lockedAt    DateTime?
+  approvedBy  String?
+  approvedAt  DateTime?
+  notes       String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([status])
+  @@map("attendance_periods")
+}
+
+enum PeriodStatus {
+  OPEN
+  LOCKED
+  APPROVED_FOR_PAYROLL
 }

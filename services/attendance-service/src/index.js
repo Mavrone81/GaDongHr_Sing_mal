@@ -8,6 +8,13 @@ const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
 const { haversineMetres, isLate, calcHoursWorked, calcOtHours } = require('./utils');
+const { resolveSchedule } = require('./shift-resolver');
+const { reconcileRecord } = require('./engines/time-reconciliation.engine');
+const { summarizeAll } = require('./engines/attendance-summary.engine');
+
+// Read at request time, not module-load time — keeps tests able to set the
+// key via process.env before each request without re-requiring the module.
+const internalKey = () => process.env.INTERNAL_SERVICE_KEY || 'dev-internal-key';
 
 const prisma = new PrismaClient();
 const app = express();
@@ -69,19 +76,31 @@ app.post('/attendance/clock-in', authenticate, async (req, res, next) => {
       return res.status(403).json({ error: 'Clock-in denied: you are outside your assigned work location(s). Contact HR if this is incorrect.' });
     }
 
+    // TAT-005: look up roster + capture scheduledStart. resolveSchedule
+    // returns null when there's no roster, in which case reconciliation
+    // falls back to "no schedule" semantics (no deltas, billable = actual).
+    const schedule = await resolveSchedule(prisma, empId, today);
+
+    // Reconcile in-memory using the proposed clock event + schedule so we
+    // can persist the deltas + status + scheduled bounds in ONE upsert.
+    const scheduledStart = schedule?.scheduledStart ?? null;
+    const scheduledEnd   = schedule?.scheduledEnd   ?? null;
+    const recon = schedule
+      ? reconcileRecord({ clockIn: now, clockOut: null, scheduledStart, scheduledEnd }, schedule)
+      : {};
+
+    const baseData = {
+      clockIn: now,
+      status: isLate(now) ? 'LATE' : 'PRESENT',
+      clockInLat: latitude ?? null, clockInLng: longitude ?? null,
+      withinGeofence: geo.valid, locationName: geo.locationName,
+      scheduledStart, scheduledEnd,
+      ...recon,
+    };
     const record = await prisma.attendanceRecord.upsert({
       where: { employeeId_date: { employeeId: empId, date: today } },
-      create: {
-        id: uuidv4(), employeeId: empId, date: today, clockIn: now,
-        status: isLate(now) ? 'LATE' : 'PRESENT',
-        clockInLat: latitude ?? null, clockInLng: longitude ?? null,
-        withinGeofence: geo.valid, locationName: geo.locationName,
-      },
-      update: {
-        clockIn: now, status: isLate(now) ? 'LATE' : 'PRESENT',
-        clockInLat: latitude ?? null, clockInLng: longitude ?? null,
-        withinGeofence: geo.valid, locationName: geo.locationName,
-      },
+      create: { id: uuidv4(), employeeId: empId, date: today, ...baseData },
+      update: baseData,
     });
     res.json(record);
   } catch (err) { next(err); }
@@ -105,6 +124,26 @@ app.post('/attendance/clock-out', authenticate, async (req, res, next) => {
     const hoursWorked = calcHoursWorked(record.clockIn, now);
     const otHours = calcOtHours(hoursWorked);
 
+    // Reconcile in-memory against the captured (or just-resolved) schedule,
+    // then do ONE update with the merged patch — clock event + reconciliation.
+    // When there's no roster, reconcileRecord still produces billable hours
+    // (raw clock-time diff − break) with both delta statuses NOT_APPLICABLE.
+    const schedule = (record.scheduledStart && record.scheduledEnd)
+      ? {
+          scheduledStart: record.scheduledStart,
+          scheduledEnd: record.scheduledEnd,
+          // Re-resolve to pick up any roster edits between clock-in and now.
+          ...(await resolveSchedule(prisma, empId, today) || {}),
+        }
+      : (await resolveSchedule(prisma, empId, today));
+
+    const inMemory = {
+      ...record,
+      clockOut: now,
+      hoursWorked,
+      otHours,
+    };
+    const recon = reconcileRecord(inMemory, schedule || {});
     const updated = await prisma.attendanceRecord.update({
       where: { id: record.id },
       data: {
@@ -112,6 +151,7 @@ app.post('/attendance/clock-out', authenticate, async (req, res, next) => {
         hoursWorked,
         otHours,
         clockOutLat: latitude ?? null, clockOutLng: longitude ?? null,
+        ...recon,
       },
     });
     res.json(updated);
@@ -133,7 +173,7 @@ app.get('/attendance/admin/records', authenticate, authorize(ROLES.SUPER_ADMIN, 
 });
 
 // ── Employee records ──────────────────────────────────────────────────────────
-const ATTENDANCE_RESERVED = new Set(['shifts', 'roster', 'locations', 'admin', 'records']);
+const ATTENDANCE_RESERVED = new Set(['shifts', 'roster', 'locations', 'admin', 'records', 'periods', 'pending-approvals', 'internal']);
 app.get('/attendance/:employeeId', authenticate, async (req, res, next) => {
   if (ATTENDANCE_RESERVED.has(req.params.employeeId)) return next();
   try {
@@ -771,6 +811,208 @@ app.delete('/attendance/shifts/projects/:id/members/:memberId', authenticate, au
   try {
     await prisma.projectMember.delete({ where: { id: req.params.memberId } });
     res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// ─── TAT-005 Period Lock / Approval / Manager Workflow ──────────────────────
+
+const PERIOD_RX = /^\d{4}-(0[1-9]|1[0-2])$/;
+const ADMIN_LOCK_ROLES = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER];
+const APPROVAL_ROLES   = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.LINE_MANAGER];
+
+function periodBounds(period) {
+  const [y, m] = period.split('-').map(Number);
+  const start = new Date(Date.UTC(y, m - 1, 1));
+  const end   = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
+  return { start, end };
+}
+
+// List + fetch period state
+app.get('/attendance/periods', authenticate, authorize(...ADMIN_LOCK_ROLES, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const rows = await prisma.attendancePeriod.findMany({ orderBy: { period: 'desc' } });
+    res.json(rows);
+  } catch (err) { next(err); }
+});
+
+app.get('/attendance/periods/:period', authenticate, authorize(...ADMIN_LOCK_ROLES, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    if (!PERIOD_RX.test(req.params.period)) return res.status(400).json({ error: 'Invalid period — use YYYY-MM' });
+    const row = await prisma.attendancePeriod.findUnique({ where: { period: req.params.period } });
+    res.json(row || { period: req.params.period, status: 'OPEN' });
+  } catch (err) { next(err); }
+});
+
+// Lock — only valid OPEN → LOCKED
+app.post('/attendance/periods/:period/lock', authenticate, authorize(...ADMIN_LOCK_ROLES), async (req, res, next) => {
+  try {
+    const period = req.params.period;
+    if (!PERIOD_RX.test(period)) return res.status(400).json({ error: 'Invalid period — use YYYY-MM' });
+    const existing = await prisma.attendancePeriod.findUnique({ where: { period } });
+    if (existing && existing.status !== 'OPEN') {
+      return res.status(409).json({ error: `Cannot lock from status ${existing.status}` });
+    }
+    const row = await prisma.attendancePeriod.upsert({
+      where: { period },
+      create: {
+        id: uuidv4(), period, status: 'LOCKED',
+        lockedBy: req.user?.sub, lockedAt: new Date(),
+        notes: req.body?.notes || null,
+      },
+      update: {
+        status: 'LOCKED',
+        lockedBy: req.user?.sub, lockedAt: new Date(),
+        notes: req.body?.notes ?? existing?.notes ?? null,
+      },
+    });
+    await writeAudit({ entityType: 'AttendancePeriod', entityId: row.id, entityName: period, action: 'LOCK', actor: req.user, req });
+    res.json(row);
+  } catch (err) { next(err); }
+});
+
+// Unlock — back to OPEN; only HR_ADMIN+ (HR_MANAGER cannot unlock once approved)
+app.post('/attendance/periods/:period/unlock', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const period = req.params.period;
+    if (!PERIOD_RX.test(period)) return res.status(400).json({ error: 'Invalid period — use YYYY-MM' });
+    const existing = await prisma.attendancePeriod.findUnique({ where: { period } });
+    if (!existing) return res.status(404).json({ error: 'Period not found' });
+    if (existing.status === 'OPEN') return res.status(409).json({ error: 'Period is already OPEN' });
+    const row = await prisma.attendancePeriod.update({
+      where: { period },
+      data: { status: 'OPEN', lockedBy: null, lockedAt: null, approvedBy: null, approvedAt: null },
+    });
+    await writeAudit({ entityType: 'AttendancePeriod', entityId: row.id, entityName: period, action: 'UNLOCK', actor: req.user, req });
+    res.json(row);
+  } catch (err) { next(err); }
+});
+
+// Approve for payroll — only valid LOCKED → APPROVED_FOR_PAYROLL
+app.post('/attendance/periods/:period/approve-for-payroll', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const period = req.params.period;
+    if (!PERIOD_RX.test(period)) return res.status(400).json({ error: 'Invalid period — use YYYY-MM' });
+    const existing = await prisma.attendancePeriod.findUnique({ where: { period } });
+    if (!existing) return res.status(404).json({ error: 'Period must be LOCKED before approval' });
+    if (existing.status !== 'LOCKED') {
+      return res.status(409).json({ error: `Cannot approve from status ${existing.status} — period must be LOCKED first` });
+    }
+    const row = await prisma.attendancePeriod.update({
+      where: { period },
+      data: { status: 'APPROVED_FOR_PAYROLL', approvedBy: req.user?.sub, approvedAt: new Date() },
+    });
+    await writeAudit({ entityType: 'AttendancePeriod', entityId: row.id, entityName: period, action: 'APPROVE_FOR_PAYROLL', actor: req.user, req });
+    res.json(row);
+  } catch (err) { next(err); }
+});
+
+// ─── Manager: pending early/late approvals ──────────────────────────────────
+
+app.get('/attendance/pending-approvals', authenticate, authorize(...APPROVAL_ROLES), async (req, res, next) => {
+  try {
+    // Optional employeeIds filter (manager-of), period filter.
+    const where = {
+      OR: [
+        { earlyStatus: 'PENDING' },
+        { lateStatus:  'PENDING' },
+      ],
+    };
+    if (req.query.employeeIds) {
+      const ids = String(req.query.employeeIds).split(',').filter(Boolean);
+      if (ids.length) where.employeeId = { in: ids };
+    }
+    if (req.query.period && PERIOD_RX.test(req.query.period)) {
+      const { start, end } = periodBounds(req.query.period);
+      where.date = { gte: start, lte: end };
+    }
+    const records = await prisma.attendanceRecord.findMany({
+      where,
+      orderBy: { date: 'desc' },
+      take: 500,
+    });
+    res.json({ count: records.length, records });
+  } catch (err) { next(err); }
+});
+
+// Approve / Deny — per side. Reconciler re-runs to update billable hours.
+async function decideDelta(req, res, side, decision) {
+  if (side !== 'early' && side !== 'late') return res.status(400).json({ error: 'Invalid side' });
+  const recordId = req.params.id;
+  const record = await prisma.attendanceRecord.findUnique({ where: { id: recordId } });
+  if (!record) return res.status(404).json({ error: 'Attendance record not found' });
+
+  const currentStatus = side === 'early' ? record.earlyStatus : record.lateStatus;
+  if (currentStatus !== 'PENDING' && currentStatus !== 'AUTO_APPROVED') {
+    return res.status(409).json({ error: `Cannot ${decision.toLowerCase()} a delta in status ${currentStatus}` });
+  }
+  // Manager override on AUTO_APPROVED is allowed (HR may want to deny something the grace approved).
+
+  // Apply the manager decision, then re-run reconciliation so billable values
+  // reflect the new status.
+  const decisionPatch = side === 'early'
+    ? { earlyStatus: decision, earlyApprovedBy: req.user?.sub, earlyApprovedAt: new Date(), earlyDenyReason: decision === 'DENIED' ? (req.body?.reason || null) : null }
+    : { lateStatus:  decision, lateApprovedBy:  req.user?.sub, lateApprovedAt:  new Date(), lateDenyReason:  decision === 'DENIED' ? (req.body?.reason || null) : null };
+
+  const afterDecision = { ...record, ...decisionPatch };
+  const shift = await resolveSchedule(prisma, record.employeeId, record.date);
+  const recon = reconcileRecord(afterDecision, shift || {});
+  const updated = await prisma.attendanceRecord.update({
+    where: { id: recordId },
+    data: { ...decisionPatch, ...recon },
+  });
+  await writeAudit({
+    entityType: 'AttendanceRecord', entityId: recordId, entityName: `${record.employeeId} ${record.date.toISOString().slice(0,10)}`,
+    action: `${side.toUpperCase()}_${decision}`, actor: req.user, req,
+  });
+  return res.json(updated);
+}
+
+app.post('/attendance/records/:id/approve-early', authenticate, authorize(...APPROVAL_ROLES), async (req, res, next) => {
+  try { await decideDelta(req, res, 'early', 'APPROVED'); } catch (err) { next(err); }
+});
+
+app.post('/attendance/records/:id/approve-late', authenticate, authorize(...APPROVAL_ROLES), async (req, res, next) => {
+  try { await decideDelta(req, res, 'late', 'APPROVED'); } catch (err) { next(err); }
+});
+
+app.post('/attendance/records/:id/deny-early', authenticate, authorize(...APPROVAL_ROLES), async (req, res, next) => {
+  try { await decideDelta(req, res, 'early', 'DENIED'); } catch (err) { next(err); }
+});
+
+app.post('/attendance/records/:id/deny-late', authenticate, authorize(...APPROVAL_ROLES), async (req, res, next) => {
+  try { await decideDelta(req, res, 'late', 'DENIED'); } catch (err) { next(err); }
+});
+
+// ─── Internal: per-employee period summary for payroll auto-feed ────────────
+// Authenticated by INTERNAL_SERVICE_KEY header — caller is the payroll
+// service running compute. Returns periodStatus so the caller can enforce
+// the APPROVED_FOR_PAYROLL gate.
+app.get('/attendance/internal/period-summary/:period', async (req, res, next) => {
+  try {
+    if (!PERIOD_RX.test(req.params.period)) return res.status(400).json({ error: 'Invalid period — use YYYY-MM' });
+    const key = req.headers['x-internal-service-key'];
+    if (!key || key !== internalKey()) return res.status(403).json({ error: 'Forbidden' });
+    const period = req.params.period;
+    const { start, end } = periodBounds(period);
+    const periodRow = await prisma.attendancePeriod.findUnique({ where: { period } });
+    const records = await prisma.attendanceRecord.findMany({
+      where: { date: { gte: start, lte: end } },
+    });
+    // Working-days computation lives in payroll-utils which is mounted here too.
+    const { countWorkingDays } = require('/app/shared/payroll-utils');
+    const holidays = []; // attendance-service doesn't own the PH calendar; caller can pass via summary endpoint v2 if needed
+    const expectedWorkDays = countWorkingDays(start, end, new Set(holidays.map(h => h.toISOString().slice(0,10))), 'FIVE_DAY');
+    const employeeIds = Array.isArray(req.query.employeeIds)
+      ? req.query.employeeIds
+      : (typeof req.query.employeeIds === 'string' ? req.query.employeeIds.split(',').filter(Boolean) : []);
+    const summary = summarizeAll(records, { expectedWorkDays, employeeIds });
+    res.json({
+      period,
+      periodStatus: periodRow?.status || 'OPEN',
+      expectedWorkDays,
+      employeeCount: Object.keys(summary).length,
+      summary,
+    });
   } catch (err) { next(err); }
 });
 

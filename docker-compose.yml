@@ -168,7 +168,9 @@ services:
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - EMPLOYEE_SERVICE_URL=http://employee-service:4002
       - LEAVE_SERVICE_URL=http://leave-service:4004
+      - ATTENDANCE_SERVICE_URL=http://attendance-service:4007
       - NOTIFICATION_SERVICE_URL=http://notification-service:4009
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-***REMOVED***}
       - DISABLE_MAKER_CHECKER=${DISABLE_MAKER_CHECKER:-true}
       - COMPANY_NAME=${COMPANY_NAME:-VORKHIVE PTE LTD}
       - COMPANY_UEN=${COMPANY_UEN:-202512345A}
@@ -293,6 +295,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${ATTENDANCE_DB:-hrms_attendance}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-***REMOVED***}
     volumes:
       - shared_certs:/app/certs:ro
     depends_on:
@@ -321,6 +324,9 @@ services:
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - PAYROLL_SERVICE_URL=http://payroll-service:4003
       - EMPLOYEE_SERVICE_URL=http://employee-service:4002
+      - LEAVE_SERVICE_URL=http://leave-service:4004
+      - CLAIMS_SERVICE_URL=http://claims-service:4005
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
     volumes:
       - shared_certs:/app/certs:ro
     depends_on:
@@ -351,7 +357,7 @@ services:
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASS=${SMTP_PASS}
-      - SMTP_FROM=${SMTP_FROM:-noreply@ezyhRM.sg}
+      - SMTP_FROM=${SMTP_FROM:-noreply@vorkhive.sg}
     volumes:
       - shared_certs:/app/certs:ro
     depends_on:
@@ -381,6 +387,7 @@ services:
       - PAYROLL_SERVICE_URL=http://payroll-service:4003
       - EMPLOYEE_SERVICE_URL=http://employee-service:4002
       - LEAVE_SERVICE_URL=http://leave-service:4004
+      - INTERNAL_SERVICE_KEY=***REMOVED***
     volumes:
       - shared_certs:/app/certs:ro
     depends_on:
@@ -406,6 +413,7 @@ services:
       - PORT=4012
       - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/hrms_performance
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+      - EMPLOYEE_SERVICE_URL=http://employee-service:4002
     volumes:
       - shared_certs:/app/certs:ro
     depends_on:
