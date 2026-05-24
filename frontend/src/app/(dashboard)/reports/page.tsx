@@ -636,6 +636,435 @@ function CustomReportModal({ onClose, onToast }: { onClose: () => void; onToast:
   );
 }
 
+// ── RPT-003 Phase 2 — Report Builder Wizard + Schedule Modal ──────────────────
+type ReportMode = 'fields' | 'grouped';
+type FilterRow  = { id: string; field: string; op: string; value: string };
+type AggRow     = { id: string; field: string; op: string; as: string };
+type SortRow    = { id: string; field: string; dir: 'asc' | 'desc' };
+interface CatalogField { key: string; label: string; type: string }
+interface Catalog { [ds: string]: CatalogField[] }
+
+const DS_LABELS: Record<string, string> = {
+  employees: 'Employees', payrollRuns: 'Payroll Runs',
+  leaveApplications: 'Leave Applications', attendance: 'Attendance', claims: 'Claims',
+};
+const FILTER_OPS_META = [
+  { op: 'eq', label: '=' }, { op: 'ne', label: '≠' },
+  { op: 'gt', label: '>' }, { op: 'lt', label: '<' },
+  { op: 'gte', label: '≥' }, { op: 'lte', label: '≤' },
+  { op: 'contains', label: 'contains' }, { op: 'in', label: 'in (csv)' },
+];
+const AGG_OPS_META = [
+  { op: 'count', label: 'Count' }, { op: 'sum', label: 'Sum' },
+  { op: 'avg', label: 'Avg' }, { op: 'min', label: 'Min' }, { op: 'max', label: 'Max' },
+];
+function nanoid6() { return Math.random().toString(36).slice(2, 8); }
+
+function ReportBuilderWizard({ onClose, onSaved, onToast }: {
+  onClose: () => void; onSaved: () => void; onToast: (msg: string, type: 'ok' | 'err') => void;
+}) {
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [catalog, setCatalog] = useState<Catalog>({});
+  const [saving, setSaving] = useState(false);
+  // Step 1
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('WORKFORCE');
+  const [dataSource, setDataSource] = useState('employees');
+  // Step 2
+  const [mode, setMode] = useState<ReportMode>('fields');
+  const [selectedFields, setSelectedFields] = useState<string[]>([]);
+  const [groupBy, setGroupBy] = useState('');
+  const [aggregations, setAggregations] = useState<AggRow[]>([{ id: nanoid6(), field: '', op: 'count', as: 'count' }]);
+  // Step 3
+  const [filters, setFilters] = useState<FilterRow[]>([]);
+  const [sortBy, setSortBy] = useState<SortRow[]>([]);
+
+  useEffect(() => {
+    apiFetch('/reports/data-sources')
+      .then(d => setCatalog(d.fieldCatalog || {}))
+      .catch(() => {});
+  }, []);
+
+  const fields = catalog[dataSource] || [];
+  const toggleField = (key: string) =>
+    setSelectedFields(p => p.includes(key) ? p.filter(k => k !== key) : [...p, key]);
+
+  function buildDefinition() {
+    const def: any = { dataSource };
+    if (filters.length > 0) {
+      def.filters = filters.map(f => {
+        let val: any = f.value;
+        if (f.op === 'in') val = f.value.split(',').map(v => v.trim());
+        else if (val === 'true') val = true;
+        else if (val === 'false') val = false;
+        else if (val !== '' && !isNaN(Number(val))) val = Number(val);
+        return { field: f.field, op: f.op, value: val };
+      });
+    }
+    if (mode === 'fields') {
+      if (selectedFields.length > 0) {
+        def.fields = selectedFields.map(k => ({ key: k, label: fields.find(f => f.key === k)?.label || k }));
+      }
+    } else {
+      if (groupBy) def.groupBy = groupBy;
+      const aggs = aggregations.filter(a => a.as.trim());
+      if (aggs.length > 0) {
+        def.aggregations = aggs.map(a => ({
+          op: a.op, as: a.as.trim(),
+          ...(a.op !== 'count' && a.field ? { field: a.field } : {}),
+        }));
+      }
+    }
+    if (sortBy.length > 0) def.sortBy = sortBy.map(s => ({ field: s.field, dir: s.dir }));
+    return def;
+  }
+
+  async function save() {
+    if (!name.trim()) { onToast('Name is required', 'err'); return; }
+    setSaving(true);
+    try {
+      await apiFetch('/reports/templates', {
+        method: 'POST',
+        body: JSON.stringify({ name: name.trim(), description, category, definition: buildDefinition() }),
+      });
+      onToast('Report saved', 'ok');
+      onSaved();
+    } catch (e: any) {
+      onToast(e.message || 'Save failed', 'err');
+    } finally { setSaving(false); }
+  }
+
+  const canNext1 = name.trim().length > 0;
+  const canNext2 = mode === 'fields' ? selectedFields.length > 0
+    : groupBy !== '' && aggregations.some(a => a.as.trim());
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+      <div className="w-full max-w-3xl bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden max-h-[92vh]">
+        <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100">
+          <div>
+            <h2 className="text-base font-black text-slate-900 tracking-tighter">New Saved Report</h2>
+            <div className="flex items-center gap-2 mt-1.5">
+              {([1, 2, 3] as const).map(s => (
+                <div key={s} className={`h-1.5 w-12 rounded-full transition-all ${s <= step ? 'bg-indigo-600' : 'bg-slate-200'}`} />
+              ))}
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Step {step} of 3</span>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100">✕</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-6">
+          {step === 1 && (
+            <>
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Report Name *</label>
+                <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Active Headcount by Department"
+                  className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Category</label>
+                  <select value={category} onChange={e => setCategory(e.target.value)}
+                    className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500">
+                    {['WORKFORCE', 'FINANCIAL', 'LEAVE', 'TRAINING', 'COMPLIANCE', 'CUSTOM'].map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Description</label>
+                  <input value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional"
+                    className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-3">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Data Source</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {Object.entries(DS_LABELS).map(([ds, lbl]) => (
+                    <button key={ds} onClick={() => { setDataSource(ds); setSelectedFields([]); setGroupBy(''); }}
+                      className={`px-4 py-3 rounded-xl border-2 text-left transition-all ${dataSource === ds ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300'}`}>
+                      <p className={`text-[10px] font-black uppercase tracking-wide ${dataSource === ds ? 'text-indigo-700' : 'text-slate-700'}`}>{lbl}</p>
+                      <p className="text-[8px] text-slate-400 mt-0.5 font-bold uppercase">{(catalog[ds] || []).length || '—'} fields</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {step === 2 && (
+            <>
+              <div className="flex gap-3">
+                {(['fields', 'grouped'] as ReportMode[]).map(m => (
+                  <button key={m} onClick={() => setMode(m)}
+                    className={`flex-1 py-3 rounded-xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${mode === m ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+                    {m === 'fields' ? 'Field List (rows)' : 'Grouped Summary'}
+                  </button>
+                ))}
+              </div>
+
+              {mode === 'fields' && (
+                <>
+                  <p className="text-[10px] font-bold text-slate-400 -mt-2">Select the columns to include. No aggregation applied.</p>
+                  <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                    {fields.map(f => (
+                      <label key={f.key} className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl cursor-pointer border transition-all ${selectedFields.includes(f.key) ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                        <input type="checkbox" checked={selectedFields.includes(f.key)} onChange={() => toggleField(f.key)} className="w-3.5 h-3.5 accent-indigo-600" />
+                        <div className="min-w-0">
+                          <span className="text-[10px] font-black uppercase tracking-widest block truncate">{f.label}</span>
+                          <span className="text-[8px] font-bold text-slate-400 uppercase">{f.type}</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {mode === 'grouped' && (
+                <>
+                  <p className="text-[10px] font-bold text-slate-400 -mt-2">Group by a single field and compute aggregations per group.</p>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Group By</label>
+                    <select value={groupBy} onChange={e => setGroupBy(e.target.value)}
+                      className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500">
+                      <option value="">— pick a field —</option>
+                      {fields.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Aggregations</label>
+                      <button onClick={() => setAggregations(p => [...p, { id: nanoid6(), field: '', op: 'count', as: '' }])}
+                        className="text-[9px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest">+ Add</button>
+                    </div>
+                    {aggregations.map((agg, i) => (
+                      <div key={agg.id} className="flex gap-2 items-center">
+                        <select value={agg.op} onChange={e => setAggregations(p => p.map((a, j) => j === i ? { ...a, op: e.target.value } : a))}
+                          className="w-20 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-700 outline-none focus:border-indigo-500">
+                          {AGG_OPS_META.map(o => <option key={o.op} value={o.op}>{o.label}</option>)}
+                        </select>
+                        <select value={agg.field} onChange={e => setAggregations(p => p.map((a, j) => j === i ? { ...a, field: e.target.value } : a))}
+                          disabled={agg.op === 'count'}
+                          className="flex-1 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-700 outline-none focus:border-indigo-500 disabled:opacity-50">
+                          <option value="">{agg.op === 'count' ? '(all rows)' : '— numeric field —'}</option>
+                          {fields.filter(f => f.type === 'number').map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                        </select>
+                        <span className="text-[9px] font-black text-slate-400">AS</span>
+                        <input value={agg.as} onChange={e => setAggregations(p => p.map((a, j) => j === i ? { ...a, as: e.target.value } : a))}
+                          placeholder="alias"
+                          className="w-20 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 outline-none focus:border-indigo-500" />
+                        {aggregations.length > 1 && (
+                          <button onClick={() => setAggregations(p => p.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600 text-xs font-black">✕</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {step === 3 && (
+            <>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Filters (optional)</label>
+                  <button onClick={() => setFilters(p => [...p, { id: nanoid6(), field: fields[0]?.key || '', op: 'eq', value: '' }])}
+                    className="text-[9px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest">+ Add Filter</button>
+                </div>
+                {filters.length === 0 && <p className="text-[10px] text-slate-400 font-bold">No filters — returns all rows.</p>}
+                {filters.map((f, i) => (
+                  <div key={f.id} className="flex gap-2 items-center">
+                    <select value={f.field} onChange={e => setFilters(p => p.map((r, j) => j === i ? { ...r, field: e.target.value } : r))}
+                      className="flex-1 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-700 outline-none focus:border-indigo-500">
+                      {fields.map(fd => <option key={fd.key} value={fd.key}>{fd.label}</option>)}
+                    </select>
+                    <select value={f.op} onChange={e => setFilters(p => p.map((r, j) => j === i ? { ...r, op: e.target.value } : r))}
+                      className="w-24 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-700 outline-none focus:border-indigo-500">
+                      {FILTER_OPS_META.map(o => <option key={o.op} value={o.op}>{o.label}</option>)}
+                    </select>
+                    <input value={f.value} onChange={e => setFilters(p => p.map((r, j) => j === i ? { ...r, value: e.target.value } : r))}
+                      placeholder={f.op === 'in' ? 'val1,val2' : 'value'}
+                      className="flex-1 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 outline-none focus:border-indigo-500" />
+                    <button onClick={() => setFilters(p => p.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600 text-xs font-black">✕</button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Sort Order (optional)</label>
+                  <button onClick={() => setSortBy(p => [...p, { id: nanoid6(), field: fields[0]?.key || '', dir: 'asc' }])}
+                    className="text-[9px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest">+ Add Sort</button>
+                </div>
+                {sortBy.map((s, i) => (
+                  <div key={s.id} className="flex gap-2 items-center">
+                    <select value={s.field} onChange={e => setSortBy(p => p.map((r, j) => j === i ? { ...r, field: e.target.value } : r))}
+                      className="flex-1 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-700 outline-none focus:border-indigo-500">
+                      {fields.map(fd => <option key={fd.key} value={fd.key}>{fd.label}</option>)}
+                    </select>
+                    <button onClick={() => setSortBy(p => p.map((r, j) => j === i ? { ...r, dir: r.dir === 'asc' ? 'desc' : 'asc' } : r))}
+                      className={`px-3 py-2 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all ${s.dir === 'asc' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-purple-50 border-purple-200 text-purple-700'}`}>
+                      {s.dir === 'asc' ? '↑ ASC' : '↓ DESC'}
+                    </button>
+                    <button onClick={() => setSortBy(p => p.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600 text-xs font-black">✕</button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Definition Preview</label>
+                <pre className="p-4 bg-slate-900 text-emerald-400 rounded-xl text-[9px] font-mono overflow-auto max-h-40 leading-relaxed">
+                  {JSON.stringify(buildDefinition(), null, 2)}
+                </pre>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="flex gap-3 px-8 py-5 border-t border-slate-100 bg-slate-50/50 flex-shrink-0">
+          <button onClick={onClose} className="px-6 py-3 text-[10px] font-black text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-100 uppercase tracking-widest">Cancel</button>
+          {step > 1 && (
+            <button onClick={() => setStep(s => (s - 1) as 1 | 2 | 3)}
+              className="px-6 py-3 text-[10px] font-black text-slate-600 border border-slate-300 rounded-xl hover:bg-slate-100 uppercase tracking-widest">← Back</button>
+          )}
+          <div className="flex-1" />
+          {step < 3 ? (
+            <button onClick={() => setStep(s => (s + 1) as 1 | 2 | 3)} disabled={step === 1 ? !canNext1 : !canNext2}
+              className="px-8 py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 rounded-xl uppercase tracking-widest transition-all">
+              Next →
+            </button>
+          ) : (
+            <button onClick={save} disabled={saving}
+              className="px-8 py-3 text-[10px] font-black text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl uppercase tracking-widest transition-all">
+              {saving ? 'Saving…' : 'Save Report'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ScheduleModal({ templateId, templateName, onClose, onToast }: {
+  templateId: string; templateName: string;
+  onClose: () => void; onToast: (msg: string, type: 'ok' | 'err') => void;
+}) {
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [freq, setFreq] = useState('WEEKLY');
+  const [format, setFormat] = useState('CSV');
+  const [recipients, setRecipients] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  const refresh = async () => {
+    setLoading(true);
+    try {
+      const data = await apiFetch(`/reports/schedules?templateId=${templateId}`);
+      setSchedules(Array.isArray(data) ? data : []);
+    } catch { setSchedules([]); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { refresh(); }, []);
+
+  const create = async () => {
+    if (!recipients.trim()) { onToast('Enter at least one recipient email', 'err'); return; }
+    setCreating(true);
+    try {
+      await apiFetch('/reports/schedules', {
+        method: 'POST',
+        body: JSON.stringify({
+          templateId, frequency: freq, format,
+          recipients: recipients.split(',').map(r => r.trim()).filter(Boolean),
+        }),
+      });
+      onToast('Schedule created', 'ok');
+      setRecipients('');
+      refresh();
+    } catch (e: any) { onToast(e.message || 'Create failed', 'err'); }
+    finally { setCreating(false); }
+  };
+
+  const remove = async (schedId: string) => {
+    setDeleting(schedId);
+    try {
+      await apiFetch(`/reports/schedules/${schedId}`, { method: 'DELETE' });
+      onToast('Schedule deleted', 'ok');
+      refresh();
+    } catch (e: any) { onToast(e.message || 'Delete failed', 'err'); }
+    finally { setDeleting(null); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+      <div className="w-full max-w-lg bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden max-h-[85vh]">
+        <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100">
+          <div>
+            <h2 className="text-base font-black text-slate-900 tracking-tighter">Scheduled Delivery</h2>
+            <p className="eyebrow-tight mt-0.5">{templateName}</p>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100">✕</button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-5">
+          <div className="flex flex-col gap-2">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Active Schedules</label>
+            {loading ? <div className="h-10 bg-slate-100 rounded-xl animate-pulse" />
+              : schedules.length === 0 ? <p className="text-[10px] font-bold text-slate-400">No schedules yet.</p>
+              : schedules.map(s => (
+                <div key={s.id} className="flex items-center justify-between px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border uppercase tracking-widest ${s.isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>{s.isActive ? 'Active' : 'Paused'}</span>
+                      <span className="text-[10px] font-black text-slate-700">{s.frequency}</span>
+                      <span className="text-[9px] font-black px-2 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-md uppercase">{s.format}</span>
+                    </div>
+                    <span className="text-[9px] text-slate-400 font-bold truncate max-w-xs">{s.recipients}</span>
+                  </div>
+                  <button onClick={() => remove(s.id)} disabled={deleting === s.id}
+                    className="text-[9px] font-black text-red-500 hover:text-red-700 disabled:opacity-50 uppercase tracking-widest ml-4">
+                    {deleting === s.id ? '…' : 'Delete'}
+                  </button>
+                </div>
+              ))}
+          </div>
+          <div className="border-t border-slate-100 pt-4 flex flex-col gap-3">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Create New Schedule</label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Frequency</label>
+                <select value={freq} onChange={e => setFreq(e.target.value)}
+                  className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-700 outline-none focus:border-indigo-500">
+                  {['DAILY', 'WEEKLY', 'MONTHLY'].map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Format</label>
+                <select value={format} onChange={e => setFormat(e.target.value)}
+                  className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-700 outline-none focus:border-indigo-500">
+                  {['CSV', 'XLSX', 'PDF'].map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Recipients (comma-separated)</label>
+              <input value={recipients} onChange={e => setRecipients(e.target.value)}
+                placeholder="hr@company.com, finance@company.com"
+                className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 outline-none focus:border-indigo-500" />
+            </div>
+            <button onClick={create} disabled={creating || !recipients.trim()}
+              className="py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl uppercase tracking-widest transition-all">
+              {creating ? 'Creating…' : 'Create Schedule'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── RPT-003 Phase 1 — Saved Reports ───────────────────────────────────────────
 type SavedTemplate = {
   id: string; name: string; description?: string | null; category?: string | null;
@@ -648,6 +1077,7 @@ function SavedReportsSection({ onToast }: { onToast: (msg: string, type: 'ok' | 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [scheduleModal, setScheduleModal] = useState<{ id: string; name: string } | null>(null);
 
   async function refresh() {
     setLoading(true);
@@ -670,7 +1100,7 @@ function SavedReportsSection({ onToast }: { onToast: (msg: string, type: 'ok' | 
     } finally { setBusy(null); }
   }
 
-  async function exportFormat(t: SavedTemplate, fmt: 'csv' | 'xlsx') {
+  async function exportFormat(t: SavedTemplate, fmt: 'csv' | 'xlsx' | 'pdf') {
     setBusy(`${fmt}-${t.id}`);
     try {
       const token = getAccessToken();
@@ -754,7 +1184,7 @@ function SavedReportsSection({ onToast }: { onToast: (msg: string, type: 'ok' | 
                     <span className="eyebrow-tight">{new Date(t.updatedAt).toLocaleDateString('en-SG')}</span>
                   </td>
                   <td className="px-8 py-5">
-                    <div className="flex gap-2 justify-center">
+                    <div className="flex gap-1.5 justify-center flex-wrap">
                       <button onClick={() => run(t)} disabled={busy === `run-${t.id}`}
                         className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-slate-600 hover:border-emerald-500 hover:text-emerald-600 uppercase tracking-widest disabled:opacity-50">
                         {busy === `run-${t.id}` ? '…' : 'Run'}
@@ -766,6 +1196,14 @@ function SavedReportsSection({ onToast }: { onToast: (msg: string, type: 'ok' | 
                       <button onClick={() => exportFormat(t, 'xlsx')} disabled={busy === `xlsx-${t.id}`}
                         className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-slate-600 hover:border-indigo-500 hover:text-indigo-600 uppercase tracking-widest disabled:opacity-50">
                         {busy === `xlsx-${t.id}` ? '…' : 'XLSX'}
+                      </button>
+                      <button onClick={() => exportFormat(t, 'pdf')} disabled={busy === `pdf-${t.id}`}
+                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-slate-600 hover:border-rose-500 hover:text-rose-600 uppercase tracking-widest disabled:opacity-50">
+                        {busy === `pdf-${t.id}` ? '…' : 'PDF'}
+                      </button>
+                      <button onClick={() => setScheduleModal({ id: t.id, name: t.name })}
+                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-slate-600 hover:border-amber-500 hover:text-amber-600 uppercase tracking-widest">
+                        Sched
                       </button>
                       <button onClick={() => remove(t)} disabled={busy === `del-${t.id}`}
                         className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-red-500 hover:border-red-500 hover:bg-red-50 uppercase tracking-widest disabled:opacity-50">
@@ -780,9 +1218,17 @@ function SavedReportsSection({ onToast }: { onToast: (msg: string, type: 'ok' | 
         )}
       </div>
       {editorOpen && (
-        <SavedReportEditor
+        <ReportBuilderWizard
           onClose={() => setEditorOpen(false)}
           onSaved={() => { setEditorOpen(false); refresh(); }}
+          onToast={onToast}
+        />
+      )}
+      {scheduleModal && (
+        <ScheduleModal
+          templateId={scheduleModal.id}
+          templateName={scheduleModal.name}
+          onClose={() => setScheduleModal(null)}
           onToast={onToast}
         />
       )}
@@ -790,84 +1236,6 @@ function SavedReportsSection({ onToast }: { onToast: (msg: string, type: 'ok' | 
   );
 }
 
-function SavedReportEditor({ onClose, onSaved, onToast }: {
-  onClose: () => void; onSaved: () => void; onToast: (msg: string, type: 'ok' | 'err') => void;
-}) {
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState('WORKFORCE');
-  const [description, setDescription] = useState('');
-  const [definitionText, setDefinitionText] = useState(JSON.stringify({
-    dataSource: 'employees',
-    filters: [{ field: 'isActive', op: 'eq', value: true }],
-    groupBy: 'department',
-    aggregations: [{ op: 'count', as: 'headcount' }],
-    sortBy: [{ field: 'headcount', dir: 'desc' }],
-  }, null, 2));
-  const [saving, setSaving] = useState(false);
-
-  async function save() {
-    if (!name) { onToast('Name is required', 'err'); return; }
-    let definition: any;
-    try { definition = JSON.parse(definitionText); }
-    catch { onToast('Definition must be valid JSON', 'err'); return; }
-    setSaving(true);
-    try {
-      await apiFetch('/reports/templates', {
-        method: 'POST',
-        body: JSON.stringify({ name, category, description, definition }),
-      });
-      onToast('Report saved', 'ok');
-      onSaved();
-    } catch (e: any) {
-      onToast(e.message || 'Save failed', 'err');
-    } finally { setSaving(false); }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
-        <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
-          <div>
-            <h2 className="text-base font-black text-slate-900 tracking-tighter">New Saved Report</h2>
-            <p className="eyebrow-tight mt-0.5">Phase 1 — JSON definition. Drag-and-drop builder ships in Phase 2.</p>
-          </div>
-          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100">✕</button>
-        </div>
-        <div className="p-8 flex flex-col gap-6 overflow-y-auto">
-          <div className="flex flex-col gap-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Name</label>
-            <input value={name} onChange={e => setName(e.target.value)}
-              className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500" />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Category</label>
-              <input value={category} onChange={e => setCategory(e.target.value)}
-                className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500" />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Description</label>
-              <input value={description} onChange={e => setDescription(e.target.value)}
-                className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500" />
-            </div>
-          </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Definition (JSON)</label>
-            <textarea value={definitionText} onChange={e => setDefinitionText(e.target.value)} rows={14}
-              className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 outline-none focus:border-indigo-500" />
-          </div>
-        </div>
-        <div className="flex gap-3 px-8 py-5 border-t border-slate-100 bg-slate-50/50">
-          <button onClick={onClose} className="flex-1 py-3 text-[10px] font-black text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-100 uppercase tracking-widest">Cancel</button>
-          <button onClick={save} disabled={saving}
-            className="flex-1 py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl uppercase tracking-widest">
-            {saving ? 'Saving…' : 'Save Report'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function ReportsPage() {

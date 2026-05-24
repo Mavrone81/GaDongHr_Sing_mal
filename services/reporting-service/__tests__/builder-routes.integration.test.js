@@ -290,3 +290,99 @@ describe('F) Run history', () => {
     expect(res.body).toHaveLength(1);
   });
 });
+
+// ── G) Phase 2 — PDF export ───────────────────────────────────────────────────
+describe('G) PDF export', () => {
+  test('G1 GET /templates/:id/export.pdf returns PDF bytes with correct headers', async () => {
+    mockDb.reportTemplate.findUnique.mockResolvedValue({
+      id: 't1', name: 'Headcount', ownerId: 'user-admin',
+      definition: {
+        dataSource: 'employees',
+        groupBy: 'department',
+        aggregations: [{ op: 'count', as: 'headcount' }],
+      },
+    });
+    mockDb.reportRun.create.mockResolvedValue({});
+    const res = await request(app)
+      .get('/reports/templates/t1/export.pdf')
+      .set(ADMIN)
+      .buffer(true)
+      .parse((r, cb) => { const c = []; r.on('data', d => c.push(d)); r.on('end', () => cb(null, Buffer.concat(c))); });
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/application\/pdf/);
+    expect(res.headers['content-disposition']).toMatch(/attachment.*\.pdf/);
+    // PDF magic bytes %PDF
+    expect(res.body.slice(0, 4).toString()).toBe('%PDF');
+  });
+
+  test('G2 GET /templates/:id/export.pdf 404 for missing template', async () => {
+    mockDb.reportTemplate.findUnique.mockResolvedValue(null);
+    const res = await request(app).get('/reports/templates/missing/export.pdf').set(ADMIN);
+    expect(res.status).toBe(404);
+  });
+
+  test('G3 GET /templates/:id/export.pdf 403 for non-owner non-shared non-admin', async () => {
+    mockDb.reportTemplate.findUnique.mockResolvedValue({
+      id: 't1', ownerId: 'someone-else', isShared: false,
+      definition: { dataSource: 'employees' },
+    });
+    const res = await request(app).get('/reports/templates/t1/export.pdf').set(HR_MGR);
+    expect(res.status).toBe(403);
+  });
+});
+
+// ── H) Phase 2 — field catalog in data-sources ────────────────────────────────
+describe('H) Field catalog', () => {
+  test('H1 GET /reports/data-sources includes fieldCatalog for all 5 sources', async () => {
+    const res = await request(app).get('/reports/data-sources').set(ADMIN);
+    expect(res.status).toBe(200);
+    expect(res.body.fieldCatalog).toBeDefined();
+    ['employees', 'payrollRuns', 'leaveApplications', 'attendance', 'claims'].forEach(src => {
+      expect(Array.isArray(res.body.fieldCatalog[src])).toBe(true);
+      expect(res.body.fieldCatalog[src].length).toBeGreaterThan(0);
+    });
+  });
+
+  test('H2 each field entry has key, label, and type', async () => {
+    const res = await request(app).get('/reports/data-sources').set(ADMIN);
+    for (const fields of Object.values(res.body.fieldCatalog)) {
+      for (const f of fields) {
+        expect(f.key).toBeTruthy();
+        expect(f.label).toBeTruthy();
+        expect(['string', 'number', 'boolean', 'date']).toContain(f.type);
+      }
+    }
+  });
+});
+
+// ── I) Phase 2 — seed-templates endpoint ────────────────────────────────────
+describe('I) Seed templates endpoint', () => {
+  test('I1 POST /reports/seed-templates 200 when all templates already exist', async () => {
+    mockDb.reportTemplate.findUnique.mockResolvedValue({ id: 'exists' });
+    const res = await request(app).post('/reports/seed-templates').set(ADMIN);
+    expect(res.status).toBe(200);
+    expect(res.body.seeded).toBe(0);
+  });
+
+  test('I2 POST /reports/seed-templates seeds 4 templates on first run', async () => {
+    mockDb.reportTemplate.findUnique.mockResolvedValue(null);
+    mockDb.reportTemplate.create.mockResolvedValue({ id: 'new' });
+    const res = await request(app).post('/reports/seed-templates').set(ADMIN);
+    expect(res.status).toBe(200);
+    expect(res.body.seeded).toBe(4);
+  });
+});
+
+// ── J) Phase 2 — schedule with PDF format ───────────────────────────────────
+describe('J) Schedule PDF format', () => {
+  test('J1 POST /schedules accepts PDF as format', async () => {
+    mockDb.reportTemplate.findUnique.mockResolvedValue({ id: 't1', ownerId: 'user-admin' });
+    mockDb.reportSchedule.create.mockImplementation(({ data }) => Promise.resolve({ id: 's-pdf', ...data }));
+    const res = await request(app).post('/reports/schedules').set(ADMIN).send({
+      templateId: 't1', frequency: 'MONTHLY', format: 'PDF',
+      recipients: ['exec@example.com'],
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.format).toBe('PDF');
+  });
+});

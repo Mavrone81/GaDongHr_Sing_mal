@@ -158,8 +158,17 @@ app.use('/reports', builderRoutes);
 app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: err.message || 'Internal server error' }); });
 
 if (require.main === module) {
-  app.listen(PORT, () => {
+  const { PrismaClient } = require('@prisma/client');
+  const { seedTemplates } = require('./seeds/seed-templates');
+  const _prismaForSeed = new PrismaClient();
+
+  app.listen(PORT, async () => {
     console.log(`[reporting-service] Running on port ${PORT}`);
+
+    // Seed pre-built analytics templates (idempotent).
+    seedTemplates(_prismaForSeed).catch(err =>
+      console.error('[reporting-service] Seed error:', err.message));
+
     // Scheduler tick: run shortly after startup, then hourly.
     setTimeout(() => {
       schedulerTick(new Date())

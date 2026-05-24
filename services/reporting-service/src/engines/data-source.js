@@ -61,6 +61,73 @@ async function fetchClaims(authHeader) {
   return data.claims || data || [];
 }
 
+// ── Field catalog ─────────────────────────────────────────────────────────────
+// Drives the Phase 2 drag-and-drop field picker on the frontend.
+const FIELD_CATALOG = {
+  employees: [
+    { key: 'employeeCode',     label: 'Employee Code',      type: 'string' },
+    { key: 'fullName',         label: 'Full Name',           type: 'string' },
+    { key: 'department',       label: 'Department',          type: 'string' },
+    { key: 'designation',      label: 'Designation',         type: 'string' },
+    { key: 'employmentType',   label: 'Employment Type',     type: 'string' },
+    { key: 'nationality',      label: 'Nationality',         type: 'string' },
+    { key: 'gender',           label: 'Gender',              type: 'string' },
+    { key: 'startDate',        label: 'Start Date',          type: 'date' },
+    { key: 'endDate',          label: 'End Date',            type: 'date' },
+    { key: 'isActive',         label: 'Active',              type: 'boolean' },
+    { key: 'workEmail',        label: 'Work Email',          type: 'string' },
+    { key: 'passType',         label: 'Pass Type',           type: 'string' },
+    { key: 'citizenshipStatus',label: 'Citizenship Status',  type: 'string' },
+    { key: 'basicSalary',      label: 'Basic Salary',        type: 'number' },
+  ],
+  payrollRuns: [
+    { key: 'period',            label: 'Period',              type: 'string' },
+    { key: 'runType',           label: 'Run Type',            type: 'string' },
+    { key: 'status',            label: 'Status',              type: 'string' },
+    { key: 'totalGross',        label: 'Total Gross',         type: 'number' },
+    { key: 'totalNet',          label: 'Total Net',           type: 'number' },
+    { key: 'totalEmployeeCpf',  label: 'Employee CPF',        type: 'number' },
+    { key: 'totalEmployerCpf',  label: 'Employer CPF',        type: 'number' },
+    { key: 'totalSdl',          label: 'Total SDL',           type: 'number' },
+    { key: 'headcount',         label: 'Headcount',           type: 'number' },
+    { key: 'createdAt',         label: 'Created At',          type: 'date' },
+  ],
+  leaveApplications: [
+    { key: 'leaveTypeName',    label: 'Leave Type',           type: 'string' },
+    { key: 'leaveTypeCode',    label: 'Leave Code',           type: 'string' },
+    { key: 'startDate',        label: 'Start Date',           type: 'date' },
+    { key: 'endDate',          label: 'End Date',             type: 'date' },
+    { key: 'totalDays',        label: 'Total Days',           type: 'number' },
+    { key: 'status',           label: 'Status',               type: 'string' },
+    { key: 'reason',           label: 'Reason',               type: 'string' },
+    { key: 'submittedAt',      label: 'Submitted At',         type: 'date' },
+  ],
+  attendance: [
+    { key: 'employeeId',       label: 'Employee ID',          type: 'string' },
+    { key: 'date',             label: 'Date',                  type: 'date' },
+    { key: 'clockIn',          label: 'Clock In',             type: 'string' },
+    { key: 'clockOut',         label: 'Clock Out',            type: 'string' },
+    { key: 'hoursWorked',      label: 'Hours Worked',         type: 'number' },
+    { key: 'billableHours',    label: 'Billable Hours',       type: 'number' },
+    { key: 'billableOtHours',  label: 'Billable OT Hours',   type: 'number' },
+    { key: 'method',           label: 'Clock Method',         type: 'string' },
+    { key: 'status',           label: 'Status',               type: 'string' },
+    { key: 'period',           label: 'Period',               type: 'string' },
+  ],
+  claims: [
+    { key: 'employeeId',       label: 'Employee ID',          type: 'string' },
+    { key: 'category',         label: 'Category',             type: 'string' },
+    { key: 'amount',           label: 'Amount',               type: 'number' },
+    { key: 'gstAmount',        label: 'GST Amount',           type: 'number' },
+    { key: 'vendor',           label: 'Vendor',               type: 'string' },
+    { key: 'purpose',          label: 'Purpose',              type: 'string' },
+    { key: 'status',           label: 'Status',               type: 'string' },
+    { key: 'submittedAt',      label: 'Submitted At',         type: 'date' },
+    { key: 'approvedAt',       label: 'Approved At',          type: 'date' },
+    { key: 'period',           label: 'Period',               type: 'string' },
+  ],
+};
+
 const FETCHERS = {
   employees: fetchEmployees,
   payrollRuns: fetchPayrollRuns,
@@ -75,4 +142,4 @@ async function fetchDataSource(dataSource, authHeader) {
   return fn(authHeader);
 }
 
-module.exports = { FETCHERS, fetchDataSource };
+module.exports = { FETCHERS, fetchDataSource, FIELD_CATALOG };

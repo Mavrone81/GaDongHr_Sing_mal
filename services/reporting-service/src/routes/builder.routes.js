@@ -26,8 +26,9 @@ const ExcelJS = require('exceljs');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
 const { execute, validate, DATA_SOURCES, FILTER_OPS, AGG_OPS } = require('../engines/query-executor.engine');
-const { fetchDataSource } = require('../engines/data-source');
+const { fetchDataSource, FIELD_CATALOG } = require('../engines/data-source');
 const { toCsv } = require('../engines/csv');
+const { toPdf } = require('../engines/pdf');
 const { firstRunAt, FREQUENCIES } = require('../engines/schedule');
 
 const prisma = new PrismaClient();
@@ -48,6 +49,7 @@ router.get('/data-sources', authenticate, authorize(...REPORT_ROLES), (req, res)
     filterOps: FILTER_OPS,
     aggregationOps: AGG_OPS,
     frequencies: FREQUENCIES,
+    fieldCatalog: FIELD_CATALOG,
   });
 });
 
@@ -235,6 +237,26 @@ router.get('/templates/:id/export.xlsx', authenticate, authorize(...REPORT_ROLES
   }
 });
 
+router.get('/templates/:id/export.pdf', authenticate, authorize(...REPORT_ROLES), async (req, res, next) => {
+  const startedAt = new Date();
+  try {
+    const tpl = await prisma.reportTemplate.findUnique({ where: { id: req.params.id } });
+    if (!tpl) return res.status(404).json({ error: 'Template not found' });
+    if (!isAdmin(req) && tpl.ownerId !== userIdOf(req) && !tpl.isShared) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const out = await runTemplate(tpl.definition, req.headers['authorization']);
+    const pdfBuf = await toPdf(tpl.name, out.columns, out.rows);
+    await recordRun(tpl.id, null, userIdOf(req), 'SUCCESS', out.rows.length, null, startedAt);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${tpl.name.replace(/[^\w.-]+/g, '_')}.pdf"`);
+    res.send(pdfBuf);
+  } catch (err) {
+    await recordRun(req.params.id, null, userIdOf(req), 'ERROR', 0, err.message, startedAt);
+    next(err);
+  }
+});
+
 router.get('/templates/:id/runs', authenticate, authorize(...REPORT_ROLES), async (req, res, next) => {
   try {
     const runs = await prisma.reportRun.findMany({
@@ -265,7 +287,7 @@ router.post('/schedules', authenticate, authorize(...REPORT_ROLES), async (req, 
       data: {
         id: uuidv4(),
         templateId, frequency,
-        format: ['CSV', 'XLSX'].includes(format) ? format : 'CSV',
+        format: ['CSV', 'XLSX', 'PDF'].includes(format) ? format : 'CSV',
         recipients: Array.isArray(recipients) ? recipients.join(',') : String(recipients),
         nextRunAt: firstRunAt(new Date()),
         createdBy: userIdOf(req),
@@ -302,7 +324,7 @@ router.put('/schedules/:id', authenticate, authorize(...REPORT_ROLES), async (re
       where: { id: req.params.id },
       data: {
         ...(frequency !== undefined && { frequency }),
-        ...(format !== undefined && ['CSV', 'XLSX'].includes(format) && { format }),
+        ...(format !== undefined && ['CSV', 'XLSX', 'PDF'].includes(format) && { format }),
         ...(recipients !== undefined && { recipients: Array.isArray(recipients) ? recipients.join(',') : String(recipients) }),
         ...(isActive !== undefined && { isActive: !!isActive }),
       },
@@ -320,6 +342,15 @@ router.delete('/schedules/:id', authenticate, authorize(...REPORT_ROLES), async 
     }
     await prisma.reportSchedule.delete({ where: { id: req.params.id } });
     res.json({ message: 'Schedule deleted' });
+  } catch (err) { next(err); }
+});
+
+// ── Seed pre-built templates (admin only) ─────────────────────────────────────
+router.post('/seed-templates', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const { seedTemplates } = require('../seeds/seed-templates');
+    const seeded = await seedTemplates(prisma);
+    res.json({ seeded, message: seeded === 0 ? 'All seed templates already present' : `Seeded ${seeded} template(s)` });
   } catch (err) { next(err); }
 });
 
