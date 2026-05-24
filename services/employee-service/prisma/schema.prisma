@@ -105,16 +105,27 @@ model Employee {
 }
 
 model SalaryHistory {
-  id              String   @id @default(uuid())
-  employeeId      String
-  effectiveDate   DateTime
-  basicSalaryEnc  String   // encrypted
-  changeReason    String?
-  changedByUserId String?
-  createdAt       DateTime @default(now())
+  id                String    @id @default(uuid())
+  employeeId        String
+  effectiveDate     DateTime
+  basicSalaryEnc    String    // encrypted — legacy alias for previousSalaryEnc
+  previousSalaryEnc String?   // encrypted salary BEFORE this revision
+  newSalaryEnc      String?   // encrypted salary AFTER this revision
+  changeReason      String?   // legacy free-text
+  reasonCode        String    @default("OTHER") // PROMOTION|ANNUAL_INCREMENT|MARKET_ADJUSTMENT|ROLE_CHANGE|CORRECTION|OTHER
+  recommendedBy     String?   // name/email of person recommending the change
+  notes             String?
+  changedByUserId   String?   // userId who initiated
+  approvedBy        String?   // userId who approved
+  approvedAt        DateTime?
+  status            String    @default("APPROVED") // PENDING|APPROVED|REJECTED
+  catchUpAmount     Float?    // back-dated catch-up amount (SGD), computed on approve
+  createdAt         DateTime  @default(now())
 
   employee Employee @relation(fields: [employeeId], references: [id])
 
+  @@index([employeeId])
+  @@index([status])
   @@map("salary_history")
 }
 

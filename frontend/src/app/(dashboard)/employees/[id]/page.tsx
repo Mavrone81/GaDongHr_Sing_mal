@@ -53,7 +53,7 @@ interface Employee {
   sickLeaveBalance?: number;
 }
 
-type Tab = 'general' | 'contracts' | 'statutory' | 'documents' | 'assets' | 'supervisors';
+type Tab = 'general' | 'contracts' | 'statutory' | 'documents' | 'assets' | 'supervisors' | 'salary';
 
 interface EmployeeDocument {
   id: string;
@@ -214,6 +214,15 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
   const [savingEntitlements, setSavingEntitlements] = useState(false);
   const [entitlementToast, setEntitlementToast] = useState('');
 
+  // Salary history & revisions
+  const [salaryHistory, setSalaryHistory] = useState<any[]>([]);
+  const [loadingSalaryHistory, setLoadingSalaryHistory] = useState(false);
+  const [showRevisionForm, setShowRevisionForm] = useState(false);
+  const [revForm, setRevForm] = useState({ newSalary: '', effectiveDate: '', reasonCode: 'PROMOTION', recommendedBy: '', notes: '' });
+  const [submittingRevision, setSubmittingRevision] = useState(false);
+  const [revisionToast, setRevisionToast] = useState('');
+  const [budgetEnvelope, setBudgetEnvelope] = useState<any>(null);
+
   // Supervisors
   const [supervisorData, setSupervisorData] = useState<{ flowType: string; supervisors: any[] } | null>(null);
   const [loadingSupervisors, setLoadingSupervisors] = useState(false);
@@ -288,6 +297,26 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
       .finally(() => setLoadingSupervisors(false));
   }, [activeTab, params.id]);
 
+  const loadSalaryHistory = useCallback(() => {
+    if (!params.id) return;
+    setLoadingSalaryHistory(true);
+    Promise.all([
+      apiFetch(`/employees/${params.id}/salary-history`),
+      apiFetch(`/employees/salary-revisions/budget-envelope?year=${new Date().getFullYear()}`).catch(() => null),
+    ])
+      .then(([hist, budget]) => {
+        setSalaryHistory(Array.isArray(hist) ? hist : []);
+        if (budget) setBudgetEnvelope(budget);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingSalaryHistory(false));
+  }, [params.id]);
+
+  useEffect(() => {
+    if (activeTab !== 'salary') return;
+    loadSalaryHistory();
+  }, [activeTab, loadSalaryHistory]);
+
   const startEditing = () => {
     if (!employee) return;
     setEditData({ ...employee });
@@ -360,6 +389,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
     { key: 'general', label: 'General Profile' },
     { key: 'contracts', label: 'Contracts & Entitlements' },
     { key: 'supervisors', label: 'Supervisors' },
+    { key: 'salary', label: 'Salary History' },
     { key: 'assets', label: 'Assets' },
     { key: 'statutory', label: 'Statutory & Compliance' },
     { key: 'documents', label: 'Document Archive' },
@@ -1335,6 +1365,262 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                         </div>
                       )}
                     </>
+                  )}
+                </div>
+              )}
+
+              {/* ══ SALARY HISTORY ════════════════════════════════════════════════ */}
+              {activeTab === 'salary' && (
+                <div className="flex flex-col gap-6">
+
+                  {/* Revision request modal */}
+                  {showRevisionForm && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+                      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl p-8 flex flex-col gap-5">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Request Salary Revision</h3>
+                            <p className="text-[10px] font-bold text-slate-400 mt-1">Creates a PENDING revision for HR Manager approval</p>
+                          </div>
+                          <button onClick={() => { setShowRevisionForm(false); setRevisionToast(''); }} className="text-slate-400 hover:text-slate-700 text-lg font-black">✕</button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="flex flex-col gap-1.5">
+                            <label className="label-form">New Monthly Salary (SGD)</label>
+                            <input
+                              type="number" min={0} step={100}
+                              value={revForm.newSalary}
+                              onChange={e => setRevForm(p => ({ ...p, newSalary: e.target.value }))}
+                              className={IX} placeholder="e.g. 5500"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <label className="label-form">Effective Date</label>
+                            <input
+                              type="date"
+                              value={revForm.effectiveDate}
+                              onChange={e => setRevForm(p => ({ ...p, effectiveDate: e.target.value }))}
+                              className={IX}
+                            />
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <label className="label-form">Reason Code</label>
+                            <div className="relative">
+                              <select value={revForm.reasonCode} onChange={e => setRevForm(p => ({ ...p, reasonCode: e.target.value }))} className={SX}>
+                                {[
+                                  { value: 'PROMOTION',         label: 'Promotion' },
+                                  { value: 'ANNUAL_INCREMENT',  label: 'Annual Increment' },
+                                  { value: 'MARKET_ADJUSTMENT', label: 'Market Adjustment' },
+                                  { value: 'ROLE_CHANGE',       label: 'Role Change' },
+                                  { value: 'CORRECTION',        label: 'Correction' },
+                                  { value: 'OTHER',             label: 'Other' },
+                                ].map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                              </select>
+                              <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <label className="label-form">Recommended By</label>
+                            <input
+                              type="text"
+                              value={revForm.recommendedBy}
+                              onChange={e => setRevForm(p => ({ ...p, recommendedBy: e.target.value }))}
+                              className={IX} placeholder="Name or email"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-1.5 col-span-2">
+                            <label className="label-form">Notes (optional)</label>
+                            <textarea
+                              rows={2}
+                              value={revForm.notes}
+                              onChange={e => setRevForm(p => ({ ...p, notes: e.target.value }))}
+                              className={IX + ' resize-none'} placeholder="Justification, performance notes, etc."
+                            />
+                          </div>
+                        </div>
+
+                        {revisionToast && (
+                          <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${revisionToast.startsWith('Error') ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
+                            {revisionToast}
+                          </div>
+                        )}
+
+                        <div className="flex gap-3 pt-1">
+                          <button
+                            onClick={() => { setShowRevisionForm(false); setRevisionToast(''); }}
+                            className="flex-1 py-3 text-[10px] font-black text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-50 uppercase tracking-widest"
+                          >Cancel</button>
+                          <button
+                            disabled={submittingRevision || !revForm.newSalary || !revForm.effectiveDate}
+                            onClick={async () => {
+                              setSubmittingRevision(true);
+                              setRevisionToast('');
+                              try {
+                                await apiFetch(`/employees/${params.id}/salary-revisions`, {
+                                  method: 'POST',
+                                  body: JSON.stringify(revForm),
+                                });
+                                setShowRevisionForm(false);
+                                setRevForm({ newSalary: '', effectiveDate: '', reasonCode: 'PROMOTION', recommendedBy: '', notes: '' });
+                                loadSalaryHistory();
+                              } catch (e: any) {
+                                setRevisionToast(`Error: ${e.message}`);
+                              } finally { setSubmittingRevision(false); }
+                            }}
+                            className="flex-1 py-3 text-[10px] font-black text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 rounded-xl uppercase tracking-widest flex items-center justify-center gap-2"
+                          >
+                            {submittingRevision && <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+                            {submittingRevision ? 'Submitting…' : 'Submit for Approval'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Header row */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-1.5 h-4 bg-violet-500 rounded-full shrink-0" />
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Salary Revision History</h4>
+                    </div>
+                    {hasPermission('employee:manage') && (
+                      <button
+                        onClick={() => { setShowRevisionForm(true); setRevisionToast(''); }}
+                        className="px-4 py-2 text-[10px] font-black text-white bg-violet-600 hover:bg-violet-700 rounded-xl uppercase tracking-widest transition-all"
+                      >+ Request Revision</button>
+                    )}
+                  </div>
+
+                  {/* Budget envelope card */}
+                  {budgetEnvelope && budgetEnvelope.totalRevisions > 0 && (
+                    <div className="grid grid-cols-3 gap-4">
+                      {[
+                        { label: `${budgetEnvelope.year} Revisions`, value: String(budgetEnvelope.totalRevisions), accent: 'text-violet-700', bg: 'bg-violet-50 border-violet-100' },
+                        { label: 'Total Annual Cost Delta', value: `SGD ${Number(budgetEnvelope.totalAnnualDelta).toLocaleString('en-SG', { minimumFractionDigits: 2 })}`, accent: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-100' },
+                        { label: 'Monthly Impact', value: `SGD ${(budgetEnvelope.totalAnnualDelta / 12).toLocaleString('en-SG', { minimumFractionDigits: 2 })}`, accent: 'text-slate-800', bg: 'bg-slate-50 border-slate-200' },
+                      ].map(kpi => (
+                        <div key={kpi.label} className={`p-4 rounded-xl border ${kpi.bg} flex flex-col gap-1`}>
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{kpi.label}</span>
+                          <span className={`text-lg font-black font-mono ${kpi.accent}`}>{kpi.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Revision toast */}
+                  {revisionToast && !showRevisionForm && (
+                    <div className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${revisionToast.startsWith('Error') ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
+                      {revisionToast}
+                    </div>
+                  )}
+
+                  {/* History table */}
+                  {loadingSalaryHistory ? (
+                    <div className="flex flex-col gap-3">
+                      {[1,2,3].map(i => <div key={i} className="h-16 bg-slate-100 rounded-xl animate-pulse" />)}
+                    </div>
+                  ) : salaryHistory.length === 0 ? (
+                    <div className="py-16 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No salary revision history</p>
+                      <p className="text-[10px] text-slate-300 font-bold mt-1">Use &quot;Request Revision&quot; to create the first record</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-hidden border border-slate-200 rounded-xl">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200 label-form">
+                            <th className="px-5 py-3">Effective Date</th>
+                            <th className="px-5 py-3">Previous (SGD)</th>
+                            <th className="px-5 py-3">New (SGD)</th>
+                            <th className="px-5 py-3">Change</th>
+                            <th className="px-5 py-3">Reason</th>
+                            <th className="px-5 py-3">Recommended By</th>
+                            <th className="px-5 py-3">Status</th>
+                            {hasPermission('employee:manage') && <th className="px-5 py-3 text-right">Actions</th>}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
+                          {salaryHistory.map((h: any, i: number) => {
+                            const isPending = h.status === 'PENDING';
+                            const isApproved = h.status === 'APPROVED';
+                            const statusCls = isPending
+                              ? 'bg-amber-50 text-amber-700 border-amber-100'
+                              : isApproved
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                              : 'bg-red-50 text-red-600 border-red-100';
+                            const reasonLabel: Record<string,string> = {
+                              PROMOTION: 'Promotion', ANNUAL_INCREMENT: 'Annual Increment',
+                              MARKET_ADJUSTMENT: 'Market Adj.', ROLE_CHANGE: 'Role Change',
+                              CORRECTION: 'Correction', OTHER: 'Other',
+                            };
+                            const fmt = (v: number | null) => v != null ? `$${Number(v).toLocaleString('en-SG', { minimumFractionDigits: 2 })}` : '—';
+                            const pct = h.incrementPct;
+                            const pctLabel = pct != null ? `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%` : null;
+                            return (
+                              <tr key={h.id ?? i} className="hover:bg-slate-50/50 transition-all">
+                                <td className="px-5 py-3 font-black text-slate-800 whitespace-nowrap">{fmtDate(h.effectiveDate)}</td>
+                                <td className="px-5 py-3 font-mono text-slate-500">{fmt(h.previousSalary ?? h.basicSalary)}</td>
+                                <td className="px-5 py-3 font-mono font-black text-violet-700">{fmt(h.newSalary)}</td>
+                                <td className="px-5 py-3">
+                                  {pctLabel ? (
+                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded ${(pct ?? 0) >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>{pctLabel}</span>
+                                  ) : '—'}
+                                </td>
+                                <td className="px-5 py-3 text-slate-500">{reasonLabel[h.reasonCode] || h.changeReason || '—'}</td>
+                                <td className="px-5 py-3 text-slate-400 truncate max-w-[120px]">{h.recommendedBy || '—'}</td>
+                                <td className="px-5 py-3">
+                                  <div className="flex flex-col gap-1">
+                                    <span className={`text-[9px] font-black px-2 py-0.5 rounded border uppercase tracking-widest ${statusCls}`}>{h.status}</span>
+                                    {h.catchUpAmount != null && h.catchUpAmount > 0 && (
+                                      <span className="text-[8px] font-black text-amber-600 uppercase">Catch-up: SGD {Number(h.catchUpAmount).toLocaleString('en-SG', { minimumFractionDigits: 2 })}</span>
+                                    )}
+                                  </div>
+                                </td>
+                                {hasPermission('employee:manage') && (
+                                  <td className="px-5 py-3 text-right">
+                                    {isPending && (
+                                      <div className="flex gap-2 justify-end">
+                                        <button
+                                          onClick={async () => {
+                                            try {
+                                              const res = await apiFetch(`/employees/${params.id}/salary-revisions/${h.id}/approve`, { method: 'PUT', body: JSON.stringify({}) });
+                                              const msg = res.salaryApplied ? 'Approved and salary applied' : 'Approved — salary will apply on effective date';
+                                              setRevisionToast(msg);
+                                              setTimeout(() => setRevisionToast(''), 4000);
+                                              loadSalaryHistory();
+                                            } catch (e: any) {
+                                              setRevisionToast(`Error: ${e.message}`);
+                                            }
+                                          }}
+                                          className="px-3 py-1.5 text-[9px] font-black text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg hover:bg-emerald-100 uppercase tracking-widest transition-all"
+                                        >Approve</button>
+                                        <button
+                                          onClick={async () => {
+                                            try {
+                                              await apiFetch(`/employees/${params.id}/salary-revisions/${h.id}/reject`, { method: 'PUT', body: JSON.stringify({}) });
+                                              setRevisionToast('Revision rejected');
+                                              setTimeout(() => setRevisionToast(''), 3000);
+                                              loadSalaryHistory();
+                                            } catch (e: any) {
+                                              setRevisionToast(`Error: ${e.message}`);
+                                            }
+                                          }}
+                                          className="px-3 py-1.5 text-[9px] font-black text-red-600 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 uppercase tracking-widest transition-all"
+                                        >Reject</button>
+                                      </div>
+                                    )}
+                                    {h.notes && (
+                                      <p className="text-[9px] text-slate-400 mt-1 text-right truncate max-w-[160px]" title={h.notes}>{h.notes}</p>
+                                    )}
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
               )}

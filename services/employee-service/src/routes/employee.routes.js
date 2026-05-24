@@ -542,16 +542,25 @@ async function handleUpdate(req, res, next) {
     if (data.nric)        { fieldsToEncrypt.nricEncrypted        = data.nric;        delete data.nric; }
     if (data.homeAddress) { fieldsToEncrypt.homeAddressEncrypted = data.homeAddress; delete data.homeAddress; }
 
-    // Salary change → also record in salary history
+    // Salary change → also record in salary history (auto-approved direct edit)
     if (data.basicSalary !== undefined) {
+      const prevEnc = before.basicSalaryEncrypted || '';
+      const { newSalaryEnc: newEnc } = encryptFields({ newSalaryEnc: String(data.basicSalary) }, ['newSalaryEnc']);
+      const reasonCode = data.salaryChangeReason && VALID_REASON_CODES.includes(data.salaryChangeReason) ? data.salaryChangeReason : 'CORRECTION';
       await prisma.salaryHistory.create({
         data: {
           id: uuidv4(),
-          employeeId:      req.params.id,
-          effectiveDate:   new Date(),
-          basicSalaryEnc:  before.basicSalaryEncrypted || '',
-          changeReason:    data.salaryChangeReason,
-          changedByUserId: req.user?.sub,
+          employeeId:        req.params.id,
+          effectiveDate:     new Date(),
+          basicSalaryEnc:    prevEnc,
+          previousSalaryEnc: prevEnc,
+          newSalaryEnc:      newEnc,
+          changeReason:      data.salaryChangeReason || null,
+          reasonCode,
+          changedByUserId:   req.user?.sub,
+          approvedBy:        req.user?.sub,
+          approvedAt:        new Date(),
+          status:            'APPROVED',
         },
       });
       fieldsToEncrypt.basicSalaryEncrypted = data.basicSalary;
@@ -701,18 +710,251 @@ router.post('/me/verify-face', authenticate, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── Salary revision helpers ───────────────────────────────────────────────────
+const VALID_REASON_CODES = ['PROMOTION', 'ANNUAL_INCREMENT', 'MARKET_ADJUSTMENT', 'ROLE_CHANGE', 'CORRECTION', 'OTHER'];
+
+function decryptSalary(enc) {
+  try { return enc ? parseFloat(decrypt(enc)) || 0 : 0; } catch { return 0; }
+}
+
+// Compute months elapsed from effectiveDate to start of current month (for back-pay)
+function monthsElapsed(effectiveDate) {
+  const eff = new Date(effectiveDate);
+  const now = new Date();
+  const months = (now.getFullYear() - eff.getFullYear()) * 12 + (now.getMonth() - eff.getMonth());
+  return Math.max(0, months);
+}
+
 // ── GET /:id/salary-history ───────────────────────────────────────────────────
-router.get('/:id/salary-history', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+router.get('/:id/salary-history', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
   try {
     const history = await prisma.salaryHistory.findMany({
       where: { employeeId: req.params.id },
       orderBy: { effectiveDate: 'desc' },
     });
-    const decrypted = history.map(h => ({
-      ...h,
-      basicSalary: (() => { try { return decrypt(h.basicSalaryEnc); } catch { return null; } })(),
-    }));
+    const decrypted = history.map(h => {
+      const prevSalary = decryptSalary(h.previousSalaryEnc || h.basicSalaryEnc);
+      const newSalary  = decryptSalary(h.newSalaryEnc);
+      const incrementPct = prevSalary > 0 && newSalary > 0
+        ? Math.round(((newSalary - prevSalary) / prevSalary) * 10000) / 100
+        : null;
+      return {
+        ...h,
+        basicSalaryEnc: undefined,
+        previousSalaryEnc: undefined,
+        newSalaryEnc: undefined,
+        basicSalary: prevSalary || null,  // legacy
+        previousSalary: prevSalary || null,
+        newSalary: newSalary || null,
+        incrementPct,
+      };
+    });
     res.json(decrypted);
+  } catch (err) { next(err); }
+});
+
+// ── POST /:id/salary-revisions — create a pending revision request ─────────────
+router.post('/:id/salary-revisions', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const emp = await prisma.employee.findUnique({ where: { id: req.params.id }, select: { id: true, basicSalaryEncrypted: true, fullName: true, employeeCode: true } });
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+    const { newSalary, effectiveDate, reasonCode, recommendedBy, notes } = req.body;
+    if (!newSalary || isNaN(parseFloat(newSalary))) return res.status(400).json({ error: 'newSalary (numeric) is required' });
+    if (!effectiveDate) return res.status(400).json({ error: 'effectiveDate is required' });
+    const code = reasonCode && VALID_REASON_CODES.includes(reasonCode) ? reasonCode : 'OTHER';
+
+    const prevSalEnc = emp.basicSalaryEncrypted || '';
+    const { newSalaryEnc: newEnc } = encryptFields({ newSalaryEnc: String(newSalary) }, ['newSalaryEnc']);
+
+    const revision = await prisma.salaryHistory.create({
+      data: {
+        id: uuidv4(),
+        employeeId: req.params.id,
+        effectiveDate: new Date(effectiveDate),
+        basicSalaryEnc: prevSalEnc,      // legacy field = old salary
+        previousSalaryEnc: prevSalEnc,
+        newSalaryEnc: newEnc,
+        reasonCode: code,
+        recommendedBy: recommendedBy || null,
+        notes: notes || null,
+        changedByUserId: req.user?.sub,
+        status: 'PENDING',
+      },
+    });
+
+    await writeAudit({
+      entityId: req.params.id,
+      entityCode: emp.employeeCode,
+      entityName: emp.fullName,
+      action: 'SALARY_REVISION_REQUESTED',
+      actor: req.user,
+      changedFields: { reasonCode: { to: code }, effectiveDate: { to: effectiveDate } },
+      req,
+    });
+
+    const prevSalary = decryptSalary(prevSalEnc);
+    const newSalaryNum = parseFloat(newSalary);
+    const incrementPct = prevSalary > 0 ? Math.round(((newSalaryNum - prevSalary) / prevSalary) * 10000) / 100 : null;
+
+    res.status(201).json({
+      ...revision,
+      basicSalaryEnc: undefined,
+      previousSalaryEnc: undefined,
+      newSalaryEnc: undefined,
+      previousSalary: prevSalary || null,
+      newSalary: newSalaryNum,
+      incrementPct,
+    });
+  } catch (err) { next(err); }
+});
+
+// ── PUT /:id/salary-revisions/:revId/approve ──────────────────────────────────
+router.put('/:id/salary-revisions/:revId/approve', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER), async (req, res, next) => {
+  try {
+    const revision = await prisma.salaryHistory.findFirst({ where: { id: req.params.revId, employeeId: req.params.id } });
+    if (!revision) return res.status(404).json({ error: 'Revision not found' });
+    if (revision.status !== 'PENDING') return res.status(400).json({ error: `Revision is already ${revision.status}` });
+
+    const now = new Date();
+    const effDate = new Date(revision.effectiveDate);
+    const elapsed = monthsElapsed(effDate);
+    const newSalary = decryptSalary(revision.newSalaryEnc);
+    const prevSalary = decryptSalary(revision.previousSalaryEnc || revision.basicSalaryEnc);
+    const catchUpAmount = elapsed > 0 && newSalary > prevSalary ? Math.round((newSalary - prevSalary) * elapsed * 100) / 100 : 0;
+
+    const updates = {
+      status: 'APPROVED',
+      approvedBy: req.user?.sub,
+      approvedAt: now,
+      catchUpAmount: catchUpAmount || null,
+    };
+
+    // Apply salary to employee if effective date has arrived
+    if (effDate <= now && revision.newSalaryEnc) {
+      const emp = await prisma.employee.findUnique({ where: { id: req.params.id }, select: { id: true, fullName: true, employeeCode: true } });
+      await prisma.employee.update({
+        where: { id: req.params.id },
+        data: { basicSalaryEncrypted: revision.newSalaryEnc },
+      });
+      await writeAudit({
+        entityId: req.params.id,
+        entityCode: emp?.employeeCode,
+        entityName: emp?.fullName,
+        action: 'SALARY_REVISION_APPLIED',
+        actor: req.user,
+        changedFields: { basicSalaryEncrypted: { changed: true, sensitive: true } },
+        req,
+      });
+    }
+
+    const updated = await prisma.salaryHistory.update({
+      where: { id: req.params.revId },
+      data: updates,
+    });
+
+    res.json({
+      ...updated,
+      basicSalaryEnc: undefined,
+      previousSalaryEnc: undefined,
+      newSalaryEnc: undefined,
+      previousSalary: prevSalary || null,
+      newSalary: newSalary || null,
+      incrementPct: prevSalary > 0 ? Math.round(((newSalary - prevSalary) / prevSalary) * 10000) / 100 : null,
+      catchUpAmount: catchUpAmount || null,
+      salaryApplied: effDate <= now,
+    });
+  } catch (err) { next(err); }
+});
+
+// ── PUT /:id/salary-revisions/:revId/reject ───────────────────────────────────
+router.put('/:id/salary-revisions/:revId/reject', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER), async (req, res, next) => {
+  try {
+    const revision = await prisma.salaryHistory.findFirst({ where: { id: req.params.revId, employeeId: req.params.id } });
+    if (!revision) return res.status(404).json({ error: 'Revision not found' });
+    if (revision.status !== 'PENDING') return res.status(400).json({ error: `Revision is already ${revision.status}` });
+
+    const updated = await prisma.salaryHistory.update({
+      where: { id: req.params.revId },
+      data: { status: 'REJECTED', approvedBy: req.user?.sub, approvedAt: new Date() },
+    });
+
+    const prevSalary = decryptSalary(updated.previousSalaryEnc || updated.basicSalaryEnc);
+    const newSalary  = decryptSalary(updated.newSalaryEnc);
+    res.json({
+      ...updated,
+      basicSalaryEnc: undefined,
+      previousSalaryEnc: undefined,
+      newSalaryEnc: undefined,
+      previousSalary: prevSalary || null,
+      newSalary: newSalary || null,
+    });
+  } catch (err) { next(err); }
+});
+
+// ── GET /salary-revisions/pending — all pending revisions (HR Admin / HR Manager) ──
+// Must be defined BEFORE /:id to avoid route shadowing
+router.get('/salary-revisions/pending', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const pending = await prisma.salaryHistory.findMany({
+      where: { status: 'PENDING' },
+      orderBy: { effectiveDate: 'asc' },
+      include: { employee: { select: { id: true, fullName: true, employeeCode: true, department: true, designation: true } } },
+    });
+    const result = pending.map(h => {
+      const prevSalary = decryptSalary(h.previousSalaryEnc || h.basicSalaryEnc);
+      const newSalary  = decryptSalary(h.newSalaryEnc);
+      return {
+        ...h,
+        basicSalaryEnc: undefined,
+        previousSalaryEnc: undefined,
+        newSalaryEnc: undefined,
+        previousSalary: prevSalary || null,
+        newSalary: newSalary || null,
+        incrementPct: prevSalary > 0 && newSalary > 0 ? Math.round(((newSalary - prevSalary) / prevSalary) * 10000) / 100 : null,
+        annualCostDelta: newSalary > 0 && prevSalary > 0 ? Math.round((newSalary - prevSalary) * 12 * 100) / 100 : null,
+      };
+    });
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// ── GET /salary-revisions/budget-envelope — annual cost summary ───────────────
+router.get('/salary-revisions/budget-envelope', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER), async (req, res, next) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const from = new Date(`${year}-01-01`);
+    const to   = new Date(`${year + 1}-01-01`);
+
+    const approved = await prisma.salaryHistory.findMany({
+      where: { status: 'APPROVED', effectiveDate: { gte: from, lt: to }, newSalaryEnc: { not: null } },
+      include: { employee: { select: { id: true, fullName: true, employeeCode: true, department: true } } },
+    });
+
+    let totalAnnualDelta = 0;
+    const breakdown = approved.map(h => {
+      const prevSalary = decryptSalary(h.previousSalaryEnc || h.basicSalaryEnc);
+      const newSalary  = decryptSalary(h.newSalaryEnc);
+      const annualDelta = Math.round((newSalary - prevSalary) * 12 * 100) / 100;
+      totalAnnualDelta += annualDelta;
+      return {
+        employeeId: h.employeeId,
+        employee: h.employee,
+        effectiveDate: h.effectiveDate,
+        reasonCode: h.reasonCode,
+        previousSalary: prevSalary || null,
+        newSalary: newSalary || null,
+        incrementPct: prevSalary > 0 ? Math.round(((newSalary - prevSalary) / prevSalary) * 10000) / 100 : null,
+        annualCostDelta: annualDelta,
+      };
+    });
+
+    res.json({
+      year,
+      totalRevisions: approved.length,
+      totalAnnualDelta: Math.round(totalAnnualDelta * 100) / 100,
+      breakdown,
+    });
   } catch (err) { next(err); }
 });
 
