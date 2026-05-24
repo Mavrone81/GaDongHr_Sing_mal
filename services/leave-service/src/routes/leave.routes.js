@@ -585,6 +585,36 @@ router.post('/public-holidays', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES
   } catch (err) { next(err); }
 });
 
+// ── GET /leave/internal/all-balances?year=YYYY — leave liability source for reporting ─
+router.get('/internal/all-balances', async (req, res, next) => {
+  const key = req.headers['x-internal-service-key'];
+  if (!key || key !== INTERNAL_KEY) return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const entitlements = await prisma.leaveEntitlement.findMany({
+      where: { year },
+      include: { leaveType: { select: { code: true, name: true, isPaid: true } } },
+    });
+    // Group by employeeId
+    const byEmp = {};
+    for (const e of entitlements) {
+      if (!byEmp[e.employeeId]) byEmp[e.employeeId] = [];
+      byEmp[e.employeeId].push({
+        leaveTypeId: e.leaveTypeId,
+        code: e.leaveType.code,
+        name: e.leaveType.name,
+        isPaid: e.leaveType.isPaid,
+        entitledDays: e.entitledDays,
+        usedDays: e.usedDays,
+        pendingDays: e.pendingDays,
+        carryForward: e.carryForward,
+      });
+    }
+    const result = Object.entries(byEmp).map(([employeeId, balances]) => ({ employeeId, balances }));
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
 // ── POST /leave/internal/auto-provision — trigger MOM entitlement provisioning ─
 router.post('/internal/auto-provision', async (req, res, next) => {
   const key = req.headers['x-internal-service-key'];

@@ -109,25 +109,7 @@ async function runMomReport() {
   );
 }
 
-async function runLeaveLiabilityReport() {
-  const data = await apiFetch('/employees?limit=500');
-  const emps = (data.employees ?? data ?? []).filter((e: any) => e.isActive);
-  const year = new Date().getFullYear();
-  const rows: any[][] = [];
-  for (const emp of emps.slice(0, 100)) {
-    try {
-      const ents = await apiFetch(`/leave/entitlements/${emp.id}?year=${year}`);
-      for (const e of ents) {
-        const balance = Math.max(0, e.entitledDays + e.carryForward - e.usedDays - e.pendingDays);
-        rows.push([emp.employeeCode, emp.fullName, emp.department, e.name, e.entitledDays, e.usedDays, e.pendingDays, balance]);
-      }
-    } catch {}
-  }
-  downloadCsv(`leave-liability-${year}.csv`,
-    ['Employee Code', 'Full Name', 'Department', 'Leave Type', 'Entitled Days', 'Used Days', 'Pending Days', 'Balance Days'],
-    rows
-  );
-}
+async function runLeaveLiabilityReport() { /* replaced by LeaveLiabilityModal */ }
 
 async function runPayrollVarianceReport() {
   const data = await apiFetch('/payroll/runs?limit=2&status=FINALISED');
@@ -151,19 +133,7 @@ async function runPayrollVarianceReport() {
   );
 }
 
-async function runIRASReport() {
-  const data = await apiFetch('/employees?limit=500');
-  const emps = (data.employees ?? data ?? []).filter((e: any) => e.isActive);
-  const year = new Date().getFullYear();
-  const rows: any[][] = [];
-  for (const emp of emps.slice(0, 200)) {
-    rows.push([emp.employeeCode, emp.fullName, emp.workEmail, emp.nationality, emp.startDate?.slice(0,10), emp.department, emp.designation, `${year}`, '—']);
-  }
-  downloadCsv(`iras-ir8a-${year}.csv`,
-    ['Employee Code', 'Full Name', 'Email', 'Nationality', 'Start Date', 'Department', 'Designation', 'YA', 'Total Income (from payroll)'],
-    rows
-  );
-}
+// IR8A now handled by Ir8aModal
 
 async function runCpfReportDirect() {
   const data = await apiFetch('/payroll/runs?limit=1&status=FINALISED');
@@ -230,6 +200,210 @@ async function runSdlReport() {
   downloadCsv(`sdl-analytics-${new Date().toISOString().slice(0,10)}.csv`,
     ['Period', 'Employee ID', 'Gross Pay', 'SDL', 'FWL'],
     rows
+  );
+}
+
+// ── Leave Liability Modal ─────────────────────────────────────────────────────
+function LeaveLiabilityModal({ onClose, onToast }: { onClose: () => void; onToast: (m: string, t: 'ok'|'err') => void }) {
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [data, setData] = useState<any | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const generate = async () => {
+    setLoading(true);
+    try {
+      const d = await apiFetch(`/reports/leave-liability?year=${year}`);
+      setData(d);
+    } catch (e: any) {
+      onToast(e.message || 'Failed to generate leave liability report', 'err');
+    } finally { setLoading(false); }
+  };
+
+  const handleCsv = () => {
+    if (!data) return;
+    downloadCsv(`leave-liability-${year}.csv`,
+      ['Employee Code', 'Full Name', 'Department', 'Leave Type', 'Leave Code', 'Entitled Days', 'Carry Forward', 'Used Days', 'Pending Days', 'Unused Days', 'Daily Rate (SGD)', 'Liability (SGD)'],
+      data.rows.map((r: any) => [r.employeeCode, r.fullName, r.department, r.leaveType, r.leaveCode, r.entitledDays, r.carryForward, r.usedDays, r.pendingDays, r.unusedDays, r.dailyRate, r.liability])
+    );
+    onToast('Leave liability CSV downloaded', 'ok');
+  };
+
+  const fmt = (v: number | null | undefined) => v == null ? '—' : `$${Number(v).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const byDept: Record<string, any[]> = data?.rows?.reduce((acc: Record<string, any[]>, r: any) => {
+    if (!acc[r.department]) acc[r.department] = [];
+    acc[r.department].push(r);
+    return acc;
+  }, {}) ?? {};
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+      <div className="w-full max-w-5xl bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
+        <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100 flex-shrink-0">
+          <div>
+            <h2 className="text-base font-black text-slate-900 tracking-tighter">Leave Liability Report</h2>
+            <p className="eyebrow-tight mt-0.5">Accrued leave liability for finance accrual reporting</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {data && <button onClick={handleCsv} className="px-5 py-2 bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all">Download CSV</button>}
+            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">✕</button>
+          </div>
+        </div>
+        <div className="flex items-center gap-4 px-8 py-4 border-b border-slate-50 bg-slate-50/50 flex-shrink-0">
+          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Year</label>
+          <input type="number" value={year} onChange={e => setYear(Number(e.target.value))} min={2020} max={2030}
+            className="w-28 px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500" />
+          <button onClick={generate} disabled={loading}
+            className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center gap-2">
+            {loading ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating…</> : 'Generate'}
+          </button>
+        </div>
+        {data && (
+          <div className="flex flex-wrap gap-3 px-8 py-4 border-b border-slate-50 flex-shrink-0">
+            {[
+              { label: 'Total Liability', value: fmt(data.totalLiability), color: 'text-emerald-700' },
+              { label: 'Headcount', value: String(data.headcount), color: 'text-slate-700' },
+              { label: 'Year', value: String(data.year), color: 'text-indigo-700' },
+              { label: 'Generated', value: new Date(data.generatedAt).toLocaleDateString('en-SG'), color: 'text-slate-500' },
+            ].map(s => (
+              <div key={s.label} className="px-4 py-2 bg-white rounded-xl border border-slate-100 text-center">
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{s.label}</p>
+                <p className={`text-xs font-black ${s.color}`}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="overflow-auto flex-1">
+          {!data ? (
+            <div className="flex items-center justify-center h-40 text-slate-400 text-sm font-bold">{loading ? 'Loading…' : 'Select year and click Generate'}</div>
+          ) : data.rows.length === 0 ? (
+            <div className="flex items-center justify-center h-40 text-slate-400 text-sm font-bold">No data for {year}</div>
+          ) : (
+            <table className="w-full text-left border-collapse text-[11px]">
+              <thead className="sticky top-0 bg-slate-50 border-b border-slate-100 label-form">
+                <tr>{['Employee', 'Leave Type', 'Entitled', 'C/F', 'Used', 'Pending', 'Unused', 'Daily Rate', 'Liability'].map(h => <th key={h} className="px-4 py-3 whitespace-nowrap">{h}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {Object.entries(byDept).map(([dept, rows]: [string, any[]]) => (
+                  <>
+                    <tr key={`hdr-${dept}`} className="bg-slate-50">
+                      <td colSpan={9} className="px-4 py-2 font-black text-slate-600 text-[10px] uppercase tracking-widest">{dept}</td>
+                    </tr>
+                    {rows.map((r: any, i: number) => (
+                      <tr key={`${r.employeeId}-${r.leaveCode}-${i}`} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-4 py-3"><p className="font-black text-slate-800 whitespace-nowrap">{r.fullName}</p><p className="text-[9px] text-slate-400 font-bold">{r.employeeCode}</p></td>
+                        <td className="px-4 py-3 font-bold text-slate-600 whitespace-nowrap">{r.leaveType}</td>
+                        <td className="px-4 py-3 text-right font-mono text-slate-600">{r.entitledDays}</td>
+                        <td className="px-4 py-3 text-right font-mono text-slate-500">{r.carryForward ?? 0}</td>
+                        <td className="px-4 py-3 text-right font-mono text-slate-600">{r.usedDays}</td>
+                        <td className="px-4 py-3 text-right font-mono text-amber-600">{r.pendingDays ?? 0}</td>
+                        <td className="px-4 py-3 text-right font-mono font-bold text-slate-800">{r.unusedDays}</td>
+                        <td className="px-4 py-3 text-right font-mono text-slate-500">{fmt(r.dailyRate)}</td>
+                        <td className="px-4 py-3 text-right font-mono font-black text-emerald-700">{fmt(r.liability)}</td>
+                      </tr>
+                    ))}
+                    <tr key={`sub-${dept}`} className="bg-blue-50/50">
+                      <td colSpan={8} className="px-4 py-2 text-right text-[9px] font-black text-slate-500 uppercase tracking-widest">Dept Total</td>
+                      <td className="px-4 py-2 text-right font-mono font-black text-blue-700">{fmt(data.byDepartment[dept])}</td>
+                    </tr>
+                  </>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── IR8A Modal ────────────────────────────────────────────────────────────────
+function Ir8aModal({ onClose, onToast }: { onClose: () => void; onToast: (m: string, t: 'ok'|'err') => void }) {
+  const [year, setYear] = useState(new Date().getFullYear() - 1);
+  const [data, setData] = useState<any[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const generate = async () => {
+    setLoading(true);
+    try {
+      const d = await apiFetch(`/reports/ir8a-data/${year}`);
+      setData(d.employees ?? d ?? []);
+    } catch (e: any) {
+      onToast(e.message || 'Failed to generate IR8A data', 'err');
+    } finally { setLoading(false); }
+  };
+
+  const downloadFlatFile = async () => {
+    const token = document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+    const res = await fetch(`${apiBase}/reports/ir8a-file/${year}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); onToast((e as any).error || 'Flat file generation failed', 'err'); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `IR8A-${year}.txt`; a.click();
+    URL.revokeObjectURL(url);
+    onToast('IR8A flat file downloaded', 'ok');
+  };
+
+  const fmt = (v: number | null | undefined) => v == null ? '—' : `$${Number(v).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+      <div className="w-full max-w-5xl bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
+        <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100 flex-shrink-0">
+          <div>
+            <h2 className="text-base font-black text-slate-900 tracking-tighter">IR8A Annual Filing — {year}</h2>
+            <p className="eyebrow-tight mt-0.5">IRAS AIS submission data · deadline 1 March {year + 1}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {data && data.length > 0 && (
+              <button onClick={downloadFlatFile}
+                className="px-5 py-2 bg-slate-800 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-900 transition-all">
+                Download Flat File
+              </button>
+            )}
+            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">✕</button>
+          </div>
+        </div>
+        <div className="flex items-center gap-4 px-8 py-4 border-b border-slate-50 bg-slate-50/50 flex-shrink-0">
+          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Year of Assessment</label>
+          <input type="number" value={year} onChange={e => setYear(Number(e.target.value))} min={2020} max={2030}
+            className="w-28 px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500" />
+          <button onClick={generate} disabled={loading}
+            className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center gap-2">
+            {loading ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating…</> : 'Generate'}
+          </button>
+          <span className="ml-auto text-[9px] font-black text-amber-600 uppercase tracking-widest bg-amber-50 border border-amber-100 px-3 py-1.5 rounded-lg">
+            IRAS Deadline: 1 Mar {year + 1}
+          </span>
+        </div>
+        <div className="overflow-auto flex-1">
+          {!data ? (
+            <div className="flex items-center justify-center h-40 text-slate-400 text-sm font-bold">{loading ? 'Loading…' : 'Select year and click Generate'}</div>
+          ) : data.length === 0 ? (
+            <div className="flex items-center justify-center h-40 text-slate-400 text-sm font-bold">No finalised payslips for {year}</div>
+          ) : (
+            <table className="w-full text-left border-collapse text-[11px]">
+              <thead className="sticky top-0 bg-slate-50 border-b border-slate-100 label-form">
+                <tr>{['Employee', 'NRIC', 'Employment Income', 'Emp CPF', 'Emplr CPF', 'AW Income', 'Other Taxable'].map(h => <th key={h} className="px-4 py-3 whitespace-nowrap">{h}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {data.map((emp: any, i: number) => (
+                  <tr key={emp.employeeId ?? i} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-4 py-3"><p className="font-black text-slate-800 whitespace-nowrap">{emp.fullName}</p><p className="text-[9px] text-slate-400 font-bold">{emp.employeeId}</p></td>
+                    <td className="px-4 py-3 font-mono text-slate-600 tracking-wider">{emp.nric ?? '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-slate-800">{fmt(emp.employmentIncome)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-indigo-600">{fmt(emp.employeeCpf)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-purple-600">{fmt(emp.employerCpf)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-teal-600">{emp.awIncome > 0 ? fmt(emp.awIncome) : '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-500">{emp.otherTaxableIncome > 0 ? fmt(emp.otherTaxableIncome) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -470,6 +644,8 @@ export default function ReportsPage() {
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
   const [runSelector, setRunSelector] = useState<{ key: ReportKey; title: string } | null>(null);
   const [customOpen, setCustomOpen] = useState(false);
+  const [leaveLiabilityOpen, setLeaveLiabilityOpen] = useState(false);
+  const [ir8aOpen, setIr8aOpen] = useState(false);
   const [breakdownModal, setBreakdownModal] = useState<{ runId: string; period: string } | null>(null);
 
   const showToast = (msg: string, type: 'ok' | 'err') => setToast({ msg, type });
@@ -484,9 +660,9 @@ export default function ReportsPage() {
     try {
       switch (key) {
         case 'cpf':       await runCpfForRun(runId!, period!); break;
-        case 'iras':      await runIRASReport(); break;
+        case 'iras':      setIr8aOpen(true); setRunning(null); return;
         case 'giro':      await runBankGiroForRun(runId!, period!); break;
-        case 'leave':     await runLeaveLiabilityReport(); break;
+        case 'leave':     setLeaveLiabilityOpen(true); setRunning(null); return;
         case 'workforce': await runWorkforceReport(); break;
         case 'attrition': await runAttritionReport(); break;
         case 'mom':       await runMomReport(); break;
@@ -648,6 +824,22 @@ export default function ReportsPage() {
       {customOpen && (
         <CustomReportModal
           onClose={() => setCustomOpen(false)}
+          onToast={showToast}
+        />
+      )}
+
+      {/* Leave Liability Modal */}
+      {leaveLiabilityOpen && (
+        <LeaveLiabilityModal
+          onClose={() => setLeaveLiabilityOpen(false)}
+          onToast={showToast}
+        />
+      )}
+
+      {/* IR8A Modal */}
+      {ir8aOpen && (
+        <Ir8aModal
+          onClose={() => setIr8aOpen(false)}
           onToast={showToast}
         />
       )}
