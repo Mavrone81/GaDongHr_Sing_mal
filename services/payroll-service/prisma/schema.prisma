@@ -169,6 +169,155 @@ model PayrollPeriodConfig {
   @@map("payroll_period_configs")
 }
 
+// ─── Benefits-in-Kind (IRAS Appendix 8A) ──────────────────────────────────────
+// Tracks non-cash benefits per employee per tax year. Annual taxable value is
+// computed (IRAS formula) or entered (manual) and surfaced in IR8A + Appendix 8A.
+model BikItem {
+  id                String   @id @default(uuid())
+  employeeId        String
+  year              Int                          // tax year
+  bikType           BikType                      // COMPANY_CAR | HOUSING | CLUB | GROUP_INSURANCE | OTHER
+  description       String?
+  // Company car inputs
+  engineCapacity    Int?                         // cc
+  carPurchaseCost   Float?
+  employerProvidesFuel Boolean @default(false)
+  runningCost       Float?                       // annual running cost (fuel/maintenance)
+  // Housing inputs
+  housingAnnualValue Float?                      // IRAS-assessed AV
+  // Final computed taxable benefit (encrypted)
+  annualValueEnc    String                       // SGD per year
+  computationMethod String                       // "IRAS_FORMULA" | "MANUAL"
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([employeeId, year, bikType])
+  @@index([employeeId, year])
+  @@index([year])
+  @@map("bik_items")
+}
+
+// ─── Stock Options / ESOP / ESPP (IRAS Appendix 8B) ───────────────────────────
+model StockOptionGrant {
+  id            String   @id @default(uuid())
+  employeeId    String
+  grantDate     DateTime
+  totalShares   Int
+  optionPrice   Float                            // strike price per share (SGD)
+  scheme        String   @default("ESOP")        // ESOP | ESPP | RSU
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  exercises StockOptionExercise[]
+
+  @@index([employeeId])
+  @@index([grantDate])
+  @@map("stock_option_grants")
+}
+
+model StockOptionExercise {
+  id                    String   @id @default(uuid())
+  grantId               String
+  exerciseDate          DateTime
+  sharesExercised       Int
+  marketValueAtExercise Float                    // OMV per share at exercise (SGD)
+  taxableGainEnc        String                   // encrypted: (OMV - optionPrice) × shares
+  notes                 String?
+  createdAt             DateTime @default(now())
+
+  grant StockOptionGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  @@index([grantId])
+  @@index([exerciseDate])
+  @@map("stock_option_exercises")
+}
+
+enum BikType {
+  COMPANY_CAR
+  HOUSING
+  CLUB_MEMBERSHIP
+  GROUP_INSURANCE
+  OTHER
+}
+
+// ─── Cost centres & payroll journal (PAY-012) ─────────────────────────────────
+model CostCentre {
+  id                String   @id @default(uuid())
+  code              String   @unique
+  name              String
+  description       String?
+  isActive          Boolean  @default(true)
+  // Optional GL overrides — fall back to system defaults if null
+  glSalaryAccount   String?
+  glCpfAccount      String?
+  glSdlAccount      String?
+  glFwlAccount      String?
+  glBankAccount     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  allocations EmployeeCostCentre[]
+  entries     PayrollJournalEntry[]
+
+  @@map("cost_centres")
+}
+
+// One employee may be split across multiple cost centres. Percentages must sum
+// to 100 at any point in time; the API enforces this on write.
+model EmployeeCostCentre {
+  id            String    @id @default(uuid())
+  employeeId    String
+  costCentreId  String
+  percentage    Float
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
+  createdAt     DateTime  @default(now())
+
+  costCentre CostCentre @relation(fields: [costCentreId], references: [id])
+
+  @@index([employeeId])
+  @@index([costCentreId])
+  @@map("employee_cost_centres")
+}
+
+model PayrollJournal {
+  id           String    @id @default(uuid())
+  runId        String    @unique
+  period       String
+  generatedAt  DateTime  @default(now())
+  totalDebit   Float     @default(0)
+  totalCredit  Float     @default(0)
+  status       String    @default("DRAFT")   // DRAFT | EXPORTED | POSTED
+  exportFormat String?                       // XERO | QUICKBOOKS | SAP | CSV
+  exportedAt   DateTime?
+
+  entries PayrollJournalEntry[]
+
+  @@index([period])
+  @@map("payroll_journals")
+}
+
+model PayrollJournalEntry {
+  id           String  @id @default(uuid())
+  journalId    String
+  account      String                       // e.g. "5100"
+  accountName  String                       // e.g. "Salary Expense"
+  side         String                       // "DEBIT" | "CREDIT"
+  description  String
+  amountEnc    String                       // encrypted SGD
+  costCentreId String?
+  employeeId   String?
+
+  journal    PayrollJournal @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  costCentre CostCentre?    @relation(fields: [costCentreId], references: [id])
+
+  @@index([journalId])
+  @@index([costCentreId])
+  @@map("payroll_journal_entries")
+}
+
 enum WorkDayType {
   FIVE_DAY
   SIX_DAY
