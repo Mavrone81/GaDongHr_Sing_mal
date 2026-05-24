@@ -31,20 +31,26 @@ model LeaveType {
 }
 
 model LeaveEntitlement {
-  id              String   @id @default(uuid())
-  employeeId      String
-  leaveTypeId     String
-  year            Int
-  entitledDays    Float
-  usedDays        Float    @default(0)
-  pendingDays     Float    @default(0)
-  carryForward    Float    @default(0)
-  expiredDays     Float    @default(0)
-  updatedAt       DateTime @updatedAt
+  id                 String    @id @default(uuid())
+  employeeId         String
+  leaveTypeId        String
+  year               Int
+  entitledDays       Float
+  usedDays           Float     @default(0)
+  pendingDays        Float     @default(0)
+  carryForward       Float     @default(0)
+  expiredDays        Float     @default(0)
+  // PAY-LEA-007: explicit expiry timestamp for the carry-forward balance.
+  // Defaults to 31 Dec of `year` at 23:59:59. Set null to make carry-forward
+  // never expire (rare; HR override). The daily sweep zeros carryForward and
+  // pushes the remainder into expiredDays after this timestamp passes.
+  carryForwardExpiry DateTime?
+  updatedAt          DateTime  @updatedAt
 
   leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
 
   @@unique([employeeId, leaveTypeId, year])
+  @@index([carryForwardExpiry])
   @@map("leave_entitlements")
 }
 
