@@ -9,6 +9,7 @@ WORKDIR /app/services/reporting-service
 COPY services/reporting-service/package*.json ./
 RUN npm install --omit=dev
 COPY services/reporting-service/ ./
+RUN npx prisma generate
 
 EXPOSE 4010
-CMD ["sh", "-c", " node src/index.js"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node src/index.js"]

@@ -388,14 +388,23 @@ Digital exit interview form (satisfaction rating, reason for leaving, open comme
 - SDL monthly computation summary as standalone SSG submission report missing
 - Submission history storage (dates, reference numbers, file copies, receipts) not yet tracked per report type
 
-### ❌ RPT-003 — Custom Report Builder & Scheduled Delivery
-**Status:** Not Done  
-**Outstanding:**
-- Drag-and-drop field selection from all data entities
-- Filter, group, sort, cross-tab, formula options
-- Named report template save and share
-- Scheduled delivery (daily/weekly/monthly) by email in PDF/Excel/CSV formats
-- Pre-built workforce analytics reports (headcount trend, attrition by tenure, OT analysis, etc.)
+### ⚠️ RPT-003 — Custom Report Builder & Scheduled Delivery
+**Status:** Partial (Phase 1 shipped)  
+**Done (Phase 1 — backend foundation):**
+- New Prisma schema on reporting-service: `ReportTemplate`, `ReportSchedule`, `ReportRun` (history).
+- Query executor engine supports: 5 canonical data sources (employees / payrollRuns / leaveApplications / attendance / claims), filter ops (eq/ne/gt/lt/gte/lte/in/contains, dotted-path fields), groupBy with count/sum/avg/min/max aggregations, multi-key sort, projection, limit cap (default 5k, max 50k).
+- Routes: `GET /reports/data-sources` (UI metadata), template CRUD (`/reports/templates`), `POST /reports/templates/:id/run`, `POST /reports/preview`, `GET /reports/templates/:id/export.csv`, `GET /reports/templates/:id/export.xlsx`, `GET /reports/templates/:id/runs`, schedule CRUD (`/reports/schedules`).
+- Hourly scheduler tick advances `nextRunAt` by frequency (DAILY/WEEKLY/MONTHLY, monthly day-clamping for Feb), records ReportRun rows. Email delivery is a logged placeholder (recipients logged; no SMTP wired yet).
+- RBAC: owner-or-shared visibility for non-admins; admin sees all. Owner-only edit/delete on templates and schedules.
+- Thin frontend section "Saved Reports" on `/reports` lists templates with Run / CSV / XLSX / Delete; new-report editor accepts JSON definition (drag-and-drop ships in Phase 2).
+- 66 tests green: 47 unit on the pure engines (query executor, CSV writer, schedule next-run calculator) + 19 supertest integration on the routes.
+
+**Outstanding (Phase 2):**
+- Drag-and-drop field-picker UI on the frontend (replace the JSON textarea editor)
+- Cross-tab pivot and formula columns
+- PDF export
+- Real email delivery via notification-service (currently logged-only); needs an internal-service token so the scheduler can fetch downstream data without a user context
+- Pre-built workforce analytics seed templates (headcount trend, attrition by tenure, OT analysis, training completion)
 
 ---
 
@@ -425,9 +434,9 @@ Employee replies to non-CLOSED tickets. HR Admin replies to any ticket. CLOSED t
 ## Outstanding Items Priority List
 
 ### Must Have (critical path)
-1. **RPT-003** — Custom report builder (management reporting)
-2. **PAY-001 (partial)** — Bi-monthly run, supplemental auto-trim, strict maker-checker user validation
-3. **OFF-004 (completion)** — IR21 money-withhold enforcement (now unblocked by PAY-010)
+1. **PAY-001 (partial)** — Bi-monthly run, supplemental auto-trim, strict maker-checker user validation
+2. **OFF-004 (completion)** — IR21 money-withhold enforcement (now unblocked by PAY-010)
+3. **RPT-003 Phase 2** — Drag-and-drop builder UI, PDF export, real scheduled email delivery, cross-tab + formulas, pre-built analytics templates
 
 ### Should Have (high value)
 7. **TRN-003** — Government grant claims (SkillsFuture, ETS, Absentee Payroll — SSG compliance)

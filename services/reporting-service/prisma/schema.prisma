@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── RPT-003 Phase 1: report builder foundation ────────────────────────────────
+// A ReportTemplate is a stored, named query against one data source.
+// definition (JSON) shape:
+//   {
+//     dataSource: "employees" | "payrollRuns" | "leaveApplications" | "attendance" | "claims",
+//     fields:     [{ key: "department", label: "Dept" }, ...],
+//     filters:    [{ field: "isActive", op: "eq", value: true }, ...],
+//     groupBy:    "department",                       // optional
+//     aggregations: [{ field: "salary", op: "sum", as: "totalSalary" }, ...],
+//     sortBy:     [{ field: "department", dir: "asc" }],
+//     limit:      1000
+//   }
+//
+// definition is validated at run time by the executor — no strict prisma typing.
+
+model ReportTemplate {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  category    String?
+  definition  Json
+  ownerId     String
+  isShared    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  schedules ReportSchedule[]
+  runs      ReportRun[]
+
+  @@index([ownerId])
+  @@index([category])
+  @@map("report_templates")
+}
+
+enum ScheduleFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum ScheduleFormat {
+  CSV
+  XLSX
+}
+
+model ReportSchedule {
+  id          String            @id @default(uuid())
+  templateId  String
+  frequency   ScheduleFrequency
+  format      ScheduleFormat    @default(CSV)
+  recipients  String            // comma-separated emails
+  isActive    Boolean           @default(true)
+  nextRunAt   DateTime
+  lastRunAt   DateTime?
+  createdBy   String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  template ReportTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  runs     ReportRun[]
+
+  @@index([nextRunAt, isActive])
+  @@index([templateId])
+  @@map("report_schedules")
+}
+
+enum RunStatus {
+  SUCCESS
+  ERROR
+}
+
+model ReportRun {
+  id          String     @id @default(uuid())
+  templateId  String
+  scheduleId  String?
+  status      RunStatus
+  rowCount    Int        @default(0)
+  errorMsg    String?
+  triggeredBy String     // userId or "scheduler"
+  startedAt   DateTime   @default(now())
+  completedAt DateTime?
+
+  template ReportTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  schedule ReportSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+
+  @@index([templateId, startedAt])
+  @@map("report_runs")
+}

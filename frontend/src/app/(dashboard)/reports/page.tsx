@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, getAccessToken } from '@/lib/api';
 
 // ── CSV utility ───────────────────────────────────────────────────────────────
 function downloadCsv(filename: string, headers: string[], rows: (string | number | null | undefined)[][]) {
@@ -636,6 +636,239 @@ function CustomReportModal({ onClose, onToast }: { onClose: () => void; onToast:
   );
 }
 
+// ── RPT-003 Phase 1 — Saved Reports ───────────────────────────────────────────
+type SavedTemplate = {
+  id: string; name: string; description?: string | null; category?: string | null;
+  definition: any; ownerId: string; isShared: boolean;
+  createdAt: string; updatedAt: string;
+};
+
+function SavedReportsSection({ onToast }: { onToast: (msg: string, type: 'ok' | 'err') => void }) {
+  const [templates, setTemplates] = useState<SavedTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+
+  async function refresh() {
+    setLoading(true);
+    try {
+      const data = await apiFetch('/reports/templates');
+      setTemplates(Array.isArray(data) ? data : []);
+    } catch (e: any) {
+      onToast(e.message || 'Failed to load saved reports', 'err');
+    } finally { setLoading(false); }
+  }
+  useEffect(() => { refresh(); }, []);
+
+  async function run(t: SavedTemplate) {
+    setBusy(`run-${t.id}`);
+    try {
+      const data = await apiFetch(`/reports/templates/${t.id}/run`, { method: 'POST' });
+      onToast(`Ran "${t.name}" — ${data.rows?.length ?? 0} rows`, 'ok');
+    } catch (e: any) {
+      onToast(e.message || 'Run failed', 'err');
+    } finally { setBusy(null); }
+  }
+
+  async function exportFormat(t: SavedTemplate, fmt: 'csv' | 'xlsx') {
+    setBusy(`${fmt}-${t.id}`);
+    try {
+      const token = getAccessToken();
+      const base = process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:4000/api`;
+      const res = await fetch(`${base}/reports/templates/${t.id}/export.${fmt}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${t.name.replace(/[^\w.-]+/g, '_')}.${fmt}`; a.click();
+      URL.revokeObjectURL(url);
+      onToast(`Downloaded ${fmt.toUpperCase()}`, 'ok');
+    } catch (e: any) {
+      onToast(e.message || 'Export failed', 'err');
+    } finally { setBusy(null); }
+  }
+
+  async function remove(t: SavedTemplate) {
+    if (!confirm(`Delete report "${t.name}"?`)) return;
+    setBusy(`del-${t.id}`);
+    try {
+      await apiFetch(`/reports/templates/${t.id}`, { method: 'DELETE' });
+      onToast('Report deleted', 'ok');
+      refresh();
+    } catch (e: any) {
+      onToast(e.message || 'Delete failed', 'err');
+    } finally { setBusy(null); }
+  }
+
+  return (
+    <section className="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 overflow-hidden">
+      <div className="p-8 border-b border-slate-50 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-2 h-8 bg-indigo-600 rounded-full" />
+          <div>
+            <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest">Saved Reports</h3>
+            <p className="eyebrow-tight mt-1">User-defined templates · run, export, schedule</p>
+          </div>
+        </div>
+        <button onClick={() => setEditorOpen(true)}
+          className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 transition-all active:scale-95">
+          + New Report
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        {loading ? (
+          <div className="p-8 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">Loading…</div>
+        ) : templates.length === 0 ? (
+          <div className="p-12 text-center">
+            <p className="text-sm font-bold text-slate-400">No saved reports yet. Click <span className="text-indigo-600">+ New Report</span> to create one.</p>
+          </div>
+        ) : (
+          <table className="w-full text-left border-collapse">
+            <thead className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-50">
+              <tr>
+                <th className="px-8 py-5">Name</th>
+                <th className="px-8 py-5">Data Source</th>
+                <th className="px-8 py-5">Category</th>
+                <th className="px-8 py-5">Updated</th>
+                <th className="px-8 py-5 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {templates.map(t => (
+                <tr key={t.id} className="hover:bg-slate-50/50 transition-all">
+                  <td className="px-8 py-5">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-black text-slate-900 uppercase tracking-tight">{t.name}</span>
+                      {t.description && <span className="text-[10px] text-slate-500 mt-0.5">{t.description}</span>}
+                    </div>
+                  </td>
+                  <td className="px-8 py-5">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t.definition?.dataSource || '—'}</span>
+                  </td>
+                  <td className="px-8 py-5">
+                    <span className="text-[9px] font-black px-3 py-1.5 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-100 uppercase tracking-widest">{t.category || 'Custom'}</span>
+                  </td>
+                  <td className="px-8 py-5">
+                    <span className="eyebrow-tight">{new Date(t.updatedAt).toLocaleDateString('en-SG')}</span>
+                  </td>
+                  <td className="px-8 py-5">
+                    <div className="flex gap-2 justify-center">
+                      <button onClick={() => run(t)} disabled={busy === `run-${t.id}`}
+                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-slate-600 hover:border-emerald-500 hover:text-emerald-600 uppercase tracking-widest disabled:opacity-50">
+                        {busy === `run-${t.id}` ? '…' : 'Run'}
+                      </button>
+                      <button onClick={() => exportFormat(t, 'csv')} disabled={busy === `csv-${t.id}`}
+                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-slate-600 hover:border-indigo-500 hover:text-indigo-600 uppercase tracking-widest disabled:opacity-50">
+                        {busy === `csv-${t.id}` ? '…' : 'CSV'}
+                      </button>
+                      <button onClick={() => exportFormat(t, 'xlsx')} disabled={busy === `xlsx-${t.id}`}
+                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-slate-600 hover:border-indigo-500 hover:text-indigo-600 uppercase tracking-widest disabled:opacity-50">
+                        {busy === `xlsx-${t.id}` ? '…' : 'XLSX'}
+                      </button>
+                      <button onClick={() => remove(t)} disabled={busy === `del-${t.id}`}
+                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-red-500 hover:border-red-500 hover:bg-red-50 uppercase tracking-widest disabled:opacity-50">
+                        {busy === `del-${t.id}` ? '…' : 'Del'}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+      {editorOpen && (
+        <SavedReportEditor
+          onClose={() => setEditorOpen(false)}
+          onSaved={() => { setEditorOpen(false); refresh(); }}
+          onToast={onToast}
+        />
+      )}
+    </section>
+  );
+}
+
+function SavedReportEditor({ onClose, onSaved, onToast }: {
+  onClose: () => void; onSaved: () => void; onToast: (msg: string, type: 'ok' | 'err') => void;
+}) {
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('WORKFORCE');
+  const [description, setDescription] = useState('');
+  const [definitionText, setDefinitionText] = useState(JSON.stringify({
+    dataSource: 'employees',
+    filters: [{ field: 'isActive', op: 'eq', value: true }],
+    groupBy: 'department',
+    aggregations: [{ op: 'count', as: 'headcount' }],
+    sortBy: [{ field: 'headcount', dir: 'desc' }],
+  }, null, 2));
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!name) { onToast('Name is required', 'err'); return; }
+    let definition: any;
+    try { definition = JSON.parse(definitionText); }
+    catch { onToast('Definition must be valid JSON', 'err'); return; }
+    setSaving(true);
+    try {
+      await apiFetch('/reports/templates', {
+        method: 'POST',
+        body: JSON.stringify({ name, category, description, definition }),
+      });
+      onToast('Report saved', 'ok');
+      onSaved();
+    } catch (e: any) {
+      onToast(e.message || 'Save failed', 'err');
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+      <div className="w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
+        <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
+          <div>
+            <h2 className="text-base font-black text-slate-900 tracking-tighter">New Saved Report</h2>
+            <p className="eyebrow-tight mt-0.5">Phase 1 — JSON definition. Drag-and-drop builder ships in Phase 2.</p>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100">✕</button>
+        </div>
+        <div className="p-8 flex flex-col gap-6 overflow-y-auto">
+          <div className="flex flex-col gap-2">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Name</label>
+            <input value={name} onChange={e => setName(e.target.value)}
+              className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Category</label>
+              <input value={category} onChange={e => setCategory(e.target.value)}
+                className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Description</label>
+              <input value={description} onChange={e => setDescription(e.target.value)}
+                className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500" />
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Definition (JSON)</label>
+            <textarea value={definitionText} onChange={e => setDefinitionText(e.target.value)} rows={14}
+              className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 outline-none focus:border-indigo-500" />
+          </div>
+        </div>
+        <div className="flex gap-3 px-8 py-5 border-t border-slate-100 bg-slate-50/50">
+          <button onClick={onClose} className="flex-1 py-3 text-[10px] font-black text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-100 uppercase tracking-widest">Cancel</button>
+          <button onClick={save} disabled={saving}
+            className="flex-1 py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl uppercase tracking-widest">
+            {saving ? 'Saving…' : 'Save Report'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function ReportsPage() {
   const [running, setRunning] = useState<ReportKey | null>(null);
@@ -810,6 +1043,9 @@ export default function ReportsPage() {
           </table>
         </div>
       </section>
+
+      {/* RPT-003 Phase 1 — Saved Reports */}
+      <SavedReportsSection onToast={showToast} />
 
       {/* Run Selector Modal */}
       {runSelector && (

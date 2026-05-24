@@ -6,6 +6,8 @@ const cors = require('cors');
 const morgan = require('morgan');
 const axios = require('axios');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
+const builderRoutes = require('./routes/builder.routes');
+const { tick: schedulerTick } = require('./scheduler-tick');
 
 const app = express();
 const PORT = process.env.PORT || 4010;
@@ -14,7 +16,7 @@ const EMPLOYEE_URL   = process.env.EMPLOYEE_SERVICE_URL  || 'http://employee-ser
 const LEAVE_URL      = process.env.LEAVE_SERVICE_URL     || 'http://leave-service:4004';
 const INTERNAL_KEY   = process.env.INTERNAL_SERVICE_KEY  || '';
 
-app.use(helmet()); app.use(cors()); app.use(express.json({ limit: '10kb' })); app.use(morgan('combined'));
+app.use(helmet()); app.use(cors()); app.use(express.json({ limit: '100kb' })); app.use(morgan('combined'));
 app.get('/health', (req, res) => res.json({ service: 'reporting-service', status: 'ok', ts: new Date() }));
 
 function authHeaders(req) { return { Authorization: req.headers['authorization'] }; }
@@ -150,5 +152,26 @@ app.get('/reports/ir8a-file/:year', authenticate, authorize(ROLES.SUPER_ADMIN, R
   }
 });
 
+// RPT-003 Phase 1 — report builder + schedules mounted under /reports
+app.use('/reports', builderRoutes);
+
 app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: err.message || 'Internal server error' }); });
-app.listen(PORT, () => console.log(`[reporting-service] Running on port ${PORT}`));
+
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`[reporting-service] Running on port ${PORT}`);
+    // Scheduler tick: run shortly after startup, then hourly.
+    setTimeout(() => {
+      schedulerTick(new Date())
+        .then(r => r.due > 0 && console.log(`[reporting-service] Scheduler tick: due=${r.due}`))
+        .catch(err => console.error('[reporting-service] Scheduler startup tick error:', err));
+      setInterval(() => {
+        schedulerTick(new Date())
+          .then(r => r.due > 0 && console.log(`[reporting-service] Scheduler tick: due=${r.due}`))
+          .catch(err => console.error('[reporting-service] Scheduler hourly tick error:', err));
+      }, 60 * 60 * 1000);
+    }, 45000);
+  });
+}
+
+module.exports = { app };
