@@ -1,7 +1,7 @@
 # Implementation Status
 
 **PRD Reference:** PRD-HRMS-001 v2.0  
-**Last Updated:** 2026-05-24 _(PAY-001 completion — bi-monthly run type, supplemental auto-trim, DB-level maker-checker)_  
+**Last Updated:** 2026-05-24 _(OFF-004 completion — IR21 auto-population, money-withhold gate, deadline dashboard, daily reminder sweep)_  
 **Legend:** ✅ Done · ⚠️ Partial · ❌ Not Done
 
 ---
@@ -18,10 +18,10 @@
 | Performance Management | 4 | 1 | 1 | 6 |
 | Training & Development | 2 | 1 | 1 | 4 |
 | Asset Management | 2 | 0 | 2 | 4 |
-| Offboarding | 4 | 1 | 0 | 5 |
+| Offboarding | 5 | 0 | 0 | 5 |
 | Reporting & Analytics | 1 | 2 | 0 | 3 |
 | Support & Ticketing | 3 | 0 | 1 | 4 |
-| **Total** | **35** | **18** | **6** | **59** |
+| **Total** | **36** | **17** | **6** | **59** |
 
 ---
 
@@ -354,13 +354,29 @@ Full checklist items across IT, Finance, HR, Logistics, Legal. Per-item due date
 **Status:** Done  
 All EA components: salary for days worked (÷ working days in month), notice pay (÷26 × notice days), leave encashment (÷26 × unused AL days), excess leave deduction, outstanding approved claims, salary advance recovery. CPF on final OW/AW. Maker-checker approval, final payslip, GIRO file.
 
-### ⚠️ OFF-004 — IR21 Tax Clearance (Foreign Employees)
-**Status:** Partial  
-**Done:** `POST /offboarding/:id/ir21-trigger` initiates IR21; `PUT /offboarding/:id/ir21-clearance` records clearance and reference number. Auto-triggered on offboarding initiation for non-SC/non-PR employees.  
-**Outstanding:**
-- Auto-population of IR21 form from payroll YTD data (employment income, bonuses, BIK Appendix 8A, stock options Appendix 8B) not fully automated — requires PAY-010 completion
-- System money-withhold enforcement until IRAS clearance not yet implemented in final pay flow
-- IR21 deadline countdown (≥1 month before last day) and filing reminder not yet on offboarding dashboard
+### ✅ OFF-004 — IR21 Tax Clearance (Foreign Employees)
+**Status:** Done _(completed 2026-05-24)_  
+Full IR21 compliance lifecycle for non-SC/non-PR employees.
+
+**Auto-population from payroll YTD (off-004 additions):**
+- New internal payroll endpoint `GET /payroll/internal/ir21-ytd/:employeeId/:year` (x-internal-service-key auth) aggregates employment income (max-YTD payslip), AW bonuses (line-item sum), BIK Appendix 8A, ESOP Appendix 8B, employee/employer CPF into a single `totalTaxableIncome` per employee.
+- `POST /offboarding/:id/ir21-populate` calls this endpoint and stores snapshot in `ir21FormData` on the case.
+- `GET /offboarding/:id/ir21-form` returns stored snapshot with deadline countdown and urgency classification.
+
+**Money-withhold gate:**
+- On `POST /offboarding/initiate`: if `isForeignEmployee=true`, automatically sets `moniesWithheld=true`, `ir21Status=PENDING`, and computes `ir21DeadlineDate = lastWorkingDate − 30 days` (IRAS rule).
+- `POST /offboarding/:id/create-final-pay-run` is blocked with 409 (`"Final pay withheld pending IRAS IR21 clearance"`) while `ir21Status ∈ {PENDING, SUBMITTED}`. Response surfaces `ir21Status`, `ir21DeadlineDate`, `daysUntilDeadline`, and resolution instructions.
+- `PUT /offboarding/:id/ir21-clearance` now sets `moniesWithheld=false` + `moniesToRelease=true` + validates SUBMITTED → CLEARANCE_ISSUED transition (rejects if not yet filed). Accepts optional `irasReference` stored in formData.
+
+**Deadline dashboard:**
+- `GET /offboarding/ir21/dashboard` — all IR21-required cases ordered by deadline, with `daysUntilDeadline`, urgency (`OVERDUE/CRITICAL/WARNING/OK`), `formPopulated`, `moniesWithheld`, and summary counts. Optional `?status=` filter.
+
+**Daily reminder sweep:**
+- Scheduled on service startup (next 00:05 SGT, repeating every 24h). Logs 30/14/7-day warnings and OVERDUE alerts for all PENDING/SUBMITTED foreign employees.
+
+**Schema additions:** `ir21DeadlineDate DateTime?`, `ir21FormData Json?`, `moniesWithheld Boolean @default(false)` on `OffboardingCase`.
+
+**Tests:** 24 unit tests (`ir21-engine.unit.test.js`: deadline boundary math incl. leap-year + year-boundary, urgency bands, withhold-status matrix, dashboard entry builder) + 15 integration tests (`ir21-api.integration.test.js`: I1-I15 covering initiate withhold, dashboard, populate, form, clearance transition, withhold gate, and local-employee bypass). Payroll service: 6 new integration tests (`ir21-ytd-internal.integration.test.js`: auth guard, full aggregation, zero-payslip case, max-YTD dedup, invalid year). Full payroll suite: **242 tests green**; full offboarding suite: **39 tests green**.
 
 ### ✅ OFF-005 — Exit Interview & Analytics
 **Status:** Done  
@@ -434,7 +450,7 @@ Employee replies to non-CLOSED tickets. HR Admin replies to any ticket. CLOSED t
 ## Outstanding Items Priority List
 
 ### Must Have (critical path)
-1. **OFF-004 (completion)** — IR21 money-withhold enforcement (now unblocked by PAY-010)
+_(all resolved)_
 
 ### Should Have (high value)
 7. **TRN-003** — Government grant claims (SkillsFuture, ETS, Absentee Payroll — SSG compliance)

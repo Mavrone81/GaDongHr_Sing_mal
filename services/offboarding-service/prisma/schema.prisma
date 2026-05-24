@@ -23,6 +23,9 @@ model OffboardingCase {
   ir21Status          Ir21Status?
   ir21FiledAt         DateTime?
   ir21ClearedAt       DateTime?
+  ir21DeadlineDate    DateTime?  // must file by: lastWorkingDate − 30 days (IRAS rule)
+  ir21FormData        Json?      // payroll YTD snapshot auto-populated from payroll service
+  moniesWithheld      Boolean    @default(false)
   moniesToRelease     Boolean    @default(false)
   exitInterviewDate   DateTime?
   exitSatisfaction    Int?       // 1-5

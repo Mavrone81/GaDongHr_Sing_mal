@@ -1586,4 +1586,65 @@ router.get('/ir8a-file/:year', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.
   } catch (err) { next(err); }
 });
 
+// ── GET /payroll/internal/ir21-ytd/:employeeId/:year ──────────────────────────
+// Internal endpoint for offboarding-service to fetch YTD income data for IR21
+// form auto-population. Authenticated by x-internal-service-key header only.
+router.get('/internal/ir21-ytd/:employeeId/:year', async (req, res, next) => {
+  try {
+    const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY || 'dev-internal-key';
+    const key = req.headers['x-internal-service-key'];
+    if (!key || key !== INTERNAL_KEY) return res.status(403).json({ error: 'Forbidden' });
+
+    const { employeeId, year } = req.params;
+    const yearInt = parseInt(year, 10);
+    if (!employeeId || isNaN(yearInt)) return res.status(400).json({ error: 'Invalid employeeId or year' });
+
+    // Latest finalised payslip for this employee in the year (max YTD)
+    const payslips = await prisma.payslip.findMany({
+      where: { employeeId, period: { startsWith: year }, isPublished: true },
+      orderBy: { period: 'desc' },
+    });
+    const latestPs = payslips.reduce((best, ps) => {
+      if (!best) return ps;
+      return decSafe(ps.ytdGrossEnc) >= decSafe(best.ytdGrossEnc) ? ps : best;
+    }, null);
+
+    // AW items (bonus/AWS) for this employee in the year
+    const awItems = await prisma.payrollLineItem.findMany({
+      where: { employeeId, wageType: 'AW', isIrasTaxable: true, run: { period: { startsWith: year } } },
+    });
+    const awIncome = round2(awItems.reduce((s, i) => s + decSafe(i.amountEnc), 0));
+
+    // BIK (Appendix 8A)
+    const bikItems = await prisma.bikItem.findMany({ where: { employeeId, year: yearInt } });
+    const benefitsInKind = round2(bikItems.reduce((s, i) => s + decSafe(i.annualValueEnc), 0));
+
+    // ESOP (Appendix 8B)
+    const yearStart = new Date(`${year}-01-01T00:00:00Z`);
+    const yearEnd   = new Date(`${yearInt + 1}-01-01T00:00:00Z`);
+    const exercises = await prisma.stockOptionExercise.findMany({
+      where: { exerciseDate: { gte: yearStart, lt: yearEnd }, grant: { employeeId } },
+      include: { grant: { select: { employeeId: true } } },
+    });
+    const stockOptionGain = round2(exercises.reduce((s, e) => s + decSafe(e.taxableGainEnc), 0));
+
+    const employmentIncome  = latestPs ? round2(decSafe(latestPs.ytdGrossEnc)) : 0;
+    const employeeCpf       = latestPs ? round2(decSafe(latestPs.ytdEmployeeCpfEnc)) : 0;
+    const employerCpf       = latestPs ? round2(decSafe(latestPs.ytdEmployerCpfEnc)) : 0;
+    const totalTaxableIncome = round2(employmentIncome + awIncome + benefitsInKind + stockOptionGain);
+
+    res.json({
+      employeeId, year,
+      employmentIncome,
+      awIncome,
+      benefitsInKind,
+      stockOptionGain,
+      employeeCpf,
+      employerCpf,
+      totalTaxableIncome,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
