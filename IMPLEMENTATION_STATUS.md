@@ -1,7 +1,7 @@
 # Implementation Status
 
 **PRD Reference:** PRD-HRMS-001 v2.0  
-**Last Updated:** 2026-05-24 _(TRN-003 completion — SSG grant config, Absentee Payroll, ETS report, SFEC + SFC tracking, grant claims ledger)_  
+**Last Updated:** 2026-05-24 _(AST-002 + AST-003 completion — logistics requests, inventory, auto purchase requests, asset maintenance, software licences, daily alert sweep)_  
 **Legend:** ✅ Done · ⚠️ Partial · ❌ Not Done
 
 ---
@@ -17,11 +17,11 @@
 | Time & Attendance | 4 | 1 | 0 | 5 |
 | Performance Management | 4 | 1 | 1 | 6 |
 | Training & Development | 3 | 1 | 0 | 4 |
-| Asset Management | 2 | 0 | 2 | 4 |
+| Asset Management | 4 | 0 | 0 | 4 |
 | Offboarding | 5 | 0 | 0 | 5 |
 | Reporting & Analytics | 1 | 2 | 0 | 3 |
 | Support & Ticketing | 3 | 0 | 1 | 4 |
-| **Total** | **37** | **17** | **5** | **59** |
+| **Total** | **39** | **17** | **3** | **59** |
 
 ---
 
@@ -329,22 +329,35 @@ Certification records with expiry date, `GET /certifications/expiring-soon`. Dai
 **Status:** Done  
 Full asset register (ID, category, serial, purchase date/cost, warranty, condition, assignee), digital handover acknowledgement, asset transfer (return + re-handover), full assignment history per asset.
 
-### ❌ AST-002 — Logistics Requests & Inventory
-**Status:** Not Done  
-**Outstanding:**
-- Employee logistics request submission (stationery, PPE, uniforms) via ESS portal
-- Manager approval and Logistics Officer fulfilment workflow
-- Inventory stock level tracking with low-stock alerts
-- Auto-generated purchase request on stock-alert trigger
-- Stock transactions log (receive, issue, adjust) with user and timestamp
+### ✅ AST-002 — Logistics Requests & Inventory
+**Status:** Done _(completed 2026-05-24)_  
+Full logistics + inventory lifecycle backed by typed Prisma models and pure decision engine.
 
-### ❌ AST-003 — Asset Expiry & Maintenance Alerts
-**Status:** Not Done  
-**Outstanding:**
-- Warranty expiry alerts at 60 days to Logistics Officer and IT Admin
-- Scheduled maintenance alerts at 30 days before due date; maintenance completion recording
-- Asset return alert 14 days before contract end / offboarding date
-- Software licence expiry alerts with seat count and renewal cost tracking
+**Inventory master:** `InventoryItem` table (SKU unique, category, unit, currentStock, reorderPoint, reorderQty, unitCost, location). Endpoints: `GET /inventory`, `GET /inventory/:id` (returns `lowStock` flag), `POST/PUT/DELETE /inventory/:id` (soft-delete via `isActive=false`), `GET /inventory/low-stock` (engine-filtered with `suggestedReorderQty`).
+
+**Employee request workflow:** `LogisticsRequest` + `LogisticsRequestLine` models. `POST /logistics/requests` (employee submits multi-line request with stationery/PPE/uniforms), `GET /logistics/requests?mine=true|status=...|requesterEmployeeId=...`, `GET /logistics/requests/:id`. State machine via dedicated routes: `PUT /logistics/requests/:id/approve` (manager/admin, PENDING → APPROVED, stamps `approvedBy`), `PUT /logistics/requests/:id/reject` (records reason), `PUT /logistics/requests/:id/fulfill` (Logistics Officer issues stock — transactional: decrements inventory, writes ISSUE `StockTransaction` per line, sets `quantityFulfilled`, triggers auto-PR if low-stock crossed), `DELETE /logistics/requests/:id` (owner/admin cancel only while PENDING). All transitions reject from non-applicable status with 409.
+
+**Stock transactions ledger:** `StockTransaction` (txType ∈ {RECEIVE, ISSUE, ADJUST}, signed quantity, reference, employeeId, createdBy, createdAt). `POST /inventory/:id/transactions` validates via `applyStockTransaction()` engine (rejects negative-result ISSUE, validates positive quantities for RECEIVE/ISSUE, signed for ADJUST), atomically updates stock + writes ledger row, auto-creates PR if stock crossed low-stock boundary. `GET /inventory/:id/transactions` returns history.
+
+**Auto purchase requests:** `PurchaseRequest` model with PR number (`PR-XXXX`), status pipeline (DRAFT→SUBMITTED→APPROVED→ORDERED→RECEIVED|CANCELLED). `POST /purchase-requests/auto-generate` sweeps all low-stock items and creates one PR each (`triggeredBy: system:low-stock`), idempotent via `shouldAutoCreatePr()` engine that checks for existing open PRs. `POST /purchase-requests` (manual), `PUT /purchase-requests/:id` (status update; setting `RECEIVED` auto-applies a RECEIVE `StockTransaction` and bumps inventory).
+
+### ✅ AST-003 — Asset Expiry & Maintenance Alerts
+**Status:** Done _(completed 2026-05-24)_  
+Idempotent alert ledger for warranty, maintenance, return, and software licence expiry with daily sweep.
+
+**Asset config additions:** `Asset.warrantyExpiry`, `Asset.nextMaintenanceAt`, `Asset.maintenanceIntervalDays`, `Asset.contractEndDate`. `AssetAssignment.offboardingDate` drives the 14-day return alert. Configurable via `POST /assets` and `PUT /assets/:id`.
+
+**Maintenance records:** `AssetMaintenance` model (type ∈ {PREVENTIVE, REPAIR, INSPECTION}, scheduledAt, completedAt, performedBy, costAmount, notes). `POST /assets/:id/maintenance` records completion; if asset has `maintenanceIntervalDays`, automatically advances `nextMaintenanceAt = completedAt + intervalDays` and clears prior MAINTENANCE alerts for the asset so the next cycle fires fresh. `GET /assets/:id/maintenance` lists history.
+
+**Software licences:** `SoftwareLicence` model (name, vendor, licenceKey, seatsTotal, seatsUsed, expiryDate, renewalCost). CRUD endpoints validate `seatsUsed ≤ seatsTotal`. `GET /licences` enriches each row with `seatsRemaining`, `daysUntilExpiry`, `urgency`. `GET /licences/expiring-soon?withinDays=N` (default 60) returns the dashboard list.
+
+**Alert thresholds:** WARRANTY [60, 30, 7] · MAINTENANCE [30, 14, 7] · RETURN [14, 7, 1] · LICENCE [60, 30, 7] (configurable in `alert.engine.js`).
+
+**Alert sweep + dashboard:** `AssetAlert` table with unique `(entityId, alertType, threshold)` for idempotency. `POST /assets/alerts/sweep` (manual) and the daily scheduled sweep at 00:15 SGT scan all 4 sources, compute days-remaining, and create rows for any not-yet-fired threshold crossed. `GET /assets/alerts?alertType=&sinceDays=` returns the dashboard with `{ total, summary: { WARRANTY, MAINTENANCE, RETURN, LICENCE }, alerts }`.
+
+**Schema additions:** `Asset` 4 fields; `AssetAssignment` 1 field; new models `InventoryItem`, `LogisticsRequest`, `LogisticsRequestLine`, `StockTransaction`, `PurchaseRequest`, `AssetMaintenance`, `SoftwareLicence`, `AssetAlert`; new enums `LogisticsRequestStatus`, `StockTxType`, `PurchaseRequestStatus`, `MaintenanceType`, `AssetAlertType`.
+
+**Tests (73 green):** 13 unit tests on `inventory.engine.js` (low-stock detection, reorder-qty fallback, signed stock transactions incl. negative-result rejection, auto-PR decision), 30 unit tests on `alert.engine.js` (threshold bands incl. correctness of "most-urgent crossed" semantics, urgency classification, idempotent `pendingThresholds()`, message formatting variants), 17 integration tests (L1-L17: inventory CRUD, low-stock filter, stock transactions, auto-PR on cross, full logistics-request state machine incl. 409 on wrong-state transitions, fulfillment with stock issuance, auto-generate sweep, PR RECEIVED auto-receive), 10 integration tests (A1-A10: maintenance recording + nextMaintenanceAt advancement, licence CRUD with seat validation, expiring-soon urgency, 4-type sweep counts per threshold (with idempotency on re-run), dashboard summary, asset CRUD regression, assignment with offboardingDate).
 
 ### ✅ AST-004 — Offboarding Asset Return
 **Status:** Done  
@@ -465,8 +478,6 @@ Employee replies to non-CLOSED tickets. HR Admin replies to any ticket. CLOSED t
 _(all resolved)_
 
 ### Should Have (high value)
-8. **AST-002** — Logistics requests & inventory management
-9. **AST-003** — Asset expiry & maintenance alerts
 10. **PMS-006** — 360-degree feedback
 11. **SUP-004** — Self-service FAQ (reduces support ticket volume)
 12. **RPT-002 (completion)** — FWL Report, MOM Manpower Survey, SDL summary report

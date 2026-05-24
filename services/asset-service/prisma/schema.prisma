@@ -7,6 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── AST-001 Asset register ───────────────────────────────────────────────────
 model Asset {
   id            String      @id @default(uuid())
   assetCode     String      @unique
@@ -19,11 +20,20 @@ model Asset {
   status        AssetStatus @default(AVAILABLE)
   location      String?
   notes         String?
+  // ─── AST-003 expiry / maintenance config ────────────────────────────────────
+  warrantyExpiry          DateTime?
+  nextMaintenanceAt       DateTime?
+  maintenanceIntervalDays Int?
+  contractEndDate         DateTime?      // for leased / rented assets
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
-  assignments AssetAssignment[]
+  assignments  AssetAssignment[]
+  maintenance  AssetMaintenance[]
 
+  @@index([warrantyExpiry])
+  @@index([nextMaintenanceAt])
+  @@index([contractEndDate])
   @@map("assets")
 }
 
@@ -35,9 +45,13 @@ model AssetAssignment {
   returnedAt DateTime?
   notes      String?
   isActive   Boolean   @default(true)
+  // ─── AST-003 offboarding-aware return ───────────────────────────────────────
+  offboardingDate DateTime?   // employee last working day → drives 14-day return alert
 
   asset Asset @relation(fields: [assetId], references: [id])
 
+  @@index([employeeId, isActive])
+  @@index([offboardingDate])
   @@map("asset_assignments")
 }
 
@@ -46,4 +60,193 @@ enum AssetStatus {
   ASSIGNED
   UNDER_REPAIR
   RETIRED
+}
+
+// ─── AST-002 Inventory + logistics requests ───────────────────────────────────
+
+model InventoryItem {
+  id           String   @id @default(uuid())
+  sku          String   @unique
+  name         String
+  category     String                    // STATIONERY, PPE, UNIFORM, CONSUMABLE, OTHER
+  unit         String   @default("EA")   // EA, BOX, PACK, etc.
+  currentStock Int      @default(0)
+  reorderPoint Int      @default(0)
+  reorderQty   Int      @default(0)
+  unitCost     Float    @default(0)
+  location     String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  requestLines      LogisticsRequestLine[]
+  stockTransactions StockTransaction[]
+  purchaseRequests  PurchaseRequest[]
+
+  @@map("inventory_items")
+}
+
+model LogisticsRequest {
+  id                   String                 @id @default(uuid())
+  requesterEmployeeId  String
+  status               LogisticsRequestStatus @default(PENDING_APPROVAL)
+  requestedAt          DateTime               @default(now())
+  approvedBy           String?
+  approvedAt           DateTime?
+  rejectedReason       String?
+  fulfilledBy          String?
+  fulfilledAt          DateTime?
+  notes                String?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  lines LogisticsRequestLine[]
+
+  @@index([requesterEmployeeId])
+  @@index([status])
+  @@map("logistics_requests")
+}
+
+model LogisticsRequestLine {
+  id                String   @id @default(uuid())
+  requestId         String
+  inventoryItemId   String
+  quantityRequested Int
+  quantityFulfilled Int      @default(0)
+  notes             String?
+
+  request       LogisticsRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem    @relation(fields: [inventoryItemId], references: [id])
+
+  @@index([requestId])
+  @@map("logistics_request_lines")
+}
+
+model StockTransaction {
+  id              String        @id @default(uuid())
+  inventoryItemId String
+  txType          StockTxType
+  quantity        Int                              // signed: positive RECEIVE/ADJUST+; negative ISSUE/ADJUST−
+  reference       String?                          // PR-XXX or REQ-XXX or free-text
+  employeeId      String?                          // recipient for ISSUE
+  createdBy       String
+  createdAt       DateTime      @default(now())
+  notes           String?
+
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  @@index([inventoryItemId, createdAt])
+  @@map("stock_transactions")
+}
+
+enum LogisticsRequestStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  FULFILLED
+  CANCELLED
+}
+
+enum StockTxType {
+  RECEIVE
+  ISSUE
+  ADJUST
+}
+
+// Purchase request — auto-generated when inventory falls below reorderPoint.
+model PurchaseRequest {
+  id                String                 @id @default(uuid())
+  prNumber          String                 @unique
+  inventoryItemId   String
+  quantitySuggested Int
+  status            PurchaseRequestStatus  @default(DRAFT)
+  triggeredBy       String                                    // 'system:low-stock' or userId
+  approvedBy        String?
+  approvedAt        DateTime?
+  notes             String?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  @@index([status])
+  @@map("purchase_requests")
+}
+
+enum PurchaseRequestStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  ORDERED
+  RECEIVED
+  CANCELLED
+}
+
+// ─── AST-003 Maintenance, software licences, alerts ───────────────────────────
+
+model AssetMaintenance {
+  id           String           @id @default(uuid())
+  assetId      String
+  scheduledAt  DateTime
+  completedAt  DateTime?
+  performedBy  String?
+  type         MaintenanceType  @default(PREVENTIVE)
+  costAmount   Float            @default(0)
+  notes        String?
+  createdBy    String
+  createdAt    DateTime         @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@index([scheduledAt])
+  @@map("asset_maintenance")
+}
+
+enum MaintenanceType {
+  PREVENTIVE
+  REPAIR
+  INSPECTION
+}
+
+model SoftwareLicence {
+  id            String    @id @default(uuid())
+  name          String
+  vendor        String?
+  licenceKey    String?
+  seatsTotal    Int       @default(1)
+  seatsUsed     Int       @default(0)
+  expiryDate    DateTime?
+  renewalCost   Float     @default(0)
+  notes         String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([expiryDate])
+  @@map("software_licences")
+}
+
+// Idempotent alert ledger. (entityId, alertType, threshold) is unique so the
+// daily sweep can be safely re-run.
+model AssetAlert {
+  id         String         @id @default(uuid())
+  alertType  AssetAlertType
+  entityId   String                              // assetId or licenceId or assignmentId
+  threshold  Int                                 // 60, 30, 14
+  message    String
+  daysUntil  Int
+  firedAt    DateTime       @default(now())
+
+  @@unique([entityId, alertType, threshold])
+  @@index([alertType])
+  @@index([firedAt])
+  @@map("asset_alerts")
+}
+
+enum AssetAlertType {
+  WARRANTY
+  MAINTENANCE
+  RETURN
+  LICENCE
 }
