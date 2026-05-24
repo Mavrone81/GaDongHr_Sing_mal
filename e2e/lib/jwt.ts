@@ -42,7 +42,7 @@ export function signJwt(user: TestUser, role: Role, opts: TokenOptions = {}): st
     const jwt = require('jsonwebtoken');
     const fs = require('fs');
     const key = fs.readFileSync('/app/certs/private.pem');
-    process.stdout.write(jwt.sign(${payloadJson}, key, { algorithm: 'RS256', issuer: 'ezyhRM', expiresIn: '${expiresIn}' }));
+    process.stdout.write(jwt.sign(${payloadJson}, key, { algorithm: 'RS256', issuer: 'vorkhive', expiresIn: '${expiresIn}' }));
   `.trim().replace(/\n+/g, ' ');
   return execSync(`docker exec hrms-auth node -e "${script.replace(/"/g, '\\"')}"`).toString().trim();
 }

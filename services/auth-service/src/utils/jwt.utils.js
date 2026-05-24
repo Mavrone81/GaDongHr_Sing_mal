@@ -32,16 +32,16 @@ function signAccessToken(payload) {
   return jwt.sign(payload, privateKey, { 
     algorithm: 'RS256', 
     expiresIn: process.env.JWT_ACCESS_EXPIRES || '15m',
-    issuer: 'ezyhRM'
+    issuer: 'vorkhive'
   });
 }
 
 function signRefreshToken(payload) {
   const privateKey = fs.readFileSync(PRIVATE_KEY_PATH, 'utf8');
-  return jwt.sign(payload, privateKey, { 
-    algorithm: 'RS256', 
+  return jwt.sign(payload, privateKey, {
+    algorithm: 'RS256',
     expiresIn: process.env.JWT_REFRESH_EXPIRES || '7d',
-    issuer: 'ezyhRM'
+    issuer: 'vorkhive'
   });
 }
 

@@ -86,7 +86,7 @@ function jwtMiddleware(req, res, next) {
       cachedPublicKey = fs.readFileSync(keyPath, 'utf8');
     }
     const token = authHeader.slice(7);
-    const payload = jwt.verify(token, cachedPublicKey, { algorithms: ['RS256'], issuer: 'ezyhRM' });
+    const payload = jwt.verify(token, cachedPublicKey, { algorithms: ['RS256'], issuer: 'vorkhive' });
     req.user = payload;
     req.headers['x-user-id'] = payload.sub;
     req.headers['x-user-role'] = payload.role;
@@ -104,7 +104,7 @@ app.use(jwtMiddleware);
 // ── Proxy Routes ─────────────────────────────────────────────────────────────
 const proxyOpts = {
   proxyReqOptDecorator: (opts, srcReq) => {
-    opts.headers['x-gateway'] = 'ezyhRM-gateway';
+    opts.headers['x-gateway'] = 'vorkhive-gateway';
     return opts;
   },
 };

@@ -332,7 +332,7 @@ async function main() {
   await seedPayroll();
   await seedLeave();
   await seedClaims();
-  console.log('\n✅ All done! Login: admin@ezyhRM.sg / ***REMOVED***\n');
+  console.log('\n✅ All done! Login: admin@vorkhive.sg / ***REMOVED***\n');
 }
 
 main().catch(err => {

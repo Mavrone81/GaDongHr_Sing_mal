@@ -37,7 +37,7 @@ function mintSuperAdminToken() {
       const perms = u.role?.permissions.map(p => p.permission.code) || [];
       console.log(jwt.sign({
         sub: u.id, email: u.email, role: 'SUPER_ADMIN', employeeId: u.employeeId, permissions: perms
-      }, fs.readFileSync('/app/certs/private.pem'), { algorithm: 'RS256', issuer: 'ezyhRM', expiresIn: '10m' }));
+      }, fs.readFileSync('/app/certs/private.pem'), { algorithm: 'RS256', issuer: 'vorkhive', expiresIn: '10m' }));
       await prisma.$disconnect();
     })();
   `.trim();

@@ -1,4 +1,4 @@
-# EzyHRM RBAC Reference
+# RBAC Reference
 **Version 3.1 — Updated May 2026**
 
 > This document mirrors the actual permission set seeded by

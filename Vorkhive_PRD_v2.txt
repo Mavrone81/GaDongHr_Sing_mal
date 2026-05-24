@@ -1,5 +1,5 @@
 PRODUCT REQUIREMENTS DOCUMENT
-Human Resource Management System (EzyHRM)
+Human Resource Management System (Vorkhive)
 Singapore – Full Statutory Compliance Edition
 Document Reference: PRD-HRMS-001  │  Version 2.0  │  May 2026
 Classification: Confidential
@@ -8,7 +8,7 @@ Prepared by: RMA DEV TEAM
 1. Document Control
 1.1 Document Information
 Document Title
-Product Requirements Document – Human Resource Management System (EzyHRM)
+Product Requirements Document – Human Resource Management System (Vorkhive)
 Document Reference
 PRD-HRMS-001
 Based on URD
@@ -44,8 +44,8 @@ RMA Dev Team
 Updated to reflect implemented features: CPF OW Ceiling updated to SGD 7,400 (Jan 2026); supervisor approval chain (ANY_ONE/SEQUENTIAL); face recognition clock-in; Performance and Training modules moved to Phase 1 (implemented); Support & Ticketing module added (Module 11); payroll period consolidation; NPL auto-deduction from leave; EA s.20 pro-rating
 
 2. Executive Summary
-This Product Requirements Document (PRD) defines the complete feature set, workflows, acceptance criteria, and compliance obligations for EzyHRM – a cloud-native Human Resource Management System purpose-built for Singapore organisations. The system covers the full employee lifecycle from recruitment to offboarding and is designed for scalability across SMEs, large enterprises, government bodies, and non-profit organisations.
-EzyHRM operates in full compliance with the Employment Act (Cap. 91), CPF Act (Cap. 36), Personal Data Protection Act 2012, IRAS Income Tax Act (IR8A/IR21/AIS), Skills Development Levy Act, Employment of Foreign Manpower Act, Child Development Co-Savings Act, and Ministry of Manpower digital submission requirements including CPF e-Submit@cpf and MyCareersFuture.
+This Product Requirements Document (PRD) defines the complete feature set, workflows, acceptance criteria, and compliance obligations for Vorkhive – a cloud-native Human Resource Management System purpose-built for Singapore organisations. The system covers the full employee lifecycle from recruitment to offboarding and is designed for scalability across SMEs, large enterprises, government bodies, and non-profit organisations.
+Vorkhive operates in full compliance with the Employment Act (Cap. 91), CPF Act (Cap. 36), Personal Data Protection Act 2012, IRAS Income Tax Act (IR8A/IR21/AIS), Skills Development Levy Act, Employment of Foreign Manpower Act, Child Development Co-Savings Act, and Ministry of Manpower digital submission requirements including CPF e-Submit@cpf and MyCareersFuture.
 2.1 Product Vision
 To be Singapore’s most compliant, configurable, and user-friendly HRMS – eliminating manual HR administration, ensuring zero-defect statutory compliance, and providing workforce insights that support data-driven people management.
 2.2 Module Overview
@@ -145,7 +145,7 @@ System admin
 Security, Integrations
 
 4. Module 1: Payroll & CPF Management
-The payroll module is the core engine of EzyHRM. It processes all compensation types in full compliance with the Employment Act (Cap. 91), CPF Act (Cap. 36), Income Tax Act, and Skills Development Levy Act. All formulas, contribution rates, ceilings, and workflows below are applied automatically without manual calculation.
+The payroll module is the core engine of Vorkhive. It processes all compensation types in full compliance with the Employment Act (Cap. 91), CPF Act (Cap. 36), Income Tax Act, and Skills Development Levy Act. All formulas, contribution rates, ceilings, and workflows below are applied automatically without manual calculation.
 4.1 Payroll Run Types & Workflow
 Monthly Run: Processed once per month for all employees. Payroll Officer initiates run for selected period and employee group. System locks attendance, leave, and claims data for the period, computes gross pay, deductions, and net pay per employee. Payroll Officer reviews exception and variance report. Maker submits for Checker approval (must be different user). Checker approves. System generates payslips, bank GIRO file, CPF submission file, SDL file, and accounting journal entries. Payroll is finalised and locked; subsequent changes require an ad-hoc correction run with full audit trail.
 Bi-Monthly Run: Processed twice per month (e.g., 1st and 15th), common for weekly-rated workers and part-timers.
