@@ -1684,6 +1684,211 @@ function BrowseProgramsTab({ onGoToMyTraining }: { onGoToMyTraining?: () => void
   );
 }
 
+// ── CertificationsTab ─────────────────────────────────────────────────────────
+type CertStatus = 'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED' | 'REVOKED';
+
+interface EmployeeCertification {
+  id: string; employeeId: string; certName: string; issuingBody?: string;
+  certNumber?: string; issuedAt?: string; expiresAt?: string;
+  status: CertStatus; documentUrl?: string; notes?: string; createdAt: string;
+}
+
+const CERT_STATUS_COLOR: Record<CertStatus, string> = {
+  ACTIVE:         'bg-emerald-50 text-emerald-700 border-emerald-200',
+  EXPIRING_SOON:  'bg-amber-50 text-amber-700 border-amber-200',
+  EXPIRED:        'bg-red-50 text-red-600 border-red-200',
+  REVOKED:        'bg-slate-50 text-slate-500 border-slate-200',
+};
+
+function CertificationsTab() {
+  const [certs, setCerts] = useState<EmployeeCertification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ employeeId: '', certName: '', issuingBody: '', certNumber: '', issuedAt: '', expiresAt: '', notes: '' });
+  const [submitting, setSubmitting] = useState(false);
+  const [filterStatus, setFilterStatus] = useState('');
+  const [toast, setToast] = useState('');
+
+  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 3000); }
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = filterStatus ? `?status=${filterStatus}` : '';
+      const data = await apiFetch(`/training/certifications${params}`);
+      setCerts(Array.isArray(data) ? data : []);
+    } catch {}
+    finally { setLoading(false); }
+  }, [filterStatus]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleAdd() {
+    if (!form.employeeId || !form.certName) return;
+    setSubmitting(true);
+    try {
+      await apiFetch('/training/certifications', {
+        method: 'POST',
+        body: JSON.stringify({ ...form, issuedAt: form.issuedAt || null, expiresAt: form.expiresAt || null }),
+      });
+      setShowAdd(false);
+      setForm({ employeeId: '', certName: '', issuingBody: '', certNumber: '', issuedAt: '', expiresAt: '', notes: '' });
+      showToast('Certification added');
+      await load();
+    } catch { showToast('Failed to add certification'); }
+    finally { setSubmitting(false); }
+  }
+
+  async function handleRevoke(id: string) {
+    try {
+      await apiFetch(`/training/certifications/${id}`, { method: 'DELETE' });
+      showToast('Certification revoked');
+      await load();
+    } catch { showToast('Failed to revoke'); }
+  }
+
+  const expiringSoon = certs.filter(c => c.status === 'EXPIRING_SOON').length;
+
+  return (
+    <div className="space-y-6">
+      {toast && (
+        <div className="fixed top-6 right-6 z-[200] px-6 py-3 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl shadow-2xl animate-in slide-in-from-top-4">{toast}</div>
+      )}
+
+      {/* Header */}
+      <div className="flex flex-wrap items-center gap-4 justify-between">
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest">Certifications</h3>
+          {expiringSoon > 0 && (
+            <span className="px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-black uppercase tracking-widest rounded-full">
+              {expiringSoon} Expiring Soon
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <select
+            value={filterStatus}
+            onChange={e => setFilterStatus(e.target.value)}
+            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 focus:outline-none"
+          >
+            <option value="">All Statuses</option>
+            <option value="ACTIVE">Active</option>
+            <option value="EXPIRING_SOON">Expiring Soon</option>
+            <option value="EXPIRED">Expired</option>
+            <option value="REVOKED">Revoked</option>
+          </select>
+          <button onClick={() => setShowAdd(true)} className="px-5 py-2 bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-amber-600 transition-all">
+            + Add Certification
+          </button>
+        </div>
+      </div>
+
+      {/* Add Form Modal */}
+      {showAdd && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 backdrop-blur-md p-6">
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100">
+            <div className="bg-slate-900 p-6 flex justify-between items-center">
+              <h4 className="text-base font-black text-white uppercase tracking-tight">Add Certification</h4>
+              <button onClick={() => setShowAdd(false)} className="w-8 h-8 bg-slate-800 border border-slate-700 rounded-xl text-slate-400 hover:text-white text-lg font-black flex items-center justify-center">×</button>
+            </div>
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+              {[
+                { label: 'Employee ID *', key: 'employeeId', placeholder: 'Employee UUID' },
+                { label: 'Certificate Name *', key: 'certName', placeholder: 'e.g. WSH Officer Certificate' },
+                { label: 'Issuing Body', key: 'issuingBody', placeholder: 'e.g. MOM Singapore' },
+                { label: 'Certificate Number', key: 'certNumber', placeholder: 'Optional' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="label-form block mb-1">{f.label}</label>
+                  <input type="text" placeholder={f.placeholder} value={(form as any)[f.key]}
+                    onChange={e => setForm(fm => ({ ...fm, [f.key]: e.target.value }))}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-400" />
+                </div>
+              ))}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label-form block mb-1">Issued Date</label>
+                  <input type="date" value={form.issuedAt} onChange={e => setForm(f => ({ ...f, issuedAt: e.target.value }))}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-400" />
+                </div>
+                <div>
+                  <label className="label-form block mb-1">Expiry Date</label>
+                  <input type="date" value={form.expiresAt} onChange={e => setForm(f => ({ ...f, expiresAt: e.target.value }))}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-400" />
+                </div>
+              </div>
+              <div>
+                <label className="label-form block mb-1">Notes</label>
+                <textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-400 resize-none" />
+              </div>
+            </div>
+            <div className="p-5 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+              <button onClick={() => setShowAdd(false)} className="px-5 py-2.5 bg-white border border-slate-200 text-[10px] font-black text-slate-500 uppercase tracking-widest rounded-xl hover:bg-slate-100">Cancel</button>
+              <button onClick={handleAdd} disabled={submitting || !form.employeeId || !form.certName}
+                className="px-6 py-2.5 bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-amber-600 disabled:opacity-50">
+                {submitting ? 'Adding...' : 'Add'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl overflow-hidden">
+        {loading ? (
+          <div className="p-12 text-center text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse">Loading…</div>
+        ) : certs.length === 0 ? (
+          <div className="p-12 text-center">
+            <p className="eyebrow-tight">No certifications found</p>
+            <button onClick={() => setShowAdd(true)} className="mt-4 px-5 py-2 bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-amber-600">Add First</button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-50">
+                <tr>
+                  {['Employee ID', 'Certificate', 'Issuing Body', 'Cert #', 'Issued', 'Expires', 'Status', ''].map(h => (
+                    <th key={h} className="px-6 py-4">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {certs.map(c => (
+                  <tr key={c.id} className="hover:bg-slate-50/50 transition-all">
+                    <td className="px-6 py-4 text-[10px] font-bold text-slate-500 font-mono">{c.employeeId.slice(0, 8)}…</td>
+                    <td className="px-6 py-4">
+                      <p className="text-xs font-black text-slate-900 uppercase tracking-tight">{c.certName}</p>
+                      {c.notes && <p className="text-[9px] text-slate-400 mt-0.5">{c.notes}</p>}
+                    </td>
+                    <td className="px-6 py-4 text-[10px] font-bold text-slate-500">{c.issuingBody || '—'}</td>
+                    <td className="px-6 py-4 text-[10px] font-bold text-slate-400 font-mono">{c.certNumber || '—'}</td>
+                    <td className="px-6 py-4 text-[10px] font-bold text-slate-400">{fmtDate(c.issuedAt)}</td>
+                    <td className="px-6 py-4 text-[10px] font-bold text-slate-400">{fmtDate(c.expiresAt)}</td>
+                    <td className="px-6 py-4">
+                      <span className={`text-[9px] font-black px-2.5 py-1 rounded-full border uppercase tracking-widest ${CERT_STATUS_COLOR[c.status]}`}>
+                        {c.status.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      {c.status !== 'REVOKED' && (
+                        <button onClick={() => handleRevoke(c.id)}
+                          className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[9px] font-black text-slate-500 uppercase tracking-widest hover:border-red-400 hover:text-red-600 transition-all">
+                          Revoke
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Root page ─────────────────────────────────────────────────────────────────
 export default function TrainingPage() {
   const { user, loading: authLoading } = useAuth();
@@ -1694,7 +1899,7 @@ export default function TrainingPage() {
   const isManager = role === 'MANAGER';
   const isEmployee = !isPrivileged && !isManager;
 
-  const adminTabs = ['Programs', 'Enrollments', 'Stats', 'My Training', 'Browse Programs'] as const;
+  const adminTabs = ['Programs', 'Enrollments', 'Certifications', 'Stats', 'My Training', 'Browse Programs'] as const;
   const empTabs   = ['My Training', 'Browse Programs'] as const;
 
   type AdminTab = typeof adminTabs[number];
@@ -1804,11 +2009,12 @@ export default function TrainingPage() {
       </div>
 
       <div>
-        {adminTab === 'Programs'       && <AdminProgramsTab onRefreshStats={loadStats} />}
-        {adminTab === 'Enrollments'    && <AdminEnrollmentsTab />}
-        {adminTab === 'Stats'          && <StatsTab stats={stats} />}
-        {adminTab === 'My Training'    && <MyTrainingTab />}
-        {adminTab === 'Browse Programs'&& <BrowseProgramsTab onGoToMyTraining={() => setAdminTab('My Training')} />}
+        {adminTab === 'Programs'        && <AdminProgramsTab onRefreshStats={loadStats} />}
+        {adminTab === 'Enrollments'     && <AdminEnrollmentsTab />}
+        {adminTab === 'Certifications'  && <CertificationsTab />}
+        {adminTab === 'Stats'           && <StatsTab stats={stats} />}
+        {adminTab === 'My Training'     && <MyTrainingTab />}
+        {adminTab === 'Browse Programs' && <BrowseProgramsTab onGoToMyTraining={() => setAdminTab('My Training')} />}
       </div>
     </div>
   );

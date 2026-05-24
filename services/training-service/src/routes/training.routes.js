@@ -451,4 +451,106 @@ router.delete('/enrollments/:id', authenticate, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── Certification Status Helper ───────────────────────────────────────────────
+function computeCertStatus(cert) {
+  if (!cert.expiresAt) return cert.status === 'REVOKED' ? 'REVOKED' : 'ACTIVE';
+  if (cert.status === 'REVOKED') return 'REVOKED';
+  const now = Date.now();
+  const exp = new Date(cert.expiresAt).getTime();
+  if (exp < now) return 'EXPIRED';
+  if (exp - now < 30 * 86400000) return 'EXPIRING_SOON';
+  return 'ACTIVE';
+}
+
+// ── GET /training/certifications/expiring-soon ────────────────────────────────
+router.get('/certifications/expiring-soon', authenticate, authorize(...ADMIN_ROLES), async (req, res, next) => {
+  try {
+    const cutoff = new Date(Date.now() + 30 * 86400000);
+    const certs = await prisma.employeeCertification.findMany({
+      where: { status: { not: 'REVOKED' }, expiresAt: { lte: cutoff, gte: new Date() } },
+      orderBy: { expiresAt: 'asc' },
+    });
+    res.json(certs.map(c => ({ ...c, status: computeCertStatus(c) })));
+  } catch (err) { next(err); }
+});
+
+// ── GET /training/certifications ──────────────────────────────────────────────
+router.get('/certifications', authenticate, authorize(...ADMIN_ROLES), async (req, res, next) => {
+  try {
+    const { employeeId, status, expiresWithinDays } = req.query;
+    const where = {};
+    if (employeeId) where.employeeId = employeeId;
+    if (status) where.status = status;
+    if (expiresWithinDays) {
+      const days = parseInt(expiresWithinDays);
+      where.expiresAt = { lte: new Date(Date.now() + days * 86400000), gte: new Date() };
+    }
+    const certs = await prisma.employeeCertification.findMany({ where, orderBy: { expiresAt: 'asc' } });
+    res.json(certs.map(c => ({ ...c, status: computeCertStatus(c) })));
+  } catch (err) { next(err); }
+});
+
+// ── POST /training/certifications ─────────────────────────────────────────────
+router.post('/certifications', authenticate, authorize(...ADMIN_ROLES), async (req, res, next) => {
+  try {
+    const { employeeId, certName, issuingBody, certNumber, issuedAt, expiresAt, documentUrl, notes } = req.body;
+    if (!employeeId || !certName) return res.status(400).json({ error: 'employeeId and certName are required' });
+    const cert = await prisma.employeeCertification.create({
+      data: {
+        id: uuidv4(), employeeId, certName, issuingBody, certNumber,
+        issuedAt: issuedAt ? new Date(issuedAt) : null,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        documentUrl, notes, createdBy: req.user.sub,
+      },
+    });
+    res.status(201).json({ ...cert, status: computeCertStatus(cert) });
+  } catch (err) { next(err); }
+});
+
+// ── GET /training/certifications/:id ─────────────────────────────────────────
+router.get('/certifications/:id', authenticate, authorize(...ADMIN_ROLES), async (req, res, next) => {
+  try {
+    const cert = await prisma.employeeCertification.findUnique({ where: { id: req.params.id } });
+    if (!cert) return res.status(404).json({ error: 'Certification not found' });
+    res.json({ ...cert, status: computeCertStatus(cert) });
+  } catch (err) { next(err); }
+});
+
+// ── PUT /training/certifications/:id ─────────────────────────────────────────
+router.put('/certifications/:id', authenticate, authorize(...ADMIN_ROLES), async (req, res, next) => {
+  try {
+    const { certName, issuingBody, certNumber, issuedAt, expiresAt, documentUrl, notes } = req.body;
+    const cert = await prisma.employeeCertification.update({
+      where: { id: req.params.id },
+      data: {
+        ...(certName !== undefined && { certName }),
+        ...(issuingBody !== undefined && { issuingBody }),
+        ...(certNumber !== undefined && { certNumber }),
+        ...(issuedAt !== undefined && { issuedAt: issuedAt ? new Date(issuedAt) : null }),
+        ...(expiresAt !== undefined && { expiresAt: expiresAt ? new Date(expiresAt) : null }),
+        ...(documentUrl !== undefined && { documentUrl }),
+        ...(notes !== undefined && { notes }),
+      },
+    });
+    res.json({ ...cert, status: computeCertStatus(cert) });
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Certification not found' });
+    next(err);
+  }
+});
+
+// ── DELETE /training/certifications/:id ── soft-delete (revoke) ───────────────
+router.delete('/certifications/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const cert = await prisma.employeeCertification.update({
+      where: { id: req.params.id },
+      data: { status: 'REVOKED' },
+    });
+    res.json({ ...cert, status: 'REVOKED' });
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Certification not found' });
+    next(err);
+  }
+});
+
 module.exports = router;

@@ -36,6 +36,13 @@ enum EnrollmentStatus {
   DROPPED
 }
 
+enum CertStatus {
+  ACTIVE
+  EXPIRING_SOON
+  EXPIRED
+  REVOKED
+}
+
 model TrainingProgram {
   id           String          @id @default(uuid())
   title        String
@@ -104,4 +111,22 @@ model TrainingMaterialProgress {
 
   @@unique([enrollmentId, materialId])
   @@map("training_material_progress")
+}
+
+model EmployeeCertification {
+  id          String     @id @default(uuid())
+  employeeId  String
+  certName    String
+  issuingBody String?
+  certNumber  String?
+  issuedAt    DateTime?
+  expiresAt   DateTime?
+  status      CertStatus @default(ACTIVE)
+  documentUrl String?
+  notes       String?
+  createdBy   String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@map("employee_certifications")
 }
