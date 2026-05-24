@@ -27,6 +27,8 @@ model OffboardingCase {
   exitInterviewDate   DateTime?
   exitSatisfaction    Int?       // 1-5
   exitFeedback        String?
+  finalPayData        Json?
+  finalPayRunId       String?
   status              CaseStatus @default(INITIATED)
   initiatedBy         String
   createdAt           DateTime   @default(now())

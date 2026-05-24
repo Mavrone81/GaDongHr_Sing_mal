@@ -26,6 +26,11 @@ interface OffboardingCase {
   status: string;
   createdAt: string;
   clearanceItems: ClearanceItem[];
+  exitInterviewDate?: string;
+  exitSatisfaction?: number;
+  exitFeedback?: string;
+  finalPayData?: any;
+  finalPayRunId?: string;
 }
 
 interface Employee {
@@ -215,16 +220,29 @@ function ManageModal({ caseId, onClose, onUpdate }: { caseId: string; onClose: (
   const [offCase, setOffCase] = useState<OffboardingCase | null>(null);
   const [empAssets, setEmpAssets] = useState<AssetItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'checklist' | 'assets'>('checklist');
+  const [tab, setTab] = useState<'checklist' | 'assets' | 'exit' | 'finalpay'>('checklist');
   const [completingItem, setCompletingItem] = useState<string | null>(null);
   const [returningAsset, setReturningAsset] = useState<string | null>(null);
   const [toast, setToast] = useState('');
+  const [exitForm, setExitForm] = useState({ exitInterviewDate: '', exitSatisfaction: 0, exitFeedback: '' });
+  const [exitSubmitting, setExitSubmitting] = useState(false);
+  const [exitSaved, setExitSaved] = useState(false);
+  const [noticeServed, setNoticeServed] = useState(true);
+  const [finalPayData, setFinalPayData] = useState<any | null>(null);
+  const [computingFinalPay, setComputingFinalPay] = useState(false);
+  const [creatingRun, setCreatingRun] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const res = await apiFetch(`/api/offboarding/${caseId}`);
       const data = await res.json();
       setOffCase(data);
+      setExitForm({
+        exitInterviewDate: data.exitInterviewDate ? data.exitInterviewDate.slice(0, 10) : '',
+        exitSatisfaction: data.exitSatisfaction || 0,
+        exitFeedback: data.exitFeedback || '',
+      });
+      if (data.finalPayData) setFinalPayData(data.finalPayData);
       // Load employee assets
       const aRes = await apiFetch(`/api/assets/employee/${data.employeeId}`);
       const assets = await aRes.json();
@@ -244,6 +262,53 @@ function ManageModal({ caseId, onClose, onUpdate }: { caseId: string; onClose: (
       if (res.ok) { showToast('Item marked as complete'); await load(); onUpdate(); }
     } catch {}
     finally { setCompletingItem(null); }
+  }
+
+  async function saveExitInterview() {
+    setExitSubmitting(true); setExitSaved(false);
+    try {
+      const res = await apiFetch(`/api/offboarding/${caseId}/exit-interview`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          exitInterviewDate: exitForm.exitInterviewDate || null,
+          exitSatisfaction: exitForm.exitSatisfaction || null,
+          exitFeedback: exitForm.exitFeedback || null,
+        }),
+      });
+      if (res.ok) { setExitSaved(true); showToast('Exit interview saved'); await load(); onUpdate(); }
+    } catch {}
+    finally { setExitSubmitting(false); }
+  }
+
+  async function computeFinalPay() {
+    setComputingFinalPay(true);
+    try {
+      const res = await apiFetch(`/api/offboarding/${caseId}/compute-final-pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noticeServed }),
+      });
+      const data = await res.json();
+      if (res.ok) { setFinalPayData(data.finalPayData ?? data); showToast('Final pay computed'); await load(); onUpdate(); }
+      else showToast(data.error || 'Computation failed');
+    } catch { showToast('Network error'); }
+    finally { setComputingFinalPay(false); }
+  }
+
+  async function createFinalPayRun() {
+    setCreatingRun(true);
+    try {
+      const res = await apiFetch(`/api/offboarding/${caseId}/create-final-pay-run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (res.ok) { showToast('Final pay run created'); await load(); onUpdate(); }
+      else showToast(data.error || 'Failed to create run');
+    } catch { showToast('Network error'); }
+    finally { setCreatingRun(false); }
   }
 
   async function returnAsset(assetId: string, assetName: string) {
@@ -296,11 +361,17 @@ function ManageModal({ caseId, onClose, onUpdate }: { caseId: string; onClose: (
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-slate-100 shrink-0">
-          {(['checklist', 'assets'] as const).map(t => (
+        <div className="flex border-b border-slate-100 shrink-0 overflow-x-auto">
+          {(['checklist', 'assets', 'exit', 'finalpay'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
-              className={`flex-1 py-4 text-[9px] font-black uppercase tracking-widest transition-colors ${tab === t ? 'text-red-600 border-b-2 border-red-500' : 'text-slate-400 hover:text-slate-600'}`}>
-              {t === 'checklist' ? `Clearance Checklist (${offCase.clearanceItems.filter(i => i.isDone).length}/${offCase.clearanceItems.length})` : `Assets to Return (${empAssets.length})`}
+              className={`flex-1 py-4 text-[9px] font-black uppercase tracking-widest transition-colors whitespace-nowrap px-3 ${tab === t ? 'text-red-600 border-b-2 border-red-500' : 'text-slate-400 hover:text-slate-600'}`}>
+              {t === 'checklist'
+                ? `Clearance (${offCase.clearanceItems.filter(i => i.isDone).length}/${offCase.clearanceItems.length})`
+                : t === 'assets'
+                  ? `Assets (${empAssets.length})`
+                  : t === 'exit'
+                    ? `Exit Interview${offCase.exitSatisfaction ? ` ★${offCase.exitSatisfaction}` : ''}`
+                    : `Final Pay${offCase.finalPayRunId ? ' ✓' : ''}`}
             </button>
           ))}
         </div>
@@ -362,6 +433,143 @@ function ManageModal({ caseId, onClose, onUpdate }: { caseId: string; onClose: (
                   ))}
                 </>
               )}
+            </div>
+          )}
+
+          {tab === 'finalpay' && (
+            <div className="space-y-5">
+              {/* Notice toggle */}
+              <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                <div>
+                  <p className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Notice Period Served?</p>
+                  <p className="text-[9px] font-bold text-slate-400 mt-0.5">If not served, notice pay in lieu will be added</p>
+                </div>
+                <button
+                  onClick={() => setNoticeServed(s => !s)}
+                  className={`w-12 h-6 rounded-full border-2 transition-all relative ${noticeServed ? 'bg-emerald-500 border-emerald-500' : 'bg-slate-200 border-slate-300'}`}>
+                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${noticeServed ? 'left-6' : 'left-0.5'}`} />
+                </button>
+              </div>
+
+              {/* Compute button */}
+              <button
+                onClick={computeFinalPay}
+                disabled={computingFinalPay}
+                className="w-full py-3 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+              >
+                {computingFinalPay ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Computing…</> : 'Compute Final Pay'}
+              </button>
+
+              {/* Breakdown table */}
+              {finalPayData && (() => {
+                const fp = finalPayData;
+                const fmtS = (v: number | null | undefined) => v == null ? '—' : `$${Number(v).toFixed(2)}`;
+                const fmtD = (v: number | null | undefined) => v == null ? '—' : `${Number(v).toFixed(1)} days`;
+                const rows = [
+                  { label: 'Salary for days worked', days: fp.daysWorked, amount: fp.salaryForDaysWorked },
+                  { label: 'Notice pay in lieu', days: fp.noticePeriodDays > 0 && !noticeServed ? fp.noticePeriodDays : null, amount: fp.noticePay },
+                  { label: 'Leave encashment (unused AL)', days: fp.unusedAL, amount: fp.leaveEncashment },
+                  { label: 'Excess leave deduction', days: fp.excessAL > 0 ? fp.excessAL : null, amount: fp.excessAL > 0 ? -(fp.excessLeaveDeduction ?? 0) : null },
+                  { label: 'Outstanding claims', days: null, amount: fp.outstandingClaims },
+                ];
+                return (
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                    <table className="w-full text-left text-[11px]">
+                      <thead className="bg-slate-50 border-b border-slate-200 label-form">
+                        <tr>
+                          <th className="px-4 py-3">Component</th>
+                          <th className="px-4 py-3 text-right">Days</th>
+                          <th className="px-4 py-3 text-right">SGD</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {rows.map((r, i) => r.amount != null && r.amount !== 0 ? (
+                          <tr key={i} className="hover:bg-slate-50">
+                            <td className="px-4 py-3 font-bold text-slate-700">{r.label}</td>
+                            <td className="px-4 py-3 text-right font-mono text-slate-500">{r.days != null ? fmtD(r.days) : '—'}</td>
+                            <td className={`px-4 py-3 text-right font-mono font-black ${(r.amount ?? 0) < 0 ? 'text-red-600' : 'text-slate-800'}`}>{fmtS(r.amount)}</td>
+                          </tr>
+                        ) : null)}
+                      </tbody>
+                      <tfoot className="bg-slate-900">
+                        <tr>
+                          <td className="px-4 py-3 text-[10px] font-black text-white uppercase tracking-widest" colSpan={2}>Gross Final Pay</td>
+                          <td className="px-4 py-3 text-right font-mono font-black text-emerald-400">{fmtS(fp.grossFinalPay)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                );
+              })()}
+
+              {/* Create run */}
+              {finalPayData && !offCase.finalPayRunId && (
+                <button
+                  onClick={createFinalPayRun}
+                  disabled={creatingRun}
+                  className="w-full py-3 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-emerald-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                >
+                  {creatingRun ? 'Creating…' : 'Create Final Pay Run'}
+                </button>
+              )}
+
+              {offCase.finalPayRunId && (
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-center">
+                  <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Final Pay Run Created</p>
+                  <Link href="/payroll" className="mt-2 inline-block text-[10px] font-black text-indigo-600 hover:underline uppercase tracking-widest">View in Payroll →</Link>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === 'exit' && (
+            <div className="space-y-5">
+              <div>
+                <label className="label-form block mb-2">Interview Date</label>
+                <input
+                  type="date"
+                  value={exitForm.exitInterviewDate}
+                  onChange={e => setExitForm(f => ({ ...f, exitInterviewDate: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="label-form block mb-2">Satisfaction Rating (1–5)</label>
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <button
+                      key={n}
+                      onClick={() => setExitForm(f => ({ ...f, exitSatisfaction: n }))}
+                      className={`w-10 h-10 rounded-xl text-base font-black border transition-all ${exitForm.exitSatisfaction >= n ? 'bg-amber-400 border-amber-400 text-white' : 'bg-slate-50 border-slate-200 text-slate-300 hover:border-amber-300'}`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                  {exitForm.exitSatisfaction > 0 && (
+                    <span className="ml-2 text-xs font-black text-amber-600">{exitForm.exitSatisfaction}/5</span>
+                  )}
+                  {exitForm.exitSatisfaction > 0 && (
+                    <button onClick={() => setExitForm(f => ({ ...f, exitSatisfaction: 0 }))} className="ml-1 text-[9px] font-black text-slate-400 hover:text-red-500 uppercase">clear</button>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="label-form block mb-2">Exit Feedback / Notes</label>
+                <textarea
+                  rows={4}
+                  value={exitForm.exitFeedback}
+                  onChange={e => setExitForm(f => ({ ...f, exitFeedback: e.target.value }))}
+                  placeholder="Key themes, improvement suggestions, reason for leaving..."
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500 resize-none"
+                />
+              </div>
+              <button
+                onClick={saveExitInterview}
+                disabled={exitSubmitting}
+                className={`w-full py-3 text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all disabled:opacity-50 ${exitSaved ? 'bg-emerald-600 text-white' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl shadow-indigo-500/20'}`}
+              >
+                {exitSaved ? 'Saved ✓' : exitSubmitting ? 'Saving...' : 'Save Exit Interview'}
+              </button>
             </div>
           )}
         </div>

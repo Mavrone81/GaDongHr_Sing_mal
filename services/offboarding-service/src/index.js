@@ -8,9 +8,17 @@ const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
 
+const { countWorkingDays } = require('/app/shared/payroll-utils');
+
 const prisma = new PrismaClient();
 const app = express();
 const PORT = process.env.PORT || 4008;
+
+const EMPLOYEE_URL   = process.env.EMPLOYEE_SERVICE_URL   || 'http://employee-service:4002';
+const LEAVE_URL      = process.env.LEAVE_SERVICE_URL      || 'http://leave-service:4004';
+const CLAIMS_URL     = process.env.CLAIMS_SERVICE_URL     || 'http://claims-service:4005';
+const PAYROLL_URL    = process.env.PAYROLL_SERVICE_URL    || 'http://payroll-service:4003';
+const INTERNAL_KEY   = process.env.INTERNAL_SERVICE_KEY   || '';
 
 app.use(helmet()); app.use(cors()); app.use(express.json({ limit: '10kb' })); app.use(morgan('combined'));
 app.get('/health', (req, res) => res.json({ service: 'offboarding-service', status: 'ok', ts: new Date() }));
@@ -113,6 +121,159 @@ app.put('/offboarding/:id/ir21-clearance', authenticate, authorize(ROLES.SUPER_A
       where: { id: req.params.id }, data: { ir21Status: 'CLEARANCE_ISSUED', ir21ClearedAt: new Date(), moniesToRelease: true },
     });
     res.json({ message: 'IR21 clearance received. Salary payment can now be released.', case: updated });
+  } catch (err) { next(err); }
+});
+
+// PUT /offboarding/:id/exit-interview
+app.put('/offboarding/:id/exit-interview', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const { exitInterviewDate, exitSatisfaction, exitFeedback } = req.body;
+    const data = {};
+    if (exitInterviewDate !== undefined) data.exitInterviewDate = exitInterviewDate ? new Date(exitInterviewDate) : null;
+    if (exitSatisfaction !== undefined) data.exitSatisfaction = exitSatisfaction ? parseInt(exitSatisfaction) : null;
+    if (exitFeedback !== undefined) data.exitFeedback = exitFeedback || null;
+    if (!Object.keys(data).length) return res.status(400).json({ error: 'No fields provided' });
+    const updated = await prisma.offboardingCase.update({ where: { id: req.params.id }, data });
+    res.json(updated);
+  } catch (err) { next(err); }
+});
+
+// GET /offboarding/analytics/exit — exit interview analytics
+app.get('/offboarding/analytics/exit', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER), async (req, res, next) => {
+  try {
+    const cases = await prisma.offboardingCase.findMany({
+      select: { reason: true, exitSatisfaction: true, lastWorkingDate: true, department: true, exitInterviewDate: true, status: true },
+    });
+    const byReason = {};
+    const byDept = {};
+    const byMonth = {};
+    let totalSat = 0, satCount = 0;
+
+    for (const c of cases) {
+      byReason[c.reason] = (byReason[c.reason] || 0) + 1;
+      if (c.department) byDept[c.department] = (byDept[c.department] || 0) + 1;
+      const m = new Date(c.lastWorkingDate).toISOString().slice(0, 7);
+      byMonth[m] = (byMonth[m] || 0) + 1;
+      if (c.exitSatisfaction) { totalSat += c.exitSatisfaction; satCount++; }
+    }
+
+    res.json({
+      total: cases.length,
+      interviewCompleted: cases.filter(c => c.exitInterviewDate).length,
+      avgSatisfaction: satCount ? Math.round((totalSat / satCount) * 10) / 10 : null,
+      byReason, byDept, byMonth,
+    });
+  } catch (err) { next(err); }
+});
+
+// POST /offboarding/:id/compute-final-pay
+app.post('/offboarding/:id/compute-final-pay', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const offCase = await prisma.offboardingCase.findUnique({ where: { id: req.params.id } });
+    if (!offCase) return res.status(404).json({ error: 'Not found' });
+
+    const authHeader = req.headers.authorization;
+    const { noticeServed = false } = req.body;
+
+    // 1. Fetch employee
+    const empRes = await fetch(`${EMPLOYEE_URL}/employees/${offCase.employeeId}`, { headers: { Authorization: authHeader } });
+    if (!empRes.ok) return res.status(502).json({ error: 'Failed to fetch employee data' });
+    const emp = await empRes.json();
+    const basicSalary = parseFloat(emp.basicSalary) || 0;
+    if (!basicSalary) return res.status(400).json({ error: 'Employee has no basic salary on record' });
+
+    const lastWorkingDate = new Date(offCase.lastWorkingDate);
+    const year = lastWorkingDate.getFullYear();
+    const monthStart = new Date(year, lastWorkingDate.getMonth(), 1);
+    const monthEnd   = new Date(year, lastWorkingDate.getMonth() + 1, 0);
+
+    // 2. Count working days (no PH exclusion — holidays not tracked in offboarding service, conservative)
+    const workingDaysInMonth = countWorkingDays(monthStart, monthEnd);
+    const daysWorked         = countWorkingDays(monthStart, lastWorkingDate);
+    const salaryForDaysWorked = workingDaysInMonth > 0 ? Math.round((basicSalary / workingDaysInMonth) * daysWorked * 100) / 100 : 0;
+
+    // 3. Notice pay in lieu (only if employer waiving notice)
+    const noticePeriodDays = offCase.noticePeriodDays || 0;
+    const noticePay = noticeServed ? 0 : Math.round((basicSalary / 26) * noticePeriodDays * 100) / 100;
+
+    // 4. Fetch AL entitlement
+    let leaveEncashment = 0, excessLeaveDeduction = 0, unusedAL = 0, excessAL = 0;
+    try {
+      const leaveRes = await fetch(`${LEAVE_URL}/leave/entitlements/${offCase.employeeId}?year=${year}`, { headers: { Authorization: authHeader, 'x-internal-service-key': INTERNAL_KEY } });
+      if (leaveRes.ok) {
+        const entitlements = await leaveRes.json();
+        const al = entitlements.find(e => e.code === 'AL' || e.name?.toLowerCase().includes('annual'));
+        if (al && al.entitledDays !== null) {
+          const startDate  = emp.startDate ? new Date(emp.startDate) : new Date(year, 0, 1);
+          const monthsServedThisYear = lastWorkingDate.getMonth() - (startDate.getFullYear() < year ? -1 : startDate.getMonth()) + 1;
+          const clampedMonths = Math.min(Math.max(monthsServedThisYear, 1), 12);
+          const alEntitledFinalYear = Math.round(al.annualEntitlement * (clampedMonths / 12) * 10) / 10;
+          unusedAL  = Math.max(0, alEntitledFinalYear - (al.usedDays || 0) - (al.pendingDays || 0) + (al.carryForward || 0));
+          excessAL  = Math.max(0, (al.usedDays || 0) - alEntitledFinalYear);
+          leaveEncashment      = Math.round((basicSalary / 26) * unusedAL * 100) / 100;
+          excessLeaveDeduction = Math.round((basicSalary / 26) * excessAL * 100) / 100;
+        }
+      }
+    } catch {}
+
+    // 5. Outstanding approved claims
+    let outstandingClaims = 0;
+    try {
+      const claimsRes = await fetch(`${CLAIMS_URL}/claims?employeeId=${offCase.employeeId}&status=APPROVED&limit=200`, { headers: { Authorization: authHeader } });
+      if (claimsRes.ok) {
+        const clData = await claimsRes.json();
+        const claims = Array.isArray(clData) ? clData : (clData.claims || []);
+        outstandingClaims = claims.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+        outstandingClaims = Math.round(outstandingClaims * 100) / 100;
+      }
+    } catch {}
+
+    const grossFinalPay = Math.round((salaryForDaysWorked + noticePay + leaveEncashment + outstandingClaims - excessLeaveDeduction) * 100) / 100;
+
+    const finalPayData = {
+      basicSalary, workingDaysInMonth, daysWorked, salaryForDaysWorked,
+      noticePeriodDays, noticeServed, noticePay,
+      unusedAL, leaveEncashment, excessAL, excessLeaveDeduction,
+      outstandingClaims, grossFinalPay, computedAt: new Date().toISOString(),
+    };
+
+    const updated = await prisma.offboardingCase.update({
+      where: { id: req.params.id },
+      data: { finalPayData, status: 'PAYROLL_COMPUTED' },
+    });
+    res.json({ ...finalPayData, caseId: updated.id, status: updated.status });
+  } catch (err) { next(err); }
+});
+
+// POST /offboarding/:id/create-final-pay-run
+app.post('/offboarding/:id/create-final-pay-run', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const offCase = await prisma.offboardingCase.findUnique({ where: { id: req.params.id } });
+    if (!offCase) return res.status(404).json({ error: 'Not found' });
+    if (!offCase.finalPayData) return res.status(400).json({ error: 'Compute final pay first' });
+
+    const authHeader = req.headers.authorization;
+    const fp = offCase.finalPayData;
+    const lwd = new Date(offCase.lastWorkingDate);
+    const period = `${lwd.getFullYear()}-${String(lwd.getMonth() + 1).padStart(2, '0')}`;
+
+    const runRes = await fetch(`${PAYROLL_URL}/payroll/runs`, {
+      method: 'POST',
+      headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ period, runType: 'SUPPLEMENTAL', notes: `Final pay — ${offCase.employeeName || offCase.employeeId}` }),
+    });
+    if (!runRes.ok) {
+      const err = await runRes.json().catch(() => ({}));
+      return res.status(502).json({ error: 'Failed to create payroll run', detail: err });
+    }
+    const run = await runRes.json();
+    const runId = run.id || run.run?.id;
+
+    await prisma.offboardingCase.update({
+      where: { id: req.params.id },
+      data: { finalPayRunId: runId },
+    });
+    res.json({ runId, period, message: 'Final pay payroll run created. Add line items and process via payroll module.' });
   } catch (err) { next(err); }
 });
 
