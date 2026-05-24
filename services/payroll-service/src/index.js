@@ -35,7 +35,17 @@ app.use((err, req, res, next) => {
 });
 
 if (require.main === module) {
-  app.listen(PORT, () => console.log(`[payroll-service] Running on port ${PORT}`));
+  app.listen(PORT, async () => {
+    console.log(`[payroll-service] Running on port ${PORT}`);
+    // PAY-001: ensure DB-level CHECK constraints (idempotent).
+    try {
+      const { PrismaClient } = require('@prisma/client');
+      const { ensurePayrollConstraints } = require('./db-constraints');
+      await ensurePayrollConstraints(new PrismaClient());
+    } catch (err) {
+      console.error('[payroll-service] db-constraints init failed:', err.message);
+    }
+  });
 }
 
 module.exports = app;

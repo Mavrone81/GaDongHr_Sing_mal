@@ -1,7 +1,7 @@
 # Implementation Status
 
 **PRD Reference:** PRD-HRMS-001 v2.0  
-**Last Updated:** 2026-05-24 _(RPT-003 Phase 2 — visual report builder, PDF export, email delivery, seed templates)_  
+**Last Updated:** 2026-05-24 _(PAY-001 completion — bi-monthly run type, supplemental auto-trim, DB-level maker-checker)_  
 **Legend:** ✅ Done · ⚠️ Partial · ❌ Not Done
 
 ---
@@ -10,7 +10,7 @@
 
 | Module | Done | Partial | Not Done | Total |
 |--------|------|---------|----------|-------|
-| Payroll & CPF | 5 | 7 | 0 | 12 |
+| Payroll & CPF | 6 | 6 | 0 | 12 |
 | Leave Management | 5 | 2 | 0 | 7 |
 | Claims & Expenses | 3 | 1 | 0 | 4 |
 | Recruitment & Onboarding | 1 | 4 | 0 | 5 |
@@ -21,19 +21,21 @@
 | Offboarding | 4 | 1 | 0 | 5 |
 | Reporting & Analytics | 1 | 2 | 0 | 3 |
 | Support & Ticketing | 3 | 0 | 1 | 4 |
-| **Total** | **34** | **19** | **6** | **59** |
+| **Total** | **35** | **18** | **6** | **59** |
 
 ---
 
 ## Module 1: Payroll & CPF Management
 
-### ⚠️ PAY-001 — Payroll Run Types & Workflow
-**Status:** Partial  
-**Done:** Monthly run (initiate → compute → approve → finalise → lock), ad-hoc/off-cycle runs, maker-checker approval, variance report, period consolidation endpoint, EA s.20 working-day pro-rating for partial-month joiners/leavers.  
-**Outstanding:**
-- Bi-monthly run type not yet enforced as a separate run mode
-- Supplemental run auto-trim to avoid double-counting OW not fully implemented
-- Maker-checker "different user" enforcement may not be strictly validated at DB level
+### ✅ PAY-001 — Payroll Run Types & Workflow
+**Status:** Done _(completed 2026-05-24)_  
+Monthly run (initiate → compute → approve → finalise → lock), ad-hoc/off-cycle supplemental runs, maker-checker approval, variance report, period consolidation, EA s.20 working-day pro-rating for partial-month joiners/leavers.
+
+**2026-05-24 additions (closing PAY-001):**
+- **Bi-monthly run type** — `BIMONTHLY` added to `RunType` enum + new `PeriodHalf` enum (`FIRST` | `SECOND`) on `PayrollRun`. Unique constraint widened to `[period, runType, periodHalf]`. POST /runs validates: BIMONTHLY requires `periodHalf`; all other types reject `periodHalf`. Compute uses `computePeriodBoundaries(period, runType, periodHalf)` → FIRST=days 1-15, SECOND=days 16-end-of-month (Feb leap-year handled). FIRST and SECOND halves coexist for the same period; each gets its own run lifecycle.
+- **Supplemental auto-trim** — On compute, ADHOC/BONUS/COMMISSION runs fetch published payslips from prior runs in the same period. For each employee already paid: `trimSupplementalEmployee()` zeroes `emp.ow / aw / grossPay` and carries forward YTDs from the prior payslip so CPF ceilings stay correct. The supplemental payslip then only carries the paycode delta (e.g., +$500 bonus AW), no double-count of base salary when `consolidatePeriod` later sums runs. Trimmed employees with no paycodes are auto-removed from the run. Response surfaces `autoTrimmedIds` and `autoRemovedIds`.
+- **Maker-checker enforced at DB level** — `db-constraints.js` on service startup adds a PostgreSQL CHECK constraint `payroll_runs_maker_checker_diff` (`approved_by IS NULL OR approved_by <> initiated_by`), idempotently. The approve route translates a violation of this constraint into a 403 (in addition to the existing app-level check at `payroll.routes.js`).
+- **Tests** — 18 new unit tests on the pure `run-types.js` engine (predicates, period boundaries incl. Feb leap-year, trim mutation, validation) + 12 new integration tests (K1-K6 bi-monthly POST validation; K7-K10 auto-trim behaviour on compute; K11-K12 maker-checker DB+app violations). Full payroll suite: **236 tests green**.
 
 ### ✅ PAY-002 — CPF Auto-Calculation
 **Status:** Done  
@@ -432,9 +434,7 @@ Employee replies to non-CLOSED tickets. HR Admin replies to any ticket. CLOSED t
 ## Outstanding Items Priority List
 
 ### Must Have (critical path)
-1. **PAY-001 (partial)** — Bi-monthly run, supplemental auto-trim, strict maker-checker user validation
-2. **OFF-004 (completion)** — IR21 money-withhold enforcement (now unblocked by PAY-010)
-3. **RPT-003 Phase 2** — Drag-and-drop builder UI, PDF export, real scheduled email delivery, cross-tab + formulas, pre-built analytics templates
+1. **OFF-004 (completion)** — IR21 money-withhold enforcement (now unblocked by PAY-010)
 
 ### Should Have (high value)
 7. **TRN-003** — Government grant claims (SkillsFuture, ETS, Absentee Payroll — SSG compliance)

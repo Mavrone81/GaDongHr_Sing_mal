@@ -10,6 +10,7 @@ const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware'
 const { encrypt, decrypt, encryptNumber, decryptNumber } = require('/app/shared/crypto');
 const { computeCpf, computeSdl, computeNetPay, countWorkingDays, countPeriodLeaveWorkingDays } = require('../engines/cpf.engine');
 const { buildEntriesForEmployee, summariseEntries } = require('../engines/journal.engine');
+const { isSupplemental, isBiMonthly, computePeriodBoundaries, trimSupplementalEmployee, validateRunTypeShape } = require('../engines/run-types');
 
 const prisma = new PrismaClient();
 
@@ -123,12 +124,24 @@ router.post('/runs', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, 
     const { period, runType = 'MONTHLY', employeeGroup } = req.body;
     if (!period) return res.status(400).json({ error: 'Period is required (YYYY-MM)' });
 
-    // Only block exact duplicates (same period + same runType)
-    const existing = await prisma.payrollRun.findFirst({ where: { period, runType: runType.toUpperCase() } });
-    if (existing) return res.status(409).json({ error: `A ${runType.toLowerCase()} payroll run for ${period} already exists (status: ${existing.status.toLowerCase().replace('_', ' ')}). Choose a different run type (e.g. ADHOC) to create a supplemental run.` });
+    const RT = runType.toUpperCase();
+    const periodHalf = req.body.periodHalf ? String(req.body.periodHalf).toUpperCase() : null;
+
+    // PAY-001: validate periodHalf — required for BIMONTHLY, forbidden otherwise
+    const shapeErr = validateRunTypeShape(RT, periodHalf);
+    if (shapeErr) return res.status(400).json({ error: shapeErr });
+
+    // Duplicate check: (period, runType, periodHalf) is the natural key
+    const existing = await prisma.payrollRun.findFirst({
+      where: { period, runType: RT, periodHalf },
+    });
+    if (existing) {
+      const halfLabel = periodHalf ? ` ${periodHalf} half` : '';
+      return res.status(409).json({ error: `A ${RT.toLowerCase()}${halfLabel} payroll run for ${period} already exists (status: ${existing.status.toLowerCase().replace('_', ' ')}). Choose a different run type (e.g. ADHOC) to create a supplemental run.` });
+    }
 
     const run = await prisma.payrollRun.create({
-      data: { id: uuidv4(), period, runType: runType.toUpperCase(), status: 'DRAFT', initiatedBy: req.user.sub, employeeGroup },
+      data: { id: uuidv4(), period, runType: RT, periodHalf, status: 'DRAFT', initiatedBy: req.user.sub, employeeGroup },
     });
     res.status(201).json(run);
   } catch (err) {
@@ -169,11 +182,14 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
 
     if (!employees || employees.length === 0) return res.status(400).json({ error: 'No active employees found for payroll computation' });
 
-    // ── Derive period boundaries first (needed for employee eligibility filter) ─
-    const [periodYear, periodMonth] = run.period.split('-').map(Number);
-    const periodStart = new Date(periodYear, periodMonth - 1, 1);
-    const periodEnd   = new Date(periodYear, periodMonth, 0); // last day of month
-    const daysInMonth = periodEnd.getDate();
+    // ── Derive period boundaries (needed for employee eligibility filter) ─
+    // PAY-001: BIMONTHLY runs use a half-month window (1-15 or 16-end)
+    let periodStart, periodEnd, daysInMonth;
+    try {
+      ({ periodStart, periodEnd, daysInMonth } = computePeriodBoundaries(run.period, run.runType, run.periodHalf));
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
 
     // Exclude employees whose employment hasn't started by the period end,
     // or whose employment ended before the period start (EA: pay only covers actual service days)
@@ -185,20 +201,30 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
 
     if (employees.length === 0) return res.status(400).json({ error: 'No active employees found for payroll computation' });
 
-    // ── For supplemental runs: fetch prior published payslips now so we can compare after compute ──
-    // Employees whose computed values exactly match their prior payslip and have no paycodes
-    // will be auto-removed from this run — only true deltas and paycode additions are kept.
-    let priorPayslipMap = {}; // employeeId → { basicSalary, grossPay, netPay }
-    if (run.runType !== 'MONTHLY') {
+    // ── PAY-001 Supplemental auto-trim: for ADHOC/BONUS/COMMISSION runs, fetch ──
+    // ── prior published payslips so we can (a) trim OW for employees who were ──
+    // ── already paid in the primary run (prevents double-counting when         ──
+    // ── consolidatePeriod sums grossPay later), and (b) drop empty payslips    ──
+    // ── (no paycodes + already paid in prior run = nothing to add).            ──
+    const supplementalRun = isSupplemental(run.runType);
+    let priorPayslipMap = {}; // employeeId → { basicSalary, grossPay, netPay, ytdGross, ytdEmployeeCpf, ytdEmployerCpf }
+    if (supplementalRun) {
       const priorPublished = await prisma.payslip.findMany({
-        where: { period: run.period, isPublished: true },
-        select: { employeeId: true, basicSalaryEnc: true, grossPayEnc: true, netPayEnc: true },
+        where: { period: run.period, isPublished: true, runId: { not: run.id } },
+        select: {
+          employeeId: true,
+          basicSalaryEnc: true, grossPayEnc: true, netPayEnc: true,
+          ytdGrossEnc: true, ytdEmployeeCpfEnc: true, ytdEmployerCpfEnc: true,
+        },
       });
       for (const ps of priorPublished) {
         priorPayslipMap[ps.employeeId] = {
-          basicSalary: decSafe(ps.basicSalaryEnc),
-          grossPay:    decSafe(ps.grossPayEnc),
-          netPay:      decSafe(ps.netPayEnc),
+          basicSalary:    decSafe(ps.basicSalaryEnc),
+          grossPay:       decSafe(ps.grossPayEnc),
+          netPay:         decSafe(ps.netPayEnc),
+          ytdGross:       decSafe(ps.ytdGrossEnc),
+          ytdEmployeeCpf: decSafe(ps.ytdEmployeeCpfEnc),
+          ytdEmployerCpf: decSafe(ps.ytdEmployerCpfEnc),
         };
       }
     }
@@ -219,7 +245,8 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
       : countWorkingDays(periodStart, periodEnd, holidaySet, workDayType);
 
     // ── EA s.20: pro-rate OW/grossPay for mid-month starters/leavers using working days ──
-    // prorationFactors is also used below to pro-rate OW line items (salary-as-paycode)
+    // PAY-001: for supplemental runs with a prior payslip, the trim happens after this
+    // loop (zeroes OW/grossPay) so any proration is harmlessly applied to zero.
     const prorationFactors = new Map();
     for (const emp of employees) {
       const startD   = emp.startDate ? new Date(emp.startDate) : null;
@@ -232,6 +259,23 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
       if (factor < 1) {
         emp.ow       = Math.round((emp.ow       || 0) * factor * 100) / 100;
         emp.grossPay = Math.round((emp.grossPay || 0) * factor * 100) / 100;
+      }
+    }
+
+    // ── PAY-001 Supplemental auto-trim: zero OW/AW/grossPay + carry YTDs forward ──
+    // for employees that already have a published payslip in this period from a
+    // primary run. Their CPF was already computed and remitted; the supplemental
+    // should only contribute the new paycode delta.
+    const trimmedEmployees = new Set();
+    if (supplementalRun) {
+      for (const emp of employees) {
+        const prior = priorPayslipMap[emp.employeeId];
+        if (prior) {
+          trimSupplementalEmployee(emp, prior);
+          trimmedEmployees.add(emp.employeeId);
+          // Override proration factor — emp.ow is now 0, OW paycodes shouldn't be re-prorated
+          prorationFactors.set(emp.employeeId, 1);
+        }
       }
     }
 
@@ -444,25 +488,21 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
       });
     }
 
-    // ── Post-compute: auto-remove employees whose values match their prior payslip ──
-    // For supplemental runs: if computed basicSalary == prior basicSalary and no paycodes,
-    // the employee is unchanged — drop them from this run, keep only their prior payslip.
+    // ── PAY-001 Post-compute cleanup for supplemental runs ──
+    // After auto-trim, employees who were trimmed (had a prior payslip) AND have
+    // no paycodes will have effectiveOw=0 + effectiveGross=0 — nothing to add.
+    // Delete their empty payslips to keep the supplemental run focused on the
+    // actual deltas. Employees with paycodes are kept (carrying just the deltas).
     let autoRemovedIds = [];
-    if (run.runType !== 'MONTHLY' && Object.keys(priorPayslipMap).length > 0) {
+    const autoTrimmedIds = Array.from(trimmedEmployees).filter(id =>
+      computedResults.find(r => r.employeeId === id && r.hasPaycodes)
+    );
+    if (supplementalRun && trimmedEmployees.size > 0) {
       const toRemove = computedResults
-        .filter(r => {
-          if (r.hasPaycodes) return false; // always keep employees with paycodes
-          const prior = priorPayslipMap[r.employeeId];
-          if (!prior) return false; // no prior payslip → new employee, keep
-          const sameBasic = Math.abs(r.effectiveOw   - prior.basicSalary) < 0.01;
-          const sameGross = Math.abs(r.effectiveGross - prior.grossPay)    < 0.01;
-          return sameBasic && sameGross;
-        })
+        .filter(r => trimmedEmployees.has(r.employeeId) && !r.hasPaycodes)
         .map(r => r.employeeId);
-
       if (toRemove.length > 0) {
         await prisma.payslip.deleteMany({ where: { runId: run.id, employeeId: { in: toRemove } } });
-        // Subtract their amounts from the run totals
         for (const r of computedResults.filter(c => toRemove.includes(c.employeeId))) {
           totalGross -= r.effectiveGross;
           totalNet   -= r.net;
@@ -487,6 +527,7 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
       total: { gross: totalGross, net: totalNet, employeeCpf: totalEmployee, employerCpf: totalEmployer, sdl: totalSdl },
       ...(zeroSalaryWarnings.length > 0 && { warnings: { zeroOrdinaryWages: zeroSalaryWarnings } }),
       ...(autoRemovedIds.length > 0 && { autoRemovedIds }),
+      ...(autoTrimmedIds.length > 0 && { autoTrimmedIds }),
       attendance: {
         periodStatus: attendancePeriodStatus,
         applied: applyAttendanceFeed,
@@ -566,11 +607,19 @@ router.post('/runs/:id/approve', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
       return res.status(403).json({ error: 'Maker-checker policy: a different authorised user must approve this payroll run. Contact your administrator.' });
     }
 
-    const updated = await prisma.payrollRun.update({
-      where: { id: run.id },
-      data: { status: 'APPROVED', approvedBy: req.user.sub, approvedAt: new Date() },
-    });
-    res.json({ message: 'Payroll approved', run: updated });
+    try {
+      const updated = await prisma.payrollRun.update({
+        where: { id: run.id },
+        data: { status: 'APPROVED', approvedBy: req.user.sub, approvedAt: new Date() },
+      });
+      res.json({ message: 'Payroll approved', run: updated });
+    } catch (dbErr) {
+      // DB CHECK constraint (payroll_runs_maker_checker_diff) fired — translate to 403
+      if (dbErr.message && /payroll_runs_maker_checker_diff/.test(dbErr.message)) {
+        return res.status(403).json({ error: 'Maker-checker policy enforced at database level: approver must differ from initiator.' });
+      }
+      throw dbErr;
+    }
   } catch (err) { next(err); }
 });
 

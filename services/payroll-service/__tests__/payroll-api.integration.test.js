@@ -1089,3 +1089,227 @@ describe('I) Reimbursement paycodes (claims integration)', () => {
     });
   });
 });
+
+// ── PAY-001) Bi-monthly run validation ────────────────────────────────────────
+describe('PAY-001) Bi-monthly run validation on POST /payroll/runs', () => {
+  test('K1 — POST 400 when BIMONTHLY missing periodHalf', async () => {
+    const res = await request(app)
+      .post('/payroll/runs')
+      .send({ period: '2026-05', runType: 'BIMONTHLY' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/periodHalf/);
+  });
+
+  test('K2 — POST 400 when BIMONTHLY has bad periodHalf', async () => {
+    const res = await request(app)
+      .post('/payroll/runs')
+      .send({ period: '2026-05', runType: 'BIMONTHLY', periodHalf: 'MIDDLE' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/periodHalf/);
+  });
+
+  test('K3 — POST 400 when non-BIMONTHLY supplies periodHalf', async () => {
+    const res = await request(app)
+      .post('/payroll/runs')
+      .send({ period: '2026-05', runType: 'MONTHLY', periodHalf: 'FIRST' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/only valid for BIMONTHLY/);
+  });
+
+  test('K4 — POST 201 creates BIMONTHLY FIRST run', async () => {
+    mockRunFindFirst.mockResolvedValue(null);
+    mockRunCreate.mockResolvedValue({
+      id: 'run-bm-1', period: '2026-05', runType: 'BIMONTHLY',
+      periodHalf: 'FIRST', status: 'DRAFT',
+    });
+    const res = await request(app)
+      .post('/payroll/runs')
+      .send({ period: '2026-05', runType: 'BIMONTHLY', periodHalf: 'FIRST' });
+    expect(res.status).toBe(201);
+    expect(res.body.periodHalf).toBe('FIRST');
+  });
+
+  test('K5 — POST 409 rejects duplicate BIMONTHLY+SECOND for same period', async () => {
+    mockRunFindFirst.mockResolvedValue({
+      id: 'run-existing', period: '2026-05', runType: 'BIMONTHLY',
+      periodHalf: 'SECOND', status: 'DRAFT',
+    });
+    const res = await request(app)
+      .post('/payroll/runs')
+      .send({ period: '2026-05', runType: 'BIMONTHLY', periodHalf: 'SECOND' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/SECOND half/);
+  });
+
+  test('K6 — FIRST and SECOND halves are independent (FIRST exists → SECOND allowed)', async () => {
+    // findFirst is called scoped to the requested half — return null for SECOND
+    mockRunFindFirst.mockResolvedValue(null);
+    mockRunCreate.mockResolvedValue({
+      id: 'run-bm-2', period: '2026-05', runType: 'BIMONTHLY',
+      periodHalf: 'SECOND', status: 'DRAFT',
+    });
+    const res = await request(app)
+      .post('/payroll/runs')
+      .send({ period: '2026-05', runType: 'BIMONTHLY', periodHalf: 'SECOND' });
+    expect(res.status).toBe(201);
+    expect(mockRunFindFirst).toHaveBeenCalledWith({
+      where: { period: '2026-05', runType: 'BIMONTHLY', periodHalf: 'SECOND' },
+    });
+  });
+});
+
+// ── PAY-001) Supplemental run auto-trim on compute ────────────────────────────
+describe('PAY-001) Supplemental run auto-trim on compute', () => {
+  const cpfRates = [
+    { id: 'rate-1', citizenStatus: 'SC', ageFrom: 0, ageTo: 55, employeeRate: 0.20, employerRate: 0.17, owCeiling: 7400, awCeiling: 102000, isActive: true },
+  ];
+  const sdlConfig = { rate: 0.0025, minAmount: 2.00, maxAmount: 11.25, salaryCap: 4500, isActive: true };
+
+  let savedFetch;
+  beforeAll(() => { savedFetch = global.fetch; });
+
+  beforeEach(() => {
+    mockCpfRateFindMany.mockResolvedValue(cpfRates);
+    mockSdlConfigFindFirst.mockResolvedValue(sdlConfig);
+    mockLineItemFindMany.mockResolvedValue([]);
+    mockPeriodConfigFindUnique.mockResolvedValue(null);
+    mockPublicHolidayFindMany.mockResolvedValue([]);
+    mockRunUpdate.mockResolvedValue({});
+    installFetchMock({ applications: [] });
+  });
+  afterEach(() => { global.fetch = savedFetch; });
+
+  const baseEmp = {
+    employeeId: 'emp-001', employeeCode: 'EMP-001', fullName: 'Alice Tan',
+    ow: 5000, aw: 0, grossPay: 5000,
+    citizenStatus: 'SC', age: 35,
+    ytdOw: 5000, ytdAw: 0, ytdGross: 5000, ytdEmployeeCpf: 1000, ytdEmployerCpf: 850,
+  };
+
+  test('K7 — BONUS run with prior payslip: OW is trimmed to 0; only paycode delta contributes', async () => {
+    mockRunFindUnique.mockResolvedValue({
+      id: 'run-bonus', period: '2026-05', runType: 'BONUS', status: 'DRAFT',
+      initiatedBy: 'admin-001', periodHalf: null,
+    });
+    // Prior MONTHLY payslip exists for this employee in this period
+    mockPayslipFindMany.mockResolvedValue([{
+      employeeId: 'emp-001',
+      basicSalaryEnc: '5000', grossPayEnc: '5000', netPayEnc: '4000',
+      ytdGrossEnc: '5000', ytdEmployeeCpfEnc: '1000', ytdEmployerCpfEnc: '850',
+    }]);
+    // A $500 bonus paycode (AW)
+    mockLineItemFindMany.mockResolvedValue([{
+      employeeId: 'emp-001', amountEncrypted: '500',
+      wageType: 'AW', isCpfApplicable: true,
+    }]);
+
+    const res = await request(app)
+      .post('/payroll/runs/run-bonus/compute')
+      .send({ employees: [baseEmp] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.autoTrimmedIds).toEqual(['emp-001']);
+    const data = mockPayslipUpsert.mock.calls[0][0].create;
+    // Basic salary is 0 because emp.ow was trimmed — consolidatePeriod's MAX
+    // will preserve the prior payslip's $5000.
+    expect(parseFloat(data.basicSalaryEnc)).toBe(0);
+    // Gross = trimmed OW (0) + AW (500) = 500 — only the bonus delta, no double-count
+    expect(parseFloat(data.grossPayEnc)).toBe(500);
+  });
+
+  test('K8 — ADHOC run, employee with prior + no paycodes: payslip is auto-removed', async () => {
+    mockRunFindUnique.mockResolvedValue({
+      id: 'run-adhoc', period: '2026-05', runType: 'ADHOC', status: 'DRAFT',
+      initiatedBy: 'admin-001', periodHalf: null,
+    });
+    mockPayslipFindMany.mockResolvedValue([{
+      employeeId: 'emp-001',
+      basicSalaryEnc: '5000', grossPayEnc: '5000', netPayEnc: '4000',
+      ytdGrossEnc: '5000', ytdEmployeeCpfEnc: '1000', ytdEmployerCpfEnc: '850',
+    }]);
+    mockLineItemFindMany.mockResolvedValue([]); // no paycodes
+
+    const res = await request(app)
+      .post('/payroll/runs/run-adhoc/compute')
+      .send({ employees: [baseEmp] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.autoRemovedIds).toEqual(['emp-001']);
+    expect(mockPayslipDeleteMany).toHaveBeenCalledWith({
+      where: { runId: 'run-adhoc', employeeId: { in: ['emp-001'] } },
+    });
+  });
+
+  test('K9 — MONTHLY run does not trigger trim (no priorPayslip fetch on primary)', async () => {
+    mockRunFindUnique.mockResolvedValue({
+      id: 'run-m', period: '2026-05', runType: 'MONTHLY', status: 'DRAFT',
+      initiatedBy: 'admin-001', periodHalf: null,
+    });
+    mockLineItemFindMany.mockResolvedValue([]);
+
+    const res = await request(app)
+      .post('/payroll/runs/run-m/compute')
+      .send({ employees: [baseEmp] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.autoTrimmedIds).toBeUndefined();
+    // MONTHLY runs don't query prior payslips — payslipFindMany should not be
+    // called with the supplemental's "exclude this run" filter.
+    const calls = mockPayslipFindMany.mock.calls.filter(c =>
+      c[0]?.where?.runId?.not === 'run-m'
+    );
+    expect(calls.length).toBe(0);
+  });
+
+  test('K10 — BIMONTHLY FIRST run uses days 1-15 boundary (mid-month leaver still gets full half pay)', async () => {
+    mockRunFindUnique.mockResolvedValue({
+      id: 'run-bm', period: '2026-05', runType: 'BIMONTHLY', status: 'DRAFT',
+      initiatedBy: 'admin-001', periodHalf: 'FIRST',
+    });
+    mockLineItemFindMany.mockResolvedValue([]);
+    const emp = { ...baseEmp, startDate: '2020-01-01', endDate: null };
+
+    const res = await request(app)
+      .post('/payroll/runs/run-bm/compute')
+      .send({ employees: [emp] });
+
+    expect(res.status).toBe(200);
+    // No proration warnings expected — employee covers the full 1-15 half
+    const data = mockPayslipUpsert.mock.calls[0][0].create;
+    expect(parseFloat(data.basicSalaryEnc)).toBe(5000);
+  });
+});
+
+// ── PAY-001) Maker-checker DB violation surfaces as 403 ──────────────────────
+describe('PAY-001) Maker-checker DB constraint violation → 403', () => {
+  test('K11 — approve where DB raises payroll_runs_maker_checker_diff returns 403', async () => {
+    // Run is PENDING_APPROVAL; app-level check would normally catch but is bypassed
+    // here by env (DISABLE_MAKER_CHECKER=true) — we still want the DB CHECK to
+    // surface cleanly as 403. Simulate by raising the matching DB error.
+    process.env.DISABLE_MAKER_CHECKER = 'true';
+    mockRunFindUnique.mockResolvedValue({
+      id: 'run-pending', period: '2026-05', status: 'PENDING_APPROVAL',
+      initiatedBy: 'admin-001',
+    });
+    mockRunUpdate.mockRejectedValue(new Error(
+      'new row for relation "payroll_runs" violates check constraint "payroll_runs_maker_checker_diff"'
+    ));
+
+    const res = await request(app).post('/payroll/runs/run-pending/approve');
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/database level/);
+
+    delete process.env.DISABLE_MAKER_CHECKER;
+  });
+
+  test('K12 — approve still 403 at app level when DISABLE_MAKER_CHECKER not set and initiator==approver', async () => {
+    mockRunFindUnique.mockResolvedValue({
+      id: 'run-pending', period: '2026-05', status: 'PENDING_APPROVAL',
+      initiatedBy: 'admin-001', // matches the mocked req.user.sub
+    });
+    const res = await request(app).post('/payroll/runs/run-pending/approve');
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/Maker-checker/);
+  });
+});

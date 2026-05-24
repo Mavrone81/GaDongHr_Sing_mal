@@ -13,10 +13,11 @@ model PayrollRun {
   id              String        @id @default(uuid())
   period          String        // e.g. "2025-01"
   runType         RunType       @default(MONTHLY)
+  periodHalf      PeriodHalf?   // only set when runType=BIMONTHLY
   status          RunStatus     @default(DRAFT)
   employeeGroup   String?
   initiatedBy     String        // userId
-  approvedBy      String?       // userId (checker — must be different from initiatedBy)
+  approvedBy      String?       // userId (checker — must be different from initiatedBy; DB CHECK enforced)
   approvedAt      DateTime?
   finalisedAt     DateTime?
   totalGross      String?       // encrypted
@@ -31,7 +32,7 @@ model PayrollRun {
   lineItems       PayrollLineItem[]
   payslips        Payslip[]
 
-  @@unique([period, runType])
+  @@unique([period, runType, periodHalf])
   @@index([period])
   @@map("payroll_runs")
 }
@@ -350,8 +351,13 @@ enum RunStatus {
 }
 enum RunType {
   MONTHLY
+  BIMONTHLY
   ADHOC
   BONUS
   FINAL_PAY
   COMMISSION
+}
+enum PeriodHalf {
+  FIRST
+  SECOND
 }
