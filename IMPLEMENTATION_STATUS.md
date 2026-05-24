@@ -1,7 +1,7 @@
 # Implementation Status
 
 **PRD Reference:** PRD-HRMS-001 v2.0  
-**Last Updated:** 2026-05-24 _(TAT-005 Attendance → Payroll auto-feed + scheduled-time reconciliation)_  
+**Last Updated:** 2026-05-24 _(RPT-003 Phase 2 — visual report builder, PDF export, email delivery, seed templates)_  
 **Legend:** ✅ Done · ⚠️ Partial · ❌ Not Done
 
 ---
@@ -19,9 +19,9 @@
 | Training & Development | 2 | 1 | 1 | 4 |
 | Asset Management | 2 | 0 | 2 | 4 |
 | Offboarding | 4 | 1 | 0 | 5 |
-| Reporting & Analytics | 0 | 2 | 1 | 3 |
+| Reporting & Analytics | 1 | 2 | 0 | 3 |
 | Support & Ticketing | 3 | 0 | 1 | 4 |
-| **Total** | **33** | **20** | **6** | **59** |
+| **Total** | **34** | **19** | **6** | **59** |
 
 ---
 
@@ -388,23 +388,21 @@ Digital exit interview form (satisfaction rating, reason for leaving, open comme
 - SDL monthly computation summary as standalone SSG submission report missing
 - Submission history storage (dates, reference numbers, file copies, receipts) not yet tracked per report type
 
-### ⚠️ RPT-003 — Custom Report Builder & Scheduled Delivery
-**Status:** Partial (Phase 1 shipped)  
-**Done (Phase 1 — backend foundation):**
-- New Prisma schema on reporting-service: `ReportTemplate`, `ReportSchedule`, `ReportRun` (history).
-- Query executor engine supports: 5 canonical data sources (employees / payrollRuns / leaveApplications / attendance / claims), filter ops (eq/ne/gt/lt/gte/lte/in/contains, dotted-path fields), groupBy with count/sum/avg/min/max aggregations, multi-key sort, projection, limit cap (default 5k, max 50k).
-- Routes: `GET /reports/data-sources` (UI metadata), template CRUD (`/reports/templates`), `POST /reports/templates/:id/run`, `POST /reports/preview`, `GET /reports/templates/:id/export.csv`, `GET /reports/templates/:id/export.xlsx`, `GET /reports/templates/:id/runs`, schedule CRUD (`/reports/schedules`).
-- Hourly scheduler tick advances `nextRunAt` by frequency (DAILY/WEEKLY/MONTHLY, monthly day-clamping for Feb), records ReportRun rows. Email delivery is a logged placeholder (recipients logged; no SMTP wired yet).
-- RBAC: owner-or-shared visibility for non-admins; admin sees all. Owner-only edit/delete on templates and schedules.
-- Thin frontend section "Saved Reports" on `/reports` lists templates with Run / CSV / XLSX / Delete; new-report editor accepts JSON definition (drag-and-drop ships in Phase 2).
-- 66 tests green: 47 unit on the pure engines (query executor, CSV writer, schedule next-run calculator) + 19 supertest integration on the routes.
+### ✅ RPT-003 — Custom Report Builder & Scheduled Delivery
+**Status:** Done _(Phase 2 implemented 2026-05-24)_
 
-**Outstanding (Phase 2):**
-- Drag-and-drop field-picker UI on the frontend (replace the JSON textarea editor)
-- Cross-tab pivot and formula columns
-- PDF export
-- Real email delivery via notification-service (currently logged-only); needs an internal-service token so the scheduler can fetch downstream data without a user context
-- Pre-built workforce analytics seed templates (headcount trend, attrition by tenure, OT analysis, training completion)
+**Phase 1 (backend foundation):**
+New Prisma schema: `ReportTemplate`, `ReportSchedule`, `ReportRun`. Query executor engine: 5 data sources (employees / payrollRuns / leaveApplications / attendance / claims), filter ops (eq/ne/gt/lt/gte/lte/in/contains), groupBy with count/sum/avg/min/max aggregations, multi-key sort, projection, limit cap (5k default, 50k max). Routes: template CRUD, run, preview, CSV/XLSX/PDF export, run history, schedule CRUD, seed-templates admin endpoint. Hourly scheduler tick with DAILY/WEEKLY/MONTHLY next-run calculation and ReportRun history. RBAC: owner-or-shared for non-admins.
+
+**Phase 2 additions:**
+- **Visual 3-step field-picker wizard** replaces JSON textarea: Step 1 = name + category + data source (5 options with field count), Step 2 = mode toggle (Field List with checkbox grid vs Grouped Summary with groupBy dropdown + aggregation builder), Step 3 = filter rows (field + op + value, in-op csv parsing) + sort rows + definition preview JSON panel.
+- **PDF export** (`GET /reports/templates/:id/export.pdf`) — landscape A4 via pdfkit, dark header row, alternating row shading, multi-page support, row-count footer.
+- **Real email delivery** — scheduler tick builds CSV/XLSX/PDF attachment when `REPORTING_INTERNAL_JWT` is set, delivers via nodemailer (SMTP_HOST/SMTP_PORT/SMTP_SECURE/SMTP_USER/SMTP_PASS/SMTP_FROM). Falls back gracefully with skipped=true when SMTP unconfigured.
+- **4 pre-built seed templates** (seeded idempotently on startup + `POST /reports/seed-templates`): Active Headcount by Department, Attrition Analysis, Leave Usage by Type, Claims Spend by Category.
+- **`FIELD_CATALOG`** per data source (key/label/type) exposed via `GET /reports/data-sources` → `fieldCatalog` — drives the wizard field picker.
+- **Schedule management modal** on frontend: list/create/delete schedules per template with frequency + format (CSV/XLSX/PDF) + recipients.
+- **PDF button** added to Saved Reports actions (alongside CSV/XLSX/Run/Sched/Del).
+- **83 tests green**: 47 unit (query executor, CSV writer, schedule calculator) + 6 PDF unit + 3 email unit + 27 supertest integration (19 Phase 1 + 8 Phase 2: PDF export, field catalog, seed-templates, PDF schedule format).
 
 ---
 
