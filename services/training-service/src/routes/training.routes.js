@@ -4,6 +4,7 @@ const router = require('express').Router();
 const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
+const { planSweep, THRESHOLDS } = require('../engines/cert-reminder.engine');
 
 const prisma = new PrismaClient();
 
@@ -493,14 +494,20 @@ router.get('/certifications', authenticate, authorize(...ADMIN_ROLES), async (re
 // ── POST /training/certifications ─────────────────────────────────────────────
 router.post('/certifications', authenticate, authorize(...ADMIN_ROLES), async (req, res, next) => {
   try {
-    const { employeeId, certName, issuingBody, certNumber, issuedAt, expiresAt, documentUrl, notes } = req.body;
+    const {
+      employeeId, certName, issuingBody, certNumber, issuedAt, expiresAt,
+      documentUrl, notes, renewalProgramId, competencyId,
+    } = req.body;
     if (!employeeId || !certName) return res.status(400).json({ error: 'employeeId and certName are required' });
     const cert = await prisma.employeeCertification.create({
       data: {
         id: uuidv4(), employeeId, certName, issuingBody, certNumber,
         issuedAt: issuedAt ? new Date(issuedAt) : null,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
-        documentUrl, notes, createdBy: req.user.sub,
+        documentUrl, notes,
+        renewalProgramId: renewalProgramId || null,
+        competencyId: competencyId || null,
+        createdBy: req.user?.sub || req.headers['x-user-id'] || 'system',
       },
     });
     res.status(201).json({ ...cert, status: computeCertStatus(cert) });
@@ -519,7 +526,10 @@ router.get('/certifications/:id', authenticate, authorize(...ADMIN_ROLES), async
 // ── PUT /training/certifications/:id ─────────────────────────────────────────
 router.put('/certifications/:id', authenticate, authorize(...ADMIN_ROLES), async (req, res, next) => {
   try {
-    const { certName, issuingBody, certNumber, issuedAt, expiresAt, documentUrl, notes } = req.body;
+    const {
+      certName, issuingBody, certNumber, issuedAt, expiresAt,
+      documentUrl, notes, renewalProgramId, competencyId,
+    } = req.body;
     const cert = await prisma.employeeCertification.update({
       where: { id: req.params.id },
       data: {
@@ -530,6 +540,8 @@ router.put('/certifications/:id', authenticate, authorize(...ADMIN_ROLES), async
         ...(expiresAt !== undefined && { expiresAt: expiresAt ? new Date(expiresAt) : null }),
         ...(documentUrl !== undefined && { documentUrl }),
         ...(notes !== undefined && { notes }),
+        ...(renewalProgramId !== undefined && { renewalProgramId: renewalProgramId || null }),
+        ...(competencyId !== undefined && { competencyId: competencyId || null }),
       },
     });
     res.json({ ...cert, status: computeCertStatus(cert) });
@@ -553,4 +565,112 @@ router.delete('/certifications/:id', authenticate, authorize(ROLES.SUPER_ADMIN, 
   }
 });
 
+// ── Cert reminder sweep (TRN-004 scheduled job) ───────────────────────────────
+// Runs daily. Idempotent — uses (certId, threshold) unique constraint.
+// Also auto-nominates the employee into the cert's renewalProgramId when the
+// 60-day threshold first fires.
+async function runCertReminderSweep(now = new Date()) {
+  const maxThreshold = Math.max(...THRESHOLDS); // 90
+  const horizon = new Date(now.getTime() + maxThreshold * 86400000);
+
+  const certs = await prisma.employeeCertification.findMany({
+    where: {
+      status: { not: 'REVOKED' },
+      expiresAt: { not: null, lte: horizon, gte: now },
+    },
+    include: { reminders: { select: { threshold: true } } },
+  });
+
+  const input = certs.map(c => ({
+    id: c.id,
+    employeeId: c.employeeId,
+    certName: c.certName,
+    expiresAt: c.expiresAt,
+    status: c.status,
+    renewalProgramId: c.renewalProgramId,
+    firedThresholds: c.reminders.map(r => r.threshold),
+  }));
+
+  const { reminders, nominations } = planSweep(input, now);
+
+  let created = 0;
+  for (const r of reminders) {
+    try {
+      await prisma.certReminder.create({
+        data: {
+          id: uuidv4(),
+          certId: r.certId,
+          threshold: r.threshold,
+          daysUntil: r.daysUntil,
+        },
+      });
+      created++;
+    } catch (err) {
+      // Unique (certId, threshold) — another sweep already inserted this; skip.
+      if (err.code !== 'P2002') throw err;
+    }
+  }
+
+  let nominated = 0;
+  for (const n of nominations) {
+    const existing = await prisma.trainingEnrollment.findUnique({
+      where: { programId_employeeId: { programId: n.programId, employeeId: n.employeeId } },
+    });
+    if (existing) continue; // already enrolled (any status); don't clobber
+    try {
+      await prisma.trainingEnrollment.create({
+        data: {
+          id: uuidv4(),
+          programId: n.programId,
+          employeeId: n.employeeId,
+          status: 'ENROLLED',
+          enrolledBy: 'system:cert-reminder',
+        },
+      });
+      nominated++;
+    } catch (err) {
+      // Race: another concurrent enrollment beat us — ignore.
+      if (err.code !== 'P2002') throw err;
+    }
+  }
+
+  return {
+    sweptAt: now.toISOString(),
+    certsScanned: certs.length,
+    remindersCreated: created,
+    nominated,
+    reminders,
+  };
+}
+
+// ── POST /training/certifications/sweep-reminders ── manual trigger ────────────
+router.post(
+  '/certifications/sweep-reminders',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN),
+  async (req, res, next) => {
+    try {
+      const out = await runCertReminderSweep(new Date());
+      res.json(out);
+    } catch (err) { next(err); }
+  },
+);
+
+// ── GET /training/certifications/:id/reminders ── reminder history ─────────────
+router.get(
+  '/certifications/:id/reminders',
+  authenticate,
+  authorize(...ADMIN_ROLES),
+  async (req, res, next) => {
+    try {
+      const reminders = await prisma.certReminder.findMany({
+        where: { certId: req.params.id },
+        orderBy: { sentAt: 'desc' },
+      });
+      res.json(reminders);
+    } catch (err) { next(err); }
+  },
+);
+
 module.exports = router;
+module.exports.runCertReminderSweep = runCertReminderSweep;

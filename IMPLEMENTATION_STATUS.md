@@ -303,13 +303,9 @@ SDL computed in every payroll run per eligible employee. SDL submission file in 
 - SkillsFuture Credit (SFC) declaration and utilisation tracking per employee
 - SFEC (SGD 10,000 enterprise credit) balance tracking and programme flagging
 
-### ⚠️ TRN-004 — Certification Expiry & Competency
-**Status:** Partial  
-**Done:** Certification records with expiry date, `GET /certifications/expiring-soon` endpoint.  
-**Outstanding:**
-- Automated reminder alerts at 90/60/30 days before expiry (scheduled job) not yet implemented
-- Competency framework (competencies per job family, course-to-competency mapping, assessed level vs required level) not yet implemented
-- Auto-nomination for renewal training when certification nears expiry missing
+### ✅ TRN-004 — Certification Expiry & Competency
+**Status:** Done  
+Certification records with expiry date, `GET /certifications/expiring-soon`. Daily reminder sweep at 00:10 SGT fires 90/60/30-day reminders idempotently (unique (certId, threshold)). Competency framework: competencies, program→competency mapping (taughtLevel), job-family required levels, employee assessed levels, and `GET /employees/:id/competencies/gap?jobFamily=X` returning gap and recommended PUBLISHED programs. Auto-nomination: when the 60-day reminder first fires for a cert with `renewalProgramId`, the employee is enrolled in that program (`enrolledBy: system:cert-reminder`), with the existing-enrollment check preventing duplicates.
 
 ---
 
@@ -445,10 +441,9 @@ Employee replies to non-CLOSED tickets. HR Admin replies to any ticket. CLOSED t
 ### Nice to Have
 14. **CLM-004 (completion)** — GST analytics dashboard and vendor GST validation
 15. **PAY-005 (completion)** — PDF payslip rendering, SLA enforcement
-16. **TRN-004 (completion)** — Competency framework and auto-renewal nomination
-17. **LEA-005 (completion)** — Government-paid leave claim generation with MSF caps
-18. **TAT-004 (completion)** — Anomaly detection automation and manager dashboard
-19. **RPT-001 (completion)** — Drag-and-drop KPI dashboard frontend
+16. **LEA-005 (completion)** — Government-paid leave claim generation with MSF caps
+17. **TAT-004 (completion)** — Anomaly detection automation and manager dashboard
+18. **RPT-001 (completion)** — Drag-and-drop KPI dashboard frontend
 
 ---
 

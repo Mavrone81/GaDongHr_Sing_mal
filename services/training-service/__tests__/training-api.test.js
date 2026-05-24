@@ -21,6 +21,26 @@ const mockDb = {
     count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(),
     create: jest.fn(), update: jest.fn(), upsert: jest.fn(),
   },
+  employeeCertification: {
+    findMany: jest.fn(), findUnique: jest.fn(),
+    create: jest.fn(), update: jest.fn(),
+  },
+  certReminder: {
+    findMany: jest.fn(), create: jest.fn(),
+  },
+  competency: {
+    findMany: jest.fn(), findUnique: jest.fn(),
+    create: jest.fn(), update: jest.fn(),
+  },
+  programCompetency: {
+    upsert: jest.fn(), delete: jest.fn(),
+  },
+  jobFamilyCompetency: {
+    findMany: jest.fn(), upsert: jest.fn(), delete: jest.fn(),
+  },
+  employeeCompetency: {
+    findMany: jest.fn(), upsert: jest.fn(),
+  },
 };
 
 jest.mock('@prisma/client', () => ({
@@ -308,5 +328,254 @@ describe('F) Program stats', () => {
     const res = await request(app).get('/training/programs/prog-1/stats').set(ADMIN_HEADERS);
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ totalEnrolled: 0, completionRate: 0, avgScore: null });
+  });
+});
+
+// ── G) Certification reminder sweep (TRN-004) ─────────────────────────────────
+describe('G) Cert reminder sweep', () => {
+  function makeCert(over = {}) {
+    return {
+      id: 'cert-1', employeeId: 'emp-1', certName: 'CPR',
+      issuingBody: null, certNumber: null, issuedAt: null,
+      expiresAt: new Date(Date.now() + 20 * 86400000),
+      status: 'ACTIVE', documentUrl: null, notes: null,
+      renewalProgramId: null, competencyId: null,
+      createdBy: 'admin-emp-1',
+      createdAt: new Date(), updatedAt: new Date(),
+      reminders: [],
+      ...over,
+    };
+  }
+
+  test('G1 sweep with no certs returns zero counters', async () => {
+    mockDb.employeeCertification.findMany.mockResolvedValue([]);
+    const res = await request(app)
+      .post('/training/certifications/sweep-reminders')
+      .set(ADMIN_HEADERS);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ certsScanned: 0, remindersCreated: 0, nominated: 0 });
+  });
+
+  test('G2 sweep fires 90/60/30 for a cert 20 days out, no prior reminders', async () => {
+    mockDb.employeeCertification.findMany.mockResolvedValue([makeCert()]);
+    mockDb.certReminder.create.mockResolvedValue({});
+    const res = await request(app)
+      .post('/training/certifications/sweep-reminders')
+      .set(ADMIN_HEADERS);
+    expect(res.status).toBe(200);
+    expect(res.body.remindersCreated).toBe(3);
+    expect(mockDb.certReminder.create).toHaveBeenCalledTimes(3);
+  });
+
+  test('G3 sweep skips thresholds already recorded (idempotent)', async () => {
+    mockDb.employeeCertification.findMany.mockResolvedValue([
+      makeCert({ reminders: [{ threshold: 90 }, { threshold: 60 }] }),
+    ]);
+    mockDb.certReminder.create.mockResolvedValue({});
+    const res = await request(app)
+      .post('/training/certifications/sweep-reminders')
+      .set(ADMIN_HEADERS);
+    expect(res.status).toBe(200);
+    expect(res.body.remindersCreated).toBe(1); // only 30 fires
+    expect(mockDb.certReminder.create).toHaveBeenCalledTimes(1);
+  });
+
+  test('G4 sweep tolerates P2002 (race / concurrent insert) and still counts the others', async () => {
+    mockDb.employeeCertification.findMany.mockResolvedValue([makeCert()]);
+    let calls = 0;
+    mockDb.certReminder.create.mockImplementation(() => {
+      calls++;
+      if (calls === 2) {
+        const err = new Error('Unique constraint');
+        err.code = 'P2002';
+        return Promise.reject(err);
+      }
+      return Promise.resolve({});
+    });
+    const res = await request(app)
+      .post('/training/certifications/sweep-reminders')
+      .set(ADMIN_HEADERS);
+    expect(res.status).toBe(200);
+    expect(res.body.remindersCreated).toBe(2); // 2 succeeded, 1 was P2002
+  });
+
+  test('G5 sweep auto-nominates when 60-day fires and renewalProgramId is set', async () => {
+    mockDb.employeeCertification.findMany.mockResolvedValue([
+      makeCert({
+        expiresAt: new Date(Date.now() + 55 * 86400000),
+        renewalProgramId: 'prog-renewal',
+      }),
+    ]);
+    mockDb.certReminder.create.mockResolvedValue({});
+    mockDb.trainingEnrollment.findUnique.mockResolvedValue(null);
+    mockDb.trainingEnrollment.create.mockResolvedValue({ id: 'enr-new' });
+    const res = await request(app)
+      .post('/training/certifications/sweep-reminders')
+      .set(ADMIN_HEADERS);
+    expect(res.status).toBe(200);
+    expect(res.body.nominated).toBe(1);
+    expect(mockDb.trainingEnrollment.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        programId: 'prog-renewal', employeeId: 'emp-1', status: 'ENROLLED',
+      }),
+    }));
+  });
+
+  test('G6 sweep does NOT re-nominate when employee already has an enrollment', async () => {
+    mockDb.employeeCertification.findMany.mockResolvedValue([
+      makeCert({
+        expiresAt: new Date(Date.now() + 55 * 86400000),
+        renewalProgramId: 'prog-renewal',
+      }),
+    ]);
+    mockDb.certReminder.create.mockResolvedValue({});
+    mockDb.trainingEnrollment.findUnique.mockResolvedValue({ id: 'existing-enr', status: 'IN_PROGRESS' });
+    const res = await request(app)
+      .post('/training/certifications/sweep-reminders')
+      .set(ADMIN_HEADERS);
+    expect(res.status).toBe(200);
+    expect(res.body.nominated).toBe(0);
+    expect(mockDb.trainingEnrollment.create).not.toHaveBeenCalled();
+  });
+
+  test('G7 GET /certifications/:id/reminders returns history', async () => {
+    mockDb.certReminder.findMany.mockResolvedValue([
+      { id: 'r1', certId: 'cert-1', threshold: 90, daysUntil: 85, sentAt: new Date() },
+      { id: 'r2', certId: 'cert-1', threshold: 60, daysUntil: 55, sentAt: new Date() },
+    ]);
+    const res = await request(app)
+      .get('/training/certifications/cert-1/reminders')
+      .set(ADMIN_HEADERS);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+  });
+});
+
+// ── H) Competency framework (TRN-004) ─────────────────────────────────────────
+describe('H) Competencies', () => {
+  test('H1 GET /competencies lists', async () => {
+    mockDb.competency.findMany.mockResolvedValue([
+      { id: 'c1', name: 'First Aid', isActive: true },
+    ]);
+    const res = await request(app).get('/training/competencies').set(ADMIN_HEADERS);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+  });
+
+  test('H2 POST /competencies 400 without name', async () => {
+    const res = await request(app).post('/training/competencies').set(ADMIN_HEADERS).send({});
+    expect(res.status).toBe(400);
+  });
+
+  test('H3 POST /competencies creates', async () => {
+    mockDb.competency.create.mockResolvedValue({ id: 'c1', name: 'First Aid', isActive: true });
+    const res = await request(app).post('/training/competencies').set(ADMIN_HEADERS)
+      .send({ name: 'First Aid' });
+    expect(res.status).toBe(201);
+    expect(res.body.name).toBe('First Aid');
+  });
+
+  test('H4 POST program-competency link clamps level to 1-5', async () => {
+    mockDb.programCompetency.upsert.mockResolvedValue({ id: 'pc1', taughtLevel: 5 });
+    const res = await request(app)
+      .post('/training/programs/prog-1/competencies')
+      .set(ADMIN_HEADERS)
+      .send({ competencyId: 'c1', taughtLevel: 99 });
+    expect(res.status).toBe(201);
+    expect(mockDb.programCompetency.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ taughtLevel: 5 }),
+      update: expect.objectContaining({ taughtLevel: 5 }),
+    }));
+  });
+
+  test('H5 POST program-competency 400 without competencyId or level', async () => {
+    const res = await request(app)
+      .post('/training/programs/prog-1/competencies')
+      .set(ADMIN_HEADERS).send({});
+    expect(res.status).toBe(400);
+  });
+
+  test('H6 POST job-family competency sets required level', async () => {
+    mockDb.jobFamilyCompetency.upsert.mockResolvedValue({ id: 'jfc1', requiredLevel: 3 });
+    const res = await request(app)
+      .post('/training/job-families/ENGINEERING/competencies')
+      .set(ADMIN_HEADERS)
+      .send({ competencyId: 'c1', requiredLevel: 3 });
+    expect(res.status).toBe(201);
+    expect(res.body.requiredLevel).toBe(3);
+  });
+
+  test('H7 PUT employee assessment upserts', async () => {
+    mockDb.employeeCompetency.upsert.mockResolvedValue({
+      id: 'ec1', employeeId: 'emp-1', competencyId: 'c1', assessedLevel: 4,
+    });
+    const res = await request(app)
+      .put('/training/employees/emp-1/competencies/c1')
+      .set(ADMIN_HEADERS)
+      .send({ assessedLevel: 4 });
+    expect(res.status).toBe(200);
+    expect(res.body.assessedLevel).toBe(4);
+  });
+
+  test('H8 GET /employees/:id/competencies forbids other employee for non-admin', async () => {
+    const res = await request(app)
+      .get('/training/employees/other-emp/competencies')
+      .set(EMP_HEADERS);
+    expect(res.status).toBe(403);
+  });
+
+  test('H9 GET gap analysis flags missing assessments as 0 and recommends published programs', async () => {
+    mockDb.jobFamilyCompetency.findMany.mockResolvedValue([
+      {
+        id: 'jfc1', jobFamily: 'ENGINEERING', competencyId: 'c1', requiredLevel: 3,
+        competency: {
+          id: 'c1', name: 'First Aid',
+          programs: [
+            { programId: 'prog-1', taughtLevel: 4, program: { id: 'prog-1', title: 'Advanced First Aid', status: 'PUBLISHED' } },
+            { programId: 'prog-2', taughtLevel: 2, program: { id: 'prog-2', title: 'Basic First Aid', status: 'PUBLISHED' } },
+            { programId: 'prog-3', taughtLevel: 5, program: { id: 'prog-3', title: 'Draft Program',     status: 'DRAFT' } },
+          ],
+        },
+      },
+    ]);
+    mockDb.employeeCompetency.findMany.mockResolvedValue([]); // no prior assessment
+    const res = await request(app)
+      .get('/training/employees/emp-1/competencies/gap?jobFamily=ENGINEERING')
+      .set(ADMIN_HEADERS);
+    expect(res.status).toBe(200);
+    expect(res.body.requirements).toHaveLength(1);
+    const gap = res.body.requirements[0];
+    expect(gap.assessedLevel).toBe(0);
+    expect(gap.gap).toBe(3);
+    // Only published programs that teach AT or ABOVE the required level
+    expect(gap.recommendedPrograms.map(p => p.programId)).toEqual(['prog-1']);
+  });
+
+  test('H10 GET gap shows zero gap and no recommendations when assessed meets required', async () => {
+    mockDb.jobFamilyCompetency.findMany.mockResolvedValue([
+      {
+        id: 'jfc1', jobFamily: 'ENGINEERING', competencyId: 'c1', requiredLevel: 3,
+        competency: {
+          id: 'c1', name: 'First Aid',
+          programs: [{ programId: 'prog-1', taughtLevel: 4, program: { id: 'prog-1', title: 'Adv', status: 'PUBLISHED' } }],
+        },
+      },
+    ]);
+    mockDb.employeeCompetency.findMany.mockResolvedValue([
+      { competencyId: 'c1', assessedLevel: 3 },
+    ]);
+    const res = await request(app)
+      .get('/training/employees/emp-1/competencies/gap?jobFamily=ENGINEERING')
+      .set(ADMIN_HEADERS);
+    expect(res.status).toBe(200);
+    expect(res.body.requirements[0].gap).toBe(0);
+    expect(res.body.requirements[0].recommendedPrograms).toEqual([]);
+  });
+
+  test('H11 GET gap 400 without jobFamily', async () => {
+    const res = await request(app)
+      .get('/training/employees/emp-1/competencies/gap')
+      .set(ADMIN_HEADERS);
+    expect(res.status).toBe(400);
   });
 });

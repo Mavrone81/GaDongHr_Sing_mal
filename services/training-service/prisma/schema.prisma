@@ -57,8 +57,10 @@ model TrainingProgram {
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
-  materials   TrainingMaterial[]
-  enrollments TrainingEnrollment[]
+  materials       TrainingMaterial[]
+  enrollments     TrainingEnrollment[]
+  competencies    ProgramCompetency[]
+  renewalForCerts EmployeeCertification[] @relation("RenewalProgram")
 
   @@map("training_programs")
 }
@@ -114,19 +116,111 @@ model TrainingMaterialProgress {
 }
 
 model EmployeeCertification {
-  id          String     @id @default(uuid())
-  employeeId  String
-  certName    String
-  issuingBody String?
-  certNumber  String?
-  issuedAt    DateTime?
-  expiresAt   DateTime?
-  status      CertStatus @default(ACTIVE)
-  documentUrl String?
-  notes       String?
-  createdBy   String
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id               String     @id @default(uuid())
+  employeeId       String
+  certName         String
+  issuingBody      String?
+  certNumber       String?
+  issuedAt         DateTime?
+  expiresAt        DateTime?
+  status           CertStatus @default(ACTIVE)
+  documentUrl      String?
+  notes            String?
+  renewalProgramId String?
+  competencyId     String?
+  createdBy        String
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
+  renewalProgram TrainingProgram? @relation("RenewalProgram", fields: [renewalProgramId], references: [id])
+  competency     Competency?      @relation(fields: [competencyId], references: [id])
+  reminders      CertReminder[]
+
+  @@index([employeeId])
+  @@index([expiresAt])
   @@map("employee_certifications")
+}
+
+// ── TRN-004 completion ────────────────────────────────────────────────────────
+// CertReminder: idempotent record that a 90/60/30-day reminder has fired for a
+// given certification. The daily scheduler uses (certId, threshold) as the
+// dedupe key so re-runs don't double-fire.
+model CertReminder {
+  id        String   @id @default(uuid())
+  certId    String
+  threshold Int
+  daysUntil Int
+  sentAt    DateTime @default(now())
+
+  certification EmployeeCertification @relation(fields: [certId], references: [id], onDelete: Cascade)
+
+  @@unique([certId, threshold])
+  @@index([sentAt])
+  @@map("cert_reminders")
+}
+
+// Competency framework: skills tracked across the company. A program teaches
+// competencies at a given level; a job family requires competencies at a given
+// level; an employee is assessed at a given level. Gap = required − assessed.
+model Competency {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  category    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  programs              ProgramCompetency[]
+  jobFamilyRequirements JobFamilyCompetency[]
+  employeeAssessments   EmployeeCompetency[]
+  certifications        EmployeeCertification[]
+
+  @@map("competencies")
+}
+
+model ProgramCompetency {
+  id           String   @id @default(uuid())
+  programId    String
+  competencyId String
+  taughtLevel  Int
+  createdAt    DateTime @default(now())
+
+  program    TrainingProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  competency Competency      @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+
+  @@unique([programId, competencyId])
+  @@map("program_competencies")
+}
+
+model JobFamilyCompetency {
+  id            String   @id @default(uuid())
+  jobFamily     String
+  competencyId  String
+  requiredLevel Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  competency Competency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+
+  @@unique([jobFamily, competencyId])
+  @@index([jobFamily])
+  @@map("job_family_competencies")
+}
+
+model EmployeeCompetency {
+  id            String   @id @default(uuid())
+  employeeId    String
+  competencyId  String
+  assessedLevel Int
+  assessedBy    String?
+  notes         String?
+  assessedAt    DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  competency Competency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, competencyId])
+  @@index([employeeId])
+  @@map("employee_competencies")
 }
