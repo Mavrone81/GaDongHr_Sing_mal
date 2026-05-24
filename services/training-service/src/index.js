@@ -7,6 +7,7 @@ const morgan = require('morgan');
 
 const trainingRoutes = require('./routes/training.routes');
 const competencyRoutes = require('./routes/competency.routes');
+const grantRoutes = require('./routes/grant.routes');
 const { runCertReminderSweep } = trainingRoutes;
 const app = express();
 const PORT = process.env.PORT || 4013;
@@ -15,6 +16,7 @@ app.use(helmet()); app.use(cors()); app.use(express.json({ limit: '100kb' })); a
 app.get('/health', (req, res) => res.json({ service: 'training-service', status: 'ok', ts: new Date() }));
 app.use('/training', trainingRoutes);
 app.use('/training', competencyRoutes);
+app.use('/training', grantRoutes);
 app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: err.message || 'Internal server error' }); });
 
 // Schedule cert-reminder sweep at next 00:10 SGT, then every 24h. 00:10 SGT

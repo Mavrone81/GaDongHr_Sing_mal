@@ -53,6 +53,14 @@ model TrainingProgram {
   passingScore Int?
   thumbnail    String?
   isMandatory  Boolean         @default(false)
+  // ─── TRN-003 government grant configuration ────────────────────────────────
+  isSsgFunded     Boolean  @default(false)  // SkillsFuture Singapore funded course
+  ssgCourseCode   String?                   // TGS-XXXXXXXXX (SkillsFuture course reference)
+  etsEligible     Boolean  @default(false)  // Enhanced Training Support — additional grant percentage
+  sfecEligible    Boolean  @default(false)  // SkillsFuture Enterprise Credit eligible
+  apHourlyRate    Float?                    // Absentee Payroll rate (SGD/hour); default SGD 7.50
+  courseFee       Float?                    // gross course fee (per seat) for grant claim
+  grantPercentage Float?                    // SSG grant % of course fee (0..1), e.g. 0.7 baseline, 0.9 with ETS
   createdBy    String
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
@@ -61,6 +69,7 @@ model TrainingProgram {
   enrollments     TrainingEnrollment[]
   competencies    ProgramCompetency[]
   renewalForCerts EmployeeCertification[] @relation("RenewalProgram")
+  grantClaims     GrantClaim[]
 
   @@map("training_programs")
 }
@@ -94,9 +103,16 @@ model TrainingEnrollment {
   enrolledAt  DateTime         @default(now())
   startedAt   DateTime?
   completedAt DateTime?
+  // ─── TRN-003 absentee-payroll & SFC tracking ──────────────────────────────
+  trainingHours      Float?       // actual training hours for AP grant computation
+  attendanceDate     DateTime?    // first session attended (for AP claim period)
+  apComputedAmount   Float?       // computed Absentee Payroll = hours × rate
+  apClaimed          Boolean   @default(false)
+  sfcDeclaredAmount  Float?       // SkillsFuture Credit declared by employee toward this course
 
   program          TrainingProgram          @relation(fields: [programId], references: [id])
   materialProgress TrainingMaterialProgress[]
+  grantClaims      GrantClaim[]
 
   @@unique([programId, employeeId])
   @@map("training_enrollments")
@@ -223,4 +239,79 @@ model EmployeeCompetency {
   @@unique([employeeId, competencyId])
   @@index([employeeId])
   @@map("employee_competencies")
+}
+
+// ─── TRN-003 SkillsFuture / SSG / SFEC tracking ───────────────────────────────
+
+// Per-employee SkillsFuture Credit balance. Personal credit issued by MOE that
+// employees can use (declare) toward training. Tracks running balance and
+// lifetime totals; declarations decrement balance.
+model EmployeeSfcBalance {
+  id               String   @id @default(uuid())
+  employeeId       String   @unique
+  balanceAmount    Float    @default(0)
+  lifetimeReceived Float    @default(0)
+  lifetimeUsed     Float    @default(0)
+  lastDeclaredAt   DateTime?
+  updatedAt        DateTime @updatedAt
+  updatedBy        String
+
+  @@map("employee_sfc_balances")
+}
+
+// Company-wide SkillsFuture Enterprise Credit ledger. SFEC is a one-time SGD
+// 10,000 credit per company that covers 90% of out-of-pocket on supported
+// programmes. Stored as a singleton row keyed by `id = 'singleton'`.
+model SfecLedger {
+  id          String   @id @default("singleton")
+  totalCredit Float    @default(10000)
+  usedAmount  Float    @default(0)
+  notes       String?
+  updatedAt   DateTime @updatedAt
+  updatedBy   String
+
+  @@map("sfec_ledger")
+}
+
+// Grant claim record — tracks every claim against SSG ETS / Absentee Payroll /
+// SFEC / SFC. Each claim links to an enrollment + program; aggregated for reports.
+model GrantClaim {
+  id             String          @id @default(uuid())
+  enrollmentId   String?         // null if pre-enrollment claim
+  programId      String
+  employeeId     String
+  claimType      GrantClaimType
+  claimAmount    Float
+  status         GrantClaimStatus @default(PENDING)
+  submissionRef  String?         // SSG submission reference number
+  notes          String?
+  createdBy      String
+  submittedAt    DateTime?
+  paidAt         DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  program    TrainingProgram     @relation(fields: [programId], references: [id])
+  enrollment TrainingEnrollment? @relation(fields: [enrollmentId], references: [id])
+
+  @@index([programId])
+  @@index([employeeId])
+  @@index([claimType])
+  @@index([status])
+  @@map("grant_claims")
+}
+
+enum GrantClaimType {
+  ETS      // Enhanced Training Support (course-fee grant)
+  AP       // Absentee Payroll (training-hours × rate)
+  SFEC     // SkillsFuture Enterprise Credit
+  SFC      // SkillsFuture Credit (employee personal)
+}
+
+enum GrantClaimStatus {
+  PENDING
+  SUBMITTED
+  APPROVED
+  PAID
+  REJECTED
 }

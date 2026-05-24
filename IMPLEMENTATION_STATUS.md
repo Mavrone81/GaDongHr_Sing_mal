@@ -1,7 +1,7 @@
 # Implementation Status
 
 **PRD Reference:** PRD-HRMS-001 v2.0  
-**Last Updated:** 2026-05-24 _(OFF-004 completion — IR21 auto-population, money-withhold gate, deadline dashboard, daily reminder sweep)_  
+**Last Updated:** 2026-05-24 _(TRN-003 completion — SSG grant config, Absentee Payroll, ETS report, SFEC + SFC tracking, grant claims ledger)_  
 **Legend:** ✅ Done · ⚠️ Partial · ❌ Not Done
 
 ---
@@ -16,12 +16,12 @@
 | Recruitment & Onboarding | 1 | 4 | 0 | 5 |
 | Time & Attendance | 4 | 1 | 0 | 5 |
 | Performance Management | 4 | 1 | 1 | 6 |
-| Training & Development | 2 | 1 | 1 | 4 |
+| Training & Development | 3 | 1 | 0 | 4 |
 | Asset Management | 2 | 0 | 2 | 4 |
 | Offboarding | 5 | 0 | 0 | 5 |
 | Reporting & Analytics | 1 | 2 | 0 | 3 |
 | Support & Ticketing | 3 | 0 | 1 | 4 |
-| **Total** | **36** | **17** | **6** | **59** |
+| **Total** | **37** | **17** | **5** | **59** |
 
 ---
 
@@ -297,13 +297,25 @@ Course/program creation (classroom, e-learning, OJT, blended), training material
 **Status:** Done  
 SDL computed in every payroll run per eligible employee. SDL submission file in CPF Board format. Monthly SDL totals available in payroll run data.
 
-### ❌ TRN-003 — Government Grant Claims & SkillsFuture
-**Status:** Not Done  
-**Outstanding:**
-- ETS eligibility flag on SSG-funded courses and ETS grant claim report generation
-- Absentee Payroll (AP) computation (training hours × SGD 7.50/hr per employee) and SSG export
-- SkillsFuture Credit (SFC) declaration and utilisation tracking per employee
-- SFEC (SGD 10,000 enterprise credit) balance tracking and programme flagging
+### ✅ TRN-003 — Government Grant Claims & SkillsFuture
+**Status:** Done _(completed 2026-05-24)_  
+Full SSG / SkillsFuture compliance lifecycle for ETS course-fee grants, Absentee Payroll, SFEC, and personal SFC declarations.
+
+**Grant configuration:** `TrainingProgram` now carries `isSsgFunded`, `ssgCourseCode` (TGS code), `etsEligible`, `sfecEligible`, `apHourlyRate` (default SGD 7.50/hr), `courseFee`, `grantPercentage` (0..1). Set via `PUT /training/programs/:id/grant-config`.
+
+**Absentee Payroll (AP):** `PUT /training/enrollments/:id/training-hours` records actual hours + attendance date and auto-computes `apComputedAmount = hours × rate` (non-SSG programs → 0). `POST /training/grants/ap/compute?period=YYYY-MM` idempotently materialises one `GrantClaim` (type=AP) per completed SSG-funded enrollment whose attendance lies in the period. `GET /training/grants/ap/export?period=YYYY-MM` emits the SSG pipe-delimited flat file (`NRIC|EmployeeName|CourseCode|HoursAttended|HourlyRate|ClaimAmount|PeriodStartDate|PeriodEndDate`), accepting an `x-employee-lookup` JSON header for NRIC/name enrichment.
+
+**ETS grant report:** `GET /training/grants/ets/report?from=...&to=...` aggregates all completed SSG-funded + ETS-eligible enrollments in the window, computes `grantAmount = courseFee × grantPercentage` per enrollment, returns total claimable and per-row breakdown for SSG portal submission.
+
+**SkillsFuture Credit (SFC) — personal credit per employee:** `EmployeeSfcBalance` table tracks `balanceAmount`, `lifetimeReceived`, `lifetimeUsed`, `lastDeclaredAt`. Endpoints: `GET /training/sfc/balance/:employeeId` (employee-self or admin only), `PUT /training/sfc/balance/:employeeId` (admin sets from MOE statement), `POST /training/sfc/declarations` (employee declares use against a specific enrollment — transactional: decrements balance, writes SFC `GrantClaim`, bumps `sfcDeclaredAmount` on the enrollment; rejected if amount > balance).
+
+**SkillsFuture Enterprise Credit (SFEC) — company singleton ledger:** `SfecLedger` row with `totalCredit` (default SGD 10,000), `usedAmount`. `GET /training/sfec/balance` shows ledger with computed `remainingAmount`. `PUT /training/sfec/balance` initialises it (Super Admin / HR Admin). `POST /training/sfec/claims` validates program is SFEC-eligible, applies `min(oopAmount × 90%, remaining)` coverage, transactionally decrements ledger + writes SFEC `GrantClaim`.
+
+**Grant claims ledger:** Every grant lands in `GrantClaim` (type ∈ {ETS, AP, SFEC, SFC}, status ∈ {PENDING, SUBMITTED, APPROVED, PAID, REJECTED}). `GET /training/grant-claims` lists with `totalsByType` aggregation; `PUT /training/grant-claims/:id` transitions status (stamps `submittedAt`/`paidAt` automatically) and records `submissionRef`. `GET /training/grants/summary` returns dashboard KPIs (claimable + paid totals by type, SFEC remaining).
+
+**Schema additions:** `TrainingProgram` 7 grant fields; `TrainingEnrollment` 5 fields (`trainingHours`, `attendanceDate`, `apComputedAmount`, `apClaimed`, `sfcDeclaredAmount`); new models `EmployeeSfcBalance`, `SfecLedger`, `GrantClaim`; new enums `GrantClaimType`, `GrantClaimStatus`.
+
+**Tests:** 18 unit tests on `grant.engine.js` (AP/ETS/SFEC formulas, SFC validation, SSG flat-file format incl. pipe-sanitisation + default-rate fallback) + 20 integration tests (G1-G20: grant-config, training-hours, AP compute idempotency, SSG export, ETS report, SFC balance/declarations cross-employee guard, SFEC ledger init + 90% coverage + ineligible-program rejection, claim status transitions with auto-stamping, summary). Full training suite: **118 tests green**.
 
 ### ✅ TRN-004 — Certification Expiry & Competency
 **Status:** Done  
@@ -453,7 +465,6 @@ Employee replies to non-CLOSED tickets. HR Admin replies to any ticket. CLOSED t
 _(all resolved)_
 
 ### Should Have (high value)
-7. **TRN-003** — Government grant claims (SkillsFuture, ETS, Absentee Payroll — SSG compliance)
 8. **AST-002** — Logistics requests & inventory management
 9. **AST-003** — Asset expiry & maintenance alerts
 10. **PMS-006** — 360-degree feedback
