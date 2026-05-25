@@ -440,7 +440,276 @@ function EmployeeLeaveView() {
   );
 }
 
+// ─── Types for HR analytics ───────────────────────────────────────────────────
+interface MCFlagged {
+  employeeId: string;
+  occurrences: number;
+  totalSickDays: number;
+  mondayCount: number;
+  fridayCount: number;
+  monFriRatio: number;
+  patternType: 'MONDAY_PATTERN' | 'FRIDAY_PATTERN' | 'MONDAY_FRIDAY_PATTERN';
+  severity: 'HIGH' | 'MEDIUM' | 'LOW';
+  employee: { name: string; department: string; designation: string } | null;
+}
+interface TrendEmployee {
+  employeeId: string;
+  name: string;
+  department: string;
+  totalDays: number;
+  occurrences: number;
+  monthlyBreakdown: Record<string, number>;
+}
+interface TrendDept {
+  department: string;
+  totalDays: number;
+  occurrences: number;
+  employeeCount: number;
+}
+
+const SEVERITY_STYLE: Record<string, string> = {
+  HIGH:   'bg-red-50 text-red-700 border-red-100',
+  MEDIUM: 'bg-amber-50 text-amber-700 border-amber-100',
+  LOW:    'bg-slate-50 text-slate-500 border-slate-200',
+};
+const PATTERN_LABEL: Record<string, string> = {
+  MONDAY_PATTERN:        'Monday',
+  FRIDAY_PATTERN:        'Friday',
+  MONDAY_FRIDAY_PATTERN: 'Mon + Fri',
+};
+
+// ─── HR Analytics: MC Patterns + Sick Leave Trends ────────────────────────────
+function HRLeaveAnalytics() {
+  const [tab, setTab] = useState<'patterns' | 'trends'>('patterns');
+  const [months, setMonths] = useState(12);
+  const [flagged, setFlagged] = useState<MCFlagged[]>([]);
+  const [byEmployee, setByEmployee] = useState<TrendEmployee[]>([]);
+  const [byDept, setByDept] = useState<TrendDept[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [pRes, tRes] = await Promise.allSettled([
+        apiFetch(`/leave/mc-patterns?months=${months}`),
+        apiFetch(`/leave/sick-leave-trends?months=${months}`),
+      ]);
+      if (pRes.status === 'fulfilled') setFlagged(pRes.value.flagged ?? []);
+      if (tRes.status === 'fulfilled') {
+        setByEmployee(tRes.value.byEmployee ?? []);
+        setByDept(tRes.value.byDepartment ?? []);
+      }
+      setLastUpdated(new Date());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, [months]);
+
+  const maxDeptDays = byDept[0]?.totalDays || 1;
+
+  return (
+    <div className="flex flex-col gap-6 max-w-[1200px] mx-auto pb-16 animate-in fade-in duration-700">
+
+      {/* Header */}
+      <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-rose-500/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5">
+        <div>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tighter">Sick Leave <span className="text-rose-600">Analytics</span></h1>
+          <p className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-widest">MC pattern detection &amp; sick leave trends</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <select value={months} onChange={e => setMonths(Number(e.target.value))}
+            className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-[11px] font-black text-slate-600 uppercase tracking-widest outline-none focus:border-rose-400 transition-all appearance-none">
+            {[3, 6, 12, 24].map(m => <option key={m} value={m}>Last {m} months</option>)}
+          </select>
+          <button onClick={load} disabled={loading}
+            className="px-5 py-2.5 bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-rose-700 shadow-lg shadow-rose-500/20 transition-all disabled:opacity-50 flex items-center gap-2">
+            {loading ? <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> : '↺'}
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-rose-500/5 overflow-hidden">
+        <div className="border-b border-slate-100 px-8 flex gap-8 bg-slate-50/50">
+          {([
+            { key: 'patterns', label: `MC Pattern Alerts${flagged.length ? ` (${flagged.length})` : ''}` },
+            { key: 'trends',   label: 'Sick Leave Trends' },
+          ] as const).map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className={`py-5 text-[11px] font-black uppercase tracking-widest border-b-2 transition-all ${tab === t.key ? 'border-rose-600 text-rose-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="p-8">
+
+          {/* ── MC Pattern Alerts ── */}
+          {tab === 'patterns' && (
+            <div className="flex flex-col gap-4">
+              {lastUpdated && (
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Updated {lastUpdated.toLocaleTimeString('en-SG')} · Pattern = Mon/Fri sick leave ratio ≥ 50% over last {months} months
+                </p>
+              )}
+              {flagged.length === 0 && !loading && (
+                <div className="py-16 text-center">
+                  <p className="text-sm font-black text-emerald-600 uppercase tracking-widest">No suspicious patterns detected</p>
+                  <p className="text-[11px] font-bold text-slate-400 mt-2">Threshold: ≥3 occurrences, ≥50% Mon/Fri ratio</p>
+                </div>
+              )}
+              {flagged.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-[10px] uppercase font-black tracking-[0.2em] text-slate-400">
+                        <th className="pb-5">Employee</th>
+                        <th className="pb-5 text-center">Pattern</th>
+                        <th className="pb-5 text-center">Severity</th>
+                        <th className="pb-5 text-center">Occurrences</th>
+                        <th className="pb-5 text-center">Mon</th>
+                        <th className="pb-5 text-center">Fri</th>
+                        <th className="pb-5 text-center">Total Days</th>
+                        <th className="pb-5 text-center">Ratio</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {flagged.map(f => (
+                        <tr key={f.employeeId} className="hover:bg-slate-50/50 transition-all">
+                          <td className="py-4">
+                            <p className="text-sm font-black text-slate-900">{f.employee?.name ?? f.employeeId}</p>
+                            <p className="text-[10px] font-bold text-slate-400">{f.employee?.department ?? ''}{f.employee?.designation ? ` · ${f.employee.designation}` : ''}</p>
+                          </td>
+                          <td className="py-4 text-center">
+                            <span className="text-[10px] font-black text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">{PATTERN_LABEL[f.patternType] ?? f.patternType}</span>
+                          </td>
+                          <td className="py-4 text-center">
+                            <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg border ${SEVERITY_STYLE[f.severity]}`}>{f.severity}</span>
+                          </td>
+                          <td className="py-4 text-center font-black text-slate-700 text-sm">{f.occurrences}</td>
+                          <td className="py-4 text-center font-bold text-indigo-600 text-sm">{f.mondayCount}</td>
+                          <td className="py-4 text-center font-bold text-purple-600 text-sm">{f.fridayCount}</td>
+                          <td className="py-4 text-center font-bold text-slate-600 text-sm">{f.totalSickDays}d</td>
+                          <td className="py-4 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                              <span className={`text-sm font-black ${f.monFriRatio >= 0.75 ? 'text-red-600' : f.monFriRatio >= 0.5 ? 'text-amber-600' : 'text-slate-600'}`}>
+                                {(f.monFriRatio * 100).toFixed(0)}%
+                              </span>
+                              <div className="h-1.5 w-16 bg-slate-100 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full ${f.monFriRatio >= 0.75 ? 'bg-red-500' : 'bg-amber-500'}`}
+                                  style={{ width: `${Math.min(f.monFriRatio * 100, 100)}%` }} />
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Sick Leave Trends ── */}
+          {tab === 'trends' && (
+            <div className="flex flex-col gap-8">
+
+              {/* By Department */}
+              <div>
+                <h3 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4">By Department</h3>
+                {byDept.length === 0 && !loading && (
+                  <p className="text-sm font-black text-slate-300 uppercase tracking-widest py-6 text-center">No data</p>
+                )}
+                <div className="flex flex-col gap-3">
+                  {byDept.map(d => (
+                    <div key={d.department} className="flex items-center gap-4">
+                      <div className="w-36 shrink-0 text-right">
+                        <p className="text-[11px] font-black text-slate-700 truncate">{d.department}</p>
+                        <p className="text-[9px] font-bold text-slate-400">{d.employeeCount} employee{d.employeeCount !== 1 ? 's' : ''}</p>
+                      </div>
+                      <div className="flex-1 h-7 bg-slate-100 rounded-lg overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-rose-400 to-rose-600 rounded-lg flex items-center px-3 transition-all"
+                          style={{ width: `${Math.max((d.totalDays / maxDeptDays) * 100, 4)}%` }}>
+                          <span className="text-[9px] font-black text-white whitespace-nowrap">{d.totalDays}d</span>
+                        </div>
+                      </div>
+                      <div className="w-16 shrink-0 text-right">
+                        <span className="text-[10px] font-black text-slate-500">{d.occurrences} apps</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* By Employee (top 20) */}
+              <div>
+                <h3 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4">Top Employees by Sick Days</h3>
+                {byEmployee.length === 0 && !loading && (
+                  <p className="text-sm font-black text-slate-300 uppercase tracking-widest py-6 text-center">No data</p>
+                )}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-[10px] uppercase font-black tracking-[0.2em] text-slate-400">
+                        <th className="pb-5">#</th>
+                        <th className="pb-5">Employee</th>
+                        <th className="pb-5 text-center">Dept</th>
+                        <th className="pb-5 text-center">Applications</th>
+                        <th className="pb-5 text-center">Total Days</th>
+                        <th className="pb-5">Monthly Trend</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {byEmployee.map((e, i) => {
+                        const months = Object.entries(e.monthlyBreakdown).sort(([a], [b]) => a.localeCompare(b)).slice(-6);
+                        const maxM = Math.max(...months.map(([, v]) => v), 1);
+                        return (
+                          <tr key={e.employeeId} className="hover:bg-slate-50/50 transition-all">
+                            <td className="py-4 text-[11px] font-black text-slate-400 w-8">{i + 1}</td>
+                            <td className="py-4">
+                              <p className="text-sm font-black text-slate-900">{e.name}</p>
+                              <p className="text-[10px] font-bold text-slate-400">{e.employeeId.slice(0, 8)}</p>
+                            </td>
+                            <td className="py-4 text-center">
+                              <span className="text-[10px] font-black text-slate-600 bg-slate-100 px-2 py-0.5 rounded-lg">{e.department}</span>
+                            </td>
+                            <td className="py-4 text-center font-black text-slate-700 text-sm">{e.occurrences}</td>
+                            <td className="py-4 text-center font-black text-rose-600 text-lg">{e.totalDays}</td>
+                            <td className="py-4">
+                              <div className="flex items-end gap-0.5 h-8">
+                                {months.map(([mo, v]) => (
+                                  <div key={mo} className="flex flex-col items-center gap-0.5 w-6" title={`${mo}: ${v}d`}>
+                                    <div className="w-4 bg-rose-300 rounded-sm hover:bg-rose-500 transition-colors cursor-default"
+                                      style={{ height: `${Math.max((v / maxM) * 28, 3)}px` }} />
+                                  </div>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
+const HR_ROLES = new Set(['SUPER_ADMIN', 'HR_ADMIN', 'HR_MANAGER']);
+
 export default function LeavePage() {
+  const { user } = useAuth();
+  const role = (user?.role ?? '').toUpperCase();
+  if (HR_ROLES.has(role)) return <HRLeaveAnalytics />;
   return <EmployeeLeaveView />;
 }

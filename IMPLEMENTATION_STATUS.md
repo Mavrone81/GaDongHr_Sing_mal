@@ -1,7 +1,7 @@
 # Implementation Status
 
 **PRD Reference:** PRD-HRMS-001 v2.0  
-**Last Updated:** 2026-05-25 _(RPT-001 completion — OT-by-department, training completion widgets, 5-min auto-refresh)_  
+**Last Updated:** 2026-05-25 _(LEA-004 completion — MC pattern detection, sick leave trend analytics, HR analytics dashboard)_  
 **Legend:** ✅ Done · ⚠️ Partial · ❌ Not Done
 
 ---
@@ -11,7 +11,7 @@
 | Module | Done | Partial | Not Done | Total |
 |--------|------|---------|----------|-------|
 | Payroll & CPF | 9 | 3 | 0 | 12 |
-| Leave Management | 6 | 1 | 0 | 7 |
+| Leave Management | 7 | 0 | 0 | 7 |
 | Claims & Expenses | 4 | 0 | 0 | 4 |
 | Recruitment & Onboarding | 4 | 1 | 0 | 5 |
 | Time & Attendance | 5 | 0 | 0 | 5 |
@@ -21,7 +21,7 @@
 | Offboarding | 5 | 0 | 0 | 5 |
 | Reporting & Analytics | 3 | 0 | 0 | 3 |
 | Support & Ticketing | 4 | 0 | 0 | 4 |
-| **Total** | **51** | **8** | **0** | **59** |
+| **Total** | **52** | **7** | **0** | **59** |
 
 ---
 
@@ -159,12 +159,19 @@ New joiner pro-ration (join-month counted if on/before 15th), resignee pro-ratio
 **Status:** Done  
 Supervisor chain (ANY_ONE / SEQUENTIAL) per employee, 403 if no supervisors configured, HR Admin / Super Admin bypass, team calendar for coverage check, blackout date blocking, SLA escalation reminders.
 
-### ⚠️ LEA-004 — MC & Document Tracking
-**Status:** Partial  
-**Done:** Document/attachment upload and download per leave application (MC, hospital memo, birth certificate).  
-**Outstanding:**
-- MC pattern detection (repeated Monday/Friday sick leave flagging) not yet implemented
-- Sick leave frequency trend dashboard per employee and department missing
+### ✅ LEA-004 — MC & Document Tracking
+**Status:** Done _(completed 2026-05-25)_  
+Document/attachment upload and download per leave application, plus MC abuse pattern detection and sick leave trend analytics.
+
+**Pattern engine (`src/engines/mc-pattern.engine.js`):** Pure — no DB. `expandWeekdays(start, end)` enumerates weekdays (Mon-Fri) in a date range. `detectPatterns(applications, thresholds)` aggregates per-employee Mon/Fri sick day counts, classifies pattern type (`MONDAY_PATTERN` / `FRIDAY_PATTERN` / `MONDAY_FRIDAY_PATTERN`) and severity (`HIGH` ≥75%, `MEDIUM` ≥50%, `LOW`), returns sorted flagged list. Default thresholds: `minOccurrences=3, minRatio=0.5`. `buildTrends(applications, employeeMap)` aggregates `totalDays` + `monthlyBreakdown` per employee and per department.
+
+**New routes (leave-service):**
+- `GET /leave/mc-patterns?months=N&minOccurrences=N&minRatio=F` — HR_ADMIN/HR_MANAGER/SUPER_ADMIN only; returns flagged employees enriched with name/dept from employee-service. Sick leave types identified by code pattern (`SICK`/`MC`/`MEDICAL`) or `requiresDocument=true`.
+- `GET /leave/sick-leave-trends?months=N` — returns `byEmployee` (top 20) and `byDepartment` sorted by sick days descending.
+
+**Frontend (`leave/page.tsx`):** HR roles (SUPER_ADMIN, HR_ADMIN, HR_MANAGER) now see a `HRLeaveAnalytics` component instead of the employee leave view. Two tabs: **MC Pattern Alerts** (table with pattern type, severity, Mon/Fri counts, ratio bar) and **Sick Leave Trends** (department bar chart + top-20 employee table with 6-month mini-bar sparklines). Month range selector (3/6/12/24) + manual refresh.
+
+**Tests:** 21 unit tests (`mc-pattern.engine.unit.test.js`) covering `expandWeekdays`, `detectPatterns` pattern/severity/sort, `buildTrends` aggregation. 18 integration tests (`mc-patterns.integration.test.js`) covering auth (403 for EMPLOYEE), Monday pattern detection, graceful employee-service failure, empty-types short-circuit, top-20 cap, analysedMonths forwarding.
 
 ### ✅ LEA-005 — Government-Paid Leave Tracking & Claims
 **Status:** Done _(completed 2026-05-25)_  
@@ -665,7 +672,6 @@ _(all resolved as of 2026-05-24)_
 ### Nice to Have
 19. **PMS-003 (completion)** — Bell curve enforcement and department grouping for calibration
 21. **PAY-004 (completion)** — DRC quota alerts for FWL
-22. **LEA-004 (completion)** — MC pattern detection, sick leave trend dashboard
 
 ---
 
