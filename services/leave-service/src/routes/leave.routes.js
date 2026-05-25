@@ -898,5 +898,101 @@ router.put('/govt-claims/:applicationId/status', authenticate, authorize(ROLES.S
   } catch (err) { next(err); }
 });
 
+// ─── LEA-004: MC pattern detection & sick-leave trend analytics ───────────────
+
+const { detectPatterns, buildTrends } = require('../engines/mc-pattern.engine');
+
+// Identify sick-leave type IDs from the DB (code contains SICK/MC/MEDICAL, or requiresDocument).
+async function getSickLeaveTypeIds() {
+  const types = await prisma.leaveType.findMany({ where: { isActive: true } });
+  const sick = types.filter(t =>
+    /\b(SICK|MC|MEDICAL)\b/i.test(t.code) || t.requiresDocument
+  );
+  return sick.map(t => t.id);
+}
+
+// GET /leave/mc-patterns?months=N&minOccurrences=N&minRatio=F
+// Returns Mon/Fri MC abuse suspects, enriched with employee name/dept.
+router.get('/mc-patterns', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER), async (req, res, next) => {
+  try {
+    const months = Math.min(Math.max(parseInt(req.query.months) || 12, 1), 36);
+    const minOccurrences = parseInt(req.query.minOccurrences) || 3;
+    const minRatio = parseFloat(req.query.minRatio) || 0.5;
+
+    const since = new Date();
+    since.setUTCMonth(since.getUTCMonth() - months);
+    since.setUTCHours(0, 0, 0, 0);
+
+    const sickTypeIds = await getSickLeaveTypeIds();
+    if (!sickTypeIds.length) return res.json({ flagged: [], analysedMonths: months, sickLeaveTypes: [] });
+
+    const apps = await prisma.leaveApplication.findMany({
+      where: { leaveTypeId: { in: sickTypeIds }, status: 'APPROVED', startDate: { gte: since } },
+      select: { employeeId: true, startDate: true, endDate: true },
+    });
+
+    const flagged = detectPatterns(apps, { minOccurrences, minRatio });
+
+    // Enrich with employee details
+    const uniqueIds = [...new Set(flagged.map(f => f.employeeId))];
+    const empLookup = {};
+    await Promise.allSettled(uniqueIds.map(async id => {
+      try {
+        const { data } = await axios.get(`${EMPLOYEE_URL}/employees/${id}`, {
+          headers: { 'x-internal-service-key': INTERNAL_KEY },
+          timeout: 3000,
+        });
+        empLookup[id] = { name: data.fullName, department: data.department, designation: data.designation };
+      } catch (_) {}
+    }));
+
+    const enriched = flagged.map(f => ({ ...f, employee: empLookup[f.employeeId] ?? null }));
+
+    res.json({ flagged: enriched, analysedMonths: months, totalApplications: apps.length });
+  } catch (err) { next(err); }
+});
+
+// GET /leave/sick-leave-trends?months=N
+// Returns sick leave days by employee (top 20) and by department.
+router.get('/sick-leave-trends', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER), async (req, res, next) => {
+  try {
+    const months = Math.min(Math.max(parseInt(req.query.months) || 12, 1), 36);
+
+    const since = new Date();
+    since.setUTCMonth(since.getUTCMonth() - months);
+    since.setUTCHours(0, 0, 0, 0);
+
+    const sickTypeIds = await getSickLeaveTypeIds();
+    if (!sickTypeIds.length) return res.json({ byEmployee: [], byDepartment: [], analysedMonths: months });
+
+    const apps = await prisma.leaveApplication.findMany({
+      where: { leaveTypeId: { in: sickTypeIds }, status: 'APPROVED', startDate: { gte: since } },
+      select: { employeeId: true, startDate: true, endDate: true, totalDays: true },
+    });
+
+    // Fetch all unique employees
+    const uniqueIds = [...new Set(apps.map(a => a.employeeId))];
+    const empMap = new Map();
+    await Promise.allSettled(uniqueIds.map(async id => {
+      try {
+        const { data } = await axios.get(`${EMPLOYEE_URL}/employees/${id}`, {
+          headers: { 'x-internal-service-key': INTERNAL_KEY },
+          timeout: 3000,
+        });
+        empMap.set(id, { name: data.fullName, department: data.department });
+      } catch (_) {}
+    }));
+
+    const { byEmployee, byDepartment } = buildTrends(apps, empMap);
+
+    res.json({
+      byEmployee: byEmployee.slice(0, 20),
+      byDepartment,
+      analysedMonths: months,
+      totalApplications: apps.length,
+    });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
 module.exports.runAutoProvision = runAutoProvision;
