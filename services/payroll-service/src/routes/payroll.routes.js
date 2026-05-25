@@ -1021,6 +1021,31 @@ router.get('/cpf-file/:runId', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.
       lines.push(`${ps.employeeId}|${ow}|0|${empCpf}|${emplrCpf}|0`);
     }
     const content = lines.join('\n');
+    // PAY-007: auto-record / refresh a DRAFT IrasSubmission so Finance can
+    // later mark it SUBMITTED with the CPF Board reference number. Best-
+    // effort; file generation must never fail because of audit bookkeeping.
+    fireAndForget(async () => {
+      const { computeDeadline } = require('../engines/iras-submission.engine');
+      const crypto = require('crypto');
+      const hash = crypto.createHash('sha256').update(content).digest('hex');
+      const existing = await prisma.irasSubmission.findFirst({ where: { kind: 'CPF_E_SUBMIT', period: run.period } });
+      const deadline = computeDeadline('CPF_E_SUBMIT', { period: run.period });
+      const fileName = `cpf-esubmit-${run.period}.txt`;
+      if (existing) {
+        await prisma.irasSubmission.update({
+          where: { id: existing.id },
+          data:  { fileHash: hash, fileSize: Buffer.byteLength(content), fileName, runId: run.id, deadline },
+        });
+      } else {
+        await prisma.irasSubmission.create({
+          data: {
+            id: uuidv4(), kind: 'CPF_E_SUBMIT', period: run.period, runId: run.id,
+            fileName, fileHash: hash, fileSize: Buffer.byteLength(content),
+            deadline, createdBy: req.user?.sub || null,
+          },
+        });
+      }
+    });
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader('Content-Disposition', `attachment; filename=cpf-esubmit-${run.period}.txt`);
     res.send(content);
@@ -1609,9 +1634,34 @@ router.get('/ir8a-file/:year', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.
       lines.push([nric, name, income, empCpf, erlCpf, aw, bik, esop].join('|'));
     }
 
+    // PAY-007: auto-record / refresh a DRAFT IR8A IrasSubmission.
+    const ir8aContent = lines.join('\n');
+    fireAndForget(async () => {
+      const { computeDeadline } = require('../engines/iras-submission.engine');
+      const crypto = require('crypto');
+      const hash = crypto.createHash('sha256').update(ir8aContent).digest('hex');
+      const yearInt = parseInt(year, 10);
+      const existing = await prisma.irasSubmission.findFirst({ where: { kind: 'IR8A', year: yearInt } });
+      const deadline = computeDeadline('IR8A', { year: yearInt });
+      const fileName = `IR8A-${year}.txt`;
+      if (existing) {
+        await prisma.irasSubmission.update({
+          where: { id: existing.id },
+          data:  { fileHash: hash, fileSize: Buffer.byteLength(ir8aContent), fileName, deadline },
+        });
+      } else {
+        await prisma.irasSubmission.create({
+          data: {
+            id: uuidv4(), kind: 'IR8A', year: yearInt,
+            fileName, fileHash: hash, fileSize: Buffer.byteLength(ir8aContent),
+            deadline, createdBy: req.user?.sub || null,
+          },
+        });
+      }
+    });
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader('Content-Disposition', `attachment; filename=IR8A-${year}.txt`);
-    res.send(lines.join('\n'));
+    res.send(ir8aContent);
   } catch (err) { next(err); }
 });
 

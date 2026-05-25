@@ -1,7 +1,7 @@
 # Implementation Status
 
 **PRD Reference:** PRD-HRMS-001 v2.0  
-**Last Updated:** 2026-05-25 _(REC-002 completion — FCF hire-gate, exemption workflow, nationality audit, compliance report)_  
+**Last Updated:** 2026-05-25 _(PAY-007 completion — IRAS / CPF submission tracking with deadline + status workflow)_  
 **Legend:** ✅ Done · ⚠️ Partial · ❌ Not Done
 
 ---
@@ -10,7 +10,7 @@
 
 | Module | Done | Partial | Not Done | Total |
 |--------|------|---------|----------|-------|
-| Payroll & CPF | 8 | 4 | 0 | 12 |
+| Payroll & CPF | 9 | 3 | 0 | 12 |
 | Leave Management | 5 | 2 | 0 | 7 |
 | Claims & Expenses | 4 | 0 | 0 | 4 |
 | Recruitment & Onboarding | 4 | 1 | 0 | 5 |
@@ -21,7 +21,7 @@
 | Offboarding | 5 | 0 | 0 | 5 |
 | Reporting & Analytics | 2 | 1 | 0 | 3 |
 | Support & Ticketing | 4 | 0 | 0 | 4 |
-| **Total** | **49** | **10** | **0** | **59** |
+| **Total** | **50** | **9** | **0** | **59** |
 
 ---
 
@@ -84,14 +84,28 @@ Full MOM EA s.96 itemised payslip PDF, payment-date SLA tracking with daily swee
 - Only one generic format; bank-specific formats (DBS IDEAL, OCBC Velocity, UOB BIBPlus, SCB, HSBC, Maybank) not differentiated
 - Bank acknowledgement file reconciliation (failed credit flagging) not yet implemented
 
-### ⚠️ PAY-007 — CPF e-Submit & IRAS AIS Filing
-**Status:** Partial  
-**Done:** CPF flat-file generation (`GET /cpf-file/:runId`), IR8A data aggregation and IRAS-format file generation (`GET /ir8a-data/:year`, `GET /ir8a-file/:year`).  
-**Outstanding:**
-- CPF e-Submit portal upload workflow (confirmation reference number storage) not automated — manual upload only
-- Appendix 8A (BIK) and Appendix 8B (stock options) not yet computed (depends on PAY-010)
-- IR21 auto-populated from payroll YTD data partially done (offboarding service triggers IR21 but full auto-population incomplete)
-- IRAS AIS e-Service submission workflow not automated
+### ✅ PAY-007 — CPF e-Submit & IRAS AIS Filing
+**Status:** Done _(completed 2026-05-25)_  
+Full submission tracking ledger covering CPF e-Submit, IR8A, Appendix 8A, Appendix 8B, IR21 — with auto-deadline computation, status workflow, IRAS / CPF reference number capture, file-integrity hashing, and a daily deadline-urgency dashboard. (Appendix 8A/8B + IR21 auto-population already shipped in PAY-010 + OFF-004.)
+
+**Engine (`src/engines/iras-submission.engine.js`):** Pure — no DB. `computeDeadline(kind, scope)` returns the statutory deadline Date: CPF_E_SUBMIT → 14th of month following the wage period (handles Dec → Jan rollover); IR8A / APPENDIX_8A / APPENDIX_8B → 1 Mar of the year after the income year (IRAS AIS rule); IR21 → lastWorkingDate − 30 days (IRAS foreign-employee rule). `classifyUrgency(deadline, now)` ladders OVERDUE / CRITICAL (≤ 3 d) / WARNING (≤ 14 d) / NOTICE (≤ 30 d) / OK / UNSCHEDULED. `validateTransition(from, to)` guards the state machine `DRAFT → SUBMITTED → ACKNOWLEDGED / REJECTED` with `REJECTED → DRAFT` for resubmission. `buildTransitionPatch(toStatus, actor, extras)` returns the timestamp + actor + reference-number patch the route should merge.
+
+**Routes (mounted at `/payroll/iras-submissions`):**
+- `POST` — record / refresh a submission. Auto-computes deadline from `kind` + `scope`. Accepts `fileContentBase64` for auto SHA-256 hash + size capture (or accepts pre-computed `fileHash`). Idempotent on `(kind + scope)` — re-recording updates file metadata + deadline but never clobbers `status` or `referenceNumber`. Per-kind scope validation (period for CPF, year for IR8A/8A/8B, employeeId for IR21).
+- `GET` — filtered list (`kind`, `status`, `period`, `year`, `employeeId`) with `summary.byStatus / byKind / byUrgency`.
+- `GET /deadlines?withinDays=N` — dashboard of non-ACKNOWLEDGED submissions within window (default 60d), always includes OVERDUE. Returns urgency-bucketed summary.
+- `GET /:id` — single submission with computed urgency.
+- `PUT /:id` — transition status with mandatory checks: SUBMITTED requires `referenceNumber`, REJECTED requires `rejectedReason`. ACKNOWLEDGED is terminal. Allows reference-only updates without status change.
+- `DELETE /:id` — only allowed while DRAFT (409 otherwise).
+- `POST /sweep` — manual deadline urgency tally trigger.
+
+**Auto-ledger on file generation:** existing `GET /payroll/cpf-file/:runId` and `GET /payroll/ir8a-file/:year` now upsert a DRAFT `IrasSubmission` row as a fire-and-forget side-effect — capturing fileHash (SHA-256), fileSize, fileName, runId. Finance later transitions the row to SUBMITTED with the CPF / IRAS reference number. Re-downloading the same file refreshes hash + deadline without overwriting status.
+
+**Daily deadline sweep:** scheduled at 00:25 SGT in `src/index.js` (`scheduleIrasDeadlineSweep`, skipped under NODE_ENV=test). Runs `runDeadlineSweep()` which scans all non-ACKNOWLEDGED submissions with deadlines and logs counts per urgency band — wire-point for future notification fan-out.
+
+**Schema additions:** `IrasSubmission` model (kind, period, year, employeeId, runId, fileName, fileHash, fileSize, status, referenceNumber, submittedBy/At, acknowledgedBy/At, rejectedReason/At, deadline, notes, createdBy) + indexes on kind/status/deadline/year/period. Enums `IrasSubmissionKind` (5 values) and `IrasSubmissionStatus` (4 values).
+
+**Tests (57 new, 393 total green):** 32 unit tests on `iras-submission.engine.js` (KINDS + STATUSES whitelists, deadline computation for all 4 kinds incl. December → January wrap + invalid period + missing year + missing LWD + unknown kind, urgency classification across all 6 bands incl. UNSCHEDULED, validateTransition all permitted paths + ACKNOWLEDGED terminal + same-status reject + unknown-target reject, buildScopeKey for all kinds, buildTransitionPatch SUBMITTED/ACKNOWLEDGED/REJECTED stamps + DRAFT resubmission clears) + 25 integration tests I1-I25 (POST happy + idempotent refresh + auto-hash from base64 + scope validation per kind + role guard, GET list + summary + filter, deadlines dashboard non-ACKNOWLEDGED filter + withinDays honoured, GET :id urgency + 404, PUT transitions with required-field guards + 409 on invalid transitions + ACKNOWLEDGED terminal + reference-only update + ACKNOWLEDGED stamp + REJECTED → DRAFT clears, DELETE only-DRAFT + 409, sweep bucket counts). Full payroll suite: **393 tests green** (57 new + 336 pre-existing — no regressions).
 
 ### ✅ PAY-008 — Maker-Checker Approval & Audit Trail
 **Status:** Done  

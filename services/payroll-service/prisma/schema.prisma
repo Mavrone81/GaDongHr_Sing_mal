@@ -122,6 +122,61 @@ enum SlaAlertType {
   PAYMENT_DATE_APPROACHING  // paymentDate within 2 days, run not yet finalised
 }
 
+// PAY-007: CPF / IRAS submission tracking ledger.
+// One row per filing event. Caller records when a file is generated, then
+// later marks SUBMITTED with the IRAS/CPF confirmation reference number,
+// then ACKNOWLEDGED (or REJECTED with reason). Deadline is auto-computed
+// from kind + period/year on create; daily sweep flags overdue rows.
+model IrasSubmission {
+  id              String   @id @default(uuid())
+  kind            IrasSubmissionKind
+  // One of period (YYYY-MM) for monthly CPF, year (Int) for annual IRAS, or
+  // employeeId for IR21. The combination of (kind + the relevant scope) is
+  // unique so re-recording the same filing updates rather than duplicates.
+  period          String?
+  year            Int?
+  employeeId      String?
+  runId           String?
+  fileName        String?
+  fileHash        String?            // SHA-256 of the generated artefact (caller computes)
+  fileSize        Int?
+  status          IrasSubmissionStatus @default(DRAFT)
+  referenceNumber String?            // IRAS / CPF Board confirmation reference
+  submittedBy     String?
+  submittedAt     DateTime?
+  acknowledgedBy  String?
+  acknowledgedAt  DateTime?
+  rejectedReason  String?
+  rejectedAt      DateTime?
+  deadline        DateTime?          // computed on create; null if caller skips
+  notes           String?
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([kind])
+  @@index([status])
+  @@index([deadline])
+  @@index([year])
+  @@index([period])
+  @@map("iras_submissions")
+}
+
+enum IrasSubmissionKind {
+  CPF_E_SUBMIT       // monthly CPF — period = "YYYY-MM"
+  IR8A               // annual employment income — year required
+  APPENDIX_8A        // annual benefits-in-kind — year required
+  APPENDIX_8B        // annual stock options — year required
+  IR21               // tax clearance for foreign employee — employeeId required
+}
+
+enum IrasSubmissionStatus {
+  DRAFT
+  SUBMITTED
+  ACKNOWLEDGED
+  REJECTED
+}
+
 model PayComponent {
   id              String   @id @default(uuid())
   code            String   @unique  // e.g. "BASIC", "OT_PAY", "AWS"
