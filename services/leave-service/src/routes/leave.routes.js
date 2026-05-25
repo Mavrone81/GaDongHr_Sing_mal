@@ -200,7 +200,7 @@ router.get('/types', authenticate, async (req, res, next) => {
 // ── POST /leave/types ─────────────────────────────────────────────────────────
 router.post('/types', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
   try {
-    const { code, name, isPaid, isStatutory, annualEntitlement, maxCarryForward, isGovtPaid, requiresDocument, minNoticeDays, minServiceMonths } = req.body;
+    const { code, name, isPaid, isStatutory, annualEntitlement, maxCarryForward, isGovtPaid, requiresDocument, minNoticeDays, minServiceMonths, msfDailyCap, msfWeeklyCap, msfPeriodCap, msfPeriodWeeks } = req.body;
     if (!code || !name) return res.status(400).json({ error: 'code and name are required' });
     const type = await prisma.leaveType.create({
       data: {
@@ -212,6 +212,10 @@ router.post('/types', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN)
         requiresDocument: requiresDocument ?? false,
         minNoticeDays: parseInt(minNoticeDays) || 0,
         minServiceMonths: parseInt(minServiceMonths) || 0,
+        msfDailyCap:    msfDailyCap   != null ? parseFloat(msfDailyCap)   : null,
+        msfWeeklyCap:   msfWeeklyCap  != null ? parseFloat(msfWeeklyCap)  : null,
+        msfPeriodCap:   msfPeriodCap  != null ? parseFloat(msfPeriodCap)  : null,
+        msfPeriodWeeks: msfPeriodWeeks != null ? parseInt(msfPeriodWeeks) : null,
       },
     });
     res.status(201).json(type);
@@ -670,6 +674,227 @@ router.post('/purge', authenticate, authorize(ROLES.SUPER_ADMIN), async (req, re
     await prisma.$executeRawUnsafe('VACUUM ANALYZE leave_applications').catch(() => {});
 
     res.json({ purged: Number(purged), cutoff: cutoff.toISOString().slice(0, 10) });
+  } catch (err) { next(err); }
+});
+
+// ─── LEA-005: MSF cap configuration + govt-paid claim tracking ────────────────
+
+const { computeClaimAmount, validateTransition } = require('../engines/msf-cap.engine');
+const PAYROLL_URL = process.env.PAYROLL_SERVICE_URL || 'http://payroll-service:4003';
+
+// PUT /leave/leave-types/:id/msf-config — configure MSF caps on a leave type
+router.put('/leave-types/:id/msf-config', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const fields = ['msfDailyCap', 'msfWeeklyCap', 'msfPeriodCap'];
+    const data = {};
+    for (const f of fields) {
+      if (req.body[f] === null) { data[f] = null; continue; }
+      if (req.body[f] !== undefined) {
+        const n = parseFloat(req.body[f]);
+        if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: `Invalid value for ${f}` });
+        data[f] = n;
+      }
+    }
+    if (req.body.msfPeriodWeeks === null) data.msfPeriodWeeks = null;
+    else if (req.body.msfPeriodWeeks !== undefined) {
+      const n = parseInt(req.body.msfPeriodWeeks);
+      if (!Number.isFinite(n) || n <= 0) return res.status(400).json({ error: 'msfPeriodWeeks must be a positive integer' });
+      data.msfPeriodWeeks = n;
+    }
+    if (req.body.isGovtPaid !== undefined) data.isGovtPaid = !!req.body.isGovtPaid;
+    const type = await prisma.leaveType.update({ where: { id: req.params.id }, data });
+    res.json(type);
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Leave type not found' });
+    next(err);
+  }
+});
+
+// Helper — derive daily rate from payroll service. Falls back to caller-
+// supplied dailyRateOverride when payroll-service is unreachable / has no
+// published payslip yet for that employee + period.
+async function resolveDailyRate(employeeId, refDate, override, authHeader) {
+  if (Number.isFinite(Number(override)) && Number(override) > 0) return Number(override);
+  try {
+    const period = `${refDate.getUTCFullYear()}-${String(refDate.getUTCMonth() + 1).padStart(2, '0')}`;
+    const r = await fetch(`${PAYROLL_URL}/payroll/internal/daily-rate/${employeeId}/${period}`, {
+      headers: { 'x-internal-service-key': INTERNAL_KEY, Authorization: authHeader || 'Bearer internal' },
+    });
+    if (r.ok) {
+      const data = await r.json();
+      if (Number.isFinite(Number(data.dailyRate)) && data.dailyRate > 0) return Number(data.dailyRate);
+    }
+  } catch (_e) { /* swallow — fall through */ }
+  return 0;
+}
+
+// POST /leave/govt-claims/generate?period=YYYY-MM
+// Iterates all approved govt-paid leave applications whose startDate falls in
+// the period and (re-)computes the claim record using the leave-type's MSF
+// caps. Idempotent — never resets a SUBMITTED / REIMBURSED claim's status.
+router.post('/govt-claims/generate', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const period = req.query.period;
+    if (!period || !/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+      return res.status(400).json({ error: 'period query param (YYYY-MM) is required' });
+    }
+    const [y, m] = period.split('-').map(Number);
+    const start = new Date(Date.UTC(y, m - 1, 1));
+    const end   = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
+    const apps = await prisma.leaveApplication.findMany({
+      where: { status: 'APPROVED', startDate: { gte: start, lte: end }, leaveType: { isGovtPaid: true } },
+      include: { leaveType: true },
+    });
+    const dailyRateOverrides = req.body?.dailyRateOverrides || {};
+    let generated = 0, skipped = 0, untouched = 0;
+    const details = [];
+    for (const app of apps) {
+      // Never touch a row already submitted / reimbursed
+      if (app.claimStatus === 'SUBMITTED' || app.claimStatus === 'REIMBURSED') {
+        untouched += 1;
+        continue;
+      }
+      const dailyRate = await resolveDailyRate(app.employeeId, app.startDate, dailyRateOverrides[app.employeeId], req.headers.authorization);
+      if (dailyRate <= 0) {
+        skipped += 1;
+        details.push({ applicationId: app.id, employeeId: app.employeeId, skipped: 'no daily rate (no payslip + no override)' });
+        continue;
+      }
+      const computed = computeClaimAmount({ totalDays: app.totalDays, dailyRate, leaveType: app.leaveType });
+      await prisma.leaveApplication.update({
+        where: { id: app.id },
+        data: {
+          claimStatus:         'NOT_SUBMITTED',
+          claimAmount:         computed.amount,
+          claimDailyRate:      computed.dailyRate,
+          claimUncappedAmount: computed.uncappedAmount,
+          claimCapApplied:     computed.capApplied,
+          claimNotes:          computed.notes,
+        },
+      });
+      generated += 1;
+      details.push({
+        applicationId: app.id, employeeId: app.employeeId,
+        leaveTypeCode: app.leaveType.code,
+        days: app.totalDays, dailyRate, ...computed,
+      });
+    }
+    res.json({ period, generated, untouched, skipped, total: apps.length, details });
+  } catch (err) { next(err); }
+});
+
+// GET /leave/govt-claims?period=&status=&leaveTypeCode=&employeeId=
+router.get('/govt-claims', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER, ROLES.HR_MANAGER), async (req, res, next) => {
+  try {
+    const { period, status, leaveTypeCode, employeeId } = req.query;
+    const where = { status: 'APPROVED', leaveType: { isGovtPaid: true } };
+    if (status)        where.claimStatus = status;
+    if (employeeId)    where.employeeId  = employeeId;
+    if (leaveTypeCode) where.leaveType   = { ...(where.leaveType || {}), code: String(leaveTypeCode).toUpperCase() };
+    if (period && /^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+      const [y, m] = period.split('-').map(Number);
+      where.startDate = { gte: new Date(Date.UTC(y, m - 1, 1)), lte: new Date(Date.UTC(y, m, 0, 23, 59, 59, 999)) };
+    }
+    const rows = await prisma.leaveApplication.findMany({
+      where,
+      include: { leaveType: { select: { code: true, name: true, msfDailyCap: true, msfWeeklyCap: true, msfPeriodCap: true } } },
+      orderBy: { startDate: 'desc' },
+      take: 500,
+    });
+    const summary = rows.reduce((acc, r) => {
+      acc.byStatus[r.claimStatus] = (acc.byStatus[r.claimStatus] || 0) + 1;
+      acc.byLeaveType[r.leaveType.code] = (acc.byLeaveType[r.leaveType.code] || 0) + 1;
+      acc.totalClaimable += (r.claimAmount || 0);
+      acc.totalReimbursed += (r.claimReimbursedAmount || 0);
+      return acc;
+    }, { byStatus: {}, byLeaveType: {}, totalClaimable: 0, totalReimbursed: 0 });
+    summary.totalClaimable  = Math.round(summary.totalClaimable  * 100) / 100;
+    summary.totalReimbursed = Math.round(summary.totalReimbursed * 100) / 100;
+    res.json({ total: rows.length, summary, claims: rows });
+  } catch (err) { next(err); }
+});
+
+// GET /leave/govt-claims/summary?period=YYYY-MM
+router.get('/govt-claims/summary', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER, ROLES.HR_MANAGER), async (req, res, next) => {
+  try {
+    const period = req.query.period;
+    const where = { status: 'APPROVED', leaveType: { isGovtPaid: true } };
+    if (period && /^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+      const [y, m] = period.split('-').map(Number);
+      where.startDate = { gte: new Date(Date.UTC(y, m - 1, 1)), lte: new Date(Date.UTC(y, m, 0, 23, 59, 59, 999)) };
+    }
+    const rows = await prisma.leaveApplication.findMany({ where, include: { leaveType: { select: { code: true, name: true } } } });
+    const byType = new Map();
+    let totalClaimable = 0;
+    let totalReimbursed = 0;
+    const byStatus = {};
+    for (const r of rows) {
+      const k = r.leaveType.code;
+      const e = byType.get(k) || { code: k, name: r.leaveType.name, totalDays: 0, totalClaimable: 0, totalReimbursed: 0, byStatus: {} };
+      e.totalDays += r.totalDays;
+      e.totalClaimable += (r.claimAmount || 0);
+      e.totalReimbursed += (r.claimReimbursedAmount || 0);
+      e.byStatus[r.claimStatus] = (e.byStatus[r.claimStatus] || 0) + 1;
+      byType.set(k, e);
+      totalClaimable  += (r.claimAmount || 0);
+      totalReimbursed += (r.claimReimbursedAmount || 0);
+      byStatus[r.claimStatus] = (byStatus[r.claimStatus] || 0) + 1;
+    }
+    res.json({
+      period: period || null,
+      totals: {
+        applications: rows.length,
+        totalClaimable:  Math.round(totalClaimable  * 100) / 100,
+        totalReimbursed: Math.round(totalReimbursed * 100) / 100,
+        byStatus,
+      },
+      byLeaveType: Array.from(byType.values()).map(e => ({
+        ...e,
+        totalClaimable:  Math.round(e.totalClaimable  * 100) / 100,
+        totalReimbursed: Math.round(e.totalReimbursed * 100) / 100,
+      })),
+    });
+  } catch (err) { next(err); }
+});
+
+// PUT /leave/govt-claims/:applicationId/status
+// Body: { status, submissionRef?, reimbursedAmount?, rejectedReason?, notes? }
+router.put('/govt-claims/:applicationId/status', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const existing = await prisma.leaveApplication.findUnique({ where: { id: req.params.applicationId }, include: { leaveType: true } });
+    if (!existing) return res.status(404).json({ error: 'Leave application not found' });
+    if (!existing.leaveType.isGovtPaid) return res.status(400).json({ error: 'Leave type is not govt-paid' });
+    const { status, submissionRef, reimbursedAmount, rejectedReason, notes } = req.body;
+    const guard = validateTransition(existing.claimStatus || 'NOT_APPLICABLE', status);
+    if (!guard.ok) return res.status(409).json({ error: guard.error });
+    if (status === 'SUBMITTED' && !submissionRef) {
+      return res.status(400).json({ error: 'submissionRef required when transitioning to SUBMITTED' });
+    }
+    if (status === 'REIMBURSED' && !Number.isFinite(Number(reimbursedAmount))) {
+      return res.status(400).json({ error: 'reimbursedAmount required when transitioning to REIMBURSED' });
+    }
+    if (status === 'REJECTED' && !rejectedReason) {
+      return res.status(400).json({ error: 'rejectedReason required when transitioning to REJECTED' });
+    }
+    const data = { claimStatus: status };
+    if (status === 'SUBMITTED') {
+      data.claimSubmissionRef = submissionRef;
+      data.claimSubmittedAt   = new Date();
+    }
+    if (status === 'REIMBURSED') {
+      data.claimReimbursedAmount = Number(reimbursedAmount);
+      data.claimReimbursedAt     = new Date();
+    }
+    if (status === 'REJECTED') {
+      data.claimRejectedReason = rejectedReason;
+    }
+    if (status === 'NOT_SUBMITTED') {
+      // Resubmission after REJECTED — clear rejection breadcrumb
+      data.claimRejectedReason = null;
+    }
+    if (notes != null) data.claimNotes = notes;
+    const updated = await prisma.leaveApplication.update({ where: { id: existing.id }, data, include: { leaveType: { select: { code: true, name: true } } } });
+    res.json(updated);
   } catch (err) { next(err); }
 });
 

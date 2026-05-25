@@ -1,7 +1,7 @@
 # Implementation Status
 
 **PRD Reference:** PRD-HRMS-001 v2.0  
-**Last Updated:** 2026-05-25 _(PAY-007 completion — IRAS / CPF submission tracking with deadline + status workflow)_  
+**Last Updated:** 2026-05-25 _(LEA-005 completion — MSF cap engine, govt-paid claim lifecycle, payroll daily-rate internal lookup)_  
 **Legend:** ✅ Done · ⚠️ Partial · ❌ Not Done
 
 ---
@@ -11,7 +11,7 @@
 | Module | Done | Partial | Not Done | Total |
 |--------|------|---------|----------|-------|
 | Payroll & CPF | 9 | 3 | 0 | 12 |
-| Leave Management | 5 | 2 | 0 | 7 |
+| Leave Management | 6 | 1 | 0 | 7 |
 | Claims & Expenses | 4 | 0 | 0 | 4 |
 | Recruitment & Onboarding | 4 | 1 | 0 | 5 |
 | Time & Attendance | 5 | 0 | 0 | 5 |
@@ -21,7 +21,7 @@
 | Offboarding | 5 | 0 | 0 | 5 |
 | Reporting & Analytics | 2 | 1 | 0 | 3 |
 | Support & Ticketing | 4 | 0 | 0 | 4 |
-| **Total** | **50** | **9** | **0** | **59** |
+| **Total** | **51** | **8** | **0** | **59** |
 
 ---
 
@@ -166,13 +166,27 @@ Supervisor chain (ANY_ONE / SEQUENTIAL) per employee, 403 if no supervisors conf
 - MC pattern detection (repeated Monday/Friday sick leave flagging) not yet implemented
 - Sick leave frequency trend dashboard per employee and department missing
 
-### ⚠️ LEA-005 — Government-Paid Leave Tracking & Claims
-**Status:** Partial  
-**Done:** Govt-paid leave types (GPML, GPPL, CCL, SPL, Extended CCL, Infant Care, Adoption) exist in entitlement engine with separate govt-paid flags.  
-**Outstanding:**
-- Auto-generation of reimbursement claim data (NRIC, leave dates, daily rate, reimbursable amount capped per MSF schedule) not yet implemented
-- Claim status tracking (Not Submitted / Submitted / Reimbursed) missing
-- MSF daily cap configurable fields (GPML SGD 10,000/4-week, GPPL SGD 2,500/week, CCL SGD 500/week) not yet wired to claim computation
+### ✅ LEA-005 — Government-Paid Leave Tracking & Claims
+**Status:** Done _(completed 2026-05-25)_  
+Configurable MSF cap engine on LeaveType, pure cap-clamp computation that picks the lowest binding ceiling (daily / weekly / period), full per-application claim lifecycle on the leave-service side complementing payroll PAY-011, plus a payroll-internal daily-rate lookup so leave-service can self-resolve rates without HR keying them in.
+
+**Engine (`src/engines/msf-cap.engine.js`):** Pure — no DB. `computeClaimAmount({ totalDays, dailyRate, leaveType })` returns `{ uncappedAmount, capApplied: 'NONE'|'DAILY'|'WEEKLY'|'PERIOD', capValue, amount, notes }`. Cap precedence: builds candidate totals from every configured cap (5-day work week assumption), picks the SMALLEST as the binding cap, returns it with an explanatory note that quotes the savings. Period cap pro-rates by the fraction of the configured `msfPeriodWeeks` block the leave covers. `validateTransition(from, to)` guards the lifecycle `NOT_SUBMITTED → SUBMITTED → REIMBURSED / REJECTED` with `REJECTED → NOT_SUBMITTED` for resubmission and `NOT_APPLICABLE` / `REIMBURSED` as terminals. `buildClaimRecord(...)` shapes the persistence payload.
+
+**Schema additions:**
+- `LeaveType` gains four MSF cap fields — `msfDailyCap` (SGD/day, e.g. CCL 100), `msfWeeklyCap` (SGD/week, e.g. GPPL 2500 / CCL 500), `msfPeriodCap` (SGD per block, e.g. GPML 10000), `msfPeriodWeeks` (block length, GPML = 4).
+- `LeaveApplication` gains 10 claim-tracking fields: `claimStatus` (NOT_APPLICABLE/NOT_SUBMITTED/SUBMITTED/REIMBURSED/REJECTED), `claimAmount`, `claimDailyRate`, `claimUncappedAmount`, `claimCapApplied`, `claimSubmissionRef`, `claimSubmittedAt`, `claimReimbursedAt`, `claimReimbursedAmount`, `claimRejectedReason`, `claimNotes` + index on `claimStatus`.
+- New `ClaimStatus` enum.
+
+**Routes:**
+- `PUT /leave/leave-types/:id/msf-config` — configure caps + period weeks + isGovtPaid flag. Validates non-negative + positive period weeks. 404 on missing leave type, 403 for non-admin.
+- `POST /leave/govt-claims/generate?period=YYYY-MM` — iterates APPROVED govt-paid applications in the period, resolves daily rate (via the new payroll-internal lookup or `dailyRateOverrides` body), runs the cap engine, writes the claim record as NOT_SUBMITTED. **Never touches** SUBMITTED / REIMBURSED rows — idempotent and safe to re-run. Returns generated / untouched / skipped counts plus per-row details.
+- `GET /leave/govt-claims?period=&status=&leaveTypeCode=&employeeId=` — filtered list with `summary.byStatus / byLeaveType / totalClaimable / totalReimbursed`.
+- `GET /leave/govt-claims/summary?period=YYYY-MM` — per-leave-type roll-up with days, claimable, reimbursed, and status breakdown.
+- `PUT /leave/govt-claims/:applicationId/status` — walks the lifecycle with required fields: SUBMITTED needs `submissionRef` (stamps `claimSubmittedAt`), REIMBURSED needs `reimbursedAmount` (stamps `claimReimbursedAt`), REJECTED needs `rejectedReason`. NOT_SUBMITTED resubmission clears the prior rejection breadcrumb. 409 on illegal transitions; 400 when the leave type isn't `isGovtPaid`.
+
+**Payroll cross-service wiring:** New internal endpoint `GET /payroll/internal/daily-rate/:employeeId/:period` (x-internal-service-key auth) returns `{ dailyRate, source }`. Prefers the payslip's exact govt-paid daily rate (`govtPaidAmountEnc ÷ govtPaidDays`) when present; falls back to `basicSalary ÷ 22` (SG standard working days/month). Falls through to the most recent published payslip if none in the exact period. Leave-service `resolveDailyRate()` calls this and fails soft to 0 (the row is then "skipped" with a clear reason rather than crashing the generate).
+
+**Tests (48 new, 91 total green on leave-service · 393 still green on payroll):** 24 unit tests on `msf-cap.engine.js` (constants, no-cap / zero-input branches, DAILY clamp, WEEKLY pro-rate including fractional weeks, PERIOD cap full + pro-rated, multi-cap "smallest binds" precedence, notes content, buildClaimRecord shape, validateTransition all permitted paths + REIMBURSED terminal + NOT_SUBMITTED→REIMBURSED skip blocked + same-status reject + unknown from-state) + 24 integration tests M1-M24 (msf-config save / null-clear / validation / 404 / 403, generate happy + untouched-on-submitted + skip-when-no-rate + dailyRateOverrides honoured + period validation + role guard, list with summary + filter pass-through, summary aggregation per leave type, status transition with required-field guards + REJECTED-clears-on-resubmission + 409 on illegal + 404 on missing + 400 on non-govt-paid).
 
 ### ✅ LEA-006 — Leave Liability Report
 **Status:** Done  
@@ -641,7 +655,6 @@ _(all resolved)_
 _(all resolved as of 2026-05-24)_
 
 ### Nice to Have
-16. **LEA-005 (completion)** — Government-paid leave claim generation with MSF caps (leave-service side)
 17. **RPT-001 (completion)** — Drag-and-drop KPI dashboard frontend
 19. **PMS-003 (completion)** — Bell curve enforcement and department grouping for calibration
 21. **PAY-004 (completion)** — DRC quota alerts for FWL

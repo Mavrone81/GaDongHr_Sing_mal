@@ -18,6 +18,13 @@ model LeaveType {
   annualEntitlement   Float     @default(0)  // days per year
   maxCarryForward     Float     @default(0)
   isGovtPaid          Boolean   @default(false) // GPML, GPPL etc
+  // LEA-005: MSF reimbursement caps. All null = no cap configured (claim is
+  // taken at the employee's actual daily rate × days). When any cap is set,
+  // the claim engine clamps total reimbursement to the LOWEST applicable cap.
+  msfDailyCap         Float?    // SGD/day (e.g. CCL SGD 100/day)
+  msfWeeklyCap        Float?    // SGD/week (e.g. GPPL SGD 2,500/week, CCL SGD 500/week)
+  msfPeriodCap        Float?    // SGD total per claim period (e.g. GPML SGD 10,000 per 4-week block)
+  msfPeriodWeeks      Int?      // number of weeks in one MSF claim period (GPML = 4, others usually 1)
   requiresDocument    Boolean   @default(false)
   minNoticeDays       Int       @default(0)
   minServiceMonths    Int       @default(0)
@@ -69,7 +76,20 @@ model LeaveApplication {
   rejectedReason       String?
   isHalfDay            Boolean       @default(false)
   halfDaySlot          String?       // AM | PM
-  govtClaimRef         String?       // for govt-paid leave claims
+  govtClaimRef         String?       // for govt-paid leave claims (legacy — superseded by MSF claim fields below)
+  // LEA-005: per-application MSF claim tracking. Populated by POST
+  // /leave/govt-claims/generate using the leave-type's MSF caps.
+  claimStatus          ClaimStatus   @default(NOT_APPLICABLE)
+  claimAmount          Float?        // capped reimbursement amount in SGD
+  claimDailyRate       Float?        // pre-cap daily rate used in computation (audit)
+  claimUncappedAmount  Float?        // pre-cap raw amount (audit — shows where the cap bit)
+  claimCapApplied      String?       // which cap binding-cap clamped the claim: 'DAILY' | 'WEEKLY' | 'PERIOD' | 'NONE'
+  claimSubmissionRef   String?       // government reference returned after submission
+  claimSubmittedAt     DateTime?
+  claimReimbursedAt    DateTime?
+  claimReimbursedAmount Float?       // actual amount reimbursed (may differ from claimAmount if govt approves less)
+  claimRejectedReason  String?
+  claimNotes           String?
   currentApprovalStep  Int           @default(1)
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
@@ -79,7 +99,16 @@ model LeaveApplication {
 
   @@index([employeeId])
   @@index([status])
+  @@index([claimStatus])
   @@map("leave_applications")
+}
+
+enum ClaimStatus {
+  NOT_APPLICABLE  // not a govt-paid leave
+  NOT_SUBMITTED   // claim computed but not yet sent to MSF
+  SUBMITTED       // sent, awaiting reimbursement
+  REIMBURSED      // funds received
+  REJECTED        // MSF rejected the claim
 }
 
 model LeaveApprovalStep {

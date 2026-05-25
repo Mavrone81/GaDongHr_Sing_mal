@@ -1665,6 +1665,50 @@ router.get('/ir8a-file/:year', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.
   } catch (err) { next(err); }
 });
 
+// ── GET /payroll/internal/daily-rate/:employeeId/:period ─────────────────────
+// LEA-005: returns the employee's daily rate for the period, derived from the
+// latest published payslip in that period (basicSalary ÷ working days for the
+// period). Used by leave-service govt-claims/generate to seed the claim amount
+// without requiring HR to enter the daily rate manually. Internal key auth.
+router.get('/internal/daily-rate/:employeeId/:period', async (req, res, next) => {
+  try {
+    const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY || 'dev-internal-key';
+    const key = req.headers['x-internal-service-key'];
+    if (!key || key !== INTERNAL_KEY) return res.status(403).json({ error: 'Forbidden' });
+    const { employeeId, period } = req.params;
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) return res.status(400).json({ error: 'period must be YYYY-MM' });
+
+    // Prefer the latest published payslip in the period; fall back to most
+    // recent published payslip overall if none in this exact period.
+    let payslip = await prisma.payslip.findFirst({
+      where: { employeeId, period, isPublished: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!payslip) {
+      payslip = await prisma.payslip.findFirst({
+        where: { employeeId, isPublished: true },
+        orderBy: { period: 'desc' },
+      });
+    }
+    if (!payslip) return res.status(404).json({ error: 'No published payslip found for employee', dailyRate: 0 });
+
+    // EA s.20 working-day convention — 22 working days/month is the SG standard
+    // proxy. If the payslip already encodes a govt-paid daily rate (govtPaidAmount
+    // ÷ govtPaidDays), prefer that — it's exactly what payroll computed.
+    let dailyRate = 0;
+    if (payslip.govtPaidDays && payslip.govtPaidAmountEnc) {
+      const days   = Number(payslip.govtPaidDays) || 0;
+      const amount = decSafe(payslip.govtPaidAmountEnc);
+      if (days > 0 && amount > 0) dailyRate = round2(amount / days);
+    }
+    if (dailyRate === 0) {
+      const basic = decSafe(payslip.basicSalaryEnc);
+      if (basic > 0) dailyRate = round2(basic / 22);
+    }
+    return res.json({ employeeId, period: payslip.period, dailyRate, source: payslip.govtPaidDays ? 'govt_paid_rate' : 'basic_div_22' });
+  } catch (err) { next(err); }
+});
+
 // ── GET /payroll/internal/ir21-ytd/:employeeId/:year ──────────────────────────
 // Internal endpoint for offboarding-service to fetch YTD income data for IR21
 // form auto-population. Authenticated by x-internal-service-key header only.
