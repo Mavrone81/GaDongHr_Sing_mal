@@ -497,11 +497,305 @@ router.put('/onboarding/:employeeId/tasks/:taskId', authenticate, async (req, re
 });
 
 // ── Work Passes ────────────────────────────────────────────────────────────────
-router.get('/work-passes', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+
+const {
+  ALERT_THRESHOLDS,
+  daysUntilExpiry,
+  pendingAlerts,
+  urgencyBand,
+  computeDrcUsage,
+  defaultRenewalChecklist,
+} = require('../engines/workpass.engine');
+
+const WORK_PASS_ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER];
+const WORK_PASS_VIEW_ROLES  = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.RECRUITER];
+
+router.get('/work-passes', authenticate, authorize(...WORK_PASS_VIEW_ROLES), async (req, res, next) => {
   try {
-    const passes = await prisma.workPass.findMany({ orderBy: { expiryDate: 'asc' } });
-    res.json(passes);
+    const { passType, status, sector } = req.query;
+    const where = {};
+    if (passType) where.passType = passType;
+    if (status)   where.status   = status;
+    if (sector)   where.sector   = sector;
+    const passes = await prisma.workPass.findMany({ where, orderBy: { expiryDate: 'asc' } });
+    const enriched = passes.map(p => {
+      const days = daysUntilExpiry(p.expiryDate);
+      return { ...p, daysUntilExpiry: days, urgency: urgencyBand(days) };
+    });
+    res.json(enriched);
+  } catch (err) { next(err); }
+});
+
+router.post('/work-passes', authenticate, authorize(...WORK_PASS_ADMIN_ROLES), async (req, res, next) => {
+  try {
+    const { employeeId, passType, passNumber, expiryDate, issuedDate, sector, workerTier } = req.body;
+    if (!employeeId || !passType || !passNumber || !expiryDate) {
+      return res.status(400).json({ error: 'employeeId, passType, passNumber, expiryDate required' });
+    }
+    const pass = await prisma.workPass.create({
+      data: {
+        id: uuidv4(), employeeId, passType, passNumber,
+        expiryDate: new Date(expiryDate),
+        issuedDate: issuedDate ? new Date(issuedDate) : null,
+        sector: sector || null, workerTier: workerTier || null,
+      },
+    });
+    res.status(201).json(pass);
+  } catch (err) {
+    if (err?.code === 'P2002') return res.status(409).json({ error: 'Work pass already exists for this employee' });
+    next(err);
+  }
+});
+
+// NOTE: PUT /work-passes/:id is defined AT THE BOTTOM of this block — after
+// the specific subroutes (drc-config, drc-usage, alerts, expiring) so it
+// doesn't shadow them via the :id wildcard.
+
+// ── Expiry alerts ────────────────────────────────────────────────────────────
+
+/**
+ * Sweep all ACTIVE/RENEWING work passes, upsert any threshold alerts that
+ * have been crossed. Idempotent via @@unique(workPassId, threshold). Returns
+ * counts by threshold + new alerts created.
+ *
+ * Best-effort notification fan-out: each new alert triggers a fire-and-forget
+ * email to the notification service (skipped silently if unreachable).
+ */
+async function runWorkPassAlertSweep({ now = new Date() } = {}) {
+  const passes = await prisma.workPass.findMany({
+    where: { status: { in: ['ACTIVE', 'RENEWING'] } },
+  });
+  const byThreshold = Object.fromEntries(ALERT_THRESHOLDS.map(t => [t, 0]));
+  const newAlerts = [];
+  for (const pass of passes) {
+    const pending = pendingAlerts(pass, now);
+    for (const a of pending) {
+      const result = await prisma.workPassAlert.upsert({
+        where: { workPassId_threshold: { workPassId: pass.id, threshold: a.threshold } },
+        create: {
+          id: uuidv4(),
+          workPassId: pass.id,
+          employeeId: pass.employeeId,
+          passType:   pass.passType,
+          threshold:  a.threshold,
+          expiryDate: pass.expiryDate,
+          message:    a.message,
+        },
+        update: { message: a.message, expiryDate: pass.expiryDate },
+      });
+      byThreshold[a.threshold] += 1;
+      if (result.createdAt.getTime() === result.notifiedAt.getTime()) {
+        newAlerts.push({ ...result, daysRemaining: a.daysRemaining });
+      }
+    }
+  }
+  // Auto-flag expired passes
+  for (const pass of passes) {
+    const d = daysUntilExpiry(pass.expiryDate, now);
+    if (d < 0 && pass.status === 'ACTIVE') {
+      await prisma.workPass.update({ where: { id: pass.id }, data: { status: 'EXPIRED' } });
+    }
+  }
+  return { sweptPasses: passes.length, byThreshold, created: newAlerts.length, newAlerts };
+}
+
+router.post('/work-passes/alerts/sweep', authenticate, authorize(...WORK_PASS_ADMIN_ROLES), async (req, res, next) => {
+  try {
+    const result = await runWorkPassAlertSweep();
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+router.get('/work-passes/alerts', authenticate, authorize(...WORK_PASS_VIEW_ROLES), async (req, res, next) => {
+  try {
+    const { threshold, passType, sinceDays } = req.query;
+    const where = {};
+    if (threshold) where.threshold = Number(threshold);
+    if (passType)  where.passType  = passType;
+    if (sinceDays) {
+      const since = new Date(); since.setUTCDate(since.getUTCDate() - Number(sinceDays));
+      where.notifiedAt = { gte: since };
+    }
+    const alerts = await prisma.workPassAlert.findMany({ where, orderBy: { notifiedAt: 'desc' }, take: 500 });
+    const summary = alerts.reduce((acc, a) => {
+      acc.byThreshold[a.threshold] = (acc.byThreshold[a.threshold] || 0) + 1;
+      acc.byPassType[a.passType]   = (acc.byPassType[a.passType]   || 0) + 1;
+      return acc;
+    }, { byThreshold: {}, byPassType: {} });
+    res.json({ total: alerts.length, summary, alerts });
+  } catch (err) { next(err); }
+});
+
+// ── DRC quota ────────────────────────────────────────────────────────────────
+
+router.get('/work-passes/drc-config', authenticate, authorize(...WORK_PASS_VIEW_ROLES), async (req, res, next) => {
+  try {
+    const configs = await prisma.drcQuotaConfig.findMany({ where: { isActive: true }, orderBy: [{ sector: 'asc' }, { workerTier: 'asc' }] });
+    res.json(configs);
+  } catch (err) { next(err); }
+});
+
+router.put('/work-passes/drc-config', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const { sector, workerTier = 'BASIC', ratioLimit, alertThreshold } = req.body;
+    if (!sector || ratioLimit == null) return res.status(400).json({ error: 'sector and ratioLimit required' });
+    if (ratioLimit < 0 || ratioLimit > 1) return res.status(400).json({ error: 'ratioLimit must be between 0 and 1' });
+    const row = await prisma.drcQuotaConfig.upsert({
+      where: { sector_workerTier: { sector, workerTier } },
+      create: { id: uuidv4(), sector, workerTier, ratioLimit, alertThreshold: alertThreshold ?? 0.85 },
+      update: { ratioLimit, alertThreshold: alertThreshold ?? 0.85, isActive: true },
+    });
+    res.json(row);
+  } catch (err) { next(err); }
+});
+
+router.get('/work-passes/drc-usage', authenticate, authorize(...WORK_PASS_VIEW_ROLES), async (req, res, next) => {
+  try {
+    const { totalHeadcount } = req.query;
+    const headcount = Number(totalHeadcount);
+    if (!Number.isFinite(headcount) || headcount <= 0) {
+      return res.status(400).json({ error: 'totalHeadcount query param required (positive integer)' });
+    }
+    const [workPasses, configs] = await Promise.all([
+      prisma.workPass.findMany({ where: { status: { in: ['ACTIVE', 'RENEWING'] } } }),
+      prisma.drcQuotaConfig.findMany({ where: { isActive: true } }),
+    ]);
+    const usage = computeDrcUsage({ workPasses, totalHeadcount: headcount, configs });
+    const breachCount = usage.filter(u => u.status === 'BREACH').length;
+    const approachingCount = usage.filter(u => u.status === 'APPROACHING').length;
+    res.json({ totalHeadcount: headcount, summary: { sectors: usage.length, breachCount, approachingCount }, usage });
+  } catch (err) { next(err); }
+});
+
+// ── Renewal workflow ─────────────────────────────────────────────────────────
+
+router.post('/work-passes/:id/renewal/initiate', authenticate, authorize(...WORK_PASS_ADMIN_ROLES), async (req, res, next) => {
+  try {
+    const pass = await prisma.workPass.findUnique({ where: { id: req.params.id } });
+    if (!pass) return res.status(404).json({ error: 'Work pass not found' });
+    if (pass.status === 'CANCELLED' || pass.status === 'EXPIRED') {
+      return res.status(409).json({ error: `Cannot initiate renewal for pass in status ${pass.status}` });
+    }
+    if (pass.renewalInitiatedAt) {
+      return res.status(409).json({ error: 'Renewal already in progress' });
+    }
+    const items = defaultRenewalChecklist(pass.passType);
+    const updated = await prisma.$transaction(async (tx) => {
+      const updatedPass = await tx.workPass.update({
+        where: { id: pass.id },
+        data: { status: 'RENEWING', renewalInitiatedAt: new Date(), renewalOutcome: null, renewalOutcomeAt: null },
+      });
+      for (const itemName of items) {
+        await tx.workPassRenewalChecklist.create({
+          data: { id: uuidv4(), workPassId: pass.id, itemName },
+        });
+      }
+      return updatedPass;
+    });
+    res.status(201).json({ workPass: updated, checklistItems: items.length });
+  } catch (err) { next(err); }
+});
+
+router.get('/work-passes/:id/renewal/checklist', authenticate, authorize(...WORK_PASS_VIEW_ROLES), async (req, res, next) => {
+  try {
+    const items = await prisma.workPassRenewalChecklist.findMany({
+      where: { workPassId: req.params.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json(items);
+  } catch (err) { next(err); }
+});
+
+router.put('/work-passes/:id/renewal/checklist/:itemId', authenticate, authorize(...WORK_PASS_ADMIN_ROLES), async (req, res, next) => {
+  try {
+    const { isComplete, notes } = req.body;
+    const data = { notes: notes ?? undefined };
+    if (typeof isComplete === 'boolean') {
+      data.isComplete  = isComplete;
+      data.completedAt = isComplete ? new Date() : null;
+      data.completedBy = isComplete ? (req.user?.sub || null) : null;
+    }
+    const item = await prisma.workPassRenewalChecklist.update({ where: { id: req.params.itemId }, data });
+    res.json(item);
+  } catch (err) {
+    if (err?.code === 'P2025') return res.status(404).json({ error: 'Checklist item not found' });
+    next(err);
+  }
+});
+
+router.put('/work-passes/:id/renewal/outcome', authenticate, authorize(...WORK_PASS_ADMIN_ROLES), async (req, res, next) => {
+  try {
+    const { outcome, renewalReference, notes, newExpiryDate } = req.body;
+    const valid = ['APPROVED', 'REJECTED', 'WITHDRAWN'];
+    if (!valid.includes(outcome)) return res.status(400).json({ error: `outcome must be one of ${valid.join('|')}` });
+    const pass = await prisma.workPass.findUnique({ where: { id: req.params.id } });
+    if (!pass) return res.status(404).json({ error: 'Work pass not found' });
+    if (pass.status !== 'RENEWING') return res.status(409).json({ error: `Cannot record outcome — pass status is ${pass.status}` });
+
+    const data = {
+      renewalOutcome:    outcome,
+      renewalOutcomeAt:  new Date(),
+      renewalReference:  renewalReference || null,
+      renewalNotes:      notes || null,
+      renewalSubmittedAt: pass.renewalSubmittedAt || new Date(),
+    };
+    if (outcome === 'APPROVED') {
+      data.status = 'ACTIVE';
+      if (newExpiryDate) data.expiryDate = new Date(newExpiryDate);
+      // Clear historical alerts so the next cycle re-fires cleanly.
+      await prisma.workPassAlert.deleteMany({ where: { workPassId: pass.id } });
+    } else {
+      data.status = outcome === 'REJECTED' ? 'EXPIRED' : 'ACTIVE';
+    }
+    const updated = await prisma.workPass.update({ where: { id: req.params.id }, data });
+    res.json(updated);
+  } catch (err) { next(err); }
+});
+
+// ── Expiry dashboard ─────────────────────────────────────────────────────────
+
+// Generic PUT /work-passes/:id — placed AFTER all specific subroutes so the
+// :id wildcard doesn't capture drc-config / drc-usage / alerts / expiring.
+router.put('/work-passes/:id', authenticate, authorize(...WORK_PASS_ADMIN_ROLES), async (req, res, next) => {
+  try {
+    const { passType, passNumber, expiryDate, issuedDate, status, sector, workerTier } = req.body;
+    const data = {};
+    if (passType    != null) data.passType    = passType;
+    if (passNumber  != null) data.passNumber  = passNumber;
+    if (expiryDate  != null) data.expiryDate  = new Date(expiryDate);
+    if (issuedDate  != null) data.issuedDate  = new Date(issuedDate);
+    if (status      != null) data.status      = status;
+    if (sector      != null) data.sector      = sector;
+    if (workerTier  != null) data.workerTier  = workerTier;
+    const pass = await prisma.workPass.update({ where: { id: req.params.id }, data });
+    res.json(pass);
+  } catch (err) {
+    if (err?.code === 'P2025') return res.status(404).json({ error: 'Work pass not found' });
+    next(err);
+  }
+});
+
+router.get('/work-passes/expiring', authenticate, authorize(...WORK_PASS_VIEW_ROLES), async (req, res, next) => {
+  try {
+    const within = Number(req.query.withinDays) || 90;
+    const now = new Date();
+    const passes = await prisma.workPass.findMany({
+      where: { status: { in: ['ACTIVE', 'RENEWING'] } },
+      orderBy: { expiryDate: 'asc' },
+    });
+    const enriched = passes
+      .map(p => {
+        const days = daysUntilExpiry(p.expiryDate, now);
+        return { ...p, daysUntilExpiry: days, urgency: urgencyBand(days) };
+      })
+      .filter(p => p.daysUntilExpiry <= within);
+    const summary = enriched.reduce((acc, p) => {
+      acc[p.urgency] = (acc[p.urgency] || 0) + 1;
+      return acc;
+    }, {});
+    res.json({ withinDays: within, total: enriched.length, summary, passes: enriched });
   } catch (err) { next(err); }
 });
 
 module.exports = router;
+module.exports.runWorkPassAlertSweep = runWorkPassAlertSweep;

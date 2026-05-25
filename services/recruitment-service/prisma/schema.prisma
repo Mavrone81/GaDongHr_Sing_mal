@@ -114,11 +114,80 @@ model WorkPass {
   passNumber   String
   expiryDate   DateTime
   issuedDate   DateTime?
-  status       String   @default("ACTIVE") // ACTIVE | EXPIRED | CANCELLED
+  status       String   @default("ACTIVE") // ACTIVE | EXPIRED | CANCELLED | RENEWING
+  // REC-003 renewal lifecycle
+  sector              String?    // for DRC quota (e.g. CONSTRUCTION, MANUFACTURING, SERVICES, MARINE, PROCESS)
+  workerTier          String?    // BASIC | HIGHER (for FWL/DRC quota)
+  renewalInitiatedAt  DateTime?
+  renewalSubmittedAt  DateTime?
+  renewalOutcome      String?    // APPROVED | REJECTED | WITHDRAWN
+  renewalOutcomeAt    DateTime?
+  renewalReference    String?    // MOM reference
+  renewalNotes        String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  alerts       WorkPassAlert[]
+  checklistItems WorkPassRenewalChecklist[]
+
   @@map("work_passes")
+}
+
+// REC-003: idempotent alert ledger for work-pass expiry. One row per
+// (workPassId, threshold) — daily sweep upserts so re-runs don't fan out
+// duplicate notifications.
+model WorkPassAlert {
+  id          String   @id @default(uuid())
+  workPassId  String
+  employeeId  String   // denormalised for fast dashboard queries
+  passType    String
+  threshold   Int      // 90 | 60 | 30 | 0 (0 = expired)
+  expiryDate  DateTime
+  message     String
+  notifiedAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  workPass    WorkPass @relation(fields: [workPassId], references: [id], onDelete: Cascade)
+
+  @@unique([workPassId, threshold])
+  @@index([employeeId])
+  @@index([expiryDate])
+  @@map("work_pass_alerts")
+}
+
+// REC-003: per-pass-type renewal checklist items. HR ticks each off.
+model WorkPassRenewalChecklist {
+  id          String   @id @default(uuid())
+  workPassId  String
+  itemName    String
+  isComplete  Boolean  @default(false)
+  completedAt DateTime?
+  completedBy String?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  workPass    WorkPass @relation(fields: [workPassId], references: [id], onDelete: Cascade)
+
+  @@index([workPassId])
+  @@map("work_pass_renewal_checklist")
+}
+
+// REC-003: DRC quota configuration per sector × worker tier.
+// MOM sets the maximum ratio of S-Pass + Work Permit holders to total
+// workforce per sector. ratioLimit is the ceiling; alertThreshold is the
+// "approaching cap" warn level (e.g. 0.85 = warn at 85% of cap).
+model DrcQuotaConfig {
+  id              String   @id @default(uuid())
+  sector          String
+  workerTier      String   @default("BASIC")  // BASIC | HIGHER
+  ratioLimit      Float    // e.g. 0.83 for CONSTRUCTION basic-tier
+  alertThreshold  Float    @default(0.85)     // warn when used/limit >= this
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([sector, workerTier])
+  @@map("drc_quota_configs")
 }
 
 enum JobStatus {

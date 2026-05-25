@@ -1,7 +1,7 @@
 # Implementation Status
 
 **PRD Reference:** PRD-HRMS-001 v2.0  
-**Last Updated:** 2026-05-25 _(TAT-004 completion — anomaly detection engine, daily sweep, manager workflow, today dashboard)_  
+**Last Updated:** 2026-05-25 _(TAT-004 + REC-003 completions — anomaly detection, work-pass expiry alerts + DRC quota + renewal workflow)_  
 **Legend:** ✅ Done · ⚠️ Partial · ❌ Not Done
 
 ---
@@ -13,7 +13,7 @@
 | Payroll & CPF | 7 | 5 | 0 | 12 |
 | Leave Management | 5 | 2 | 0 | 7 |
 | Claims & Expenses | 3 | 1 | 0 | 4 |
-| Recruitment & Onboarding | 2 | 3 | 0 | 5 |
+| Recruitment & Onboarding | 3 | 2 | 0 | 5 |
 | Time & Attendance | 5 | 0 | 0 | 5 |
 | Performance Management | 5 | 1 | 0 | 6 |
 | Training & Development | 3 | 1 | 0 | 4 |
@@ -21,7 +21,7 @@
 | Offboarding | 5 | 0 | 0 | 5 |
 | Reporting & Analytics | 2 | 1 | 0 | 3 |
 | Support & Ticketing | 4 | 0 | 0 | 4 |
-| **Total** | **45** | **14** | **0** | **59** |
+| **Total** | **46** | **13** | **0** | **59** |
 
 ---
 
@@ -195,13 +195,27 @@ Job requisitions, pipeline stages (Applied → Screened → Interviewed → Offe
 - FCF audit trail (nationality breakdown of applicants, shortlisting notes, hiring decision rationale) not fully captured
 - FCF Compliance Report (all jobs with posting status, days advertised, nationality breakdown) not yet built
 
-### ⚠️ REC-003 — Work Pass Tracking & Expiry Alerts
-**Status:** Partial  
-**Done:** `GET /recruitment/work-passes` endpoint; pass type, number, expiry date stored per employee in Employee model.  
-**Outstanding:**
-- Automated expiry alerts at 90/60/30 days (scheduled job) not yet implemented
-- DRC quota monitoring and MOM quota alert not yet implemented
-- Pass renewal workflow (initiate, checklist, outcome update) not yet built
+### ✅ REC-003 — Work Pass Tracking & Expiry Alerts
+**Status:** Done _(completed 2026-05-25)_  
+Full work-pass lifecycle: expiry alerts, DRC quota monitoring, and renewal workflow with checklist + outcome tracking.
+
+**Engine (`src/engines/workpass.engine.js`):** Pure — no DB. Computes `daysUntilExpiry` (UTC-day-aligned), `pendingAlerts` (which of the 90/60/30/0 thresholds have been crossed), `urgencyBand` (EXPIRED/CRITICAL/WARNING/NOTICE/OK), `isForeignPass`, `consumesDrcQuota` (WP + S-Pass only — EP excluded per MOM rule), `computeDrcUsage` (per-sector × tier ratio + BREACH/APPROACHING/OK classification), `defaultRenewalChecklist` (8 base items + pass-type extras: medical exam + tier for WP, qualifications check for S_PASS).
+
+**Work pass CRUD:** `POST /recruitment/work-passes` (create with sector + workerTier), `PUT /recruitment/work-passes/:id` (any field), `GET /recruitment/work-passes` (filters: passType, status, sector) — every response enriched with `daysUntilExpiry` + `urgency`. 409 on duplicate employeeId.
+
+**Expiry alerts:** `WorkPassAlert` model with unique `(workPassId, threshold)` for idempotency. `POST /recruitment/work-passes/alerts/sweep` runs the upsert loop manually; **daily scheduled sweep at 00:20 SGT** (next-tick + 24h interval, armed on service boot, skipped under NODE_ENV=test) fires 90/60/30-day reminders for ACTIVE/RENEWING passes and auto-flips ACTIVE → EXPIRED for passes past expiry date. `GET /recruitment/work-passes/alerts` lists with `summary.byThreshold/byPassType`.
+
+**DRC quota monitoring:** `DrcQuotaConfig` table (unique on `sector × workerTier`) holds MOM ratio limits per sector (e.g. SERVICES 0.35, CONSTRUCTION 0.83). `GET/PUT /recruitment/work-passes/drc-config` for admin config. `GET /recruitment/work-passes/drc-usage?totalHeadcount=N` returns per-sector usage with `currentRatio`, `utilisationPct`, status (BREACH if over cap, APPROACHING if ≥ alertThreshold default 85% of cap, OK otherwise) plus `summary.breachCount/approachingCount`. Excludes EXPIRED + CANCELLED passes and EP holders from quota count.
+
+**Renewal workflow:** `POST /recruitment/work-passes/:id/renewal/initiate` flips status to RENEWING (409 if already renewing / CANCELLED / EXPIRED) and seeds the per-pass-type checklist transactionally. `GET /recruitment/work-passes/:id/renewal/checklist` + `PUT /recruitment/work-passes/:id/renewal/checklist/:itemId` (auto-stamps `completedAt/By`). `PUT /recruitment/work-passes/:id/renewal/outcome` records outcome (APPROVED / REJECTED / WITHDRAWN, 409 if not RENEWING): APPROVED flips back to ACTIVE, updates `expiryDate` if `newExpiryDate` provided, and clears historical alerts so the next cycle fires fresh; REJECTED → EXPIRED; WITHDRAWN → ACTIVE. Records `renewalReference` (MOM ref) + notes.
+
+**Expiring dashboard:** `GET /recruitment/work-passes/expiring?withinDays=N` (default 90) returns passes within window enriched with urgency + `summary` count per urgency band.
+
+**Schema additions:** `WorkPass` 7 fields (sector, workerTier, 5 renewal-lifecycle fields); new models `WorkPassAlert`, `WorkPassRenewalChecklist`, `DrcQuotaConfig`.
+
+**Route ordering note:** `PUT /work-passes/:id` is mounted AFTER all `/work-passes/<specific>` subroutes (alerts, drc-config, drc-usage, expiring) so the `:id` wildcard doesn't shadow them.
+
+**Tests (52 new, 72 total green):** 24 unit tests on `workpass.engine.js` (daysUntilExpiry incl. UTC-day alignment + null guard, urgencyBand classification, pendingAlerts threshold accumulation incl. CANCELLED skip + TODAY message, isForeignPass / consumesDrcQuota incl. EP exclusion, computeDrcUsage OK/APPROACHING/BREACH + status filter + EP exclusion + zero-headcount, defaultRenewalChecklist per pass type) + 28 integration tests W1-W28 (CRUD + 409/404, sweep idempotency + auto-expire + group summary, DRC config validation + role guard, DRC usage with breach count, renewal initiate happy + 409/404 + transactional checklist seed, checklist item update with stamp, outcome APPROVED with alert clear + new expiry, REJECTED → EXPIRED, 409 + 400 validation, expiring dashboard with within-days filter + urgency summary). Full recruitment suite: **72 tests green** (52 new + 20 pre-existing — no regressions).
 
 ### ⚠️ REC-004 — Digital Onboarding Workflow
 **Status:** Partial  
@@ -564,8 +578,7 @@ _(all resolved as of 2026-05-24)_
 16. **LEA-005 (completion)** — Government-paid leave claim generation with MSF caps (leave-service side)
 17. **RPT-001 (completion)** — Drag-and-drop KPI dashboard frontend
 18. **REC-002 (completion)** — FCF 14-day enforcement gate, audit trail, compliance report
-19. **REC-003 (completion)** — Work pass expiry alerts (90/60/30 days), DRC quota, renewal workflow
-20. **PMS-003 (completion)** — Bell curve enforcement and department grouping for calibration
+19. **PMS-003 (completion)** — Bell curve enforcement and department grouping for calibration
 21. **PAY-004 (completion)** — DRC quota alerts for FWL
 22. **LEA-004 (completion)** — MC pattern detection, sick leave trend dashboard
 
