@@ -1,7 +1,7 @@
 # Implementation Status
 
 **PRD Reference:** PRD-HRMS-001 v2.0  
-**Last Updated:** 2026-05-25 _(TAT-004 + REC-003 completions — anomaly detection, work-pass expiry alerts + DRC quota + renewal workflow)_  
+**Last Updated:** 2026-05-25 _(CLM-004 completion — vendor GST registry, finance dashboards, category budget vs spend)_  
 **Legend:** ✅ Done · ⚠️ Partial · ❌ Not Done
 
 ---
@@ -12,7 +12,7 @@
 |--------|------|---------|----------|-------|
 | Payroll & CPF | 7 | 5 | 0 | 12 |
 | Leave Management | 5 | 2 | 0 | 7 |
-| Claims & Expenses | 3 | 1 | 0 | 4 |
+| Claims & Expenses | 4 | 0 | 0 | 4 |
 | Recruitment & Onboarding | 3 | 2 | 0 | 5 |
 | Time & Attendance | 5 | 0 | 0 | 5 |
 | Performance Management | 5 | 1 | 0 | 6 |
@@ -21,7 +21,7 @@
 | Offboarding | 5 | 0 | 0 | 5 |
 | Reporting & Analytics | 2 | 1 | 0 | 3 |
 | Support & Ticketing | 4 | 0 | 0 | 4 |
-| **Total** | **46** | **13** | **0** | **59** |
+| **Total** | **47** | **12** | **0** | **59** |
 
 ---
 
@@ -170,13 +170,37 @@ Multi-level routing (L1 Line Manager → L2 Finance/HOD above threshold → L3 D
 **Status:** Done  
 Approved claims aggregated per employee per payroll period, added to net pay as non-CPF reimbursement. Cut-off date logic. Claims marked Paid with payroll run reference. Payslip itemisation.
 
-### ⚠️ CLM-004 — GST & Finance Reporting
-**Status:** Partial  
-**Done:** `GET /claims/report` returns claims with GST amounts broken out. Per-claim GST computation (9÷109 formula).  
-**Outstanding:**
-- Finance dashboard (GST-claimable totals by period, category, cost centre) not yet built on frontend
-- Vendor GST registration number validation against IRAS GST list not implemented
-- Claims analytics (spend by category vs budget, top claimants trend) not yet on analytics dashboard
+### ✅ CLM-004 — GST & Finance Reporting
+**Status:** Done _(completed 2026-05-25)_  
+Vendor GST registry with IRAS-format validation, auto-validation on claim submit, finance dashboards (GST summary by period/category/cost-centre, top claimants, spend-vs-budget).
+
+**Engine (`src/engines/gst.engine.js`):** Pure — no DB. `validateGstNumber` accepts 3 IRAS forms (9-char GSTN like `M12345678X`, post-2009 UEN `T07LL1234X`, pre-2009 UEN `200012345A`), normalises case + strips whitespace/hyphens. `checkRegistryMatch` does format validation then registry lookup honouring `effectiveFrom`/`effectiveTo` window + `isActive` flag, returns `{ valid, reason, vendor, normalized }`. Plus pure aggregators: `aggregateGstByPeriod`, `aggregateByCostCentre`, `aggregateByCategory` (with categoryLookup enrichment), `rankTopClaimants` (deterministic tie-break), `computeCategoryBudgetUtilisation` (BREACH/APPROACHING/OK + UNBUDGETED rows).
+
+**Vendor GST registry:** New `VendorGstRegistration` model (unique `gstNumber`, effective-window dates, isActive flag). Endpoints (FINANCE_ADMIN):
+- `GET /claims/vendor-gst?search=` — search by gstNumber OR vendorName (insensitive)
+- `POST /claims/vendor-gst` — create (auto-normalises gstNumber, 400 on invalid format, 409 on duplicate)
+- `PUT /claims/vendor-gst/:id` — update any field
+- `DELETE /claims/vendor-gst/:id` — soft-delete via `isActive=false`
+- `POST /claims/vendor-gst/validate` — real-time format + registry check for the claim UI
+- `POST /claims/vendor-gst/revalidate` — sweeps SUBMITTED + APPROVED claims, refreshes `gstValidated` flag (lets Finance catch claims submitted before the vendor was registered). Returns `{ scanned, updated, nowValid, nowInvalid }`.
+
+**Auto-validation on submit:** `POST /claims` now accepts `vendorGstNumber`, `vendorName`, `costCentre` and:
+- Validates the GST number against active registry as of `claimDate`
+- Stamps `gstValidated` (boolean) + `gstValidationNote` (`"Matched <vendor>"` or `"Validation failed: <reason>"`)
+- If no GST number supplied but category `isGstClaimable` and `gstAmount > 0`, notes `"GST claimed but no vendor GST number supplied"` — flagged for Finance follow-up.
+
+**Category budgets:** New `CategoryBudget` model (unique `(categoryId, period)`). `GET /claims/budgets?period=&categoryId=`, `PUT /claims/budgets` upsert (rejects negative). Drives the spend-vs-budget dashboard.
+
+**Finance dashboards (FINANCE_VIEW_ROLES):**
+- `GET /claims/dashboard/gst-summary?from=&to=&periodEq=` — APPROVED+PAID claims filtered to `category.isGstClaimable=true`. Returns `{ totals: { claimCount, gstClaimableClaims, totalSpend, totalGst, validatedGst, unvalidatedGst, unvalidatedClaimCount }, byPeriod, byCategory, byCostCentre }`.
+- `GET /claims/dashboard/top-claimants?from=&to=&limit=10` — ranks employees by reimbursement amount with deterministic tie-break.
+- `GET /claims/dashboard/category-budget?period=YYYY-MM` — spend-vs-budget per category with utilisation %, BREACH/APPROACHING/OK status + UNBUDGETED rows for unbudgeted spend; summary surfaces breach count, approaching count, total budget/spend/remaining.
+
+**Schema additions:** `Claim` 5 fields (`costCentre`, `vendorName`, `vendorGstNumber`, `gstValidated`, `gstValidationNote`) + indexes on `costCentre` and `payrollPeriod`. New models `VendorGstRegistration`, `CategoryBudget`.
+
+**Service hardening:** `src/index.js` listen() now guarded by `require.main === module` so supertest can import the app without binding the port. Jest config + auth/generic mocks added (`__mocks__/`).
+
+**Tests (47 new, 47 total green — claims-service had no prior tests):** 25 unit tests on `gst.engine.js` (3 GST format variants + lowercase/whitespace/hyphen normalisation + null/empty/short rejection, registry match with effective-window guards + active flag + invalid-format-rejected-before-lookup + future-effective guard, aggregators with deterministic ordering + UNASSIGNED/UNALLOCATED buckets + lookup enrichment for both Map and plain-object forms, rankTopClaimants tie-break, budget utilisation with OK/APPROACHING/BREACH + UNBUDGETED row + empty-claims fallback) + 22 integration tests V1-V22 (registry CRUD with auto-normalisation, 400 on bad format, 409 on duplicate, soft-delete, validate endpoint match + not-in-registry, 403 for non-admin POST, revalidate sweep flips flag in both directions, auto-validation on POST /claims happy + invalid + GST-without-vendor-note, budget validation + filter, dashboard gst-summary with validated/unvalidated split + APPROVED+PAID gate, top-claimants ranking, category-budget BREACH + UNBUDGETED surfaced, 403 for non-finance dashboard). Full claims suite: **47 tests green** (47 new + 0 pre-existing — first test coverage on this service).
 
 ---
 
@@ -573,7 +597,6 @@ _(all resolved)_
 _(all resolved as of 2026-05-24)_
 
 ### Nice to Have
-14. **CLM-004 (completion)** — GST analytics dashboard and vendor GST validation
 15. **PAY-005 (completion)** — PDF payslip rendering, SLA enforcement
 16. **LEA-005 (completion)** — Government-paid leave claim generation with MSF caps (leave-service side)
 17. **RPT-001 (completion)** — Drag-and-drop KPI dashboard frontend

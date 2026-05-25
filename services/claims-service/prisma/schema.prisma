@@ -42,6 +42,12 @@ model Claim {
   payrollPeriod   String?      // period this will be reimbursed in
   receiptPaths    String[]
   notes           String?
+  // CLM-004 finance dashboard fields
+  costCentre      String?      // free-text cost-centre code for spend roll-up
+  vendorName      String?
+  vendorGstNumber String?      // IRAS GST registration number (e.g. M12345678X)
+  gstValidated    Boolean      @default(false)
+  gstValidationNote String?    // why validation passed/failed
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
@@ -50,6 +56,8 @@ model Claim {
 
   @@index([employeeId])
   @@index([status])
+  @@index([costCentre])
+  @@index([payrollPeriod])
   @@map("claims")
 }
 
@@ -73,4 +81,42 @@ enum ClaimStatus {
   REJECTED
   PAID
   CANCELLED
+}
+
+// CLM-004: IRAS GST-registered vendor whitelist. Finance Admin maintains the
+// list (mirrors IRAS public GST register). On claim submit/amend, the vendor
+// GST number is matched against this table to flag invalid/expired/missing
+// registrations. Unique on (gstNumber) so a vendor can be re-added if a
+// previous record was deactivated.
+model VendorGstRegistration {
+  id              String   @id @default(uuid())
+  gstNumber       String   @unique
+  vendorName      String
+  effectiveFrom   DateTime
+  effectiveTo     DateTime?  // null = currently registered
+  isActive        Boolean  @default(true)
+  notes           String?
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([vendorName])
+  @@map("vendor_gst_registrations")
+}
+
+// CLM-004: category budget per fiscal period for spend-vs-budget analytics.
+// Period is "YYYY-MM" or "YYYY" — caller's choice; engine treats it as opaque.
+model CategoryBudget {
+  id          String   @id @default(uuid())
+  categoryId  String
+  period      String                                    // "YYYY-MM" or "YYYY"
+  budgetAmount Float
+  notes        String?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([categoryId, period])
+  @@index([period])
+  @@map("category_budgets")
 }
