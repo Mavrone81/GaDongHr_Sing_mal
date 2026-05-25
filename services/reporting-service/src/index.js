@@ -11,10 +11,12 @@ const { tick: schedulerTick } = require('./scheduler-tick');
 
 const app = express();
 const PORT = process.env.PORT || 4010;
-const PAYROLL_URL    = process.env.PAYROLL_SERVICE_URL   || 'http://payroll-service:4003';
-const EMPLOYEE_URL   = process.env.EMPLOYEE_SERVICE_URL  || 'http://employee-service:4002';
-const LEAVE_URL      = process.env.LEAVE_SERVICE_URL     || 'http://leave-service:4004';
-const INTERNAL_KEY   = process.env.INTERNAL_SERVICE_KEY  || '';
+const PAYROLL_URL      = process.env.PAYROLL_SERVICE_URL    || 'http://payroll-service:4003';
+const EMPLOYEE_URL     = process.env.EMPLOYEE_SERVICE_URL   || 'http://employee-service:4002';
+const LEAVE_URL        = process.env.LEAVE_SERVICE_URL      || 'http://leave-service:4004';
+const ATTENDANCE_URL   = process.env.ATTENDANCE_SERVICE_URL || 'http://attendance-service:4007';
+const TRAINING_URL     = process.env.TRAINING_SERVICE_URL   || 'http://training-service:4013';
+const INTERNAL_KEY     = process.env.INTERNAL_SERVICE_KEY   || '';
 
 app.use(helmet()); app.use(cors()); app.use(express.json({ limit: '100kb' })); app.use(morgan('combined'));
 app.get('/health', (req, res) => res.json({ service: 'reporting-service', status: 'ok', ts: new Date() }));
@@ -648,6 +650,87 @@ app.get('/reports/workforce-dashboard',
         byCitizenship,
       });
     } catch (err) { next(err); }
+  }
+);
+
+// ── RPT-001 — OT Hours by Department (6-month rolling) ───────────────────────
+app.get('/reports/ot-by-department',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER),
+  async (req, res, next) => {
+    try {
+      const months = Math.min(Math.max(parseInt(req.query.months) || 6, 1), 12);
+      const auth = authHeaders(req);
+
+      const now = new Date();
+      const periods = [];
+      for (let i = months - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        periods.push({
+          period: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+          label:  d.toLocaleDateString('en-SG', { month: 'short', year: '2-digit' }),
+        });
+      }
+
+      const [empRes, ...summaryResults] = await Promise.allSettled([
+        axios.get(`${EMPLOYEE_URL2}/employees?limit=2000`, { headers: auth }),
+        ...periods.map(({ period }) =>
+          axios.get(`${ATTENDANCE_URL}/attendance/internal/period-summary/${period}`, {
+            headers: { 'x-internal-service-key': INTERNAL_KEY },
+          })
+        ),
+      ]);
+
+      const empMap = {};
+      if (empRes.status === 'fulfilled') {
+        for (const e of (empRes.value.data.employees || [])) empMap[e.id] = e.department || 'Unassigned';
+      }
+
+      const byDepartment = {};
+      for (let i = 0; i < periods.length; i++) {
+        const result = summaryResults[i];
+        const periodSummary = result.status === 'fulfilled' ? (result.value.data.summary || {}) : {};
+
+        for (const [empId, s] of Object.entries(periodSummary)) {
+          const dept = empMap[empId] || 'Unassigned';
+          const ot   = parseFloat(s.billableOtHours ?? s.otHours ?? 0) || 0;
+          if (!byDepartment[dept]) byDepartment[dept] = new Array(periods.length).fill(0);
+          byDepartment[dept][i] = Math.round((byDepartment[dept][i] + ot) * 10) / 10;
+        }
+      }
+
+      const totals = {};
+      for (const [dept, arr] of Object.entries(byDepartment)) {
+        totals[dept] = Math.round(arr.reduce((s, v) => s + v, 0) * 10) / 10;
+      }
+
+      const topDepts = Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([d]) => d);
+      const filtered = {};
+      for (const d of topDepts) filtered[d] = byDepartment[d];
+
+      res.json({
+        generatedAt:  now.toISOString(),
+        months:       periods.map(p => p.label),
+        byDepartment: filtered,
+        totals:       Object.fromEntries(topDepts.map(d => [d, totals[d]])),
+      });
+    } catch (err) { next(err); }
+  }
+);
+
+// ── RPT-001 — Training Completion Summary ────────────────────────────────────
+app.get('/reports/training-summary',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER),
+  async (req, res, next) => {
+    try {
+      const auth = authHeaders(req);
+      const trainRes = await axios.get(`${TRAINING_URL}/training/stats`, { headers: auth });
+      res.json(trainRes.data);
+    } catch (err) {
+      if (err.response) return res.status(err.response.status).json(err.response.data);
+      next(err);
+    }
   }
 );
 
