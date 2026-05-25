@@ -50,6 +50,22 @@ enum ScheduleFrequency {
 enum ScheduleFormat {
   CSV
   XLSX
+  PDF
+}
+
+enum SubmissionType {
+  CPF_E_SUBMIT
+  SDL_SSG
+  FWL_MOM
+  IR8A_IRAS
+  MOM_HEADCOUNT
+  ANNUAL_MANPOWER_SURVEY
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  ACKNOWLEDGED
 }
 
 model ReportSchedule {
@@ -94,4 +110,24 @@ model ReportRun {
 
   @@index([templateId, startedAt])
   @@map("report_runs")
+}
+
+// ── RPT-002: Statutory submission history ─────────────────────────────────────
+model StatutorySubmission {
+  id              String           @id @default(uuid())
+  type            SubmissionType
+  period          String           // YYYY-MM or YYYY for annual
+  status          SubmissionStatus @default(DRAFT)
+  referenceNumber String?
+  fileName        String?
+  notes           String?
+  submittedAt     DateTime?
+  submittedBy     String?
+  acknowledgedAt  DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([type, period])
+  @@index([status])
+  @@map("statutory_submissions")
 }

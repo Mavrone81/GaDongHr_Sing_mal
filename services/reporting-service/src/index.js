@@ -152,6 +152,401 @@ app.get('/reports/ir8a-file/:year', authenticate, authorize(ROLES.SUPER_ADMIN, R
   }
 });
 
+// ── RPT-002 — Statutory Reports ───────────────────────────────────────────────
+
+const PAYROLL_URL2   = process.env.PAYROLL_SERVICE_URL  || 'http://payroll-service:4003';
+const EMPLOYEE_URL2  = process.env.EMPLOYEE_SERVICE_URL || 'http://employee-service:4002';
+
+let _prismaRpt;
+function getPrisma() {
+  if (!_prismaRpt) {
+    const { PrismaClient } = require('@prisma/client');
+    _prismaRpt = new PrismaClient();
+  }
+  return _prismaRpt;
+}
+
+// GET /reports/fwl/:period — FWL amounts per WP/S-Pass employee for a period
+app.get('/reports/fwl/:period',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER),
+  async (req, res, next) => {
+    try {
+      const { period } = req.params;
+      const auth = authHeaders(req);
+
+      // 1. Get FINALISED runs for the period
+      const runsRes = await axios.get(`${PAYROLL_URL2}/payroll/runs?period=${period}&status=FINALISED`, { headers: auth });
+      const runs = runsRes.data.runs || [];
+      if (!runs.length) return res.json({ period, message: 'No finalised runs for this period', rows: [], totals: { totalFwl: 0, byPassType: {} } });
+
+      // 2. Collect payslips from all runs; key by employeeId (last run wins)
+      const payslipByEmp = {};
+      for (const run of runs) {
+        const psRes = await axios.get(`${PAYROLL_URL2}/payroll/runs/${run.id}/payslips`, { headers: auth });
+        for (const ps of (psRes.data.payslips || [])) {
+          if ((ps.fwl || 0) > 0) payslipByEmp[ps.employeeId] = ps;
+        }
+      }
+
+      const empIds = Object.keys(payslipByEmp);
+      if (!empIds.length) return res.json({ period, message: 'No FWL-liable employees found', rows: [], totals: { totalFwl: 0, byPassType: {} } });
+
+      // 3. Fetch employee records for pass type / name / NRIC
+      const empRes = await axios.get(`${EMPLOYEE_URL2}/employees?limit=2000`, { headers: auth });
+      const empMap = {};
+      for (const e of (empRes.data.employees || [])) empMap[e.id] = e;
+
+      // 4. Build report rows
+      const rows = [];
+      let totalFwl = 0;
+      const byPassType = {};
+
+      for (const empId of empIds) {
+        const ps  = payslipByEmp[empId];
+        const emp = empMap[empId] || {};
+        const passType = emp.workPassType || emp.passType || 'UNKNOWN';
+        const fwl = parseFloat(ps.fwl) || 0;
+
+        rows.push({
+          employeeId:   empId,
+          employeeCode: emp.employeeCode || null,
+          fullName:     emp.fullName     || null,
+          nric:         emp.nric || emp.fin || null,
+          nationality:  emp.nationality  || null,
+          passType,
+          fwlAmount:    Math.round(fwl * 100) / 100,
+          period,
+        });
+
+        totalFwl += fwl;
+        byPassType[passType] = (byPassType[passType] || 0) + fwl;
+      }
+
+      for (const k of Object.keys(byPassType)) byPassType[k] = Math.round(byPassType[k] * 100) / 100;
+
+      rows.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''));
+      res.json({
+        period,
+        generatedAt: new Date().toISOString(),
+        totalEmployees: rows.length,
+        totals: { totalFwl: Math.round(totalFwl * 100) / 100, byPassType },
+        rows,
+      });
+    } catch (err) { next(err); }
+  }
+);
+
+// GET /reports/sdl-summary/:period — SDL computation summary for SSG submission
+app.get('/reports/sdl-summary/:period',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER),
+  async (req, res, next) => {
+    try {
+      const { period } = req.params;
+      const auth = authHeaders(req);
+
+      const runsRes = await axios.get(`${PAYROLL_URL2}/payroll/runs?period=${period}&status=FINALISED`, { headers: auth });
+      const runs = runsRes.data.runs || [];
+      if (!runs.length) return res.json({ period, message: 'No finalised runs for this period', rows: [], totalSdl: 0 });
+
+      const payslipByEmp = {};
+      for (const run of runs) {
+        const psRes = await axios.get(`${PAYROLL_URL2}/payroll/runs/${run.id}/payslips`, { headers: auth });
+        for (const ps of (psRes.data.payslips || [])) {
+          const sdl = parseFloat(ps.sdl) || 0;
+          if (sdl > 0) {
+            if (!payslipByEmp[ps.employeeId] || sdl > payslipByEmp[ps.employeeId].sdl) {
+              payslipByEmp[ps.employeeId] = { ...ps, sdl };
+            }
+          }
+        }
+      }
+
+      const empRes = await axios.get(`${EMPLOYEE_URL2}/employees?limit=2000`, { headers: auth });
+      const empMap = {};
+      for (const e of (empRes.data.employees || [])) empMap[e.id] = e;
+
+      let totalSdl = 0;
+      const rows = Object.entries(payslipByEmp).map(([empId, ps]) => {
+        const emp = empMap[empId] || {};
+        totalSdl += ps.sdl;
+        return {
+          employeeId: empId,
+          employeeCode: emp.employeeCode || null,
+          fullName: emp.fullName || null,
+          grossPay: parseFloat(ps.grossPay) || 0,
+          sdlAmount: ps.sdl,
+        };
+      });
+
+      rows.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''));
+
+      res.json({
+        period,
+        generatedAt: new Date().toISOString(),
+        totalEmployees: rows.length,
+        totalSdl: Math.round(totalSdl * 100) / 100,
+        ssgSubmissionNote: `Total SDL payable for ${period}: SGD ${(Math.round(totalSdl * 100) / 100).toFixed(2)}. Submit via CPF e-Submit portal.`,
+        rows,
+      });
+    } catch (err) { next(err); }
+  }
+);
+
+// GET /reports/mom-headcount — MOM Monthly Headcount Report
+// Query params: year, month (1-12) — defaults to current month
+app.get('/reports/mom-headcount',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER),
+  async (req, res, next) => {
+    try {
+      const now = new Date();
+      const year  = parseInt(req.query.year)  || now.getFullYear();
+      const month = parseInt(req.query.month) || now.getMonth() + 1;
+
+      const auth = authHeaders(req);
+      const empRes = await axios.get(`${EMPLOYEE_URL2}/employees?limit=2000`, { headers: auth });
+      const employees = empRes.data.employees || [];
+
+      // MOM categories
+      const byNationality = {};
+      const byEmploymentType = {};
+      const byPassType = { SC: 0, PR: 0, EP: 0, S_PASS: 0, WP: 0, DP: 0, OTHER: 0 };
+
+      let totalActive = 0;
+      let residents = 0;
+      let foreigners = 0;
+      let maleCount = 0;
+      let femaleCount = 0;
+      let newHires = 0;
+      let terminations = 0;
+
+      const periodStart = new Date(year, month - 1, 1);
+      const periodEnd   = new Date(year, month, 0, 23, 59, 59);
+
+      for (const e of employees) {
+        if (!e.isActive) continue;
+        totalActive++;
+
+        const nat = e.nationality || 'Unknown';
+        byNationality[nat] = (byNationality[nat] || 0) + 1;
+
+        const empType = e.employmentType || 'Unknown';
+        byEmploymentType[empType] = (byEmploymentType[empType] || 0) + 1;
+
+        const pass = (e.workPassType || e.passType || '').toUpperCase();
+        if (pass === 'SC' || e.nationality === 'Singapore Citizen') { byPassType.SC++; residents++; }
+        else if (pass === 'PR') { byPassType.PR++; residents++; }
+        else if (pass === 'EP' || pass === 'EMPLOYMENT_PASS') { byPassType.EP++; foreigners++; }
+        else if (pass === 'S_PASS' || pass === 'SPASS') { byPassType.S_PASS++; foreigners++; }
+        else if (pass === 'WP' || pass === 'WORK_PERMIT') { byPassType.WP++; foreigners++; }
+        else if (pass === 'DP' || pass === 'DEPENDANT_PASS') { byPassType.DP++; foreigners++; }
+        else { byPassType.OTHER++; }
+
+        const gender = (e.gender || '').toUpperCase();
+        if (gender === 'MALE' || gender === 'M') maleCount++;
+        else if (gender === 'FEMALE' || gender === 'F') femaleCount++;
+
+        // New hires: joinDate within the reporting month
+        if (e.joinDate) {
+          const jd = new Date(e.joinDate);
+          if (jd >= periodStart && jd <= periodEnd) newHires++;
+        }
+        // Terminations: use lastWorkingDate or resignationDate if present
+        const termDate = e.lastWorkingDate || e.resignationDate;
+        if (termDate) {
+          const td = new Date(termDate);
+          if (td >= periodStart && td <= periodEnd) terminations++;
+        }
+      }
+
+      const netChange = newHires - terminations;
+
+      res.json({
+        reportType: 'MOM_MONTHLY_HEADCOUNT',
+        year,
+        month,
+        period: `${year}-${String(month).padStart(2, '0')}`,
+        generatedAt: new Date().toISOString(),
+        summary: {
+          totalActive,
+          residents,
+          foreigners,
+          male: maleCount,
+          female: femaleCount,
+          newHires,
+          terminations,
+          netChange,
+        },
+        byNationality,
+        byEmploymentType,
+        byPassType,
+        momFormatNote: 'Submit via MOM iSubmit portal (mom.gov.sg/isubmit) for companies with ≥10 employees',
+      });
+    } catch (err) { next(err); }
+  }
+);
+
+// GET /reports/mom-manpower-survey — Annual MOM Manpower Survey data export (year param)
+app.get('/reports/mom-manpower-survey',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN),
+  async (req, res, next) => {
+    try {
+      const year = parseInt(req.query.year) || new Date().getFullYear();
+      const auth = authHeaders(req);
+
+      const empRes = await axios.get(`${EMPLOYEE_URL2}/employees?limit=2000`, { headers: auth });
+      const employees = empRes.data.employees || [];
+
+      const active = employees.filter(e => e.isActive);
+      const yearStart = new Date(year, 0, 1);
+      const yearEnd   = new Date(year, 11, 31, 23, 59, 59);
+
+      const hiredInYear = employees.filter(e => {
+        if (!e.joinDate) return false;
+        const d = new Date(e.joinDate);
+        return d >= yearStart && d <= yearEnd;
+      });
+
+      const terminatedInYear = employees.filter(e => {
+        const d = new Date(e.lastWorkingDate || e.resignationDate || null);
+        return d && d >= yearStart && d <= yearEnd;
+      });
+
+      const byOccupation = {};
+      const byAge = { 'Below 25': 0, '25-34': 0, '35-44': 0, '45-54': 0, '55-64': 0, '65 and above': 0 };
+
+      for (const e of active) {
+        const occ = e.jobTitle || e.designation || 'Other';
+        byOccupation[occ] = (byOccupation[occ] || 0) + 1;
+
+        if (e.dateOfBirth) {
+          const age = year - new Date(e.dateOfBirth).getFullYear();
+          if (age < 25)        byAge['Below 25']++;
+          else if (age < 35)   byAge['25-34']++;
+          else if (age < 45)   byAge['35-44']++;
+          else if (age < 55)   byAge['45-54']++;
+          else if (age < 65)   byAge['55-64']++;
+          else                 byAge['65 and above']++;
+        }
+      }
+
+      res.json({
+        reportType: 'MOM_ANNUAL_MANPOWER_SURVEY',
+        year,
+        generatedAt: new Date().toISOString(),
+        totalEmployees: active.length,
+        newHires: hiredInYear.length,
+        terminations: terminatedInYear.length,
+        byOccupation,
+        byAgeGroup: byAge,
+        surveyNote: `Complete the MOM Annual Manpower Survey at stats.mom.gov.sg. Reference period: Jan–Dec ${year}.`,
+      });
+    } catch (err) { next(err); }
+  }
+);
+
+// ── Statutory submission history ──────────────────────────────────────────────
+
+// POST /reports/submissions — record a submission
+app.post('/reports/submissions',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER),
+  async (req, res, next) => {
+    try {
+      const { type, period, referenceNumber, fileName, notes, status } = req.body;
+      const VALID_TYPES = ['CPF_E_SUBMIT', 'SDL_SSG', 'FWL_MOM', 'IR8A_IRAS', 'MOM_HEADCOUNT', 'ANNUAL_MANPOWER_SURVEY'];
+      if (!type || !VALID_TYPES.includes(type)) {
+        return res.status(400).json({ error: `type is required and must be one of ${VALID_TYPES.join(', ')}` });
+      }
+      if (!period) return res.status(400).json({ error: 'period is required (YYYY-MM or YYYY)' });
+
+      const db = getPrisma();
+      const sub = await db.statutorySubmission.create({
+        data: {
+          id: require('crypto').randomUUID(),
+          type,
+          period,
+          referenceNumber: referenceNumber || null,
+          fileName: fileName || null,
+          notes: notes || null,
+          status: status || 'DRAFT',
+          submittedBy: req.user.sub,
+          submittedAt: status === 'SUBMITTED' ? new Date() : null,
+        },
+      });
+      res.status(201).json(sub);
+    } catch (err) { next(err); }
+  }
+);
+
+// GET /reports/submissions — list submission history
+app.get('/reports/submissions',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER),
+  async (req, res, next) => {
+    try {
+      const { type, period, status } = req.query;
+      const where = {};
+      if (type)   where.type   = type;
+      if (period) where.period = period;
+      if (status) where.status = status;
+
+      const db = getPrisma();
+      const [submissions, total] = await Promise.all([
+        db.statutorySubmission.findMany({ where, orderBy: { createdAt: 'desc' }, take: 200 }),
+        db.statutorySubmission.count({ where }),
+      ]);
+      res.json({ submissions, total });
+    } catch (err) { next(err); }
+  }
+);
+
+// GET /reports/submissions/:id
+app.get('/reports/submissions/:id',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER),
+  async (req, res, next) => {
+    try {
+      const db = getPrisma();
+      const sub = await db.statutorySubmission.findUnique({ where: { id: req.params.id } });
+      if (!sub) return res.status(404).json({ error: 'Submission record not found' });
+      res.json(sub);
+    } catch (err) { next(err); }
+  }
+);
+
+// PUT /reports/submissions/:id — update (mark as submitted/acknowledged)
+app.put('/reports/submissions/:id',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER),
+  async (req, res, next) => {
+    try {
+      const db = getPrisma();
+      const existing = await db.statutorySubmission.findUnique({ where: { id: req.params.id } });
+      if (!existing) return res.status(404).json({ error: 'Submission record not found' });
+
+      const { status, referenceNumber, fileName, notes } = req.body;
+      const updates = {};
+      if (referenceNumber !== undefined) updates.referenceNumber = referenceNumber;
+      if (fileName        !== undefined) updates.fileName        = fileName;
+      if (notes           !== undefined) updates.notes           = notes;
+      if (status) {
+        updates.status = status;
+        if (status === 'SUBMITTED'    && !existing.submittedAt)   updates.submittedAt   = new Date();
+        if (status === 'ACKNOWLEDGED' && !existing.acknowledgedAt) updates.acknowledgedAt = new Date();
+      }
+
+      if (!Object.keys(updates).length) return res.status(400).json({ error: 'No fields to update' });
+
+      const updated = await db.statutorySubmission.update({ where: { id: req.params.id }, data: updates });
+      res.json(updated);
+    } catch (err) { next(err); }
+  }
+);
+
 // RPT-003 Phase 1 — report builder + schedules mounted under /reports
 app.use('/reports', builderRoutes);
 
