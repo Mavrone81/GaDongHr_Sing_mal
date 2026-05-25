@@ -1,7 +1,7 @@
 # Implementation Status
 
 **PRD Reference:** PRD-HRMS-001 v2.0  
-**Last Updated:** 2026-05-25 _(LEA-004 completion — MC pattern detection, sick leave trend analytics, HR analytics dashboard)_  
+**Last Updated:** 2026-05-25 _(PAY-004 completion — DRC quota engine, MOM ceiling monitoring, payroll banner alerts)_  
 **Legend:** ✅ Done · ⚠️ Partial · ❌ Not Done
 
 ---
@@ -10,7 +10,7 @@
 
 | Module | Done | Partial | Not Done | Total |
 |--------|------|---------|----------|-------|
-| Payroll & CPF | 9 | 3 | 0 | 12 |
+| Payroll & CPF | 10 | 2 | 0 | 12 |
 | Leave Management | 7 | 0 | 0 | 7 |
 | Claims & Expenses | 4 | 0 | 0 | 4 |
 | Recruitment & Onboarding | 4 | 1 | 0 | 5 |
@@ -21,7 +21,7 @@
 | Offboarding | 5 | 0 | 0 | 5 |
 | Reporting & Analytics | 3 | 0 | 0 | 3 |
 | Support & Ticketing | 4 | 0 | 0 | 4 |
-| **Total** | **52** | **7** | **0** | **59** |
+| **Total** | **53** | **6** | **0** | **59** |
 
 ---
 
@@ -45,12 +45,28 @@ All CPF age bands (SC/PR3+ all ages, PR Year 1/2, Foreigner), OW ceiling SGD 7,4
 **Status:** Done  
 Gross pay formula, OT at 1.5× hourly basic rate, 72-hour monthly cap with HR override, rest day pay (employee/employer request rates), PH work pay + OIL, AWS pro-ration, shift differentials.
 
-### ⚠️ PAY-004 — SDL & FWL Computation
-**Status:** Partial  
-**Done:** SDL min(max(Gross × 0.25%, SGD 2.00), SGD 11.25) per employee, SDL submission file.  
-**Outstanding:**
-- FWL rate table configuration by sector and worker tier exists but DRC quota alerts not yet implemented
-- FWL dependency ratio ceiling (DRC) warning to HR when approaching MOM quota limit missing
+### ✅ PAY-004 — SDL & FWL Computation
+**Status:** Done _(completed 2026-05-25)_  
+SDL min(max(Gross × 0.25%, SGD 2.00), SGD 11.25) per employee, SDL submission file, FWL rate table per sector/tier/pass-type, and DRC (Dependency Ratio Ceiling) quota monitoring with MOM-compliance alerts.
+
+**DRC engine (`src/engines/drc.engine.js`):** Pure — no DB. `groupBySector(employees)` classifies employees into `LOCAL` (SC/PR) / `WP` / `S_PASS` buckets per sector; EP/DP/LTVP holders are exempt. `computeDrcStatus(sectorGroups, quotas)` computes current ratio vs ceiling per sector × passType, returns `OK` / `WARNING` (≥80% of ceiling) / `EXCEEDED`, plus `remainingHeadroom`, `usagePct`, and `totalHeadcount`. Falls back to `MOM_DEFAULTS` when no DB quotas are seeded.
+
+**MOM 2024 ceilings (built-in defaults):**
+- Services: WP 15%, S-Pass 15%
+- Construction / Marine / Process: WP 83%, S-Pass 18%
+- Manufacturing: WP 60%, S-Pass 15%
+
+**New schema model** `DrcQuota` (`sector`, `passType`, `maxRatioPct`, `alertThreshPct`, unique on `[sector, passType]`).
+
+**New API routes (payroll-service):**
+- `GET /payroll/drc-status` — fetches all active employees from employee-service, groups by sector, runs engine, returns `{ summary, results, asOf }`. 503 if employee-service unreachable.
+- `GET /components/drc-quotas` — list quotas; returns MOM defaults with `isDefault=true` if table is empty.
+- `POST /components/drc-quotas/seed` — upsert MOM 2024 DRC defaults (SUPER_ADMIN only, idempotent).
+- `PUT /components/drc-quotas/:id` — update `maxRatioPct` / `alertThreshPct` with validation.
+
+**Frontend (payroll/page.tsx):** `AdminPayrollDashboard` now loads `/payroll/drc-status` on mount and renders a banner at the top of the page when any sector is in `WARNING` or `EXCEEDED` state — red for EXCEEDED, amber for WARNING — listing each offending sector, current ratio, and ceiling.
+
+**Tests:** 21 unit tests (`drc.engine.unit.test.js`) covering groupBySector (WP/S_PASS/local/EP-exempt/default-sector), computeDrcStatus (OK/WARNING/EXCEEDED/sort/headroom/fallback-to-defaults), MOM_DEFAULTS coverage. 19 integration tests (`drc-api.integration.test.js`) covering auth (403 EMPLOYEE), 503 on employee-service failure, usingDefaults flag, quota seeding idempotence, PUT validation. 40 tests total, all green.
 
 ### ✅ PAY-005 — Payslip Generation (MOM Mandatory)
 **Status:** Done _(completed 2026-05-25)_  
@@ -671,7 +687,6 @@ _(all resolved as of 2026-05-24)_
 
 ### Nice to Have
 19. **PMS-003 (completion)** — Bell curve enforcement and department grouping for calibration
-21. **PAY-004 (completion)** — DRC quota alerts for FWL
 
 ---
 

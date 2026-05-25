@@ -2029,6 +2029,43 @@ router.get('/audit-logs', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_AD
   } catch (err) { next(err); }
 });
 
+// ─── PAY-004: DRC headcount status ───────────────────────────────────────────
+
+const { groupBySector, computeDrcStatus } = require('../engines/drc.engine');
+const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY || '';
+
+// GET /payroll/drc-status — compute current FW/local headcount vs DRC ceilings
+router.get('/drc-status', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    // Fetch all active employees with pass type + citizenship + sector
+    let employees = [];
+    try {
+      const axios = require('axios');
+      const { data } = await axios.get(
+        `${EMPLOYEE_SERVICE_URL}/employees?limit=2000&isActive=true`,
+        { headers: { 'x-internal-service-key': INTERNAL_KEY }, timeout: 10000 }
+      );
+      employees = data.employees || (Array.isArray(data) ? data : []);
+    } catch (fetchErr) {
+      return res.status(503).json({ error: 'Unable to reach employee-service', detail: fetchErr.message });
+    }
+
+    const quotas = await prisma.drcQuota.findMany({ where: { isActive: true } });
+    const sectorGroups = groupBySector(employees);
+    const results = computeDrcStatus(sectorGroups, quotas);
+
+    const summary = {
+      total: results.length,
+      exceeded: results.filter(r => r.status === 'EXCEEDED').length,
+      warning:  results.filter(r => r.status === 'WARNING').length,
+      ok:       results.filter(r => r.status === 'OK').length,
+      usingDefaults: quotas.length === 0,
+    };
+
+    res.json({ summary, results, asOf: new Date().toISOString() });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
 module.exports.runPayslipSlaSweep = runPayslipSlaSweep;
 module.exports.sendPublishNotifications = sendPublishNotifications;

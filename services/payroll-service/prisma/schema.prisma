@@ -254,6 +254,21 @@ model FwlRate {
   @@map("fwl_rates")
 }
 
+// ─── PAY-004: DRC (Dependency Ratio Ceiling) quota configuration ─────────────
+model DrcQuota {
+  id             String   @id @default(uuid())
+  sector         String   // SERVICES | CONSTRUCTION | MARINE | PROCESS | MANUFACTURING
+  passType       String   // WP | S_PASS
+  maxRatioPct    Float    // e.g. 15.0 = 15%
+  alertThreshPct Float    @default(80.0) // alert when usage >= this % of ceiling
+  isActive       Boolean  @default(true)
+  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now())
+
+  @@unique([sector, passType])
+  @@map("drc_quotas")
+}
+
 model PublicHoliday {
   id        String   @id @default(uuid())
   date      DateTime

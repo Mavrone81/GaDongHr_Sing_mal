@@ -185,4 +185,65 @@ router.post('/seed-defaults', authenticate, authorize(ROLES.SUPER_ADMIN), async 
   } catch (err) { next(err); }
 });
 
+// ─── PAY-004: DRC quota configuration ────────────────────────────────────────
+
+const { MOM_DEFAULTS } = require('../engines/drc.engine');
+
+// GET /components/drc-quotas — list all configured DRC quotas (falls back to MOM defaults)
+router.get('/drc-quotas', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const quotas = await prisma.drcQuota.findMany({ where: { isActive: true }, orderBy: [{ sector: 'asc' }, { passType: 'asc' }] });
+    // If not yet seeded, return MOM defaults with isDefault flag
+    if (quotas.length === 0) {
+      return res.json(MOM_DEFAULTS.map(d => ({ ...d, id: null, isDefault: true, isActive: true })));
+    }
+    res.json(quotas.map(q => ({ ...q, isDefault: false })));
+  } catch (err) { next(err); }
+});
+
+// PUT /components/drc-quotas/:id — update an existing quota
+router.put('/drc-quotas/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const { maxRatioPct, alertThreshPct } = req.body;
+    if (maxRatioPct !== undefined && (maxRatioPct <= 0 || maxRatioPct > 100)) {
+      return res.status(400).json({ error: 'maxRatioPct must be between 0 and 100' });
+    }
+    if (alertThreshPct !== undefined && (alertThreshPct <= 0 || alertThreshPct > 100)) {
+      return res.status(400).json({ error: 'alertThreshPct must be between 0 and 100' });
+    }
+    const quota = await prisma.drcQuota.update({
+      where: { id: req.params.id },
+      data: {
+        ...(maxRatioPct    !== undefined && { maxRatioPct: parseFloat(maxRatioPct) }),
+        ...(alertThreshPct !== undefined && { alertThreshPct: parseFloat(alertThreshPct) }),
+      },
+    });
+    res.json(quota);
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'DRC quota not found' });
+    next(err);
+  }
+});
+
+// POST /components/drc-quotas/seed — upsert MOM 2024 DRC defaults
+router.post('/drc-quotas/seed', authenticate, authorize(ROLES.SUPER_ADMIN), async (req, res, next) => {
+  try {
+    const force = req.query.force === 'true';
+    const existing = await prisma.drcQuota.count({ where: { isActive: true } });
+    if (existing > 0 && !force) {
+      return res.json({ message: 'DRC quotas already seeded', seeded: 0, skipped: true });
+    }
+    let seeded = 0;
+    for (const d of MOM_DEFAULTS) {
+      await prisma.drcQuota.upsert({
+        where: { sector_passType: { sector: d.sector, passType: d.passType } },
+        create: { id: require('crypto').randomUUID(), sector: d.sector, passType: d.passType, maxRatioPct: d.maxRatioPct, alertThreshPct: d.alertThreshPct, isActive: true },
+        update: force ? { maxRatioPct: d.maxRatioPct, alertThreshPct: d.alertThreshPct, isActive: true } : {},
+      });
+      seeded++;
+    }
+    res.status(201).json({ message: 'DRC quotas seeded with MOM 2024 defaults', seeded });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
