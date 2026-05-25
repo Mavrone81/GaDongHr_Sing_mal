@@ -11,6 +11,7 @@ const payrollRoutes = require('./routes/payroll.routes');
 const componentRoutes = require('./routes/component.routes');
 const bikRoutes = require('./routes/bik.routes');
 const costCentreRoutes = require('./routes/cost-centre.routes');
+const govtLeaveClaimsRoutes = require('./routes/govt-leave-claims.routes');
 
 const app = express();
 const PORT = process.env.PORT || 4003;
@@ -26,6 +27,7 @@ app.use(morgan('combined'));
 app.get('/health', (req, res) => res.json({ service: 'payroll-service', status: 'ok', ts: new Date() }));
 app.use('/payroll', payrollRoutes);
 app.use('/payroll', bikRoutes);
+app.use('/payroll', govtLeaveClaimsRoutes);
 app.use('/', costCentreRoutes);
 app.use('/components', componentRoutes);
 

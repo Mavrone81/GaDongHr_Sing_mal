@@ -319,6 +319,44 @@ model PayrollJournalEntry {
   @@map("payroll_journal_entries")
 }
 
+// ─── Government-Paid Leave Claims (PAY-011) ───────────────────────────────────
+// One row per employee × period × leave type. Generated from approved govt-paid
+// leave applications after payroll compute. Tracks reimbursement from MSF/MINDEF.
+model GovtLeaveClaimPayroll {
+  id                  String          @id @default(uuid())
+  employeeId          String
+  period              String          // YYYY-MM of the payroll period
+  leaveTypeCode       String          // ML | PL | CCL | SPL | NSL
+  leaveTypeName       String
+  leaveDays           Float
+  dailyRateEnc        String          // encrypted: civilian daily rate used
+  claimableAmountEnc  String          // encrypted: min(dailyRate × days, MSF daily cap × days)
+  cpfOnGovtPaidEnc    String?         // encrypted: employer CPF attributable to govt-paid days
+  nsMakeupAmountEnc   String?         // encrypted: (dailyRate − nsAllowancePerDay) × days, NSL only
+  nsAllowancePerDay   Float?          // MINDEF daily allowance used for NSL formula
+  status              GovtClaimStatus @default(PENDING)
+  submissionRef       String?
+  submittedAt         DateTime?
+  reimbursedAmountEnc String?         // encrypted: actual amount reimbursed
+  reimbursedAt        DateTime?
+  notes               String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@unique([employeeId, period, leaveTypeCode])
+  @@index([period])
+  @@index([employeeId])
+  @@index([status])
+  @@map("govt_leave_claims_payroll")
+}
+
+enum GovtClaimStatus {
+  PENDING
+  SUBMITTED
+  REIMBURSED
+  REJECTED
+}
+
 enum WorkDayType {
   FIVE_DAY
   SIX_DAY
