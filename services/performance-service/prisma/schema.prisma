@@ -61,6 +61,24 @@ enum IncrementStatus {
   REJECTED
 }
 
+enum FeedbackReviewerType {
+  PEER
+  SUBORDINATE
+  SUPERVISOR
+}
+
+enum FeedbackRequestStatus {
+  PENDING_APPROVAL
+  APPROVED
+  SUBMITTED
+  DECLINED
+}
+
+enum FeedbackQuestionType {
+  RATING
+  TEXT
+}
+
 model ReviewCycle {
   id           String      @id @default(uuid())
   name         String
@@ -78,6 +96,9 @@ model ReviewCycle {
   calibrationLockedAt DateTime?
   incrementBudgetPct  Float?
   incrementProposals  IncrementProposal[]
+  feedbackWeight      Float?              @default(0.0)
+  feedbackRequests    FeedbackRequest[]
+  feedbackQuestions   FeedbackQuestion[]
 
   @@map("review_cycles")
 }
@@ -101,6 +122,7 @@ model Appraisal {
   calibratedScore    Float?
   calibratedAt       DateTime?
   calibratedBy       String?
+  score360           Float?
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
@@ -160,4 +182,65 @@ model PipRecord {
   updatedAt      DateTime  @updatedAt
 
   @@map("pip_records")
+}
+
+// ─── 360-Degree Feedback (PMS-006) ────────────────────────────────────────────
+
+model FeedbackQuestion {
+  id           String               @id @default(uuid())
+  cycleId      String
+  questionText String
+  questionType FeedbackQuestionType @default(RATING)
+  category     String?
+  weight       Float                @default(1.0)
+  displayOrder Int                  @default(0)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  cycle     ReviewCycle      @relation(fields: [cycleId], references: [id])
+  responses FeedbackResponse[]
+
+  @@index([cycleId])
+  @@map("feedback_questions")
+}
+
+model FeedbackRequest {
+  id                 String                @id @default(uuid())
+  cycleId            String
+  subjectEmployeeId  String
+  reviewerEmployeeId String
+  reviewerType       FeedbackReviewerType
+  status             FeedbackRequestStatus @default(PENDING_APPROVAL)
+  nominatedBy        String
+  nominatedAt        DateTime              @default(now())
+  approvedBy         String?
+  approvedAt         DateTime?
+  submittedAt        DateTime?
+  declinedReason     String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  cycle     ReviewCycle      @relation(fields: [cycleId], references: [id])
+  responses FeedbackResponse[]
+
+  @@unique([cycleId, subjectEmployeeId, reviewerEmployeeId])
+  @@index([cycleId])
+  @@index([subjectEmployeeId])
+  @@index([reviewerEmployeeId])
+  @@map("feedback_requests")
+}
+
+model FeedbackResponse {
+  id          String   @id @default(uuid())
+  requestId   String
+  questionId  String
+  ratingValue Float?
+  textValue   String?
+  createdAt   DateTime @default(now())
+
+  request  FeedbackRequest  @relation(fields: [requestId], references: [id])
+  question FeedbackQuestion @relation(fields: [questionId], references: [id])
+
+  @@unique([requestId, questionId])
+  @@map("feedback_responses")
 }
