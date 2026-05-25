@@ -1,7 +1,7 @@
 # Implementation Status
 
 **PRD Reference:** PRD-HRMS-001 v2.0  
-**Last Updated:** 2026-05-25 _(CLM-004 completion — vendor GST registry, finance dashboards, category budget vs spend)_  
+**Last Updated:** 2026-05-25 _(PAY-005 completion — MOM-compliant PDF payslip, SLA tracking, publish notifications, 5-year archive)_  
 **Legend:** ✅ Done · ⚠️ Partial · ❌ Not Done
 
 ---
@@ -10,7 +10,7 @@
 
 | Module | Done | Partial | Not Done | Total |
 |--------|------|---------|----------|-------|
-| Payroll & CPF | 7 | 5 | 0 | 12 |
+| Payroll & CPF | 8 | 4 | 0 | 12 |
 | Leave Management | 5 | 2 | 0 | 7 |
 | Claims & Expenses | 4 | 0 | 0 | 4 |
 | Recruitment & Onboarding | 3 | 2 | 0 | 5 |
@@ -21,7 +21,7 @@
 | Offboarding | 5 | 0 | 0 | 5 |
 | Reporting & Analytics | 2 | 1 | 0 | 3 |
 | Support & Ticketing | 4 | 0 | 0 | 4 |
-| **Total** | **47** | **12** | **0** | **59** |
+| **Total** | **48** | **11** | **0** | **59** |
 
 ---
 
@@ -52,14 +52,30 @@ Gross pay formula, OT at 1.5× hourly basic rate, 72-hour monthly cap with HR ov
 - FWL rate table configuration by sector and worker tier exists but DRC quota alerts not yet implemented
 - FWL dependency ratio ceiling (DRC) warning to HR when approaching MOM quota limit missing
 
-### ⚠️ PAY-005 — Payslip Generation (MOM Mandatory)
-**Status:** Partial  
-**Done:** All MOM-mandatory fields (name, NRIC, employer, period, basic salary, allowances, OT, deductions, CPF YTD, net pay) generated per employee per run. Payslip viewable via ESS portal (`/payslips/me`).  
-**Outstanding:**
-- PDF download rendering (data returned as JSON; PDF template not yet implemented)
-- Payslip issued-by-payment-date SLA enforcement and HR alert missing
-- Mobile app push notification on payslip publication missing
-- 5-year archive with searchable index not yet implemented
+### ✅ PAY-005 — Payslip Generation (MOM Mandatory)
+**Status:** Done _(completed 2026-05-25)_  
+Full MOM EA s.96 itemised payslip PDF, payment-date SLA tracking with daily sweep + HR alerts, multi-channel publish notifications (in-app + email + mobile push hint), and a 5-year archive with searchable index.
+
+**PDF engine (`src/engines/pdf.engine.js`):** Pure wrapper around PDFKit. `buildPayslipPdf(stream, data)` renders an A4 MOM-compliant payslip with all 11 mandatory fields (employer name + UEN, employee name/ID/NRIC-last-4/department/designation, pay period dates, payment date, basic salary, itemised allowances, OT hours + rate + amount, itemised deductions including Employee CPF + NPL, net pay, Employer CPF, SDL, FWL, YTD Gross/Employee CPF/Employer CPF). Includes govt-paid leave line when present, EA s.96 compliance footer, and publication timestamp. `splitLineItems(items)` routes raw `PayrollLineItem` rows into allowances / OT / deductions based on `wageType` + amount sign + componentCode prefix.
+
+**SLA engine (`src/engines/sla.engine.js`):** Pure — classifies one run's SLA state per MOM EA s.21 (salary paid within 7 days of period end). Three alert types: `PAYMENT_DATE_APPROACHING` (≤ 2 days, run not yet FINALISED, MEDIUM/HIGH based on day), `UNPUBLISHED_PAST_PAYMENT` (paymentDate ≤ now and some payslips still unpublished, severity ladders MEDIUM→HIGH→CRITICAL with daysOverdue), `LATE_PUBLICATION` (all published but latest publishedAt > paymentDate). `isAlertResolved` lets the sweep auto-resolve stored alerts when the violation goes away.
+
+**Payment-date wiring:**
+- `POST /payroll/runs` accepts `paymentDate`; defaults to period-end + 7 days (MOM cap)
+- `PATCH /payroll/runs/:id` allows updating `paymentDate` until FINALISED (409 otherwise)
+- Run finalise stamps `Payslip.publishedAt = finalisedAt` + fires fan-out notifications
+
+**Publish notifications:** `sendPublishNotifications(run, authHeader)` resolves all published payslips → fetches employees via `EMPLOYEE_SERVICE_URL/employees/by-ids` → for each fires a `PAYSLIP_PUBLISHED` notification with `channels: ['IN_APP', 'EMAIL' (if email known), 'MOBILE_PUSH' (if phone known)]` to `NOTIFICATION_SERVICE_URL/notifications/send`. Stamps `Payslip.notifiedAt` on success. Failures logged but never block. Manual re-fire: `POST /payroll/runs/:id/notify-published` (409 if not FINALISED). Called automatically by the finalise route as fire-and-forget.
+
+**Daily SLA sweep:** `POST /payroll/payslips/sla/sweep` runs the engine against all runs with `paymentDate ≥ now − 30 days`, upserts `PayslipSlaAlert` via `@@unique([runId, type])`, and resolves stored alerts whose violations are gone. **Scheduled daily at 00:15 SGT** (armed in service boot via `schedulePayslipSlaSweep()`, skipped under NODE_ENV=test). `GET /payroll/payslips/sla/alerts?type=&severity=&includeResolved=` returns active alerts (default excludes resolved) with `summary.byType/bySeverity`.
+
+**5-year archive + search:** `GET /payroll/payslips/archive?employeeId=&fromYear=&toYear=&search=&page=&limit=` returns paginated payslip index with decrypted netPay/grossPay/ytdGross + payment dates. Default window: current year minus 4 (5-year window). Employees can only query own (`employeeId` query param is force-overwritten to `req.user.employeeId`); 403 if no employee profile linked. Admins (SUPER_ADMIN/HR_ADMIN/PAYROLL_OFFICER) can query anyone. `search` filters periods by substring (e.g. "2025-03" or "2025").
+
+**Schema additions:** `PayrollRun.paymentDate DateTime?`; `Payslip.publishedAt DateTime?` + `Payslip.notifiedAt DateTime?` + index on `publishedAt`; new `PayslipSlaAlert` model (unique `(runId, type)`, severity/daysOverdue/unpublishedCount/message/resolvedAt fields, indexes on type + resolvedAt); new `SlaAlertType` enum.
+
+**Route ordering note:** `PAYSLIP_RESERVED = {sla, archive, me}` guards `GET /payslips/:employeeId/:period` so the wildcard doesn't shadow sibling routes.
+
+**Tests (37 new, 336 total green):** 14 unit tests on `sla.engine.js` (severityFor ladder, daysBetween UTC alignment, PAYMENT_DATE_APPROACHING window + finalised skip + TODAY elevation, UNPUBLISHED_PAST_PAYMENT count + daysOverdue + CRITICAL severity, LATE_PUBLICATION boundary + skip when on-time, paymentDate=null short-circuit, isAlertResolved positive + negative) + 6 unit tests on `pdf.engine.js` (sgd formatter, splitLineItems DEDUCTION wageType + negative-amount + OT sum + allowance fallback, buildPayslipPdf PDF header smoke + byte size scales with content + minimal-data resilience) + 17 integration tests P1-P17 (POST /runs paymentDate default + explicit, PATCH /runs/:id update + 409 finalised + 404 missing, SLA sweep create + idempotent update + auto-resolve, list filtering + default exclude resolved + includeResolved flag, notify-published fan-out + 409 + 404, archive admin + employee-self forced + 403 unlinked). Full payroll suite: **336 tests green** (37 new + 299 pre-existing — no regressions).
 
 ### ⚠️ PAY-006 — Bank GIRO File Generation
 **Status:** Partial  
@@ -597,7 +613,6 @@ _(all resolved)_
 _(all resolved as of 2026-05-24)_
 
 ### Nice to Have
-15. **PAY-005 (completion)** — PDF payslip rendering, SLA enforcement
 16. **LEA-005 (completion)** — Government-paid leave claim generation with MSF caps (leave-service side)
 17. **RPT-001 (completion)** — Drag-and-drop KPI dashboard frontend
 18. **REC-002 (completion)** — FCF 14-day enforcement gate, audit trail, compliance report

@@ -36,6 +36,33 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
 
+// PAY-005: daily payslip SLA sweep at 00:15 SGT
+function schedulePayslipSlaSweep() {
+  if (process.env.NODE_ENV === 'test') return;
+  const sgtOffsetMs = 8 * 60 * 60 * 1000;
+  function msUntilNext0015Sgt() {
+    const nowMs   = Date.now();
+    const sgtNow  = new Date(nowMs + sgtOffsetMs);
+    const target  = new Date(Date.UTC(sgtNow.getUTCFullYear(), sgtNow.getUTCMonth(), sgtNow.getUTCDate(), 0, 15, 0, 0));
+    if (target <= sgtNow) target.setUTCDate(target.getUTCDate() + 1);
+    return target.getTime() - sgtNow.getTime();
+  }
+  async function tick() {
+    try {
+      const sweep = payrollRoutes.runPayslipSlaSweep;
+      if (typeof sweep === 'function') {
+        const result = await sweep();
+        console.log(`[payslip-sla-sweep] scanned=${result.scannedRuns} created=${result.created} updated=${result.updated} resolved=${result.resolved} byType=${JSON.stringify(result.byType)}`);
+      }
+    } catch (err) {
+      console.error('[payslip-sla-sweep] failed:', err.message);
+    }
+    setTimeout(tick, 24 * 60 * 60 * 1000);
+  }
+  setTimeout(tick, msUntilNext0015Sgt());
+  console.log('[payslip-sla-sweep] daily scheduler armed for 00:15 SGT');
+}
+
 if (require.main === module) {
   app.listen(PORT, async () => {
     console.log(`[payroll-service] Running on port ${PORT}`);
@@ -47,6 +74,7 @@ if (require.main === module) {
     } catch (err) {
       console.error('[payroll-service] db-constraints init failed:', err.message);
     }
+    schedulePayslipSlaSweep();
   });
 }
 

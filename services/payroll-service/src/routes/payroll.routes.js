@@ -11,6 +11,15 @@ const { encrypt, decrypt, encryptNumber, decryptNumber } = require('/app/shared/
 const { computeCpf, computeSdl, computeNetPay, countWorkingDays, countPeriodLeaveWorkingDays } = require('../engines/cpf.engine');
 const { buildEntriesForEmployee, summariseEntries } = require('../engines/journal.engine');
 const { isSupplemental, isBiMonthly, computePeriodBoundaries, trimSupplementalEmployee, validateRunTypeShape } = require('../engines/run-types');
+const { classifyRunSla, isAlertResolved } = require('../engines/sla.engine');
+const { buildPayslipPdf, splitLineItems } = require('../engines/pdf.engine');
+
+const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:4009';
+const EMPLOYEE_SERVICE_URL     = process.env.EMPLOYEE_SERVICE_URL     || 'http://employee-service:4002';
+
+async function fireAndForget(fn) {
+  try { await fn(); } catch (err) { console.error('[fire-and-forget]', err.message); }
+}
 
 const prisma = new PrismaClient();
 
@@ -121,7 +130,7 @@ router.get('/runs', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, R
 // ─── POST /payroll/runs ─ Initiate Payroll Run ───────────────────────────────
 router.post('/runs', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
   try {
-    const { period, runType = 'MONTHLY', employeeGroup } = req.body;
+    const { period, runType = 'MONTHLY', employeeGroup, paymentDate } = req.body;
     if (!period) return res.status(400).json({ error: 'Period is required (YYYY-MM)' });
 
     const RT = runType.toUpperCase();
@@ -140,14 +149,42 @@ router.post('/runs', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, 
       return res.status(409).json({ error: `A ${RT.toLowerCase()}${halfLabel} payroll run for ${period} already exists (status: ${existing.status.toLowerCase().replace('_', ' ')}). Choose a different run type (e.g. ADHOC) to create a supplemental run.` });
     }
 
+    // PAY-005: paymentDate default = period-end + 7 days (MOM EA s.21 cap)
+    let resolvedPaymentDate = paymentDate ? new Date(paymentDate) : null;
+    if (!resolvedPaymentDate) {
+      const [yy, mm] = period.split('-').map(Number);
+      const periodEnd = new Date(Date.UTC(yy, mm, 0));
+      resolvedPaymentDate = new Date(periodEnd);
+      resolvedPaymentDate.setUTCDate(resolvedPaymentDate.getUTCDate() + 7);
+    }
+
     const run = await prisma.payrollRun.create({
-      data: { id: uuidv4(), period, runType: RT, periodHalf, status: 'DRAFT', initiatedBy: req.user.sub, employeeGroup },
+      data: {
+        id: uuidv4(), period, runType: RT, periodHalf, status: 'DRAFT',
+        initiatedBy: req.user.sub, employeeGroup,
+        paymentDate: resolvedPaymentDate,
+      },
     });
     res.status(201).json(run);
   } catch (err) {
     if (err.code === 'P2002') return res.status(409).json({ error: `A payroll run for this period already exists. Please check the payroll list before creating a new one.` });
     next(err);
   }
+});
+
+// PAY-005: update paymentDate on an existing (non-finalised) run
+router.patch('/runs/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const { paymentDate, notes } = req.body;
+    const existing = await prisma.payrollRun.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: 'Run not found' });
+    if (existing.status === 'FINALISED') return res.status(409).json({ error: 'Cannot modify a finalised run' });
+    const data = {};
+    if (paymentDate != null) data.paymentDate = paymentDate ? new Date(paymentDate) : null;
+    if (notes       != null) data.notes       = notes;
+    const updated = await prisma.payrollRun.update({ where: { id: req.params.id }, data });
+    res.json(updated);
+  } catch (err) { next(err); }
 });
 
 // ─── GET /payroll/runs/:id ───────────────────────────────────────────────────
@@ -644,9 +681,13 @@ router.post('/runs/:id/finalise', authenticate, authorize(ROLES.SUPER_ADMIN, ROL
     if (!run) return res.status(404).json({ error: 'Run not found' });
     if (run.status !== 'APPROVED') return res.status(400).json({ error: 'Run must be APPROVED before finalising' });
 
-    await prisma.payrollRun.update({ where: { id: run.id }, data: { status: 'FINALISED', finalisedAt: new Date() } });
-    // Publish payslips
-    await prisma.payslip.updateMany({ where: { runId: run.id }, data: { isPublished: true } });
+    const finalisedAt = new Date();
+    await prisma.payrollRun.update({ where: { id: run.id }, data: { status: 'FINALISED', finalisedAt } });
+    // Publish payslips — PAY-005: stamp publishedAt for SLA tracking + archive search
+    await prisma.payslip.updateMany({ where: { runId: run.id }, data: { isPublished: true, publishedAt: finalisedAt } });
+
+    // PAY-005: fire-and-forget publish notifications to employees
+    fireAndForget(() => sendPublishNotifications(run, req.headers.authorization));
 
     // Auto-consolidate: merge any duplicate payslips for this period across runs
     const consolidatedCount = await consolidatePeriod(run.period, run.id);
@@ -823,127 +864,115 @@ router.get('/payslips/me/:period', authenticate, async (req, res, next) => {
   try {
     const employeeId = req.user.employeeId;
     if (!employeeId) return res.status(400).json({ error: 'No employee profile linked to this account' });
-
-    const payslip = await prisma.payslip.findFirst({
-      where: { employeeId, period: req.params.period, isPublished: true },
-    });
-    if (!payslip) return res.status(404).json({ error: 'Payslip not found or not yet published' });
-
-    const data = {
-      period: req.params.period,
-      basicSalary: decrypt(payslip.basicSalaryEnc),
-      grossPay: decrypt(payslip.grossPayEnc),
-      netPay: decrypt(payslip.netPayEnc),
-      employeeCpf: decrypt(payslip.employeeCpfEnc),
-      employerCpf: decrypt(payslip.employerCpfEnc),
-      sdl: payslip.sdlAmountEnc ? decrypt(payslip.sdlAmountEnc) : 0,
-      ytdGross: payslip.ytdGrossEnc ? decrypt(payslip.ytdGrossEnc) : null,
-      ytdEmployeeCpf: payslip.ytdEmployeeCpfEnc ? decrypt(payslip.ytdEmployeeCpfEnc) : null,
-      nplDays: payslip.nplDays || 0,
-      nplDeduction: payslip.nplDeductionEnc ? decrypt(payslip.nplDeductionEnc) : 0,
-      govtPaidDays: payslip.govtPaidDays || 0,
-      govtPaidAmount: payslip.govtPaidAmountEnc ? decrypt(payslip.govtPaidAmountEnc) : 0,
-    };
-
-    const doc = new PDFDocument({ size: 'A4', margin: 50 });
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=payslip-${employeeId}-${req.params.period}.pdf`);
-    doc.pipe(res);
-
-    doc.fontSize(20).font('Helvetica-Bold').text('PAYSLIP', { align: 'center' });
-    doc.fontSize(12).font('Helvetica').text(`${process.env.COMPANY_NAME || 'Vorkhive Pte Ltd'}`, { align: 'center' });
-    doc.text(`UEN: ${process.env.COMPANY_UEN || '202512345A'}`, { align: 'center' });
-    doc.moveDown();
-    doc.text(`Pay Period: ${data.period}`);
-    doc.text(`Employee ID: ${employeeId}`);
-    doc.moveDown();
-    drawLine(doc);
-    doc.font('Helvetica-Bold').text('EARNINGS', 50, doc.y);
-    doc.font('Helvetica');
-    doc.text(`Basic Salary`, 50, doc.y + 5); doc.text(`SGD ${parseFloat(data.basicSalary).toFixed(2)}`, 400, doc.y - 12, { align: 'right' });
-    doc.moveDown(0.5);
-    drawLine(doc);
-    doc.font('Helvetica-Bold').text(`GROSS PAY: SGD ${parseFloat(data.grossPay).toFixed(2)}`, { align: 'right' });
-    doc.moveDown();
-    doc.font('Helvetica').text(`DEDUCTIONS`);
-    doc.text(`Employee CPF`, 50, doc.y + 5); doc.text(`SGD ${parseFloat(data.employeeCpf).toFixed(2)}`, 400, doc.y - 12, { align: 'right' });
-    doc.moveDown(0.5);
-    drawLine(doc);
-    doc.font('Helvetica-Bold').text(`NET PAY: SGD ${parseFloat(data.netPay).toFixed(2)}`, { align: 'right' });
-    doc.moveDown();
-    doc.font('Helvetica').text(`Employer CPF Contribution: SGD ${parseFloat(data.employerCpf).toFixed(2)}`);
-    doc.text(`SDL: SGD ${parseFloat(data.sdl).toFixed(2)}`);
-    if (data.ytdGross) {
-      doc.moveDown();
-      doc.text(`YTD Gross: SGD ${parseFloat(data.ytdGross).toFixed(2)}`);
-      doc.text(`YTD Employee CPF: SGD ${parseFloat(data.ytdEmployeeCpf).toFixed(2)}`);
-    }
-    doc.end();
+    return streamPayslipPdf(req, res, employeeId, req.params.period);
   } catch (err) { next(err); }
 });
 
 // ─── GET /payroll/payslips/:employeeId/:period ─ Download payslip PDF ────────
+// PAY-005: reserved-segment guard prevents the :employeeId wildcard from
+// shadowing sibling routes like /payslips/sla/* and /payslips/archive.
+const PAYSLIP_RESERVED = new Set(['sla', 'archive', 'me']);
 router.get('/payslips/:employeeId/:period', authenticate, async (req, res, next) => {
+  if (PAYSLIP_RESERVED.has(req.params.employeeId)) return next();
   try {
     const { employeeId, period } = req.params;
-    // RBAC: employee can only view own payslip
-    if (req.user.role === 'employee' && req.user.employeeId !== employeeId) {
+    const isAdmin = ['SUPER_ADMIN', 'HR_ADMIN', 'PAYROLL_OFFICER'].includes(String(req.user?.role || '').toUpperCase());
+    if (!isAdmin && req.user.employeeId !== employeeId) {
       return res.status(403).json({ error: 'Access denied' });
     }
-
-    const payslip = await prisma.payslip.findFirst({ where: { employeeId, period, isPublished: true } });
-    if (!payslip) return res.status(404).json({ error: 'Payslip not found' });
-
-    const data = {
-      employeeId,
-      period,
-      basicSalary: decrypt(payslip.basicSalaryEnc),
-      grossPay: decrypt(payslip.grossPayEnc),
-      netPay: decrypt(payslip.netPayEnc),
-      employeeCpf: decrypt(payslip.employeeCpfEnc),
-      employerCpf: decrypt(payslip.employerCpfEnc),
-      sdl: payslip.sdlAmountEnc ? decrypt(payslip.sdlAmountEnc) : 0,
-      ytdGross: payslip.ytdGrossEnc ? decrypt(payslip.ytdGrossEnc) : null,
-      ytdEmployeeCpf: payslip.ytdEmployeeCpfEnc ? decrypt(payslip.ytdEmployeeCpfEnc) : null,
-    };
-
-    // Generate PDF with PDFKit
-    const doc = new PDFDocument({ size: 'A4', margin: 50 });
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=payslip-${employeeId}-${period}.pdf`);
-    doc.pipe(res);
-
-    // Header
-    doc.fontSize(20).font('Helvetica-Bold').text('PAYSLIP', { align: 'center' });
-    doc.fontSize(12).font('Helvetica').text(`${process.env.COMPANY_NAME || 'Vorkhive Pte Ltd'}`, { align: 'center' });
-    doc.text(`UEN: ${process.env.COMPANY_UEN || '202512345A'}`, { align: 'center' });
-    doc.moveDown();
-    doc.text(`Pay Period: ${period}`);
-    doc.text(`Employee ID: ${employeeId}`);
-    doc.moveDown();
-
-    // Pay table
-    drawLine(doc);
-    doc.font('Helvetica-Bold').text('EARNINGS', 50, doc.y);
-    doc.font('Helvetica');
-    doc.text(`Basic Salary`, 50, doc.y + 5); doc.text(`SGD ${parseFloat(data.basicSalary).toFixed(2)}`, 400, doc.y - 12, { align: 'right' });
-    doc.moveDown(0.5);
-    drawLine(doc);
-    doc.font('Helvetica-Bold').text(`GROSS PAY: SGD ${parseFloat(data.grossPay).toFixed(2)}`, { align: 'right' });
-    doc.moveDown();
-    doc.font('Helvetica').text(`DEDUCTIONS`);
-    doc.text(`Employee CPF`, 50, doc.y + 5); doc.text(`SGD ${parseFloat(data.employeeCpf).toFixed(2)}`, 400, doc.y - 12, { align: 'right' });
-    doc.moveDown(0.5);
-    drawLine(doc);
-    doc.font('Helvetica-Bold').text(`NET PAY: SGD ${parseFloat(data.netPay).toFixed(2)}`, { align: 'right' });
-    doc.moveDown();
-    doc.font('Helvetica').text(`Employer CPF Contribution: SGD ${parseFloat(data.employerCpf).toFixed(2)}`);
-    doc.text(`SDL: SGD ${parseFloat(data.sdl).toFixed(2)}`);
-    if (data.ytdGross) { doc.moveDown(); doc.text(`YTD Gross: SGD ${parseFloat(data.ytdGross).toFixed(2)}`); doc.text(`YTD Employee CPF: SGD ${parseFloat(data.ytdEmployeeCpf).toFixed(2)}`); }
-
-    doc.end();
+    return streamPayslipPdf(req, res, employeeId, period);
   } catch (err) { next(err); }
 });
+
+// ─── PAY-005: shared MOM-compliant payslip PDF streamer ─────────────────────
+async function streamPayslipPdf(req, res, employeeId, period) {
+  const payslip = await prisma.payslip.findFirst({ where: { employeeId, period, isPublished: true }, include: { run: true } });
+  if (!payslip) return res.status(404).json({ error: 'Payslip not found or not yet published' });
+
+  // Fetch line items so allowances/OT/deductions itemise properly
+  const lineItems = await prisma.payrollLineItem.findMany({
+    where: { runId: payslip.runId, employeeId },
+    include: { /* relation to PayComponent — peek name + code */ },
+  });
+  const decoratedLineItems = await Promise.all(lineItems.map(async (li) => {
+    let componentCode = null;
+    try {
+      const comp = await prisma.payComponent.findUnique({ where: { id: li.componentId }, select: { code: true, category: true } });
+      componentCode = comp?.code;
+    } catch (_e) {}
+    return {
+      description: li.description,
+      amount: decSafe(li.amountEncrypted),
+      wageType: li.wageType,
+      isCpfApplicable: li.isCpfApplicable,
+      componentCode,
+    };
+  }));
+  const split = splitLineItems(decoratedLineItems);
+
+  // Try to enrich with employee details (best-effort)
+  let emp = { id: employeeId };
+  try {
+    const r = await fetch(`${EMPLOYEE_SERVICE_URL}/employees/${employeeId}`, {
+      headers: { Authorization: req.headers.authorization || '' },
+    });
+    if (r.ok) {
+      const full = await r.json();
+      emp = {
+        id: employeeId,
+        fullName: full.fullName,
+        department: full.department,
+        designation: full.designation,
+        nric: full.nricLast4 || null,
+      };
+    }
+  } catch (_e) {}
+
+  const employeeCpf = decSafe(payslip.employeeCpfEnc);
+  const employerCpf = decSafe(payslip.employerCpfEnc);
+  const deductions = [
+    { name: 'Employee CPF Contribution', amount: employeeCpf },
+    ...split.deductions,
+  ];
+  if (payslip.nplDays && payslip.nplDeductionEnc) {
+    deductions.push({ name: `No-Pay Leave (${payslip.nplDays} day(s))`, amount: decSafe(payslip.nplDeductionEnc) });
+  }
+
+  const data = {
+    company: {
+      name: process.env.COMPANY_NAME || 'Vorkhive Pte Ltd',
+      uen:  process.env.COMPANY_UEN  || '202512345A',
+      address: process.env.COMPANY_ADDRESS || null,
+    },
+    employee: emp,
+    run: {
+      period,
+      runType: payslip.run?.runType,
+      paymentDate: payslip.run?.paymentDate,
+    },
+    earnings: {
+      basicSalary: decSafe(payslip.basicSalaryEnc),
+      grossPay:    decSafe(payslip.grossPayEnc),
+    },
+    allowances: split.allowances,
+    overtime:   split.overtime,
+    deductions,
+    netPay:     decSafe(payslip.netPayEnc),
+    employerCpf,
+    sdl:        payslip.sdlAmountEnc ? decSafe(payslip.sdlAmountEnc) : null,
+    fwl:        payslip.fwlAmountEnc ? decSafe(payslip.fwlAmountEnc) : null,
+    ytdGross:        payslip.ytdGrossEnc        ? decSafe(payslip.ytdGrossEnc)        : null,
+    ytdEmployeeCpf:  payslip.ytdEmployeeCpfEnc  ? decSafe(payslip.ytdEmployeeCpfEnc)  : null,
+    ytdEmployerCpf:  payslip.ytdEmployerCpfEnc  ? decSafe(payslip.ytdEmployerCpfEnc)  : null,
+    govtPaidDays:    payslip.govtPaidDays || 0,
+    govtPaidAmount:  payslip.govtPaidAmountEnc ? decSafe(payslip.govtPaidAmountEnc) : 0,
+    publishedAt:     payslip.publishedAt ? new Date(payslip.publishedAt).toISOString() : null,
+  };
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename=payslip-${employeeId}-${period}.pdf`);
+  buildPayslipPdf(res, data);
+}
 
 // ─── GET /payroll/runs/:id/payslips ─ Admin: list payslips for a run ─────────
 router.get('/runs/:id/payslips', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
@@ -1647,4 +1676,204 @@ router.get('/internal/ir21-ytd/:employeeId/:year', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── PAY-005: payslip publish notifications ─────────────────────────────────
+
+async function sendPublishNotifications(run, authHeader) {
+  const payslips = await prisma.payslip.findMany({ where: { runId: run.id, isPublished: true } });
+  if (!payslips.length) return;
+  const employeeIds = Array.from(new Set(payslips.map(p => p.employeeId)));
+  let employeeMap = new Map();
+  try {
+    const r = await fetch(`${EMPLOYEE_SERVICE_URL}/employees/by-ids?ids=${employeeIds.join(',')}`, {
+      headers: { Authorization: authHeader || '' },
+    });
+    if (r.ok) {
+      const list = await r.json();
+      for (const e of (Array.isArray(list) ? list : [])) employeeMap.set(e.id, e);
+    }
+  } catch (err) {
+    console.error('[publish-notify] employee lookup failed:', err.message);
+  }
+  let notified = 0;
+  for (const ps of payslips) {
+    const emp = employeeMap.get(ps.employeeId);
+    const channels = ['IN_APP'];
+    const recipients = [];
+    if (emp?.workEmail || emp?.personalEmail) { channels.push('EMAIL'); recipients.push(emp.workEmail || emp.personalEmail); }
+    if (emp?.personalPhone) channels.push('MOBILE_PUSH');
+    try {
+      await fetch(`${NOTIFICATION_SERVICE_URL}/notifications/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: authHeader || '' },
+        body: JSON.stringify({
+          type: 'PAYSLIP_PUBLISHED',
+          employeeId: ps.employeeId,
+          channels,
+          recipients,
+          data: {
+            employeeName: emp?.fullName || ps.employeeId,
+            period: ps.period,
+            paymentDate: run.paymentDate ? new Date(run.paymentDate).toISOString().slice(0, 10) : null,
+            payslipId: ps.id,
+          },
+        }),
+      });
+      await prisma.payslip.update({ where: { id: ps.id }, data: { notifiedAt: new Date() } });
+      notified += 1;
+    } catch (err) {
+      console.error('[publish-notify] notification fan-out failed:', err.message);
+    }
+  }
+  return { notified, total: payslips.length };
+}
+
+// POST /payroll/runs/:id/notify-published — manual re-fire (for HR if the
+// initial fan-out failed or new employees were added post-publish).
+router.post('/runs/:id/notify-published', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const run = await prisma.payrollRun.findUnique({ where: { id: req.params.id } });
+    if (!run) return res.status(404).json({ error: 'Run not found' });
+    if (run.status !== 'FINALISED') return res.status(409).json({ error: 'Run must be FINALISED before notifications can be sent' });
+    const result = await sendPublishNotifications(run, req.headers.authorization);
+    res.json(result || { notified: 0, total: 0 });
+  } catch (err) { next(err); }
+});
+
+// ─── PAY-005: SLA sweep ────────────────────────────────────────────────────
+
+async function runPayslipSlaSweep({ now = new Date() } = {}) {
+  // Only check runs whose paymentDate has been set and is within ±30 days,
+  // or whose status is not yet FINALISED.
+  const horizon = new Date(now); horizon.setUTCDate(horizon.getUTCDate() - 30);
+  const runs = await prisma.payrollRun.findMany({
+    where: { paymentDate: { not: null, gte: horizon } },
+    include: { payslips: { select: { isPublished: true, publishedAt: true } } },
+  });
+  const byType = { UNPUBLISHED_PAST_PAYMENT: 0, LATE_PUBLICATION: 0, PAYMENT_DATE_APPROACHING: 0 };
+  let created = 0, updated = 0, resolved = 0;
+  for (const run of runs) {
+    const alerts = classifyRunSla(run, run.payslips, { now });
+    // Upsert active alerts
+    for (const a of alerts) {
+      const existing = await prisma.payslipSlaAlert.findUnique({
+        where: { runId_type: { runId: run.id, type: a.type } },
+      });
+      const data = {
+        runId: run.id, period: run.period, type: a.type,
+        severity: a.severity, daysOverdue: a.daysOverdue,
+        unpublishedCount: a.unpublishedCount, message: a.message,
+        notifiedAt: new Date(), resolvedAt: null,
+      };
+      if (!existing) {
+        await prisma.payslipSlaAlert.create({ data: { id: uuidv4(), ...data } });
+        created += 1;
+      } else {
+        await prisma.payslipSlaAlert.update({ where: { id: existing.id }, data });
+        updated += 1;
+      }
+      byType[a.type] = (byType[a.type] || 0) + 1;
+    }
+    // Resolve previously-fired alerts that no longer apply
+    const stored = await prisma.payslipSlaAlert.findMany({ where: { runId: run.id, resolvedAt: null } });
+    for (const s of stored) {
+      if (isAlertResolved(s, alerts)) {
+        await prisma.payslipSlaAlert.update({ where: { id: s.id }, data: { resolvedAt: new Date() } });
+        resolved += 1;
+      }
+    }
+  }
+  return { scannedRuns: runs.length, created, updated, resolved, byType };
+}
+
+router.post('/payslips/sla/sweep', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const result = await runPayslipSlaSweep();
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+router.get('/payslips/sla/alerts', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const { type, severity, includeResolved } = req.query;
+    const where = {};
+    if (type)     where.type     = type;
+    if (severity) where.severity = severity;
+    if (includeResolved !== 'true') where.resolvedAt = null;
+    const alerts = await prisma.payslipSlaAlert.findMany({ where, orderBy: [{ severity: 'desc' }, { notifiedAt: 'desc' }], take: 500 });
+    const summary = alerts.reduce((acc, a) => {
+      acc.byType[a.type]         = (acc.byType[a.type]         || 0) + 1;
+      acc.bySeverity[a.severity] = (acc.bySeverity[a.severity] || 0) + 1;
+      return acc;
+    }, { byType: {}, bySeverity: {} });
+    res.json({ total: alerts.length, summary, alerts });
+  } catch (err) { next(err); }
+});
+
+// ─── PAY-005: 5-year payslip archive ────────────────────────────────────────
+
+// GET /payroll/payslips/archive?employeeId=&fromYear=&toYear=&search=&page=&limit=
+//
+// Searchable index across the 5-year archive window (or less, depending on
+// data retention). RBAC: admins see everyone; employees see only their own.
+router.get('/payslips/archive', authenticate, async (req, res, next) => {
+  try {
+    const adminRoles = ['SUPER_ADMIN', 'HR_ADMIN', 'PAYROLL_OFFICER'];
+    const isAdmin = adminRoles.includes(String(req.user?.role || '').toUpperCase());
+    let { employeeId, fromYear, toYear, search, page = 1, limit = 50 } = req.query;
+
+    if (!isAdmin) {
+      // Employees can only view their own archive
+      employeeId = req.user.employeeId;
+      if (!employeeId) return res.status(403).json({ error: 'Employee profile not linked to this account' });
+    }
+
+    const where = { isPublished: true };
+    if (employeeId) where.employeeId = employeeId;
+
+    const thisYear = new Date().getUTCFullYear();
+    const archiveFloor = Math.max(thisYear - 4, 1970); // MOM EA s.96(4): keep payslips for ≥ 2 years; we extend to 5 (PRD)
+    const fromY = Number(fromYear) || archiveFloor;
+    const toY   = Number(toYear)   || thisYear;
+    const periods = [];
+    for (let y = fromY; y <= toY; y++) {
+      for (let m = 1; m <= 12; m++) periods.push(`${y}-${String(m).padStart(2, '0')}`);
+    }
+    where.period = { in: periods };
+    if (search) {
+      // Search on period substring (lets users find by "2025-03" or "2025")
+      where.period = { contains: String(search) };
+    }
+    const take = Math.min(Number(limit) || 50, 200);
+    const skip = (Math.max(Number(page), 1) - 1) * take;
+    const [rows, total] = await Promise.all([
+      prisma.payslip.findMany({
+        where, orderBy: [{ period: 'desc' }, { publishedAt: 'desc' }], skip, take,
+        select: {
+          id: true, runId: true, employeeId: true, period: true, publishedAt: true,
+          notifiedAt: true, createdAt: true,
+          netPayEnc: true, grossPayEnc: true, ytdGrossEnc: true,
+          run: { select: { runType: true, paymentDate: true, finalisedAt: true } },
+        },
+      }),
+      prisma.payslip.count({ where }),
+    ]);
+    res.json({
+      window: { fromYear: fromY, toYear: toY, retentionYears: 5 },
+      total, page: Number(page), pageSize: take, pages: Math.ceil(total / take),
+      payslips: rows.map(r => ({
+        id: r.id, runId: r.runId, employeeId: r.employeeId, period: r.period,
+        publishedAt: r.publishedAt, notifiedAt: r.notifiedAt, createdAt: r.createdAt,
+        netPay:    decSafe(r.netPayEnc),
+        grossPay:  decSafe(r.grossPayEnc),
+        ytdGross:  decSafe(r.ytdGrossEnc),
+        runType:    r.run?.runType,
+        paymentDate: r.run?.paymentDate,
+        finalisedAt: r.run?.finalisedAt,
+      })),
+    });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
+module.exports.runPayslipSlaSweep = runPayslipSlaSweep;
+module.exports.sendPublishNotifications = sendPublishNotifications;

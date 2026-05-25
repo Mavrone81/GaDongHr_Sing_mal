@@ -20,6 +20,7 @@ model PayrollRun {
   approvedBy      String?       // userId (checker — must be different from initiatedBy; DB CHECK enforced)
   approvedAt      DateTime?
   finalisedAt     DateTime?
+  paymentDate     DateTime?     // PAY-005: the date salary must be credited by (MOM EA s.21: within 7 days of period end)
   totalGross      String?       // encrypted
   totalNet        String?       // encrypted
   totalCpf        String?       // encrypted
@@ -74,6 +75,8 @@ model Payslip {
   ytdEmployerCpfEnc   String?
   pdfPath             String?
   isPublished         Boolean  @default(false)
+  publishedAt         DateTime?  // PAY-005: timestamp of publication for SLA tracking + archive
+  notifiedAt          DateTime?  // PAY-005: when employee notification was fired (null = not yet)
   // No-Pay Leave auto-computed fields
   nplDays             Float?   // NPL days in this pay period (auto from leave service)
   nplDeductionEnc     String?  // encrypted NPL deduction amount
@@ -86,7 +89,37 @@ model Payslip {
 
   @@unique([runId, employeeId])
   @@index([employeeId, period])
+  @@index([publishedAt])
   @@map("payslips")
+}
+
+// PAY-005: SLA alert ledger. Sweep fires when paymentDate ≤ today and the
+// payslip is still unpublished (or published > paymentDate). Idempotent via
+// unique (runId, type) — one row per run per SLA type, refreshable.
+model PayslipSlaAlert {
+  id          String   @id @default(uuid())
+  runId       String
+  period      String
+  type        SlaAlertType
+  severity    String   @default("MEDIUM") // LOW | MEDIUM | HIGH | CRITICAL
+  daysOverdue Int      @default(0)
+  unpublishedCount Int @default(0)
+  message     String
+  notifiedAt  DateTime @default(now())
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([runId, type])
+  @@index([type])
+  @@index([resolvedAt])
+  @@map("payslip_sla_alerts")
+}
+
+enum SlaAlertType {
+  UNPUBLISHED_PAST_PAYMENT  // run paymentDate has passed and payslips not all published
+  LATE_PUBLICATION          // published, but after paymentDate
+  PAYMENT_DATE_APPROACHING  // paymentDate within 2 days, run not yet finalised
 }
 
 model PayComponent {
