@@ -24,6 +24,13 @@ model JobPosting {
   mcfPostedAt     DateTime?  // when posted on MCF
   mcfExpiredAt    DateTime?  // must be 14 days before shortlisting
   fcfCompliant    Boolean    @default(false)
+  // REC-002 FCF exemption + audit
+  fcfExempt        Boolean    @default(false)  // true when job qualifies for FCF exemption (salary ≥ S$30k/mo, intra-corporate transfer, etc.)
+  fcfExemptReason  String?                     // one of: HIGH_SALARY | INTRA_CORPORATE | SHORTAGE_OCCUPATION | OTHER
+  fcfExemptNote    String?                     // free-text justification
+  fcfExemptBy      String?
+  fcfExemptAt      DateTime?
+  fcfNotes         String?                     // recruiter notes on FCF posting/compliance
   status          JobStatus  @default(DRAFT)
   postedById      String
   createdAt       DateTime   @default(now())
@@ -31,6 +38,8 @@ model JobPosting {
 
   candidates      Candidate[]
 
+  @@index([fcfCompliant])
+  @@index([fcfExempt])
   @@map("job_postings")
 }
 
@@ -52,6 +61,12 @@ model Candidate {
   isHired         Boolean    @default(false)
   employeeId      String?
   notes           String?
+  // REC-002 FCF audit fields — nationality + shortlisting / hiring rationale
+  nationality     String?            // ISO country code or "SC" | "PR" | free-text (e.g. "Indian", "Chinese")
+  citizenStatus   CitizenshipKind?   // bucketed for the nationality breakdown report
+  shortlistingNotes String?          // why the candidate was/wasn't shortlisted
+  hiringRationale   String?          // why this candidate was chosen over others
+  rejectionReason   String?          // FCF audit — why a candidate was rejected
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
@@ -59,7 +74,14 @@ model Candidate {
   interviewRounds  InterviewRound[]
   stageEvents      CandidateStageEvent[]
 
+  @@index([citizenStatus])
   @@map("candidates")
+}
+
+enum CitizenshipKind {
+  CITIZEN
+  PR
+  FOREIGNER
 }
 
 model CandidateStageEvent {

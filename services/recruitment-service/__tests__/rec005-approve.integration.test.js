@@ -36,12 +36,19 @@ const { app }  = require('../src/index');
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
+// REC-002: the job's MCF posting must be ≥ 14 days old for the FCF gate to
+// allow hire. Use a 20-day-old posting in the happy-path fixture.
+const MCF_POSTED_20D_AGO = (() => { const d = new Date(); d.setDate(d.getDate() - 20); return d; })();
+
 const CANDIDATE_OFFER = {
   id: 'cand-001', firstName: 'Alice', lastName: 'Tan', email: 'alice@example.com',
   phone: '+65 9123 4567', currentTitle: 'Software Engineer',
   stage: 'OFFER', isHired: false, isOfferMade: true, employeeId: null,
   jobId: 'job-001', expectedSalary: 5000,
-  job: { id: 'job-001', title: 'Senior Engineer', department: 'Engineering' },
+  job: {
+    id: 'job-001', title: 'Senior Engineer', department: 'Engineering',
+    mcfPostedAt: MCF_POSTED_20D_AGO, fcfExempt: false,
+  },
   createdAt: new Date(), updatedAt: new Date(),
 };
 

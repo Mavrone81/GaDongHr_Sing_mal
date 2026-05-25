@@ -1,7 +1,7 @@
 # Implementation Status
 
 **PRD Reference:** PRD-HRMS-001 v2.0  
-**Last Updated:** 2026-05-25 _(PAY-005 completion — MOM-compliant PDF payslip, SLA tracking, publish notifications, 5-year archive)_  
+**Last Updated:** 2026-05-25 _(REC-002 completion — FCF hire-gate, exemption workflow, nationality audit, compliance report)_  
 **Legend:** ✅ Done · ⚠️ Partial · ❌ Not Done
 
 ---
@@ -13,7 +13,7 @@
 | Payroll & CPF | 8 | 4 | 0 | 12 |
 | Leave Management | 5 | 2 | 0 | 7 |
 | Claims & Expenses | 4 | 0 | 0 | 4 |
-| Recruitment & Onboarding | 3 | 2 | 0 | 5 |
+| Recruitment & Onboarding | 4 | 1 | 0 | 5 |
 | Time & Attendance | 5 | 0 | 0 | 5 |
 | Performance Management | 5 | 1 | 0 | 6 |
 | Training & Development | 3 | 1 | 0 | 4 |
@@ -21,7 +21,7 @@
 | Offboarding | 5 | 0 | 0 | 5 |
 | Reporting & Analytics | 2 | 1 | 0 | 3 |
 | Support & Ticketing | 4 | 0 | 0 | 4 |
-| **Total** | **48** | **11** | **0** | **59** |
+| **Total** | **49** | **10** | **0** | **59** |
 
 ---
 
@@ -227,13 +227,27 @@ Vendor GST registry with IRAS-format validation, auto-validation on claim submit
 Job requisitions, pipeline stages (Applied → Screened → Interviewed → Offered → Hired/Rejected), candidate pool (independent of jobs), stage timeline audit trail, resume upload/download/replace, interview scheduling (rounds + feedback), FCF compliance flag per job, candidate tag-to-job.  
 **Note:** Offer letter PDF template generation and e-sign workflow are partial.
 
-### ⚠️ REC-002 — FCF & MyCareersFuture Compliance
-**Status:** Partial  
-**Done:** `POST /jobs/:id/fcf-compliance` records FCF posting date and flag per job.  
-**Outstanding:**
-- 14-day elapsed enforcement that blocks EP application trigger not yet wired to work-pass application workflow
-- FCF audit trail (nationality breakdown of applicants, shortlisting notes, hiring decision rationale) not fully captured
-- FCF Compliance Report (all jobs with posting status, days advertised, nationality breakdown) not yet built
+### ✅ REC-002 — FCF & MyCareersFuture Compliance
+**Status:** Done _(completed 2026-05-25)_  
+Hard-gated FCF 14-day enforcement on hire approval, formal exemption workflow with mandatory justification, full nationality + shortlisting + hiring + rejection audit on every candidate, and dashboard compliance report.
+
+**Engine (`src/engines/fcf.engine.js`):** Pure — no DB. `evaluateFcfStatus(job, now)` returns one of NOT_POSTED / IN_PERIOD / COMPLIANT / EXEMPT with `daysSincePosting`, `daysRemaining`, `blocksShortlisting`, `blocksHire`. `classifyCitizenship(value)` buckets free-text nationality into CITIZEN / PR / FOREIGNER / UNSPECIFIED with friendly aliases (SC, Singaporean, Singapore → CITIZEN). `buildNationalityBreakdown(candidates)` tallies counts + per-nationality dict. `buildReportRow(job, candidates, now)` emits per-job audit row with FCF status, days advertised, candidate counts (total / shortlisted / hired / rejected), nationality breakdown, hiring decisions with rationales, and rejection audit with reasons. `buildFcfReport(jobs, byJob, now)` aggregates the rows plus dashboard summary (totalJobs, byStatus, totalHired, totalCitizens/PRs/Foreigners, complianceViolations — jobs that had hires while gate was blocking).
+
+**Hire-gate (hard 14-day block):** `POST /candidates/:id/approve` now runs `evaluateFcfStatus` on the candidate's job. If `blocksHire`, returns **409** with structured payload `{ error, fcfStatus, daysRemaining, mcfDaysRequired, hint }`. Override is gated to SUPER_ADMIN via `fcfOverride: true` body flag (HR_ADMIN cannot override — still blocked). Hint message switches based on status (NOT_POSTED → "post on MCF first", IN_PERIOD → "wait N more days").
+
+**Exemption workflow:** `PUT /jobs/:id/fcf-exempt` accepts `{ fcfExempt, fcfExemptReason, fcfExemptNote }` — both `reason` (whitelist: HIGH_SALARY | INTRA_CORPORATE | SHORTAGE_OCCUPATION | OTHER) and `note` (non-empty justification) are mandatory when granting. Stamps `fcfExemptBy/At`. Clearing exemption (`fcfExempt: false`) wipes all four fields. 403 for non-admin.
+
+**Status check endpoint:** `GET /jobs/:id/fcf-status` returns the full evaluation result for the recruiter UI to display before submitting a work-pass application.
+
+**Candidate audit fields:** `Candidate` gains `nationality`, `citizenStatus` (CITIZEN/PR/FOREIGNER), `shortlistingNotes`, `hiringRationale`, `rejectionReason`. New `PATCH /candidates/:id/audit` updates any subset (rejects unknown citizenStatus values, rejects empty body).
+
+**Compliance report:** `GET /recruitment/fcf-report?from=&to=&jobId=` returns `{ summary, rows }` with per-job audit rows including hiring rationales + rejection reasons + nationality breakdown. Restricted to admin + RECRUITER roles. EMPLOYEE → 403.
+
+**fcfNotes capture:** existing `POST /jobs/:id/fcf-compliance` now also captures free-text recruiter notes on the FCF posting.
+
+**Schema additions:** `JobPosting` 6 fields (`fcfExempt`, `fcfExemptReason`, `fcfExemptNote`, `fcfExemptBy`, `fcfExemptAt`, `fcfNotes`) + indexes on `fcfCompliant` and `fcfExempt`. `Candidate` 5 fields (`nationality`, `citizenStatus`, `shortlistingNotes`, `hiringRationale`, `rejectionReason`) + index on `citizenStatus`. New `CitizenshipKind` enum.
+
+**Tests (41 new, 113 total green):** 17 unit tests on `fcf.engine.js` (constants, UTC-day-aligned daysBetween, evaluateFcfStatus all 4 states + boundary at 14 days + EXEMPT short-circuit, classifyCitizenship aliases + null guard, buildNationalityBreakdown counts + explicit citizenStatus override, buildReportRow with hire/reject/shortlist counts + rationales, buildFcfReport summary aggregation + violation count) + 24 integration tests F1-F24 (fcf-status NOT_POSTED/IN_PERIOD/COMPLIANT/EXEMPT/404, fcf-exempt grant + reason whitelist + empty-note + clear-fields + role guard, candidate audit happy + invalid citizenStatus + empty-body + 404, fcf-report rows + summary + jobId filter + role guard, hire-gate blocks NOT_POSTED + IN_PERIOD + passes COMPLIANT + passes EXEMPT + SUPER_ADMIN override + HR_ADMIN cannot override, fcfNotes captured on fcf-compliance). REC-005 happy-path fixture updated so its job is FCF-compliant (mcfPostedAt 20 days ago). Full recruitment suite: **113 tests green** (41 new + 72 pre-existing — no regressions).
 
 ### ✅ REC-003 — Work Pass Tracking & Expiry Alerts
 **Status:** Done _(completed 2026-05-25)_  
@@ -615,7 +629,6 @@ _(all resolved as of 2026-05-24)_
 ### Nice to Have
 16. **LEA-005 (completion)** — Government-paid leave claim generation with MSF caps (leave-service side)
 17. **RPT-001 (completion)** — Drag-and-drop KPI dashboard frontend
-18. **REC-002 (completion)** — FCF 14-day enforcement gate, audit trail, compliance report
 19. **PMS-003 (completion)** — Bell curve enforcement and department grouping for calibration
 21. **PAY-004 (completion)** — DRC quota alerts for FWL
 22. **LEA-004 (completion)** — MC pattern detection, sick leave trend dashboard

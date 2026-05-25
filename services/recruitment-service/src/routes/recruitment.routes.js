@@ -71,16 +71,54 @@ router.post('/jobs', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, 
 
 router.post('/jobs/:id/fcf-compliance', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.RECRUITER), async (req, res, next) => {
   try {
-    const { mcfJobId, mcfPostedAt } = req.body;
+    const { mcfJobId, mcfPostedAt, fcfNotes } = req.body;
     const postedDate = new Date(mcfPostedAt);
     const expiry = new Date(postedDate);
     expiry.setDate(expiry.getDate() + 14);
     const job = await prisma.jobPosting.update({
       where: { id: req.params.id },
-      data: { mcfJobId, mcfPostedAt: postedDate, mcfExpiredAt: expiry, fcfCompliant: false, status: 'OPEN' },
+      data: { mcfJobId, mcfPostedAt: postedDate, mcfExpiredAt: expiry, fcfCompliant: false, fcfNotes: fcfNotes || null, status: 'OPEN' },
     });
     res.json({ message: 'MCF posting recorded. FCF 14-day period ends on: ' + expiry.toISOString().split('T')[0], job });
   } catch (err) { next(err); }
+});
+
+// REC-002: status check for a single job — used by recruiters before submitting work-pass apps
+router.get('/jobs/:id/fcf-status', authenticate, async (req, res, next) => {
+  try {
+    const job = await prisma.jobPosting.findUnique({ where: { id: req.params.id } });
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+    const { evaluateFcfStatus } = require('../engines/fcf.engine');
+    const fcf = evaluateFcfStatus(job);
+    res.json({ jobId: job.id, title: job.title, mcfPostedAt: job.mcfPostedAt, mcfExpiredAt: job.mcfExpiredAt, fcfExempt: job.fcfExempt, fcfExemptReason: job.fcfExemptReason, ...fcf });
+  } catch (err) { next(err); }
+});
+
+// REC-002: mark / unmark a job FCF-exempt with mandatory justification.
+router.put('/jobs/:id/fcf-exempt', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const { EXEMPT_REASONS } = require('../engines/fcf.engine');
+    const { fcfExempt, fcfExemptReason, fcfExemptNote } = req.body;
+    if (fcfExempt !== false && fcfExempt !== true) {
+      return res.status(400).json({ error: 'fcfExempt must be boolean' });
+    }
+    if (fcfExempt) {
+      if (!fcfExemptReason || !EXEMPT_REASONS.includes(fcfExemptReason)) {
+        return res.status(400).json({ error: `fcfExemptReason required (one of ${EXEMPT_REASONS.join('|')})` });
+      }
+      if (!fcfExemptNote || !String(fcfExemptNote).trim()) {
+        return res.status(400).json({ error: 'fcfExemptNote (justification) is required when granting exemption' });
+      }
+    }
+    const data = fcfExempt
+      ? { fcfExempt: true, fcfExemptReason, fcfExemptNote, fcfExemptBy: req.user?.sub || null, fcfExemptAt: new Date() }
+      : { fcfExempt: false, fcfExemptReason: null, fcfExemptNote: null, fcfExemptBy: null, fcfExemptAt: null };
+    const job = await prisma.jobPosting.update({ where: { id: req.params.id }, data });
+    res.json(job);
+  } catch (err) {
+    if (err?.code === 'P2025') return res.status(404).json({ error: 'Job not found' });
+    next(err);
+  }
 });
 
 router.get('/jobs/:id', authenticate, async (req, res, next) => {
@@ -200,6 +238,28 @@ router.post('/candidates/:id/approve',
       if (!candidate) return res.status(404).json({ error: 'Candidate not found' });
       if (candidate.isHired) {
         return res.status(409).json({ error: 'Candidate already hired', employeeId: candidate.employeeId });
+      }
+
+      // REC-002: FCF gate — block hire if the job's MCF 14-day window hasn't
+      // elapsed AND the job isn't FCF-exempt. Override possible via
+      // `fcfOverride: true` body flag (Super Admin only — audited downstream).
+      if (candidate.job) {
+        const { evaluateFcfStatus } = require('../engines/fcf.engine');
+        const fcf = evaluateFcfStatus(candidate.job);
+        if (fcf.blocksHire) {
+          const override = req.body?.fcfOverride === true && req.user?.role === 'SUPER_ADMIN';
+          if (!override) {
+            return res.status(409).json({
+              error: 'FCF compliance gate: cannot hire this candidate yet',
+              fcfStatus: fcf.status,
+              daysRemaining: fcf.daysRemaining,
+              mcfDaysRequired: fcf.mcfDaysRequired,
+              hint: fcf.status === 'NOT_POSTED'
+                ? 'Post the job on MyCareersFuture first (POST /jobs/:id/fcf-compliance), or mark the job FCF-exempt with justification (PUT /jobs/:id/fcf-exempt).'
+                : `Wait ${fcf.daysRemaining} more day(s) for the 14-day MCF advertising window to elapse.`,
+            });
+          }
+        }
       }
 
       const { startDate, department, jobTitle, basicSalary, managerId, probationMonths = 3 } = req.body;
@@ -462,6 +522,61 @@ router.delete('/candidates/:id/resume', authenticate, authorize(ROLES.SUPER_ADMI
     }
     await prisma.candidate.update({ where: { id: req.params.id }, data: { resumePath: null, resumeName: null } });
     res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// ── REC-002 FCF audit + report ────────────────────────────────────────────────
+
+// PATCH /candidates/:id/audit — capture nationality, shortlisting/hiring/rejection notes
+router.patch('/candidates/:id/audit', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.RECRUITER), async (req, res, next) => {
+  try {
+    const { nationality, citizenStatus, shortlistingNotes, hiringRationale, rejectionReason } = req.body;
+    const data = {};
+    if (nationality        != null) data.nationality        = nationality;
+    if (citizenStatus      != null) {
+      const valid = ['CITIZEN', 'PR', 'FOREIGNER'];
+      if (!valid.includes(citizenStatus)) return res.status(400).json({ error: `citizenStatus must be one of ${valid.join('|')}` });
+      data.citizenStatus = citizenStatus;
+    }
+    if (shortlistingNotes  != null) data.shortlistingNotes  = shortlistingNotes;
+    if (hiringRationale    != null) data.hiringRationale    = hiringRationale;
+    if (rejectionReason    != null) data.rejectionReason    = rejectionReason;
+    if (!Object.keys(data).length) return res.status(400).json({ error: 'no audit fields supplied' });
+    const candidate = await prisma.candidate.update({ where: { id: req.params.id }, data });
+    res.json(candidate);
+  } catch (err) {
+    if (err?.code === 'P2025') return res.status(404).json({ error: 'Candidate not found' });
+    next(err);
+  }
+});
+
+// GET /recruitment/fcf-report?from=YYYY-MM-DD&to=YYYY-MM-DD&jobId=
+// Full FCF compliance report — one row per job with posting status, days
+// advertised, nationality breakdown, hiring decisions + rationale, rejection
+// audit. Plus dashboard summary (totalJobs, byStatus, complianceViolations).
+router.get('/fcf-report', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.RECRUITER), async (req, res, next) => {
+  try {
+    const { from, to, jobId } = req.query;
+    const where = {};
+    if (jobId) where.id = jobId;
+    if (from || to) {
+      where.createdAt = {};
+      if (from) where.createdAt.gte = new Date(from + 'T00:00:00.000Z');
+      if (to)   where.createdAt.lte = new Date(to   + 'T23:59:59.999Z');
+    }
+    const jobs = await prisma.jobPosting.findMany({ where, orderBy: { createdAt: 'desc' }, take: 500 });
+    const jobIds = jobs.map(j => j.id);
+    const candidates = jobIds.length
+      ? await prisma.candidate.findMany({ where: { jobId: { in: jobIds } } })
+      : [];
+    const byJob = {};
+    for (const c of candidates) {
+      if (!c.jobId) continue;
+      (byJob[c.jobId] ||= []).push(c);
+    }
+    const { buildFcfReport } = require('../engines/fcf.engine');
+    const report = buildFcfReport(jobs, byJob);
+    res.json({ generatedAt: new Date().toISOString(), filters: { from: from || null, to: to || null, jobId: jobId || null }, ...report });
   } catch (err) { next(err); }
 });
 
