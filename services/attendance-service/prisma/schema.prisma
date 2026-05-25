@@ -314,3 +314,81 @@ enum PeriodStatus {
   LOCKED
   APPROVED_FOR_PAYROLL
 }
+
+// TAT-004: attendance anomaly ledger.
+// One row per (employee, date, type) — daily sweep upserts on the natural key
+// so re-runs don't fan out duplicates. Manager workflow flips status through
+// PENDING → ACKNOWLEDGED / EXPLAINED / DISMISSED.
+model AttendanceAnomaly {
+  id            String           @id @default(uuid())
+  employeeId    String
+  date          DateTime         @db.Date
+  type          AnomalyType
+  severity      AnomalySeverity  @default(LOW)
+  message       String
+  detail        Json?
+  status        AnomalyStatus    @default(PENDING)
+  // Optional link back to the AttendanceRecord row that triggered it. Null
+  // when there is no record (AWOL) or when the anomaly aggregates many rows
+  // (MONTHLY_OT_BREACH).
+  recordId      String?
+  // Manager workflow
+  acknowledgedBy   String?
+  acknowledgedAt   DateTime?
+  explanation      String?
+  explanationBy    String?
+  explanationAt    DateTime?
+  dismissedBy      String?
+  dismissedAt      DateTime?
+  dismissReason    String?
+  // Bookkeeping
+  detectedAt    DateTime         @default(now())
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@unique([employeeId, date, type])
+  @@index([status])
+  @@index([type])
+  @@index([employeeId])
+  @@index([date])
+  @@map("attendance_anomalies")
+}
+
+enum AnomalyType {
+  LATE_ARRIVAL
+  EARLY_DEPARTURE
+  MISSING_CLOCK_OUT
+  AWOL
+  EXCESSIVE_OT
+  MONTHLY_OT_BREACH
+}
+
+enum AnomalySeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum AnomalyStatus {
+  PENDING
+  ACKNOWLEDGED
+  EXPLAINED
+  DISMISSED
+}
+
+// TAT-004: org-wide configurable thresholds. Singleton (id=1) — POST upserts.
+// Values mirror DEFAULT_THRESHOLDS in anomaly.engine.js; the engine reads
+// these via the sweep route and falls back to defaults when no row exists.
+model AnomalyThreshold {
+  id                          Int       @id @default(1)
+  lateThresholdMin            Int       @default(15)
+  earlyDepartThresholdMin     Int       @default(15)
+  dailyOtThresholdHours       Float     @default(4)
+  monthlyOtAlertHours         Float     @default(60)
+  missingClockOutGraceHours   Float     @default(2)
+  updatedBy                   String?
+  updatedAt                   DateTime  @updatedAt
+  createdAt                   DateTime  @default(now())
+
+  @@map("anomaly_thresholds")
+}

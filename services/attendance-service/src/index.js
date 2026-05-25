@@ -11,6 +11,16 @@ const { haversineMetres, isLate, calcHoursWorked, calcOtHours } = require('./uti
 const { resolveSchedule } = require('./shift-resolver');
 const { reconcileRecord } = require('./engines/time-reconciliation.engine');
 const { summarizeAll } = require('./engines/attendance-summary.engine');
+const {
+  detectAnomaliesForRecord,
+  detectMonthlyOtBreach,
+  ANOMALY_TYPES,
+  DEFAULT_THRESHOLDS,
+} = require('./engines/anomaly.engine');
+
+const EMPLOYEE_SERVICE_URL     = process.env.EMPLOYEE_SERVICE_URL     || 'http://employee-service:4002';
+const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:4009';
+const LEAVE_SERVICE_URL        = process.env.LEAVE_SERVICE_URL        || 'http://leave-service:4004';
 
 // Read at request time, not module-load time — keeps tests able to set the
 // key via process.env before each request without re-requiring the module.
@@ -173,7 +183,7 @@ app.get('/attendance/admin/records', authenticate, authorize(ROLES.SUPER_ADMIN, 
 });
 
 // ── Employee records ──────────────────────────────────────────────────────────
-const ATTENDANCE_RESERVED = new Set(['shifts', 'roster', 'locations', 'admin', 'records', 'periods', 'pending-approvals', 'internal']);
+const ATTENDANCE_RESERVED = new Set(['shifts', 'roster', 'locations', 'admin', 'records', 'periods', 'pending-approvals', 'internal', 'anomalies', 'thresholds', 'today']);
 app.get('/attendance/:employeeId', authenticate, async (req, res, next) => {
   if (ATTENDANCE_RESERVED.has(req.params.employeeId)) return next();
   try {
@@ -1016,10 +1026,528 @@ app.get('/attendance/internal/period-summary/:period', async (req, res, next) =>
   } catch (err) { next(err); }
 });
 
+// ─── TAT-004 Anomaly Detection ──────────────────────────────────────────────
+
+const ANOMALY_ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER];
+const ANOMALY_VIEW_ROLES  = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.LINE_MANAGER, ROLES.PAYROLL_OFFICER];
+
+async function loadThresholds() {
+  try {
+    const row = await prisma.anomalyThreshold.findUnique({ where: { id: 1 } });
+    if (!row) return { ...DEFAULT_THRESHOLDS };
+    return {
+      lateThresholdMin:          row.lateThresholdMin,
+      earlyDepartThresholdMin:   row.earlyDepartThresholdMin,
+      dailyOtThresholdHours:     row.dailyOtThresholdHours,
+      monthlyOtAlertHours:       row.monthlyOtAlertHours,
+      missingClockOutGraceHours: row.missingClockOutGraceHours,
+    };
+  } catch (err) {
+    console.error('[anomaly] threshold load failed, using defaults:', err.message);
+    return { ...DEFAULT_THRESHOLDS };
+  }
+}
+
+// GET / PUT thresholds (singleton id=1)
+app.get('/attendance/thresholds', authenticate, authorize(...ANOMALY_VIEW_ROLES), async (req, res, next) => {
+  try {
+    const row = await prisma.anomalyThreshold.findUnique({ where: { id: 1 } });
+    res.json(row || { id: 1, ...DEFAULT_THRESHOLDS, updatedBy: null, updatedAt: null });
+  } catch (err) { next(err); }
+});
+
+app.put('/attendance/thresholds', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const fields = ['lateThresholdMin', 'earlyDepartThresholdMin', 'dailyOtThresholdHours', 'monthlyOtAlertHours', 'missingClockOutGraceHours'];
+    const data = {};
+    for (const f of fields) {
+      if (req.body[f] != null) {
+        const n = Number(req.body[f]);
+        if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: `Invalid value for ${f}` });
+        data[f] = n;
+      }
+    }
+    data.updatedBy = req.user?.sub || null;
+    const row = await prisma.anomalyThreshold.upsert({
+      where: { id: 1 },
+      create: { id: 1, ...DEFAULT_THRESHOLDS, ...data },
+      update: data,
+    });
+    await writeAudit({ entityType: 'AnomalyThreshold', entityId: '1', action: 'UPDATE', actor: req.user, req, changedFields: data });
+    res.json(row);
+  } catch (err) { next(err); }
+});
+
+/**
+ * Run a sweep for a date range. For every attendance record in the window
+ * (plus AWOL-detection over rostered employees who have NO record), upsert
+ * the resulting anomaly rows. Also runs MONTHLY_OT_BREACH per (employee,
+ * month) if the window covers any full or partial month.
+ *
+ * @param {object} args  { from, to, now } — Dates
+ * @returns {object}     { swept, created, updated, byType: {...} }
+ */
+async function runAnomalySweep({ from, to, now = new Date() } = {}) {
+  if (!(from instanceof Date) || !(to instanceof Date)) {
+    throw new Error('runAnomalySweep requires from + to Date objects');
+  }
+  const thresholds = await loadThresholds();
+  const byType = Object.fromEntries(Object.values(ANOMALY_TYPES).map(t => [t, 0]));
+  let created = 0;
+  let updated = 0;
+
+  // 1. Per-record anomalies
+  const records = await prisma.attendanceRecord.findMany({
+    where: { date: { gte: from, lte: to } },
+  });
+
+  for (const record of records) {
+    const detected = detectAnomaliesForRecord(record, { thresholds, now });
+    for (const a of detected) {
+      const recordDate = new Date(record.date);
+      recordDate.setUTCHours(0, 0, 0, 0);
+      const result = await prisma.attendanceAnomaly.upsert({
+        where: { employeeId_date_type: { employeeId: record.employeeId, date: recordDate, type: a.type } },
+        create: {
+          id: uuidv4(),
+          employeeId: record.employeeId,
+          date: recordDate,
+          type: a.type,
+          severity: a.severity,
+          message: a.message,
+          detail: a.detail,
+          recordId: record.id,
+        },
+        update: {
+          // Refresh message + detail in case thresholds changed; keep status/ack/explain fields untouched.
+          severity: a.severity,
+          message: a.message,
+          detail: a.detail,
+          recordId: record.id,
+        },
+      });
+      byType[a.type] += 1;
+      if (result.detectedAt.getTime() === result.updatedAt.getTime()) created += 1; else updated += 1;
+    }
+  }
+
+  // 2. AWOL — scheduled-to-work employees with no AttendanceRecord at all
+  const rosterEntries = await prisma.rosterEntry.findMany({
+    where: { date: { gte: from, lte: to } },
+    include: { shiftTemplate: true, workingShift: true, shiftPattern: true },
+  });
+  const recordKeySet = new Set(records.map(r => `${r.employeeId}|${new Date(r.date).toISOString().slice(0, 10)}`));
+  for (const entry of rosterEntries) {
+    const dStr = new Date(entry.date).toISOString().slice(0, 10);
+    if (recordKeySet.has(`${entry.employeeId}|${dStr}`)) continue;
+    // Build a synthetic "no clock-in" record so the engine can decide AWOL.
+    const schedule = await resolveSchedule(prisma, entry.employeeId, new Date(entry.date));
+    if (!schedule) continue;
+    if (now <= new Date(schedule.scheduledEnd)) continue; // day not over yet
+    const synthetic = {
+      employeeId: entry.employeeId,
+      date: entry.date,
+      clockIn: null,
+      clockOut: null,
+      status: 'ABSENT',
+      scheduledStart: schedule.scheduledStart,
+      scheduledEnd:   schedule.scheduledEnd,
+    };
+    const detected = detectAnomaliesForRecord(synthetic, { thresholds, now });
+    for (const a of detected) {
+      const recordDate = new Date(entry.date);
+      recordDate.setUTCHours(0, 0, 0, 0);
+      const result = await prisma.attendanceAnomaly.upsert({
+        where: { employeeId_date_type: { employeeId: entry.employeeId, date: recordDate, type: a.type } },
+        create: {
+          id: uuidv4(),
+          employeeId: entry.employeeId,
+          date: recordDate,
+          type: a.type,
+          severity: a.severity,
+          message: a.message,
+          detail: a.detail,
+        },
+        update: { severity: a.severity, message: a.message, detail: a.detail },
+      });
+      byType[a.type] += 1;
+      if (result.detectedAt.getTime() === result.updatedAt.getTime()) created += 1; else updated += 1;
+    }
+  }
+
+  // 3. MONTHLY_OT_BREACH per (employee, month) covered by the window
+  const monthKeys = new Set();
+  for (const r of records) {
+    const d = new Date(r.date);
+    monthKeys.add(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
+  }
+  for (const monthKey of monthKeys) {
+    const [y, m] = monthKey.split('-').map(Number);
+    const mStart = new Date(Date.UTC(y, m - 1, 1));
+    const mEnd   = new Date(Date.UTC(y, m,   0, 23, 59, 59, 999));
+    const monthRecords = await prisma.attendanceRecord.findMany({ where: { date: { gte: mStart, lte: mEnd } } });
+    const byEmp = new Map();
+    for (const r of monthRecords) {
+      if (!byEmp.has(r.employeeId)) byEmp.set(r.employeeId, []);
+      byEmp.get(r.employeeId).push(r);
+    }
+    for (const [empId, rows] of byEmp.entries()) {
+      const breach = detectMonthlyOtBreach(rows, { thresholds, markerDate: mStart });
+      if (!breach) continue;
+      const result = await prisma.attendanceAnomaly.upsert({
+        where: { employeeId_date_type: { employeeId: empId, date: mStart, type: breach.type } },
+        create: {
+          id: uuidv4(),
+          employeeId: empId,
+          date: mStart,
+          type: breach.type,
+          severity: breach.severity,
+          message: breach.message,
+          detail: breach.detail,
+        },
+        update: { severity: breach.severity, message: breach.message, detail: breach.detail },
+      });
+      byType[breach.type] += 1;
+      if (result.detectedAt.getTime() === result.updatedAt.getTime()) created += 1; else updated += 1;
+    }
+  }
+
+  return { swept: records.length, created, updated, byType };
+}
+
+// POST /attendance/anomalies/sweep — admin trigger
+app.post('/attendance/anomalies/sweep', authenticate, authorize(...ANOMALY_ADMIN_ROLES), async (req, res, next) => {
+  try {
+    const { from, to } = req.body || {};
+    if (!from || !to) return res.status(400).json({ error: 'from and to (YYYY-MM-DD) required' });
+    const fromD = new Date(from + 'T00:00:00.000Z');
+    const toD   = new Date(to   + 'T23:59:59.999Z');
+    if (Number.isNaN(fromD.getTime()) || Number.isNaN(toD.getTime()) || fromD > toD) {
+      return res.status(400).json({ error: 'Invalid from/to range' });
+    }
+    const result = await runAnomalySweep({ from: fromD, to: toD });
+    await writeAudit({ entityType: 'AttendanceAnomaly', action: 'SWEEP', actor: req.user, req, changedFields: { from, to, ...result } });
+    res.json({ from, to, ...result });
+  } catch (err) { next(err); }
+});
+
+// GET /attendance/anomalies — list with filters
+app.get('/attendance/anomalies', authenticate, authorize(...ANOMALY_VIEW_ROLES), async (req, res, next) => {
+  try {
+    const { status, type, employeeId, from, to, severity } = req.query;
+    const where = {};
+    if (status) where.status = status;
+    if (type) where.type = type;
+    if (severity) where.severity = severity;
+    if (employeeId) where.employeeId = employeeId;
+    if (from || to) {
+      where.date = {};
+      if (from) where.date.gte = new Date(from + 'T00:00:00.000Z');
+      if (to)   where.date.lte = new Date(to   + 'T23:59:59.999Z');
+    }
+    // Line managers only see their direct reports — caller must pass employeeIds
+    // resolved upstream (or filter client-side from the unrestricted feed).
+    const rows = await prisma.attendanceAnomaly.findMany({
+      where,
+      orderBy: [{ date: 'desc' }, { severity: 'desc' }],
+      take: 1000,
+    });
+    const summary = rows.reduce((acc, r) => {
+      acc.byStatus[r.status] = (acc.byStatus[r.status] || 0) + 1;
+      acc.byType[r.type]     = (acc.byType[r.type]     || 0) + 1;
+      acc.bySeverity[r.severity] = (acc.bySeverity[r.severity] || 0) + 1;
+      return acc;
+    }, { byStatus: {}, byType: {}, bySeverity: {} });
+    res.json({ total: rows.length, summary, anomalies: rows });
+  } catch (err) { next(err); }
+});
+
+// PUT /attendance/anomalies/:id/acknowledge
+app.put('/attendance/anomalies/:id/acknowledge', authenticate, authorize(...ANOMALY_VIEW_ROLES), async (req, res, next) => {
+  try {
+    const existing = await prisma.attendanceAnomaly.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: 'Anomaly not found' });
+    if (existing.status === 'DISMISSED') {
+      return res.status(409).json({ error: `Cannot acknowledge an anomaly in status ${existing.status}` });
+    }
+    const row = await prisma.attendanceAnomaly.update({
+      where: { id: req.params.id },
+      data: { status: 'ACKNOWLEDGED', acknowledgedBy: req.user?.sub || null, acknowledgedAt: new Date() },
+    });
+    await writeAudit({ entityType: 'AttendanceAnomaly', entityId: row.id, action: 'ACKNOWLEDGE', actor: req.user, req });
+    res.json(row);
+  } catch (err) { next(err); }
+});
+
+// PUT /attendance/anomalies/:id/explain  { explanation: "..." }
+app.put('/attendance/anomalies/:id/explain', authenticate, async (req, res, next) => {
+  try {
+    const existing = await prisma.attendanceAnomaly.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: 'Anomaly not found' });
+    if (existing.status === 'DISMISSED') {
+      return res.status(409).json({ error: `Cannot explain an anomaly in status ${existing.status}` });
+    }
+    // Employee may explain own anomaly; managers may explain any (they have the role).
+    const role = req.user?.role;
+    const ownerByRole = ANOMALY_VIEW_ROLES.includes(role);
+    if (!ownerByRole && req.user?.employeeId !== existing.employeeId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const explanation = (req.body?.explanation || '').trim();
+    if (!explanation) return res.status(400).json({ error: 'explanation is required' });
+    const row = await prisma.attendanceAnomaly.update({
+      where: { id: req.params.id },
+      data: { status: 'EXPLAINED', explanation, explanationBy: req.user?.sub || null, explanationAt: new Date() },
+    });
+    await writeAudit({ entityType: 'AttendanceAnomaly', entityId: row.id, action: 'EXPLAIN', actor: req.user, req });
+    res.json(row);
+  } catch (err) { next(err); }
+});
+
+// PUT /attendance/anomalies/:id/dismiss  { reason?: "..." }
+app.put('/attendance/anomalies/:id/dismiss', authenticate, authorize(...ANOMALY_VIEW_ROLES), async (req, res, next) => {
+  try {
+    const existing = await prisma.attendanceAnomaly.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: 'Anomaly not found' });
+    if (existing.status === 'DISMISSED') {
+      return res.status(409).json({ error: 'Already dismissed' });
+    }
+    const row = await prisma.attendanceAnomaly.update({
+      where: { id: req.params.id },
+      data: { status: 'DISMISSED', dismissedBy: req.user?.sub || null, dismissedAt: new Date(), dismissReason: req.body?.reason || null },
+    });
+    await writeAudit({ entityType: 'AttendanceAnomaly', entityId: row.id, action: 'DISMISS', actor: req.user, req });
+    res.json(row);
+  } catch (err) { next(err); }
+});
+
+// POST /attendance/anomalies/manager-summary  — fire daily summary emails
+// Body: { date?: 'YYYY-MM-DD' }  (defaults to yesterday)
+// Honours x-internal-service-key OR an admin JWT — lets the scheduled task and
+// HR Admin both kick it off.
+app.post('/attendance/anomalies/manager-summary', async (req, res, next) => {
+  try {
+    const internal = req.headers['x-internal-service-key'] && req.headers['x-internal-service-key'] === internalKey();
+    if (!internal) {
+      // Fall through to auth + admin authorize
+      return authenticate(req, res, () => {
+        const role = req.user?.role;
+        if (![ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER].includes(role)) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+        return dispatchManagerSummary(req, res, next);
+      });
+    }
+    return dispatchManagerSummary(req, res, next);
+  } catch (err) { next(err); }
+});
+
+async function dispatchManagerSummary(req, res, next) {
+  try {
+    const targetDate = req.body?.date ? new Date(req.body.date + 'T00:00:00.000Z') : (() => {
+      const y = new Date(); y.setUTCDate(y.getUTCDate() - 1); y.setUTCHours(0, 0, 0, 0); return y;
+    })();
+    const endDate = new Date(targetDate); endDate.setUTCHours(23, 59, 59, 999);
+    const pending = await prisma.attendanceAnomaly.findMany({
+      where: { date: { gte: targetDate, lte: endDate }, status: 'PENDING' },
+    });
+    if (!pending.length) return res.json({ date: targetDate.toISOString().slice(0, 10), managersNotified: 0, anomalies: 0 });
+
+    // Group by employeeId then resolve managers
+    const byEmp = new Map();
+    for (const a of pending) {
+      if (!byEmp.has(a.employeeId)) byEmp.set(a.employeeId, []);
+      byEmp.get(a.employeeId).push(a);
+    }
+    const employeeIds = Array.from(byEmp.keys());
+    let employeeMap = new Map();
+    try {
+      const empRes = await fetch(`${EMPLOYEE_SERVICE_URL}/employees/by-ids?ids=${employeeIds.join(',')}`, {
+        headers: { Authorization: req.headers.authorization || '' },
+      });
+      if (empRes.ok) {
+        const list = await empRes.json();
+        for (const e of list) employeeMap.set(e.id, e);
+      }
+    } catch (err) {
+      console.error('[anomaly] employee lookup failed:', err.message);
+    }
+
+    // Build manager → anomalies map
+    const byManager = new Map();
+    for (const [empId, list] of byEmp.entries()) {
+      const emp = employeeMap.get(empId);
+      const managerId = emp?.reportingManagerId;
+      if (!managerId) continue;
+      if (!byManager.has(managerId)) byManager.set(managerId, []);
+      byManager.get(managerId).push({ employee: emp, anomalies: list });
+    }
+
+    let notified = 0;
+    for (const [managerId, items] of byManager.entries()) {
+      const manager = employeeMap.get(managerId) || (await tryFetchEmployee(managerId, req.headers.authorization));
+      if (!manager?.workEmail) continue;
+      try {
+        const totalAnomalies = items.reduce((sum, i) => sum + i.anomalies.length, 0);
+        await fetch(`${NOTIFICATION_SERVICE_URL}/notifications/email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: req.headers.authorization || '' },
+          body: JSON.stringify({
+            type: 'ATTENDANCE_ANOMALY_DIGEST',
+            recipients: [manager.workEmail],
+            data: {
+              managerName: manager.fullName,
+              date: targetDate.toISOString().slice(0, 10),
+              totalAnomalies,
+              employeeCount: items.length,
+              items: items.map(i => ({
+                employeeName: i.employee?.fullName || i.employee?.id,
+                anomalies: i.anomalies.map(a => ({ type: a.type, severity: a.severity, message: a.message })),
+              })),
+            },
+          }),
+        });
+        notified += 1;
+      } catch (err) {
+        console.error('[anomaly] manager notify failed:', err.message);
+      }
+    }
+
+    res.json({
+      date: targetDate.toISOString().slice(0, 10),
+      anomalies: pending.length,
+      managersNotified: notified,
+    });
+  } catch (err) { next(err); }
+}
+
+async function tryFetchEmployee(id, authHeader) {
+  try {
+    const r = await fetch(`${EMPLOYEE_SERVICE_URL}/employees/${id}`, { headers: { Authorization: authHeader || '' } });
+    if (r.ok) return await r.json();
+  } catch (_e) {}
+  return null;
+}
+
+// ─── TAT-004 Real-Time Today Dashboard ──────────────────────────────────────
+
+/**
+ * GET /attendance/today/dashboard
+ *
+ * Real-time snapshot of today: who's in / on break / WFH / absent / on leave /
+ * not yet clocked in. Reads:
+ *   - all AttendanceRecord rows for today
+ *   - rostered employees (RosterEntry) for today — anyone rostered without
+ *     a record falls into NOT_CLOCKED_IN
+ *   - leave-service approved leaves for today (best-effort; failure logs)
+ */
+app.get('/attendance/today/dashboard', authenticate, authorize(...ANOMALY_VIEW_ROLES), async (req, res, next) => {
+  try {
+    const now = new Date();
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const tomorrow = new Date(today); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+
+    const [records, rosterToday] = await Promise.all([
+      prisma.attendanceRecord.findMany({ where: { date: { gte: today, lt: tomorrow } } }),
+      prisma.rosterEntry.findMany({ where: { date: { gte: today, lt: tomorrow } } }),
+    ]);
+
+    // Optional leave fetch — fail-soft if leave service is unreachable.
+    let leaveSet = new Map();
+    try {
+      const lr = await fetch(`${LEAVE_SERVICE_URL}/leave/internal/on-leave-today`, {
+        headers: { 'x-internal-service-key': internalKey() },
+      });
+      if (lr.ok) {
+        const list = await lr.json();
+        for (const item of (Array.isArray(list) ? list : [])) {
+          leaveSet.set(item.employeeId, item.leaveTypeCode || 'ON_LEAVE');
+        }
+      }
+    } catch (err) {
+      console.error('[dashboard] leave fetch failed:', err.message);
+    }
+
+    const buckets = { IN: [], OUT: [], WFH: [], LATE: [], ON_LEAVE: [], NOT_CLOCKED_IN: [], PUBLIC_HOLIDAY: [], ABSENT: [] };
+    const seen = new Set();
+
+    for (const r of records) {
+      const empId = r.employeeId;
+      seen.add(empId);
+      const entry = rosterToday.find(e => e.employeeId === empId);
+      const isWfh = entry?.note?.toLowerCase().includes('wfh') || false;
+      if (leaveSet.has(empId)) {
+        buckets.ON_LEAVE.push({ employeeId: empId, leaveType: leaveSet.get(empId), recordId: r.id });
+      } else if (r.status === 'PUBLIC_HOLIDAY') {
+        buckets.PUBLIC_HOLIDAY.push({ employeeId: empId, recordId: r.id });
+      } else if (r.status === 'ABSENT') {
+        buckets.ABSENT.push({ employeeId: empId, recordId: r.id });
+      } else if (r.clockOut) {
+        const target = isWfh ? buckets.WFH : buckets.OUT;
+        target.push({ employeeId: empId, clockIn: r.clockIn, clockOut: r.clockOut, hoursWorked: r.hoursWorked });
+      } else if (r.clockIn) {
+        const target = isWfh ? buckets.WFH : buckets.IN;
+        target.push({ employeeId: empId, clockIn: r.clockIn, status: r.status });
+        if (r.status === 'LATE') buckets.LATE.push({ employeeId: empId, clockIn: r.clockIn });
+      } else {
+        buckets.NOT_CLOCKED_IN.push({ employeeId: empId, recordId: r.id });
+      }
+    }
+
+    // Rostered employees with NO record yet
+    for (const entry of rosterToday) {
+      if (seen.has(entry.employeeId)) continue;
+      if (leaveSet.has(entry.employeeId)) {
+        buckets.ON_LEAVE.push({ employeeId: entry.employeeId, leaveType: leaveSet.get(entry.employeeId) });
+      } else {
+        buckets.NOT_CLOCKED_IN.push({ employeeId: entry.employeeId, scheduled: true });
+      }
+    }
+
+    const summary = Object.fromEntries(Object.entries(buckets).map(([k, v]) => [k, v.length]));
+    res.json({
+      date: today.toISOString().slice(0, 10),
+      generatedAt: now.toISOString(),
+      summary,
+      buckets,
+    });
+  } catch (err) { next(err); }
+});
+
+// ─── Scheduled daily anomaly sweep ───────────────────────────────────────────
+// Runs at 00:30 SGT every day — sweeps the prior day. Best-effort: errors are
+// logged, the scheduler stays alive.
+function scheduleDailyAnomalySweep() {
+  if (process.env.NODE_ENV === 'test') return;
+  const sgtOffsetMs = 8 * 60 * 60 * 1000;
+  function msUntilNext0030Sgt() {
+    const nowMs   = Date.now();
+    const sgtNow  = new Date(nowMs + sgtOffsetMs);
+    const target  = new Date(Date.UTC(sgtNow.getUTCFullYear(), sgtNow.getUTCMonth(), sgtNow.getUTCDate(), 0, 30, 0, 0));
+    if (target <= sgtNow) target.setUTCDate(target.getUTCDate() + 1);
+    return target.getTime() - sgtNow.getTime();
+  }
+  async function tick() {
+    try {
+      const yesterday = new Date(); yesterday.setUTCDate(yesterday.getUTCDate() - 1); yesterday.setUTCHours(0, 0, 0, 0);
+      const yEnd      = new Date(yesterday); yEnd.setUTCHours(23, 59, 59, 999);
+      const result = await runAnomalySweep({ from: yesterday, to: yEnd });
+      console.log(`[anomaly-sweep] ${yesterday.toISOString().slice(0,10)} created=${result.created} updated=${result.updated} byType=${JSON.stringify(result.byType)}`);
+    } catch (err) {
+      console.error('[anomaly-sweep] failed:', err.message);
+    }
+    setTimeout(tick, 24 * 60 * 60 * 1000);
+  }
+  setTimeout(tick, msUntilNext0030Sgt());
+  console.log('[anomaly-sweep] daily scheduler armed for 00:30 SGT');
+}
+
 app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: err.message || 'Internal server error' }); });
 
 if (require.main === module) {
   app.listen(PORT, () => console.log(`[attendance-service] Running on port ${PORT}`));
+  scheduleDailyAnomalySweep();
 }
 
 module.exports = app;
+module.exports.runAnomalySweep = runAnomalySweep;

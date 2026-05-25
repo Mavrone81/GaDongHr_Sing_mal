@@ -585,6 +585,36 @@ router.post('/public-holidays', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES
   } catch (err) { next(err); }
 });
 
+// ── GET /leave/internal/on-leave-today — list of employees on approved leave today ─
+// Used by attendance-service today-dashboard (TAT-004) to route those employees
+// into the ON_LEAVE bucket instead of NOT_CLOCKED_IN.
+router.get('/internal/on-leave-today', async (req, res, next) => {
+  const key = req.headers['x-internal-service-key'];
+  if (!key || key !== INTERNAL_KEY) return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const now = new Date();
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const tomorrow = new Date(today); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    const apps = await prisma.leaveApplication.findMany({
+      where: {
+        status: 'APPROVED',
+        startDate: { lt: tomorrow },
+        endDate:   { gte: today },
+      },
+      include: { leaveType: { select: { code: true, name: true } } },
+    });
+    res.json(apps.map(a => ({
+      employeeId: a.employeeId,
+      leaveTypeCode: a.leaveType?.code,
+      leaveTypeName: a.leaveType?.name,
+      startDate: a.startDate,
+      endDate: a.endDate,
+      isHalfDay: a.isHalfDay,
+      halfDaySlot: a.halfDaySlot,
+    })));
+  } catch (err) { next(err); }
+});
+
 // ── GET /leave/internal/all-balances?year=YYYY — leave liability source for reporting ─
 router.get('/internal/all-balances', async (req, res, next) => {
   const key = req.headers['x-internal-service-key'];

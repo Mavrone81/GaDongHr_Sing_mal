@@ -1,7 +1,7 @@
 # Implementation Status
 
 **PRD Reference:** PRD-HRMS-001 v2.0  
-**Last Updated:** 2026-05-24 _(SUP-004 completion — self-service FAQ with admin CRUD, helpfulness feedback, idempotent seed)_  
+**Last Updated:** 2026-05-25 _(TAT-004 completion — anomaly detection engine, daily sweep, manager workflow, today dashboard)_  
 **Legend:** ✅ Done · ⚠️ Partial · ❌ Not Done
 
 ---
@@ -10,18 +10,18 @@
 
 | Module | Done | Partial | Not Done | Total |
 |--------|------|---------|----------|-------|
-| Payroll & CPF | 6 | 6 | 0 | 12 |
+| Payroll & CPF | 7 | 5 | 0 | 12 |
 | Leave Management | 5 | 2 | 0 | 7 |
 | Claims & Expenses | 3 | 1 | 0 | 4 |
-| Recruitment & Onboarding | 1 | 4 | 0 | 5 |
-| Time & Attendance | 4 | 1 | 0 | 5 |
-| Performance Management | 4 | 1 | 1 | 6 |
+| Recruitment & Onboarding | 2 | 3 | 0 | 5 |
+| Time & Attendance | 5 | 0 | 0 | 5 |
+| Performance Management | 5 | 1 | 0 | 6 |
 | Training & Development | 3 | 1 | 0 | 4 |
 | Asset Management | 4 | 0 | 0 | 4 |
 | Offboarding | 5 | 0 | 0 | 5 |
-| Reporting & Analytics | 1 | 2 | 0 | 3 |
+| Reporting & Analytics | 2 | 1 | 0 | 3 |
 | Support & Ticketing | 4 | 0 | 0 | 4 |
-| **Total** | **40** | **17** | **2** | **59** |
+| **Total** | **45** | **14** | **0** | **59** |
 
 ---
 
@@ -89,13 +89,25 @@ Full revision workflow: `POST /:id/salary-revisions` (PENDING), `PUT /:id/salary
 **Status:** Done _(implemented 2026-05-23)_  
 BIK item CRUD with IRAS formula computation (`POST/GET/PUT/DELETE /payroll/bik-items`) covering all 4 PRD types: COMPANY_CAR (3/7 × purchase cost + optional 3/7 × running cost if employer provides fuel), HOUSING (IRAS-assessed AV less employee contribution), CLUB_MEMBERSHIP, GROUP_INSURANCE, OTHER (manual). Stock option lifecycle (`POST/GET/PUT/DELETE /payroll/stock-options`) and exercise events (`POST /payroll/stock-options/:id/exercises`) with taxable gain = max(0, (OMV − optionPrice) × shares). Annual aggregation endpoints: `GET /payroll/appendix-8a/:year`, `GET /payroll/appendix-8a-file/:year`, `GET /payroll/appendix-8b/:year`, `GET /payroll/appendix-8b-file/:year`, all in IRAS pipe-delimited flat-file format. Existing `GET /payroll/ir8a-data/:year` and `/ir8a-file/:year` now fold in BIK + ESOP totals per employee (regression-tested). All monetary fields AES-256 encrypted. 18 unit tests for IRAS formulas (`bik-engine.unit.test.js`) + 23 integration tests (`bik-api.integration.test.js`) including 2 IR8A regression tests.
 
-### ⚠️ PAY-011 — Government-Paid Leave Integration
-**Status:** Partial  
-**Done:** NPL auto-deduction from approved leave passed to payroll (daily rate × NPL days deduction line). Govt-paid leave type flags in leave module.  
-**Outstanding:**
-- CPF treatment differentiation (employer-paid portion vs government pass-through) not yet applied automatically
-- GPML/GPPL/NS make-up pay claim generation and tracking not yet implemented
-- NS make-up pay formula (civilian daily rate − NS allowance × NS days) not yet automated
+### ✅ PAY-011 — Government-Paid Leave Integration
+**Status:** Done _(completed 2026-05-24)_  
+NPL auto-deduction, govt-paid leave type flags, CPF treatment differentiation, and full GPML/GPPL/CCL/SPL/NS make-up pay claim generation and tracking.
+
+**Claim generation:** `POST /payroll/govt-leave-claims/generate?period=YYYY-MM` — calls leave service for approved govt-paid applications in the period, derives per-employee daily rate from the published payslip (`govtPaidAmount ÷ govtPaidDays`), groups by employee × leave type, and upserts one `GovtLeaveClaimPayroll` row per combination. Optional `nsAllowancePerDay` and `employerCpfRate` query params.
+
+**MSF daily caps enforced per type:** ML/PL/SPL SGD 500/day, CCL SGD 100/day (configurable in engine). Rate above cap is clamped; clamped `claimableAmount` stored encrypted.
+
+**NS make-up pay (NSL):** `claimableAmount = nsMakeupAmount = max(0, civilianDailyRate − nsAllowancePerDay) × days`. No MSF cap; MINDEF claim is net employer cost. `nsAllowancePerDay` defaults to 0 (full civilian rate claimed).
+
+**CPF treatment differentiation:** `cpfOnGovtPaidEnc` on each claim row = `claimableAmount × employerCpfRate` — tracks the employer CPF obligation attributable to the govt-reimbursable days for reconciliation.
+
+**Claim tracking:** Status machine PENDING → SUBMITTED → REIMBURSED (or REJECTED from either). `PUT /payroll/govt-leave-claims/:id` transitions status, stamps `submittedAt`/`reimbursedAt`, stores `submissionRef` and `reimbursedAmountEnc`.
+
+**Endpoints:** `GET /payroll/govt-leave-claims` (filterable by period/status/leaveTypeCode/employeeId, paginated), `GET /payroll/govt-leave-claims/summary?period=` (totals by type and status, totalNsMakeup), `GET /payroll/govt-leave-claims/:id`.
+
+**Schema:** New `GovtLeaveClaimPayroll` model with `@@unique([employeeId, period, leaveTypeCode])` + new `GovtClaimStatus` enum (PENDING/SUBMITTED/REIMBURSED/REJECTED).
+
+**Tests:** 37 unit tests on `govt-leave-claims.engine.js` (DAILY_CAPS constants, claimable amount + MSF cap logic, NS formula incl. negative clamp and zero-allowance default, CPF on govt-paid, buildClaimRecord for ML vs NSL, groupLeavesByEmployeeAndType aggregation + exclusion of non-govt-paid types, full transition matrix) + 19 integration tests G1-G19 (period validation, leave-service 502 propagation, no-leave empty response, ML generate + upsert data assertions, employee-skip when no payslip, ML/CCL/PL cap enforcement, NS make-up with and without allowance, list filtering, summary aggregation, status transitions with timestamp stamps, 409 on invalid transitions including skip-step and terminal state). Full payroll suite: **299 tests green**.
 
 ### ✅ PAY-012 — Cost Centre & Payroll Journal
 **Status:** Done _(implemented 2026-05-23)_  
@@ -200,15 +212,28 @@ Job requisitions, pipeline stages (Applied → Screened → Interviewed → Offe
 - Incomplete onboarding 3-day-before-start-date HR alert missing
 - Mandatory acknowledgements (handbook, harassment policy, PDPA) e-sign not fully implemented
 
-### ⚠️ REC-005 — Employee Record Auto-Creation
-**Status:** Partial  
-**Done:** `POST /applications/:id/approve` creates employee record with unique Employee ID. Leave entitlement provisioned via internal auto-provision call. Employee activated on start date.  
-**Outstanding:**
-- IT access provisioning trigger on approval not implemented
-- Payroll setup (bank details, CPF profile) automatic wiring on approval incomplete
-- Assets-to-issue list auto-creation on approval missing
-- Probation tracking auto-start on activation missing
-- Confirmation email to new employee and Line Manager not yet sent
+### ✅ REC-005 — Employee Record Auto-Creation
+**Status:** Done _(completed 2026-05-24)_
+
+Full hire approval pipeline: `POST /candidates/:id/approve` (HR Admin/Super Admin) is the single entry point that orchestrates employee record creation and all downstream provisioning.
+
+**Employee creation:** Calls `POST /employee-service/employees` with candidate details + body overrides (`startDate` required; optional: `department`, `jobTitle`, `basicSalary`, `managerId`, `probationMonths`). Returns 502 with propagated error if employee service fails or is unreachable; 409 with `employeeId` if candidate already hired; 400 if `startDate` missing.
+
+**Candidate update (transactional):** Atomically updates candidate `stage=HIRED`, `isHired=true`, `employeeId` + writes `CandidateStageEvent` with approval note.
+
+**Leave entitlement provisioning:** `POST /leave-service/leave/internal/provision-entitlements` (fire-and-forget — failure doesn't block approval; `triggers.leaveProvisioned` in response).
+
+**IT provisioning tasks (Day −5):** Creates 5 `OnboardingTask` records (Active Directory/SSO, laptop, corporate email, system access, MFA/VPN) with `dueDate = startDate − 5 days`, `assignedTo=IT`. `triggers.itTaskCreated` in response.
+
+**Payroll setup task:** Creates 1 `OnboardingTask` for Payroll Officer: configure bank account + CPF contribution type + FWL tier before first payroll run. `dueDate = startDate`. `triggers.payrollSetupQueued` in response.
+
+**Probation tracking:** Creates 1 `OnboardingTask` (`dueDate = startDate + probationMonths`, default 3): Line Manager must complete probation appraisal. `triggers.probationStarted` in response.
+
+**Confirmation email:** `POST /notification-service/notifications/email` with `NEW_HIRE_WELCOME` type (fire-and-forget). `triggers.emailSent` in response.
+
+**All downstream triggers are fire-and-forget:** failures are captured in the `triggers` object but never block the 201 response.
+
+**Tests:** 13 integration tests R1-R13 (happy path: employee created + HIRED stage + 5 IT tasks + payroll task + probation task with correct end date + auth header forwarded; validation: 404/409/400/502 unreachable/502 non-OK; resilience: approval succeeds when leave service or notification service is down; transaction called with 2 ops). Full recruitment suite: **20 tests green**.
 
 ---
 
@@ -226,14 +251,37 @@ Shift templates (name, start/end, break, colour), roster grid (weekly 7-column, 
 **Status:** Done  
 OT hours = max(0, worked − contracted), 72h monthly cap, 60h alert, HR override with audit trail, OT pay (1.5× hourly basic rate), rest day pay (EA s.37 employee/employer request rates), PH work pay (normal + 1 day or OIL credit). All amounts auto-passed to payroll.
 
-### ⚠️ TAT-004 — Attendance Anomaly Detection
-**Status:** Partial  
-**Done:** Attendance records stored; late/early/missing-clock-out anomalies implicitly detectable from records.  
-**Outstanding:**
-- Automated anomaly classification (late arrival, early departure, AWOL, missing clock-out, excessive OT) with configurable thresholds not yet implemented
-- Manager daily summary email of team anomalies not implemented
-- Anomaly acknowledgement/explanation workflow (manager review) not built
-- Real-time attendance dashboard (who's in/WFH/absent/late) not yet on frontend
+### ✅ TAT-004 — Attendance Anomaly Detection
+**Status:** Done _(completed 2026-05-25)_  
+Full anomaly classification engine, daily sweep, ack workflow, manager digest email, and real-time today dashboard.
+
+**Anomaly engine (`src/engines/anomaly.engine.js`):** Pure classifier — no DB. Detects six types per (employee × date):
+- `LATE_ARRIVAL` — clockIn ≥ scheduledStart + `lateThresholdMin` (default 15 min)
+- `EARLY_DEPARTURE` — clockOut ≤ scheduledEnd − `earlyDepartThresholdMin` (default 15 min)
+- `MISSING_CLOCK_OUT` — clockIn present, no clockOut, past `missingClockOutGraceHours` (default 2h) beyond scheduled end (or clockIn + 12h fallback when no schedule)
+- `AWOL` — scheduled day with no clockIn at all, status ∉ {ON_LEAVE, PUBLIC_HOLIDAY}, day fully elapsed
+- `EXCESSIVE_OT` — single-day OT ≥ `dailyOtThresholdHours` (default 4h), uses billableOtHours when present
+- `MONTHLY_OT_BREACH` — Σ OT for the month ≥ `monthlyOtAlertHours` (default 60h — alert before MOM's 72h hard cap)
+
+**Configurable thresholds:** Singleton `AnomalyThreshold` table (id=1). `GET /attendance/thresholds` + `PUT /attendance/thresholds` (HR Admin only). Engine reads via sweep route; falls back to defaults if no row.
+
+**Idempotent daily sweep:** `POST /attendance/anomalies/sweep` (HR Admin+) accepts `{from, to}` YYYY-MM-DD. Iterates every record + every rostered employee in the window. Per-record anomalies upsert on `@@unique([employeeId, date, type])`; AWOL synthesises a no-clockin record for rostered employees with no `AttendanceRecord`; MONTHLY_OT_BREACH aggregates per (employee × month) and pins one row per month-start. Daily scheduled sweep at 00:30 SGT (next run + 24h interval) sweeps the prior day automatically — armed on service boot via `scheduleDailyAnomalySweep()` (skipped under NODE_ENV=test).
+
+**Manager workflow:**
+- `GET /attendance/anomalies?status=&type=&severity=&employeeId=&from=&to=` — paginated list (cap 1000) with `summary.byStatus/byType/bySeverity`
+- `PUT /attendance/anomalies/:id/acknowledge` — manager flips PENDING → ACKNOWLEDGED, stamps `acknowledgedBy/At`
+- `PUT /attendance/anomalies/:id/explain` — employee (own only) or any view-role manager flips → EXPLAINED with required `explanation` text
+- `PUT /attendance/anomalies/:id/dismiss` — view-role manager flips → DISMISSED with optional `reason`. All terminal transitions reject DISMISSED → others with 409.
+
+**Manager digest email:** `POST /attendance/anomalies/manager-summary` (internal-key OR HR Admin/HR Manager JWT) — groups PENDING anomalies for a target date (defaults yesterday) by `employee.reportingManagerId`, resolves manager email via employee-service `/employees/by-ids`, fires one `ATTENDANCE_ANOMALY_DIGEST` email per manager via notification-service. Fail-soft: per-manager exceptions logged but don't fail the run.
+
+**Real-time today dashboard:** `GET /attendance/today/dashboard` returns `{ date, generatedAt, summary, buckets }` with 8 buckets: `IN`, `OUT`, `WFH`, `LATE`, `ON_LEAVE`, `NOT_CLOCKED_IN`, `PUBLIC_HOLIDAY`, `ABSENT`. WFH detected by `RosterEntry.note` containing "wfh". `ON_LEAVE` joined via new `GET /leave/internal/on-leave-today` endpoint (internal-key auth) — failure is fail-soft, dashboard still renders.
+
+**Schema additions:** `AttendanceAnomaly` (uuid PK, unique on `(employeeId, date, type)`, severity LOW/MEDIUM/HIGH, status PENDING/ACKNOWLEDGED/EXPLAINED/DISMISSED, ack/explain/dismiss audit fields, optional `recordId` back-link); `AnomalyThreshold` singleton (id=1, 5 configurable thresholds); enums `AnomalyType`, `AnomalySeverity`, `AnomalyStatus`. Indexed on status/type/employeeId/date.
+
+**Wiring:** `docker-compose.yml` exports `EMPLOYEE_SERVICE_URL`, `LEAVE_SERVICE_URL`, `NOTIFICATION_SERVICE_URL` to attendance-service. New leave-service endpoint `GET /leave/internal/on-leave-today` returns active APPROVED leaves for today.
+
+**Tests (52 new, 131 total green):** 27 unit tests on `anomaly.engine.js` (mergeThresholds defaults/0-override/non-finite guard, buildAnomalyKey shaping, AWOL with/without schedule + leave/PH suppression + day-not-over guard, LATE_ARRIVAL boundary + custom threshold, EARLY_DEPARTURE, MISSING_CLOCK_OUT grace window + no-schedule fallback, EXCESSIVE_OT billableOt precedence, MONTHLY_OT_BREACH sum + custom threshold + billable precedence, multi-anomaly composition) + 25 integration tests T1-T25 (thresholds GET/PUT/validation/403, sweep validation/AWOL synthesis/MONTHLY_OT/idempotency/403, list + filters + summary, acknowledge/explain/dismiss happy + 404/409/403/empty-explanation, manager digest fan-out + role guard + empty list, today dashboard buckets/leave routing/fail-soft). Full attendance suite: **131 tests green** (52 new + 79 pre-existing — no regressions). Leave-service suite: **43 tests green** after new internal endpoint added.
 
 ### ✅ TAT-005 — Payroll Integration from Attendance
 **Status:** Done _(implemented 2026-05-24)_  
@@ -276,14 +324,24 @@ Compensation matrix with increment proposals (`POST /cycles/:id/increment-propos
 **Status:** Done  
 Probation tracking per employee, 30/14/7-day reminders to Line Manager and HR, outcomes (Confirm / Extend / Terminate), permanent status change on confirmation, PIP creation and progress tracking.
 
-### ❌ PMS-006 — 360-Degree Feedback
-**Status:** Not Done  
-**Outstanding:**
-- Peer/subordinate reviewer nomination by employee
-- HR Admin reviewer list approval
-- Anonymous feedback form (configurable per question type)
-- Aggregate competency report without identifying reviewers
-- 360 score factored into overall appraisal rating at configurable weight
+### ✅ PMS-006 — 360-Degree Feedback
+**Status:** Done _(completed 2026-05-24)_
+
+Full 360-degree peer/subordinate/supervisor feedback lifecycle integrated into appraisal cycles.
+
+**Schema additions:** `FeedbackQuestion` (RATING/TEXT, weight, displayOrder), `FeedbackRequest` (nomination → approval → submission state machine, @@unique per cycle × subject × reviewer), `FeedbackResponse` (@@unique per request × question). `ReviewCycle` gains `feedbackWeight Float`. `Appraisal` gains `score360 Float`. New enums: `FeedbackReviewerType`, `FeedbackRequestStatus`, `FeedbackQuestionType`.
+
+**Question management (HR Admin):** `POST /performance/cycles/:id/360/questions` (RATING or TEXT, weight, category, displayOrder), `GET /performance/cycles/:id/360/questions`, `DELETE /performance/cycles/:id/360/questions/:qid`. `PUT /performance/cycles/:id/feedback-weight` sets the 360 blend weight (0.0–1.0).
+
+**Nomination workflow:** `POST /performance/cycles/:id/360/nominations` — employee nominates one or more reviewers with type (PEER/SUBORDINATE/SUPERVISOR); self-nomination and duplicates are silently skipped in `skippedDetails`. `GET /performance/cycles/:id/360/nominations` (HR sees all, employee sees own). `PUT .../nominations/:nomId/approve` (HR Admin) + `PUT .../nominations/:nomId/decline` (with optional reason).
+
+**Anonymous feedback submission:** `GET /performance/cycles/:id/360/my-reviews` — reviewer sees all APPROVED/SUBMITTED requests plus cycle questions. `POST /performance/360/submit/:requestId` — reviewer submits `[{questionId, ratingValue?, textValue?}]`; validates ratingValue 1–5; unknown question IDs silently ignored; previous responses cannot be re-submitted (409). Response contains no subject identification.
+
+**Aggregate report (anonymised):** `GET /performance/cycles/:id/360/report/:employeeId` — HR Admin/HR Manager/Manager can view; employees see own only. Report includes respondentCount, respondentsByType, per-question avgRating/minRating/maxRating, and text comments — comments are suppressed (`revealComments=false`, empty array) when `respondentCount < 3` to prevent identity inference.
+
+**Apply 360 scores:** `POST /performance/cycles/:id/360/apply` — computes weighted average 360 score per employee from all SUBMITTED requests, stores on `appraisal.score360`, and blends with `calibratedScore ?? overallScore` using `feedbackWeight`: `blended = (1-w)×appraisal + w×score360`. Returns per-employee results with `blendedOverallScore`.
+
+**Tests:** 11 unit tests on `feedback360.engine.js` (compute360Score incl. weighted avg, null cases, TEXT exclusion; blendScores incl. clamping; buildReport incl. anonymity threshold, respondentsByType, text-reveal toggle) + 34 integration tests F1-F34 (question CRUD + type validation, feedback-weight range guard, nominations happy path + self-skip + duplicate + type-guard, nomination approve/decline + 409 guards, my-reviews with questions, submit happy path + 403/409/400/unknown-qId, aggregate report HR/employee/403/comment-suppression, apply-scores blend + skip + 404). Full performance suite: **133 tests green**.
 
 ---
 
@@ -421,15 +479,22 @@ Digital exit interview form (satisfaction rating, reason for leaving, open comme
 - PDF/PowerPoint export of dashboard missing
 - Real-time data refresh (max 5-minute delay) not yet confirmed
 
-### ⚠️ RPT-002 — Statutory Reports (Pre-Built)
-**Status:** Partial  
-**Done:** CPF contribution flat-file (`/cpf-file/:runId`), SDL amounts in payroll run data, IR8A annual data and IRAS-format file, leave-liability report, work-pass expiry report.  
-**Outstanding:**
-- FWL Report (per WP/S-Pass employee FWL amounts) separate report not yet built
-- MOM Monthly Headcount Report in MOM-prescribed format not yet implemented
-- Annual MOM Manpower Survey data export missing
-- SDL monthly computation summary as standalone SSG submission report missing
-- Submission history storage (dates, reference numbers, file copies, receipts) not yet tracked per report type
+### ✅ RPT-002 — Statutory Reports (Pre-Built)
+**Status:** Done _(completed 2026-05-24)_
+
+All pre-built statutory reports implemented, plus a persistent submission history ledger.
+
+**FWL Report** — `GET /reports/fwl/:period`: fetches FINALISED payroll runs, aggregates payslip FWL amounts per employee (fwl > 0 only), enriches with employee name/NRIC/passType from employee service, returns total + `byPassType` breakdown (WP, S-Pass, etc.). Empty when no finalised runs.
+
+**SDL Summary** — `GET /reports/sdl-summary/:period`: aggregates SDL per employee across all FINALISED runs for the period (highest-SDL payslip wins), returns `totalSdl`, per-employee `grossPay + sdlAmount`, and `ssgSubmissionNote` referencing the CPF e-Submit portal.
+
+**MOM Monthly Headcount** — `GET /reports/mom-headcount?year=YYYY&month=M`: returns `summary` (totalActive, residents, foreigners, male, female, newHires, terminations, netChange), `byNationality`, `byEmploymentType`, `byPassType` (SC/PR/EP/S_PASS/WP/DP/OTHER). New hires = `joinDate` within the month; terminations = `lastWorkingDate` or `resignationDate` within the month.
+
+**MOM Annual Manpower Survey** — `GET /reports/mom-manpower-survey?year=YYYY`: aggregate for MOM's annual survey — totalEmployees, newHires, terminations, `byOccupation` (jobTitle breakdown), `byAgeGroup` (Below 25 / 25-34 / 35-44 / 45-54 / 55-64 / 65+), plus `surveyNote` referencing MOM's stats.mom.gov.sg portal.
+
+**Statutory Submission History** — new `StatutorySubmission` Prisma model (type ∈ {CPF_E_SUBMIT, SDL_SSG, FWL_MOM, IR8A_IRAS, MOM_HEADCOUNT, ANNUAL_MANPOWER_SURVEY}, status ∈ {DRAFT, SUBMITTED, ACKNOWLEDGED}, `referenceNumber`, `fileName`, `notes`, `submittedAt`, `acknowledgedAt`). Endpoints: `POST /reports/submissions` (create record, stamps `submittedAt` when status=SUBMITTED), `GET /reports/submissions` (filterable by type/period/status, total count), `GET /reports/submissions/:id`, `PUT /reports/submissions/:id` (transitions status, auto-stamps timestamps).
+
+**Tests:** 20 integration tests S1-S20 (FWL: empty-run, fwl=0 exclusion, byPassType; SDL: total + fullName enrichment + empty; MOM headcount: new-hires in month, gender, residents/foreigners; Manpower survey: new-hires for year; Submission CRUD: type-missing + invalid + period-missing + create + list + update-with-timestamp). Full reporting suite: **102 tests green**.
 
 ### ✅ RPT-003 — Custom Report Builder & Scheduled Delivery
 **Status:** Done _(Phase 2 implemented 2026-05-24)_
@@ -491,16 +556,18 @@ Curated FAQ panel browsable before ticket submission, with admin CRUD + helpfuln
 _(all resolved)_
 
 ### Should Have (high value)
-10. **PMS-006** — 360-degree feedback
-12. **RPT-002 (completion)** — FWL Report, MOM Manpower Survey, SDL summary report
-13. **REC-005 (completion)** — Full auto-trigger on employee record approval
+_(all resolved as of 2026-05-24)_
 
 ### Nice to Have
 14. **CLM-004 (completion)** — GST analytics dashboard and vendor GST validation
 15. **PAY-005 (completion)** — PDF payslip rendering, SLA enforcement
-16. **LEA-005 (completion)** — Government-paid leave claim generation with MSF caps
-17. **TAT-004 (completion)** — Anomaly detection automation and manager dashboard
-18. **RPT-001 (completion)** — Drag-and-drop KPI dashboard frontend
+16. **LEA-005 (completion)** — Government-paid leave claim generation with MSF caps (leave-service side)
+17. **RPT-001 (completion)** — Drag-and-drop KPI dashboard frontend
+18. **REC-002 (completion)** — FCF 14-day enforcement gate, audit trail, compliance report
+19. **REC-003 (completion)** — Work pass expiry alerts (90/60/30 days), DRC quota, renewal workflow
+20. **PMS-003 (completion)** — Bell curve enforcement and department grouping for calibration
+21. **PAY-004 (completion)** — DRC quota alerts for FWL
+22. **LEA-004 (completion)** — MC pattern detection, sick leave trend dashboard
 
 ---
 

@@ -296,6 +296,9 @@ services:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-***REMOVED***}
+      - EMPLOYEE_SERVICE_URL=http://employee-service:4002
+      - LEAVE_SERVICE_URL=http://leave-service:4004
+      - NOTIFICATION_SERVICE_URL=http://notification-service:4009
     volumes:
       - shared_certs:/app/certs:ro
     depends_on:
