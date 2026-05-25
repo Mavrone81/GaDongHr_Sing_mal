@@ -555,6 +555,187 @@ const CATEGORY_COLORS: Record<string, string> = {
   Training:   'bg-amber-50 text-amber-600 border-amber-100',
 };
 
+// ── RPT-001 Executive Workforce Dashboard Modal ───────────────────────────────
+interface WFDashData {
+  generatedAt: string;
+  kpis: { totalHeadcount: number; activeHeadcount: number; hiresMtd: number; termsMtd: number; attritionRate12m: number; terminations12m: number };
+  trend: { label: string; hires: number; terminations: number }[];
+  byDepartment: Record<string, number>;
+  byEmploymentType: Record<string, number>;
+  byCitizenship: Record<string, number>;
+}
+
+function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; onToast: (m: string, t: 'ok'|'err') => void }) {
+  const [data, setData] = useState<WFDashData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch('/reports/workforce-dashboard')
+      .then(d => setData(d))
+      .catch(e => onToast(e.message || 'Failed to load workforce dashboard', 'err'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handlePrint = () => window.print();
+
+  if (loading || !data) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+        <div className="bg-white rounded-[2rem] p-12 flex flex-col items-center gap-4 shadow-2xl">
+          <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+          <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Loading dashboard…</p>
+        </div>
+      </div>
+    );
+  }
+
+  const { kpis, trend, byDepartment, byEmploymentType, byCitizenship } = data;
+
+  // ── SVG bar chart helpers ──────────────────────────────────────────────────
+  const chartW = 560; const chartH = 160; const barPad = 4;
+  const maxTrend = Math.max(...trend.map(m => Math.max(m.hires, m.terminations)), 1);
+  const barGroupW = (chartW - 40) / trend.length;
+  const barW = Math.max(4, (barGroupW - barPad * 2) / 2);
+
+  // ── Horizontal bar helpers ─────────────────────────────────────────────────
+  const deptEntries  = Object.entries(byDepartment).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const maxDept      = Math.max(...deptEntries.map(e => e[1]), 1);
+  const etEntries    = Object.entries(byEmploymentType).sort((a, b) => b[1] - a[1]);
+  const csEntries    = Object.entries(byCitizenship).filter(e => e[1] > 0);
+  const totalCiti    = csEntries.reduce((s, e) => s + e[1], 0) || 1;
+  const csColors: Record<string, string> = { SC: '#6366f1', PR: '#8b5cf6', EP: '#06b6d4', S_PASS: '#f59e0b', WP: '#ef4444', OTHER: '#94a3b8' };
+
+  const kpiCards = [
+    { label: 'Total Headcount',     value: kpis.totalHeadcount,  sub: `${kpis.activeHeadcount} active`, color: 'text-slate-900' },
+    { label: 'Hires MTD',           value: kpis.hiresMtd,        sub: 'this month',                    color: 'text-emerald-600' },
+    { label: 'Terminations MTD',    value: kpis.termsMtd,        sub: 'this month',                    color: 'text-red-600' },
+    { label: '12m Attrition Rate',  value: `${kpis.attritionRate12m}%`, sub: `${kpis.terminations12m} exits in 12m`, color: 'text-indigo-600' },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm print:p-0 print:bg-transparent print:inset-auto print:relative">
+      <div className="w-full max-w-5xl bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden max-h-[92vh] print:shadow-none print:rounded-none print:max-h-none">
+        {/* Header */}
+        <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100 flex-shrink-0 print:border-slate-300">
+          <div>
+            <h2 className="text-base font-black text-slate-900 tracking-tighter">Executive Workforce Dashboard</h2>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] mt-0.5">
+              Real-time · Generated {new Date(data.generatedAt).toLocaleString('en-SG')}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 print:hidden">
+            <button onClick={handlePrint} className="px-5 py-2 bg-slate-800 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-900 transition-all">Print / PDF</button>
+            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">✕</button>
+          </div>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-8 flex flex-col gap-8">
+          {/* KPI Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {kpiCards.map(k => (
+              <div key={k.label} className="bg-slate-50 rounded-2xl p-5 border border-slate-100 flex flex-col gap-1">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{k.label}</span>
+                <span className={`text-3xl font-black tracking-tighter ${k.color}`}>{k.value}</span>
+                <span className="text-[10px] text-slate-400 font-bold">{k.sub}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* 12-month Hires vs Terminations trend */}
+          <div className="bg-white rounded-2xl border border-slate-100 p-6">
+            <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">12-Month Hires vs Terminations</h3>
+            <svg viewBox={`0 0 ${chartW} ${chartH + 30}`} width="100%" className="overflow-visible">
+              {/* Y grid */}
+              {[0, 0.25, 0.5, 0.75, 1].map(f => (
+                <line key={f} x1={30} y1={chartH * (1 - f)} x2={chartW} y2={chartH * (1 - f)}
+                  stroke="#f1f5f9" strokeWidth="1" />
+              ))}
+              {trend.map((m, i) => {
+                const x = 30 + i * barGroupW + barPad;
+                const hH = Math.round((m.hires / maxTrend) * chartH);
+                const tH = Math.round((m.terminations / maxTrend) * chartH);
+                return (
+                  <g key={m.label}>
+                    {/* Hires bar (emerald) */}
+                    <rect x={x} y={chartH - hH} width={barW} height={hH} rx="2" fill="#10b981" opacity={0.85} />
+                    {/* Terminations bar (red) */}
+                    <rect x={x + barW + 1} y={chartH - tH} width={barW} height={tH} rx="2" fill="#ef4444" opacity={0.85} />
+                    {/* Month label */}
+                    <text x={x + barW} y={chartH + 16} textAnchor="middle" fontSize="8" fill="#94a3b8" fontWeight="700">{m.label}</text>
+                  </g>
+                );
+              })}
+            </svg>
+            <div className="flex gap-5 mt-1">
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-500 block" /><span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Hires</span></div>
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-500 block" /><span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Terminations</span></div>
+            </div>
+          </div>
+
+          {/* Bottom section: dept + citizenship + employment type */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Department breakdown */}
+            <div className="lg:col-span-1 bg-white rounded-2xl border border-slate-100 p-6 flex flex-col gap-3">
+              <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">By Department</h3>
+              {deptEntries.map(([dept, count]) => (
+                <div key={dept} className="flex flex-col gap-1">
+                  <div className="flex justify-between">
+                    <span className="text-[10px] font-black text-slate-700 truncate max-w-[80%]">{dept}</span>
+                    <span className="text-[10px] font-black text-slate-900">{count}</span>
+                  </div>
+                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${(count / maxDept) * 100}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Employment type */}
+            <div className="bg-white rounded-2xl border border-slate-100 p-6 flex flex-col gap-3">
+              <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Employment Type</h3>
+              {etEntries.map(([type, count]) => {
+                const total = etEntries.reduce((s, e) => s + e[1], 0) || 1;
+                const pct   = Math.round((count / total) * 100);
+                return (
+                  <div key={type} className="flex flex-col gap-1">
+                    <div className="flex justify-between">
+                      <span className="text-[10px] font-black text-slate-700">{type.replace(/_/g, ' ')}</span>
+                      <span className="text-[10px] font-black text-slate-500">{count} ({pct}%)</span>
+                    </div>
+                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Citizenship / pass type */}
+            <div className="bg-white rounded-2xl border border-slate-100 p-6 flex flex-col gap-3">
+              <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Citizenship / Pass</h3>
+              {csEntries.map(([key, count]) => {
+                const pct = Math.round((count / totalCiti) * 100);
+                const color = csColors[key] || '#94a3b8';
+                return (
+                  <div key={key} className="flex flex-col gap-1">
+                    <div className="flex justify-between">
+                      <span className="text-[10px] font-black text-slate-700">{key.replace(/_/g, ' ')}</span>
+                      <span className="text-[10px] font-black text-slate-500">{count} ({pct}%)</span>
+                    </div>
+                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Custom report builder modal ───────────────────────────────────────────────
 function CustomReportModal({ onClose, onToast }: { onClose: () => void; onToast: (m: string, t: 'ok'|'err') => void }) {
   const [dataset, setDataset] = useState('employees');
@@ -1248,6 +1429,7 @@ export default function ReportsPage() {
   const [leaveLiabilityOpen, setLeaveLiabilityOpen] = useState(false);
   const [ir8aOpen, setIr8aOpen] = useState(false);
   const [breakdownModal, setBreakdownModal] = useState<{ runId: string; period: string } | null>(null);
+  const [workforceDashOpen, setWorkforceDashOpen] = useState(false);
 
   const showToast = (msg: string, type: 'ok' | 'err') => setToast({ msg, type });
 
@@ -1264,8 +1446,8 @@ export default function ReportsPage() {
         case 'iras':      setIr8aOpen(true); setRunning(null); return;
         case 'giro':      await runBankGiroForRun(runId!, period!); break;
         case 'leave':     setLeaveLiabilityOpen(true); setRunning(null); return;
-        case 'workforce': await runWorkforceReport(); break;
-        case 'attrition': await runAttritionReport(); break;
+        case 'workforce': setWorkforceDashOpen(true); setRunning(null); return;
+        case 'attrition': setWorkforceDashOpen(true); setRunning(null); return;
         case 'mom':       await runMomReport(); break;
         case 'sdl':       await runSdlReport(); break;
         case 'variance':  await runPayrollVarianceReport(); break;
@@ -1454,6 +1636,14 @@ export default function ReportsPage() {
           runId={breakdownModal.runId}
           period={breakdownModal.period}
           onClose={() => setBreakdownModal(null)}
+          onToast={showToast}
+        />
+      )}
+
+      {/* Workforce Dashboard Modal */}
+      {workforceDashOpen && (
+        <WorkforceDashboardModal
+          onClose={() => setWorkforceDashOpen(false)}
           onToast={showToast}
         />
       )}

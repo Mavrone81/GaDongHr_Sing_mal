@@ -1019,6 +1019,10 @@ app.get('/attendance/internal/period-summary/:period', async (req, res, next) =>
     res.json({
       period,
       periodStatus: periodRow?.status || 'OPEN',
+      lockedBy:     periodRow?.lockedBy   || null,
+      lockedAt:     periodRow?.lockedAt   || null,
+      approvedBy:   periodRow?.approvedBy || null,
+      approvedAt:   periodRow?.approvedAt || null,
       expectedWorkDays,
       employeeCount: Object.keys(summary).length,
       summary,

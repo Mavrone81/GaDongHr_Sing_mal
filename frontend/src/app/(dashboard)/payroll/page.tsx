@@ -480,6 +480,11 @@ function AdminPayrollDashboard() {
   const [variance, setVariance] = useState<any>(null);
   const [varianceLoading, setVarianceLoading] = useState(false);
 
+  // ── CPF Statutory Protocol Queue ──────────────────────────────────────────
+  const [cpfSubmissions, setCpfSubmissions] = useState<any[]>([]);
+  const [cpfActionRun, setCpfActionRun] = useState<{ runId: string; period: string; submissionStatus: string | null } | null>(null);
+  const [cpfDownloading, setCpfDownloading] = useState(false);
+
   // ── Period working-day config ──────────────────────────────────────────────
   const [periodCfg, setPeriodCfg] = useState<{
     workDayType: string;
@@ -535,7 +540,16 @@ function AdminPayrollDashboard() {
     }
   }
 
-  useEffect(() => { loadRuns(); }, []);
+  async function loadCpfSubmissions() {
+    try {
+      const data = await apiFetch('/payroll/iras-submissions?kind=CPF_E_SUBMIT');
+      setCpfSubmissions(data.submissions ?? []);
+    } catch (e: any) {
+      console.error('[Payroll] loadCpfSubmissions failed:', (e as Error).message);
+    }
+  }
+
+  useEffect(() => { loadRuns(); loadCpfSubmissions(); }, []);
   useEffect(() => { if (isRunModalOpen && selectedPeriod) loadPeriodConfig(selectedPeriod); }, [isRunModalOpen, selectedPeriod]);
 
   const sortedRuns = useMemo(() => {
@@ -676,8 +690,9 @@ function AdminPayrollDashboard() {
   // auto-creates / refreshes a DRAFT IrasSubmission row as a side-effect — the
   // toast points the user to /payroll/iras-submissions where they record the
   // CPF Board reference number once they've uploaded the file via CPF EZPay.
-  const downloadCpfFile = async (runId: string, period: string) => {
+  const downloadCpfFile = async (runId: string, period: string, onSuccess?: () => void) => {
     try {
+      setCpfDownloading(true);
       const res = await fetch(`${resolveApiBase()}/payroll/cpf-file/${runId}`, {
         headers: { Authorization: `Bearer ${getAccessToken()}` },
       });
@@ -694,9 +709,13 @@ function AdminPayrollDashboard() {
       a.click();
       URL.revokeObjectURL(url);
       handleActionToast(`CPF e-Submit file downloaded — track upload at IRAS Submissions`);
+      loadCpfSubmissions();
+      onSuccess?.();
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'CPF download failed';
       handleActionToast(msg);
+    } finally {
+      setCpfDownloading(false);
     }
   };
 
@@ -1019,7 +1038,7 @@ function AdminPayrollDashboard() {
              className="px-6 py-5 bg-white border border-slate-200 text-slate-700 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:border-indigo-400 hover:text-indigo-700 transition-all flex items-center gap-2"
              title="CPF e-Submit, IR8A, Appendix 8A/8B, IR21 submission tracking"
            >
-              <span>◉</span> IRAS Submissions
+              <span>◉</span> IRAS & CPF Submissions
            </a>
            <button
              onClick={() => setIsRunModalOpen(true)}
@@ -1062,10 +1081,36 @@ function AdminPayrollDashboard() {
         <div className="bg-slate-950 p-8 rounded-[2rem] border border-slate-800 shadow-2xl shadow-slate-900/10">
           <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-6">Statutory Protocol Queue</p>
           <div className="flex flex-col gap-3">
-            <button className="flex items-center justify-between p-4 bg-slate-900 border border-slate-800 rounded-2xl hover:border-indigo-600 transition-all group">
-               <span className="text-[10px] font-black text-slate-300 uppercase tracking-tight">CPF Submissions (Mar 2026)</span>
-               <span className="text-[9px] font-black px-2 py-0.5 bg-amber-500 text-slate-950 rounded">Action Needed</span>
-            </button>
+            {(() => {
+              // Finalised MONTHLY runs that are pending CPF action (no submission or still DRAFT)
+              const finalisedRuns = runs.filter(r => r.status === 'FINALISED' && r.runType === 'MONTHLY');
+              const cpfItems = finalisedRuns.map(r => {
+                const sub = cpfSubmissions.find(s => s.runId === r.id || s.period === r.period);
+                const subStatus = sub?.status ?? null;
+                const needsAction = !sub || subStatus === 'DRAFT';
+                return { run: r, sub, subStatus, needsAction };
+              }).filter(x => x.needsAction).slice(0, 3);
+
+              if (cpfItems.length === 0) return (
+                <div className="flex items-center justify-between p-4 bg-slate-900/50 border border-slate-800 rounded-2xl">
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight italic">No pending CPF submissions</span>
+                  <span className="text-emerald-500 text-xs">✓</span>
+                </div>
+              );
+
+              return cpfItems.map(({ run, subStatus }) => (
+                <button key={run.id}
+                  onClick={() => setCpfActionRun({ runId: run.id, period: run.period, submissionStatus: subStatus })}
+                  className="flex items-center justify-between p-4 bg-slate-900 border border-slate-800 rounded-2xl hover:border-amber-500/60 transition-all group">
+                  <span className="text-[10px] font-black text-slate-300 uppercase tracking-tight">
+                    CPF Submissions ({fmtPeriod(run.period)})
+                  </span>
+                  <span className="text-[9px] font-black px-2 py-0.5 bg-amber-500 text-slate-950 rounded">
+                    {subStatus === 'DRAFT' ? 'Upload Pending' : 'Action Needed'}
+                  </span>
+                </button>
+              ));
+            })()}
             <button className="flex items-center justify-between p-4 bg-slate-900/50 border border-slate-800 rounded-2xl opacity-50 grayscale">
                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight italic">Bank GIRO (Draft Saved)</span>
                <span className="text-slate-700">→</span>
@@ -1181,6 +1226,78 @@ function AdminPayrollDashboard() {
           </table>
         </div>
       </section>
+
+      {/* CPF Statutory Action Modal */}
+      {cpfActionRun && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-8 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md border border-slate-100 animate-in slide-in-from-bottom-4 duration-200">
+            {/* Header */}
+            <div className="p-8 border-b border-slate-100 flex justify-between items-start">
+              <div>
+                <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-1">Statutory Protocol</p>
+                <h3 className="text-xl font-black text-slate-900 tracking-tighter uppercase">CPF e-Submit</h3>
+                <p className="text-[10px] font-black text-slate-400 uppercase mt-1">{fmtPeriod(cpfActionRun.period)}</p>
+              </div>
+              <button onClick={() => setCpfActionRun(null)} className="w-9 h-9 flex items-center justify-center bg-slate-100 rounded-2xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all font-black text-sm">&times;</button>
+            </div>
+
+            {/* Status pill */}
+            <div className="px-8 pt-6">
+              <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                cpfActionRun.submissionStatus === 'DRAFT'
+                  ? 'bg-amber-50 text-amber-600 border border-amber-100'
+                  : 'bg-slate-100 text-slate-500 border border-slate-200'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${cpfActionRun.submissionStatus === 'DRAFT' ? 'bg-amber-500' : 'bg-slate-400'}`}></span>
+                {cpfActionRun.submissionStatus === 'DRAFT' ? 'File generated — awaiting upload to CPF EZPay' : 'No file generated yet'}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="p-8 flex flex-col gap-4">
+              {/* Download */}
+              <button
+                disabled={cpfDownloading}
+                onClick={() => downloadCpfFile(cpfActionRun.runId, cpfActionRun.period, () => {
+                  setCpfActionRun(prev => prev ? { ...prev, submissionStatus: 'DRAFT' } : null);
+                })}
+                className="w-full flex items-center gap-4 p-5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white rounded-2xl transition-all active:scale-[0.98] shadow-lg shadow-indigo-500/20"
+              >
+                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                </div>
+                <div className="text-left">
+                  <p className="text-[11px] font-black uppercase tracking-widest">{cpfDownloading ? 'Generating…' : 'Download CPF e-Submit File'}</p>
+                  <p className="text-[9px] font-black text-indigo-200 mt-0.5">Upload via CPF EZPay portal after download</p>
+                </div>
+              </button>
+
+              {/* FTP Upload — future */}
+              <div className="w-full flex items-center gap-4 p-5 bg-slate-50 border border-slate-200 rounded-2xl opacity-60 cursor-not-allowed select-none">
+                <div className="w-10 h-10 bg-slate-200 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                </div>
+                <div className="text-left">
+                  <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">FTP Direct Upload</p>
+                  <p className="text-[9px] font-black text-slate-400 mt-0.5">Coming soon — configure SFTP credentials in Settings</p>
+                </div>
+                <span className="ml-auto text-[8px] font-black bg-slate-200 text-slate-500 px-2 py-0.5 rounded uppercase tracking-widest">Soon</span>
+              </div>
+
+              {/* Track on submissions page */}
+              <a href="/payroll/iras-submissions"
+                onClick={() => setCpfActionRun(null)}
+                className="w-full flex items-center justify-center gap-2 p-4 border border-slate-200 rounded-2xl text-[10px] font-black text-slate-500 hover:text-indigo-600 hover:border-indigo-200 transition-all uppercase tracking-widest">
+                View IRAS Submissions Ledger →
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* GIRO Generation Modal */}
       {giroRunId && (() => {
@@ -1687,9 +1804,14 @@ function AdminPayrollDashboard() {
                        setPaycodesDirty(false);
                        const zeroIds: string[] = result?.warnings?.zeroOrdinaryWages ?? [];
                        const removedIds: string[] = result?.autoRemovedIds ?? [];
+                       const attWarnR = result?.warnings?.attendanceNotApproved;
                        const notes: string[] = [];
                        if (removedIds.length > 0) notes.push(`${removedIds.length} employee(s) unchanged — skipped`);
                        if (zeroIds.length > 0) notes.push(`${zeroIds.length} have $0 ordinary wages — check salary`);
+                       if (attWarnR) {
+                         const who = attWarnR.lockedBy ? `locked by ${attWarnR.lockedBy} but not yet approved` : 'not yet locked or approved';
+                         notes.push(`Attendance period ${attWarnR.period} was ${who} (${attWarnR.periodStatus}) — attendance auto-feed skipped`);
+                       }
                        handleActionToast(notes.length > 0
                          ? `Recomputed. NOTE: ${notes.join('; ')}.`
                          : 'Recomputed with updated paycodes.');
@@ -1714,9 +1836,14 @@ function AdminPayrollDashboard() {
                          const result = await apiFetch(`/payroll/runs/${id}/compute`, { method: 'POST', body: JSON.stringify({}) });
                          const zeroIds: string[] = result?.warnings?.zeroOrdinaryWages ?? [];
                          const removedIds: string[] = result?.autoRemovedIds ?? [];
+                         const attWarn = result?.warnings?.attendanceNotApproved;
                          const notes: string[] = [];
                          if (removedIds.length > 0) notes.push(`${removedIds.length} employee(s) unchanged from prior payslip — skipped from this run`);
                          if (zeroIds.length > 0) notes.push(`${zeroIds.length} have $0 ordinary wages — check salary before authorising`);
+                         if (attWarn) {
+                           const who = attWarn.lockedBy ? `locked by ${attWarn.lockedBy} but not yet approved` : 'not yet locked or approved';
+                           notes.push(`Attendance period ${attWarn.period} was ${who} (status: ${attWarn.periodStatus}) — attendance auto-feed skipped, verify OT/absences manually`);
+                         }
                          handleActionToast(notes.length > 0
                            ? `Computed. NOTE: ${notes.join('; ')}.`
                            : 'Payroll computed. Pending authorisation.');

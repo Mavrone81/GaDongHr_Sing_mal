@@ -9,6 +9,25 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model AuditLog {
+  id          String   @id @default(uuid())
+  entityType  String   // e.g. 'PayrollRun'
+  entityId    String?  // run UUID
+  action      String   // e.g. 'COMPUTE_ATTENDANCE_WARNING'
+  actorId     String?
+  actorEmail  String?
+  actorRole   String?
+  details     Json?    // arbitrary payload (warning body, period status, lockedBy, etc.)
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  @@index([entityType])
+  @@index([entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("payroll_audit_logs")
+}
+
 model PayrollRun {
   id              String        @id @default(uuid())
   period          String        // e.g. "2025-01"
