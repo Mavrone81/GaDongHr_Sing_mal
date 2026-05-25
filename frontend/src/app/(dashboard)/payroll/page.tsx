@@ -480,6 +480,10 @@ function AdminPayrollDashboard() {
   const [variance, setVariance] = useState<any>(null);
   const [varianceLoading, setVarianceLoading] = useState(false);
 
+  // ── DRC quota alert state ──────────────────────────────────────────────────
+  const [drcResults, setDrcResults] = useState<any[]>([]);
+  const [drcLoaded, setDrcLoaded] = useState(false);
+
   // ── CPF Statutory Protocol Queue ──────────────────────────────────────────
   const [cpfSubmissions, setCpfSubmissions] = useState<any[]>([]);
   const [cpfActionRun, setCpfActionRun] = useState<{ runId: string; period: string; submissionStatus: string | null } | null>(null);
@@ -549,7 +553,14 @@ function AdminPayrollDashboard() {
     }
   }
 
-  useEffect(() => { loadRuns(); loadCpfSubmissions(); }, []);
+  useEffect(() => {
+    loadRuns();
+    loadCpfSubmissions();
+    apiFetch('/payroll/drc-status').then((d: any) => {
+      setDrcResults(d.results ?? []);
+      setDrcLoaded(true);
+    }).catch(() => setDrcLoaded(true));
+  }, []);
   useEffect(() => { if (isRunModalOpen && selectedPeriod) loadPeriodConfig(selectedPeriod); }, [isRunModalOpen, selectedPeriod]);
 
   const sortedRuns = useMemo(() => {
@@ -823,8 +834,36 @@ function AdminPayrollDashboard() {
     }
   };
 
+  // ── DRC banner helpers ─────────────────────────────────────────────────────
+  const drcAlerts = drcResults.filter(r => r.status === 'EXCEEDED' || r.status === 'WARNING');
+
   return (
     <div className="flex flex-col gap-10 max-w-[1600px] mx-auto pb-20 animate-in fade-in duration-700">
+
+      {/* DRC Quota Alert Banner */}
+      {drcLoaded && drcAlerts.length > 0 && (
+        <div className={`px-6 py-4 rounded-2xl border flex flex-col gap-2 ${drcAlerts.some(r => r.status === 'EXCEEDED') ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
+          <div className="flex items-center gap-3">
+            <span className={`text-sm font-black uppercase tracking-widest ${drcAlerts.some(r => r.status === 'EXCEEDED') ? 'text-red-700' : 'text-amber-700'}`}>
+              {drcAlerts.some(r => r.status === 'EXCEEDED') ? '⚠ DRC Ceiling Exceeded' : '⚠ DRC Quota Warning'}
+            </span>
+            <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border ${drcAlerts.some(r => r.status === 'EXCEEDED') ? 'bg-red-100 text-red-700 border-red-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>MOM Compliance</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {drcAlerts.map(r => (
+              <div key={`${r.sector}-${r.passType}`} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black ${r.status === 'EXCEEDED' ? 'bg-white border-red-200 text-red-700' : 'bg-white border-amber-200 text-amber-700'}`}>
+                <span>{r.sector} — {r.passType.replace('_', ' ')}</span>
+                <span className="opacity-60">·</span>
+                <span>{r.currentRatioPct}% of {r.maxRatioPct}% ceiling</span>
+                {r.status === 'WARNING' && <span className="text-[9px]">({r.usagePct.toFixed(0)}% used)</span>}
+              </div>
+            ))}
+          </div>
+          <p className={`text-[10px] font-bold ${drcAlerts.some(r => r.status === 'EXCEEDED') ? 'text-red-600' : 'text-amber-600'}`}>
+            Review foreign worker headcount at Settings → Statutory Rates.
+          </p>
+        </div>
+      )}
 
       {/* Period Conflict — Supplemental Run Confirmation Modal */}
       {periodConflictRuns.length > 0 && (
