@@ -672,6 +672,34 @@ function AdminPayrollDashboard() {
     setTimeout(() => setActionToast(null), 3000);
   };
 
+  // PAY-007: download CPF e-Submit flat file for a finalised run. The backend
+  // auto-creates / refreshes a DRAFT IrasSubmission row as a side-effect — the
+  // toast points the user to /payroll/iras-submissions where they record the
+  // CPF Board reference number once they've uploaded the file via CPF EZPay.
+  const downloadCpfFile = async (runId: string, period: string) => {
+    try {
+      const res = await fetch(`${resolveApiBase()}/payroll/cpf-file/${runId}`, {
+        headers: { Authorization: `Bearer ${getAccessToken()}` },
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error((e as { error?: string }).error ?? `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const cd = res.headers.get('Content-Disposition') ?? '';
+      a.download = cd.split('filename=')[1]?.replace(/"/g, '') ?? `cpf-esubmit-${period}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+      handleActionToast(`CPF e-Submit file downloaded — track upload at IRAS Submissions`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'CPF download failed';
+      handleActionToast(msg);
+    }
+  };
+
   const downloadGiro = async () => {
     if (!giroRunId) return;
     const run = runs.find(r => r.id === giroRunId);
@@ -1125,7 +1153,13 @@ function AdminPayrollDashboard() {
                       ) : (
                         <div className="flex items-center gap-3">
                           <button onClick={() => { const ref = generateGiroRef(run.period); setGiroRunId(run.id); setGiroBank('uob'); setGiroFields({ acct: '', companyName: 'VORKHIVE PTE LTD', valueDate: new Date().toISOString().slice(0,10), ref, batchNo: '001', payDesc: `SALARY ${run.period}` }); }} className="px-4 py-2 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-slate-800 transition-all">GIRO</button>
-                          <button onClick={() => handleActionToast('Opening CPF E-Submit Portal…')} className="px-4 py-2 bg-emerald-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-emerald-700 transition-all">FTP</button>
+                          <button
+                            onClick={() => downloadCpfFile(run.id, run.period)}
+                            title="Download CPF e-Submit flat file (creates a tracked DRAFT submission)"
+                            className="px-4 py-2 bg-emerald-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-emerald-700 transition-all"
+                          >
+                            CPF File
+                          </button>
                           <button onClick={() => { setPayslipRunId(run.id); setPayslipRows([]); }} className="px-4 py-2 bg-white border border-slate-200 label-form rounded-lg hover:text-indigo-600 hover:border-indigo-600 transition-all">Payslips</button>
                           {runs.filter(r => r.period === run.period && r.id !== run.id && r.status === 'FINALISED').length > 0 && (
                             <button onClick={async () => {
