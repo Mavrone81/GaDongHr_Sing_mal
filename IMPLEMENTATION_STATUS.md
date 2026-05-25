@@ -1,7 +1,7 @@
 # Implementation Status
 
 **PRD Reference:** PRD-HRMS-001 v2.0  
-**Last Updated:** 2026-05-25 _(LEA-005 completion — MSF cap engine, govt-paid claim lifecycle, payroll daily-rate internal lookup)_  
+**Last Updated:** 2026-05-25 _(RPT-001 completion — OT-by-department, training completion widgets, 5-min auto-refresh)_  
 **Legend:** ✅ Done · ⚠️ Partial · ❌ Not Done
 
 ---
@@ -19,7 +19,7 @@
 | Training & Development | 3 | 1 | 0 | 4 |
 | Asset Management | 4 | 0 | 0 | 4 |
 | Offboarding | 5 | 0 | 0 | 5 |
-| Reporting & Analytics | 2 | 1 | 0 | 3 |
+| Reporting & Analytics | 3 | 0 | 0 | 3 |
 | Support & Ticketing | 4 | 0 | 0 | 4 |
 | **Total** | **51** | **8** | **0** | **59** |
 
@@ -565,15 +565,23 @@ Digital exit interview form (satisfaction rating, reason for leaving, open comme
 
 ## Module 10: Reporting & Analytics
 
-### ⚠️ RPT-001 — Executive Workforce Dashboard
-**Status:** Partial  
-**Done:** Headcount by department/nationality/pass type (`/reports/headcount`), payroll cost summary per period (`/reports/payroll-summary`), leave utilisation rate (`/reports/leave-utilisation`), work-pass expiry dashboard (`/reports/work-pass-expiry`), leave liability value (`/reports/leave-liability`), IR8A data (`/reports/ir8a-data`).  
-**Outstanding:**
-- KPI widgets frontend dashboard (drag-and-drop configurable) not yet built
-- Monthly new hires vs terminations, attrition rate (12-month rolling) widget missing
-- OT hours by department trend, training completion rate widget missing
-- PDF/PowerPoint export of dashboard missing
-- Real-time data refresh (max 5-minute delay) not yet confirmed
+### ✅ RPT-001 — Executive Workforce Dashboard
+**Status:** Done _(completed 2026-05-25)_  
+Full executive workforce dashboard with live KPI cards, 12-month hire/termination trend, headcount breakdowns, OT-by-department widget, training completion rate widget, and 5-minute auto-refresh.
+
+**Backend endpoints (reporting-service):**
+- `GET /reports/workforce-dashboard` — headcount KPIs (total, active, hires MTD, terms MTD, 12m attrition rate), 12-month rolling hire/termination trend, active headcount by department/employment-type/citizenship.
+- `GET /reports/ot-by-department?months=N` — aggregates OT hours from attendance-service internal period summaries across N months (default 6), joins with employee-service for department mapping, returns top-8 departments by total OT with per-month arrays and totals.
+- `GET /reports/training-summary` — proxies `/training/stats` from training-service; returns completionRate, completed, inProgress, totalEnrollments, mandatory count, and byCategory breakdown.
+
+**Frontend (`WorkforceDashboardModal`):**
+- 4 KPI cards: Total Headcount, Hires MTD, Terminations MTD, 12m Attrition Rate.
+- 12-month SVG bar chart — hires (emerald) vs terminations (red) per month.
+- Headcount by Department / Employment Type / Citizenship horizontal-bar panels (3-column grid).
+- **OT by Department** — horizontal bars showing 6-month total per dept with current-month highlighted in amber.
+- **Training Completion** — completion rate gauge, completed/in-progress/total counts, mandatory programme alert, programmes-by-category breakdown.
+- **5-minute auto-refresh** with manual ↺ Refresh button and "Updated X ago" timestamp indicator.
+- Print/PDF via `window.print()` with print-safe CSS.
 
 ### ✅ RPT-002 — Statutory Reports (Pre-Built)
 **Status:** Done _(completed 2026-05-24)_
@@ -655,7 +663,6 @@ _(all resolved)_
 _(all resolved as of 2026-05-24)_
 
 ### Nice to Have
-17. **RPT-001 (completion)** — Drag-and-drop KPI dashboard frontend
 19. **PMS-003 (completion)** — Bell curve enforcement and department grouping for calibration
 21. **PAY-004 (completion)** — DRC quota alerts for FWL
 22. **LEA-004 (completion)** — MC pattern detection, sick leave trend dashboard

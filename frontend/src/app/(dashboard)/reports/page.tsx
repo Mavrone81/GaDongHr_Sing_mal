@@ -564,19 +564,62 @@ interface WFDashData {
   byEmploymentType: Record<string, number>;
   byCitizenship: Record<string, number>;
 }
+interface OTData {
+  months: string[];
+  byDepartment: Record<string, number[]>;
+  totals: Record<string, number>;
+}
+interface TrainingData {
+  completionRate: number;
+  completed: number;
+  inProgress: number;
+  totalEnrollments: number;
+  mandatory: number;
+  byCategory: { category: string; _count: { id: number } }[];
+}
+
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
 function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; onToast: (m: string, t: 'ok'|'err') => void }) {
-  const [data, setData] = useState<WFDashData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData]         = useState<WFDashData | null>(null);
+  const [otData, setOtData]     = useState<OTData | null>(null);
+  const [trainData, setTrainData] = useState<TrainingData | null>(null);
+  const [loading, setLoading]   = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [secAgo, setSecAgo]     = useState(0);
+
+  const loadAll = async (isBackground = false) => {
+    if (isBackground) setRefreshing(true); else setLoading(true);
+    try {
+      const [wf, ot, tr] = await Promise.allSettled([
+        apiFetch('/reports/workforce-dashboard'),
+        apiFetch('/reports/ot-by-department?months=6'),
+        apiFetch('/reports/training-summary'),
+      ]);
+      if (wf.status === 'fulfilled') setData(wf.value);
+      else onToast((wf.reason as Error).message || 'Failed to load workforce dashboard', 'err');
+      if (ot.status === 'fulfilled') setOtData(ot.value);
+      if (tr.status === 'fulfilled') setTrainData(tr.value);
+      setLastRefreshed(new Date());
+      setSecAgo(0);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
-    apiFetch('/reports/workforce-dashboard')
-      .then(d => setData(d))
-      .catch(e => onToast(e.message || 'Failed to load workforce dashboard', 'err'))
-      .finally(() => setLoading(false));
+    loadAll();
+    const autoRefresh = setInterval(() => loadAll(true), REFRESH_INTERVAL_MS);
+    return () => clearInterval(autoRefresh);
   }, []);
 
-  const handlePrint = () => window.print();
+  useEffect(() => {
+    if (!lastRefreshed) return;
+    const tick = setInterval(() => setSecAgo(Math.round((Date.now() - lastRefreshed.getTime()) / 1000)), 15000);
+    return () => clearInterval(tick);
+  }, [lastRefreshed]);
 
   if (loading || !data) {
     return (
@@ -597,7 +640,7 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
   const barGroupW = (chartW - 40) / trend.length;
   const barW = Math.max(4, (barGroupW - barPad * 2) / 2);
 
-  // ── Horizontal bar helpers ─────────────────────────────────────────────────
+  // ── Headcount breakdown helpers ────────────────────────────────────────────
   const deptEntries  = Object.entries(byDepartment).sort((a, b) => b[1] - a[1]).slice(0, 8);
   const maxDept      = Math.max(...deptEntries.map(e => e[1]), 1);
   const etEntries    = Object.entries(byEmploymentType).sort((a, b) => b[1] - a[1]);
@@ -605,12 +648,28 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
   const totalCiti    = csEntries.reduce((s, e) => s + e[1], 0) || 1;
   const csColors: Record<string, string> = { SC: '#6366f1', PR: '#8b5cf6', EP: '#06b6d4', S_PASS: '#f59e0b', WP: '#ef4444', OTHER: '#94a3b8' };
 
+  // ── OT helpers ─────────────────────────────────────────────────────────────
+  const otEntries = otData ? Object.entries(otData.totals).sort((a, b) => b[1] - a[1]).slice(0, 6) : [];
+  const maxOt     = Math.max(...otEntries.map(e => e[1]), 1);
+  // Current month OT = last index in each dept array
+  const otCurrentMonth = otData
+    ? Object.fromEntries(Object.entries(otData.byDepartment).map(([d, arr]) => [d, arr[arr.length - 1] ?? 0]))
+    : {};
+
+  // ── Training helpers ───────────────────────────────────────────────────────
+  const catEntries = trainData
+    ? [...(trainData.byCategory || [])].sort((a, b) => b._count.id - a._count.id).slice(0, 6)
+    : [];
+  const maxCat = Math.max(...catEntries.map(c => c._count.id), 1);
+
   const kpiCards = [
-    { label: 'Total Headcount',     value: kpis.totalHeadcount,  sub: `${kpis.activeHeadcount} active`, color: 'text-slate-900' },
-    { label: 'Hires MTD',           value: kpis.hiresMtd,        sub: 'this month',                    color: 'text-emerald-600' },
-    { label: 'Terminations MTD',    value: kpis.termsMtd,        sub: 'this month',                    color: 'text-red-600' },
-    { label: '12m Attrition Rate',  value: `${kpis.attritionRate12m}%`, sub: `${kpis.terminations12m} exits in 12m`, color: 'text-indigo-600' },
+    { label: 'Total Headcount',     value: kpis.totalHeadcount,        sub: `${kpis.activeHeadcount} active`,           color: 'text-slate-900' },
+    { label: 'Hires MTD',           value: kpis.hiresMtd,              sub: 'this month',                               color: 'text-emerald-600' },
+    { label: 'Terminations MTD',    value: kpis.termsMtd,              sub: 'this month',                               color: 'text-red-600' },
+    { label: '12m Attrition Rate',  value: `${kpis.attritionRate12m}%`, sub: `${kpis.terminations12m} exits in 12m`,   color: 'text-indigo-600' },
   ];
+
+  const refreshLabel = secAgo < 60 ? 'just now' : secAgo < 3600 ? `${Math.floor(secAgo / 60)}m ago` : `${Math.floor(secAgo / 3600)}h ago`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm print:p-0 print:bg-transparent print:inset-auto print:relative">
@@ -620,11 +679,16 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
           <div>
             <h2 className="text-base font-black text-slate-900 tracking-tighter">Executive Workforce Dashboard</h2>
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] mt-0.5">
-              Real-time · Generated {new Date(data.generatedAt).toLocaleString('en-SG')}
+              Auto-refresh every 5 min · {lastRefreshed ? `Updated ${refreshLabel}` : 'Loading…'}
+              {refreshing && <span className="ml-2 inline-block w-2.5 h-2.5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin align-middle" />}
             </p>
           </div>
           <div className="flex items-center gap-2 print:hidden">
-            <button onClick={handlePrint} className="px-5 py-2 bg-slate-800 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-900 transition-all">Print / PDF</button>
+            <button onClick={() => loadAll(true)} disabled={refreshing}
+              className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-200 disabled:opacity-50 transition-all">
+              ↺ Refresh
+            </button>
+            <button onClick={() => window.print()} className="px-5 py-2 bg-slate-800 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-900 transition-all">Print / PDF</button>
             <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">✕</button>
           </div>
         </div>
@@ -645,10 +709,8 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
           <div className="bg-white rounded-2xl border border-slate-100 p-6">
             <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">12-Month Hires vs Terminations</h3>
             <svg viewBox={`0 0 ${chartW} ${chartH + 30}`} width="100%" className="overflow-visible">
-              {/* Y grid */}
               {[0, 0.25, 0.5, 0.75, 1].map(f => (
-                <line key={f} x1={30} y1={chartH * (1 - f)} x2={chartW} y2={chartH * (1 - f)}
-                  stroke="#f1f5f9" strokeWidth="1" />
+                <line key={f} x1={30} y1={chartH * (1 - f)} x2={chartW} y2={chartH * (1 - f)} stroke="#f1f5f9" strokeWidth="1" />
               ))}
               {trend.map((m, i) => {
                 const x = 30 + i * barGroupW + barPad;
@@ -656,11 +718,8 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
                 const tH = Math.round((m.terminations / maxTrend) * chartH);
                 return (
                   <g key={m.label}>
-                    {/* Hires bar (emerald) */}
-                    <rect x={x} y={chartH - hH} width={barW} height={hH} rx="2" fill="#10b981" opacity={0.85} />
-                    {/* Terminations bar (red) */}
+                    <rect x={x}           y={chartH - hH} width={barW} height={hH} rx="2" fill="#10b981" opacity={0.85} />
                     <rect x={x + barW + 1} y={chartH - tH} width={barW} height={tH} rx="2" fill="#ef4444" opacity={0.85} />
-                    {/* Month label */}
                     <text x={x + barW} y={chartH + 16} textAnchor="middle" fontSize="8" fill="#94a3b8" fontWeight="700">{m.label}</text>
                   </g>
                 );
@@ -672,10 +731,9 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
             </div>
           </div>
 
-          {/* Bottom section: dept + citizenship + employment type */}
+          {/* Headcount breakdowns */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Department breakdown */}
-            <div className="lg:col-span-1 bg-white rounded-2xl border border-slate-100 p-6 flex flex-col gap-3">
+            <div className="bg-white rounded-2xl border border-slate-100 p-6 flex flex-col gap-3">
               <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">By Department</h3>
               {deptEntries.map(([dept, count]) => (
                 <div key={dept} className="flex flex-col gap-1">
@@ -689,8 +747,6 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
                 </div>
               ))}
             </div>
-
-            {/* Employment type */}
             <div className="bg-white rounded-2xl border border-slate-100 p-6 flex flex-col gap-3">
               <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Employment Type</h3>
               {etEntries.map(([type, count]) => {
@@ -709,12 +765,10 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
                 );
               })}
             </div>
-
-            {/* Citizenship / pass type */}
             <div className="bg-white rounded-2xl border border-slate-100 p-6 flex flex-col gap-3">
               <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Citizenship / Pass</h3>
               {csEntries.map(([key, count]) => {
-                const pct = Math.round((count / totalCiti) * 100);
+                const pct   = Math.round((count / totalCiti) * 100);
                 const color = csColors[key] || '#94a3b8';
                 return (
                   <div key={key} className="flex flex-col gap-1">
@@ -728,6 +782,101 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          {/* OT by department + Training completion */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* OT by department */}
+            <div className="bg-white rounded-2xl border border-slate-100 p-6 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">OT Hours by Department</h3>
+                {otData && <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">6-month total · this month highlighted</span>}
+              </div>
+              {!otData ? (
+                <p className="text-[10px] text-slate-400 font-bold py-4 text-center">No OT data available</p>
+              ) : otEntries.length === 0 ? (
+                <p className="text-[10px] text-slate-400 font-bold py-4 text-center">No OT recorded in this period</p>
+              ) : otEntries.map(([dept, total]) => {
+                const thisMo = otCurrentMonth[dept] ?? 0;
+                const pct    = Math.round((total / maxOt) * 100);
+                const moPct  = total > 0 ? Math.round((thisMo / total) * 100) : 0;
+                return (
+                  <div key={dept} className="flex flex-col gap-1">
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-[10px] font-black text-slate-700 truncate max-w-[60%]">{dept}</span>
+                      <span className="text-[10px] font-black text-slate-500">
+                        <span className="text-amber-600">{thisMo}h</span>
+                        <span className="text-slate-300 mx-1">/</span>
+                        {total}h total
+                      </span>
+                    </div>
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-amber-200 rounded-full relative" style={{ width: `${pct}%` }}>
+                        <div className="h-full bg-amber-500 rounded-full absolute left-0 top-0" style={{ width: `${moPct}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Training completion */}
+            <div className="bg-white rounded-2xl border border-slate-100 p-6 flex flex-col gap-4">
+              <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Training Completion</h3>
+              {!trainData ? (
+                <p className="text-[10px] text-slate-400 font-bold py-4 text-center">No training data available</p>
+              ) : (
+                <>
+                  <div className="flex items-center gap-6">
+                    <div className="flex flex-col items-center">
+                      <span className={`text-4xl font-black tracking-tighter ${trainData.completionRate >= 80 ? 'text-emerald-600' : trainData.completionRate >= 50 ? 'text-amber-600' : 'text-red-500'}`}>
+                        {trainData.completionRate}%
+                      </span>
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Completion Rate</span>
+                    </div>
+                    <div className="flex flex-col gap-1 flex-1">
+                      {[
+                        { label: 'Completed',   value: trainData.completed,        color: 'bg-emerald-500' },
+                        { label: 'In Progress', value: trainData.inProgress,       color: 'bg-amber-400' },
+                        { label: 'Total',       value: trainData.totalEnrollments, color: 'bg-slate-300' },
+                      ].map(s => (
+                        <div key={s.label} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${s.color}`} />
+                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{s.label}</span>
+                          </div>
+                          <span className="text-[10px] font-black text-slate-800">{s.value}</span>
+                        </div>
+                      ))}
+                      {trainData.mandatory > 0 && (
+                        <div className="mt-1 px-2 py-1 bg-red-50 border border-red-100 rounded-lg">
+                          <span className="text-[8px] font-black text-red-600 uppercase tracking-widest">{trainData.mandatory} mandatory programme{trainData.mandatory !== 1 ? 's' : ''}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {catEntries.length > 0 && (
+                    <div className="flex flex-col gap-2 pt-2 border-t border-slate-50">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Programmes by Category</span>
+                      {catEntries.map(c => {
+                        const pct = Math.round((c._count.id / maxCat) * 100);
+                        return (
+                          <div key={c.category} className="flex flex-col gap-0.5">
+                            <div className="flex justify-between">
+                              <span className="text-[9px] font-black text-slate-600">{c.category}</span>
+                              <span className="text-[9px] font-black text-slate-400">{c._count.id}</span>
+                            </div>
+                            <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>
