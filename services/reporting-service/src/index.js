@@ -547,6 +547,110 @@ app.put('/reports/submissions/:id',
   }
 );
 
+// ── RPT-001 — Executive Workforce Dashboard ───────────────────────────────────
+app.get('/reports/workforce-dashboard',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER),
+  async (req, res, next) => {
+    try {
+      const auth = authHeaders(req);
+      const empRes = await axios.get(`${EMPLOYEE_URL2}/employees?limit=2000`, { headers: auth });
+      const employees = empRes.data.employees || [];
+
+      const now = new Date();
+      const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const thisMonthEnd   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+      // Build 12-month rolling window (oldest first)
+      const months = [];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        months.push({
+          year: d.getFullYear(),
+          month: d.getMonth() + 1,
+          label: d.toLocaleDateString('en-SG', { month: 'short', year: '2-digit' }),
+          start: new Date(d.getFullYear(), d.getMonth(), 1),
+          end:   new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59),
+          hires: 0,
+          terminations: 0,
+        });
+      }
+
+      const twelveMonthsAgo = months[0].start;
+
+      let totalActive = 0;
+      let hiresMtd = 0;
+      let termsMtd = 0;
+      let terminations12m = 0;
+      const byDepartment = {};
+      const byEmploymentType = {};
+      const byCitizenship = { SC: 0, PR: 0, EP: 0, S_PASS: 0, WP: 0, OTHER: 0 };
+
+      for (const e of employees) {
+        const joinDate = e.joinDate ? new Date(e.joinDate) : null;
+        const termDate = e.lastWorkingDate
+          ? new Date(e.lastWorkingDate)
+          : e.resignationDate ? new Date(e.resignationDate) : null;
+
+        // Active headcount
+        if (e.isActive) {
+          totalActive++;
+          const dept = e.department || 'Unassigned';
+          byDepartment[dept] = (byDepartment[dept] || 0) + 1;
+          const et = e.employmentType || 'Unknown';
+          byEmploymentType[et] = (byEmploymentType[et] || 0) + 1;
+
+          const pass = (e.workPassType || e.passType || '').toUpperCase();
+          const cs   = (e.citizenshipStatus || '').toUpperCase();
+          if (cs === 'SC' || pass === 'SC' || e.nationality === 'Singapore Citizen')      byCitizenship.SC++;
+          else if (cs === 'PR' || pass === 'PR')                                           byCitizenship.PR++;
+          else if (pass === 'EP' || pass === 'EMPLOYMENT_PASS')                            byCitizenship.EP++;
+          else if (pass === 'S_PASS' || pass === 'SPASS')                                  byCitizenship.S_PASS++;
+          else if (pass === 'WP' || pass === 'WORK_PERMIT')                               byCitizenship.WP++;
+          else                                                                             byCitizenship.OTHER++;
+        }
+
+        // Hires MTD
+        if (joinDate && joinDate >= thisMonthStart && joinDate <= thisMonthEnd) hiresMtd++;
+
+        // Terminations MTD
+        if (termDate && termDate >= thisMonthStart && termDate <= thisMonthEnd) termsMtd++;
+
+        // 12m rolling buckets
+        for (const m of months) {
+          if (joinDate && joinDate >= m.start && joinDate <= m.end) m.hires++;
+          if (termDate && termDate >= m.start && termDate <= m.end) { m.terminations++; }
+        }
+
+        // 12m termination count for attrition rate
+        if (termDate && termDate >= twelveMonthsAgo && termDate <= now) terminations12m++;
+      }
+
+      const attritionRate12m = totalActive > 0
+        ? Math.round((terminations12m / (totalActive + terminations12m)) * 100 * 10) / 10
+        : 0;
+
+      const trend = months.map(m => ({ label: m.label, hires: m.hires, terminations: m.terminations }));
+
+      res.json({
+        generatedAt: now.toISOString(),
+        kpis: {
+          totalHeadcount: employees.length,
+          activeHeadcount: totalActive,
+          hiresMtd,
+          termsMtd,
+          attritionRate12m,
+          terminations12m,
+        },
+        trend,
+        byDepartment,
+        byEmploymentType,
+        byCitizenship,
+      });
+    } catch (err) { next(err); }
+  }
+);
+
 // RPT-003 Phase 1 — report builder + schedules mounted under /reports
 app.use('/reports', builderRoutes);
 

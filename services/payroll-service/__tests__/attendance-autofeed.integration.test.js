@@ -5,15 +5,16 @@
  * ABSENCE_DED, PH_WORK line items.
  *
  * Cases:
- *   A) Period status ≠ APPROVED_FOR_PAYROLL → 409 (no compute, no payslip)
- *   B) attendanceOverride: true bypasses the gate (no auto-feed applied)
+ *   A) Period status ≠ APPROVED_FOR_PAYROLL → 200 with attendanceNotApproved warning
+ *      (payroll proceeds; attendance auto-feed skipped; audit log written)
+ *   B) attendanceOverride: true still accepted (no-op; auto-feed still skipped)
  *   C) Approved + OT hours → OT_PAY line item created at 1.5× hourly rate
  *   D) Approved + absent days → ABSENCE_DED line item created at -dailyRate × days
  *   E) Approved + PH worked days → PH_WORK line item created at +dailyRate × days
  *   F) Manual Wins — existing OT_PAY line item suppresses the auto-feed
  *      for THAT employee/code (other employees + codes still apply)
  *   G) Pay component missing → auto-feed silently skips that code
- *   H) Attendance fetch fails → 409 unless override
+ *   H) Attendance fetch fails → 200, no auto-feed, fetchFailed flag (no warning written)
  */
 
 jest.mock('/app/shared/auth-middleware', () => ({
@@ -60,6 +61,7 @@ jest.mock('@prisma/client', () => ({
     payrollOverride:      { findMany: jest.fn().mockResolvedValue([]) },
     payrollPeriodConfig:  { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn() },
     publicHoliday:        { findMany: jest.fn().mockResolvedValue([]), create: jest.fn(), delete: jest.fn() },
+    auditLog:             { create: jest.fn().mockResolvedValue({}), findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
   })),
 }));
 
@@ -111,34 +113,36 @@ beforeEach(() => {
   mockLineItemCreate.mockImplementation(({ data }) => Promise.resolve({ ...data }));
 });
 
-// ── A) gate: non-APPROVED status → 409 ──────────────────────────────────────
+// ── A) Unapproved attendance → 200 with warning (payroll proceeds) ───────────
 
-describe('A) Attendance approval gate', () => {
-  test('OPEN → 409', async () => {
+describe('A) Attendance approval gate — auto-proceed with warning', () => {
+  test('OPEN → 200, attendanceNotApproved warning included, auto-feed skipped', async () => {
     installAttendanceFetch('OPEN', {});
     const res = await request(app)
       .post('/payroll/runs/run-001/compute')
       .send({ employees: [EMP_A] });
-    expect(res.status).toBe(409);
-    expect(res.body.attendancePeriodStatus).toBe('OPEN');
-    expect(mockLineItemCreate).not.toHaveBeenCalled();
-    expect(mockPayslipUpsert).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(res.body.warnings?.attendanceNotApproved).toBeDefined();
+    expect(res.body.warnings.attendanceNotApproved.periodStatus).toBe('OPEN');
+    expect(res.body.attendance.applied).toBe(false);
+    // Payslip is still computed.
+    expect(mockPayslipUpsert).toHaveBeenCalled();
   });
 
-  test('LOCKED → 409', async () => {
+  test('LOCKED → 200, warning references locked status, auto-feed skipped', async () => {
     installAttendanceFetch('LOCKED', {});
     const res = await request(app).post('/payroll/runs/run-001/compute').send({ employees: [EMP_A] });
-    expect(res.status).toBe(409);
-    expect(res.body.attendancePeriodStatus).toBe('LOCKED');
+    expect(res.status).toBe(200);
+    expect(res.body.warnings?.attendanceNotApproved.periodStatus).toBe('LOCKED');
+    expect(res.body.attendance.applied).toBe(false);
   });
 
-  test('attendanceOverride:true bypasses gate; no auto-feed applied', async () => {
+  test('attendanceOverride:true still accepted; no auto-feed applied', async () => {
     installAttendanceFetch('LOCKED', { 'emp-A': { otHours: 5, absentDays: 0, phWorkedDays: 0 } });
     const res = await request(app)
       .post('/payroll/runs/run-001/compute')
       .send({ employees: [EMP_A], attendanceOverride: true });
     expect(res.status).toBe(200);
-    // Auto-feed is suppressed when override is in play.
     expect(mockLineItemCreate).not.toHaveBeenCalled();
     expect(res.body.attendance.applied).toBe(false);
   });
@@ -261,13 +265,17 @@ describe('F) Pay component not configured', () => {
   });
 });
 
-// ── G) Attendance fetch fails → 409 unless override ─────────────────────────
+// ── G) Attendance service unreachable → 200, no auto-feed, fetchFailed flag ──
 
 describe('G) Attendance service unreachable', () => {
-  test('fetch rejects → 409', async () => {
+  test('fetch rejects → 200, no auto-feed, fetchFailed flag set, no attendance warning written', async () => {
     installAttendanceFetch('OPEN', {}, /* attendanceError= */ true);
     const res = await request(app).post('/payroll/runs/run-001/compute').send({ employees: [EMP_A] });
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(200);
+    expect(res.body.attendance.applied).toBe(false);
+    expect(res.body.attendance.fetchFailed).toBe(true);
+    // No warning when we couldn't even reach attendance — we don't know the status.
+    expect(res.body.warnings?.attendanceNotApproved).toBeUndefined();
   });
 
   test('fetch rejects + attendanceOverride:true → 200, no auto-feed, fetchFailed flag set', async () => {

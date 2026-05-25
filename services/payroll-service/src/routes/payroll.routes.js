@@ -355,6 +355,8 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
     let attendanceSummary = {};
     let attendancePeriodStatus = 'OPEN';
     let attendanceFetchFailed = false;
+    let attendancePeriodLockedBy = null;
+    let attendancePeriodApprovedBy = null;
     try {
       const attRes = await fetch(
         `${ATTENDANCE_SERVICE_URL}/attendance/internal/period-summary/${run.period}`,
@@ -364,6 +366,8 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
         const body = await attRes.json();
         attendanceSummary = body.summary || {};
         attendancePeriodStatus = body.periodStatus || 'OPEN';
+        attendancePeriodLockedBy = body.lockedBy || null;
+        attendancePeriodApprovedBy = body.approvedBy || null;
       } else {
         attendanceFetchFailed = true;
         console.warn('[payroll] attendance fetch returned', attRes.status);
@@ -373,15 +377,41 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
       console.warn('[payroll] Could not fetch attendance summary:', e.message);
     }
 
-    if (attendancePeriodStatus !== 'APPROVED_FOR_PAYROLL' && !req.body.attendanceOverride) {
-      return res.status(409).json({
-        error: 'Attendance period not approved for payroll',
-        details: `Period ${run.period} status is ${attendancePeriodStatus}. Lock and approve it in the Attendance module, or pass attendanceOverride:true to bypass (the attendance auto-feed will be skipped).`,
-        attendancePeriodStatus,
-      });
+    // Auto-proceed when attendance period is not yet approved — payroll is not
+    // blocked, but the unapproved status is logged as a warning so management
+    // can follow up with the responsible approver.
+    let attendanceNotApprovedWarning = null;
+    if (attendancePeriodStatus !== 'APPROVED_FOR_PAYROLL' && !attendanceFetchFailed) {
+      const whoLocked = attendancePeriodLockedBy
+        ? `locked by user ${attendancePeriodLockedBy} (not yet approved for payroll)`
+        : 'not yet locked or approved for payroll';
+      const warningMsg = `Payroll computed with attendance period ${run.period} unapproved — ${whoLocked}. Status: ${attendancePeriodStatus}. Attendance auto-feed skipped.`;
+      console.warn(`[payroll][attendance-warning] run=${run.id} period=${run.period} ${warningMsg}`);
+      attendanceNotApprovedWarning = {
+        period: run.period,
+        periodStatus: attendancePeriodStatus,
+        lockedBy: attendancePeriodLockedBy,
+        approvedBy: attendancePeriodApprovedBy,
+        message: warningMsg,
+      };
+      // Write to payroll audit log so it is queryable from the audit trail.
+      prisma.auditLog.create({
+        data: {
+          entityType: 'PayrollRun',
+          entityId:   run.id,
+          action:     'COMPUTE_ATTENDANCE_WARNING',
+          actorId:    req.user?.sub  || null,
+          actorEmail: req.user?.email || null,
+          actorRole:  req.user?.role  || null,
+          details:    attendanceNotApprovedWarning,
+          ipAddress:  req.ip || req.headers?.['x-forwarded-for'] || null,
+        },
+      }).catch(e => console.error('[payroll][audit] failed to write attendance warning:', e.message));
     }
-    // If override is in play, do not apply the auto-feed — leave Payroll
-    // Officer responsible for any manual OT/Absent paycodes they want.
+
+    // Auto-feed only applies when the period is fully approved and fetch succeeded.
+    // When the period is unapproved we skip the feed — Payroll Officer must add
+    // OT/Absent paycodes manually if needed.
     const applyAttendanceFeed = attendancePeriodStatus === 'APPROVED_FOR_PAYROLL' && !attendanceFetchFailed;
 
     // Look up the pay component IDs we materialize. Codes are pre-seeded.
@@ -557,12 +587,19 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
         totalCpf: encrypt(String(totalEmployee)),
         totalEmployerCpf: encrypt(String(totalEmployer)),
         totalSdl: String(totalSdl),
+        ...(attendanceNotApprovedWarning && {
+          notes: attendanceNotApprovedWarning.message,
+        }),
       },
     });
+    const warnings = {
+      ...(zeroSalaryWarnings.length > 0 && { zeroOrdinaryWages: zeroSalaryWarnings }),
+      ...(attendanceNotApprovedWarning && { attendanceNotApproved: attendanceNotApprovedWarning }),
+    };
     res.json({
       message: 'Payroll computed. Status: PENDING_APPROVAL',
       total: { gross: totalGross, net: totalNet, employeeCpf: totalEmployee, employerCpf: totalEmployer, sdl: totalSdl },
-      ...(zeroSalaryWarnings.length > 0 && { warnings: { zeroOrdinaryWages: zeroSalaryWarnings } }),
+      ...(Object.keys(warnings).length > 0 && { warnings }),
       ...(autoRemovedIds.length > 0 && { autoRemovedIds }),
       ...(autoTrimmedIds.length > 0 && { autoTrimmedIds }),
       attendance: {
@@ -1965,6 +2002,30 @@ router.get('/payslips/archive', authenticate, async (req, res, next) => {
         finalisedAt: r.run?.finalisedAt,
       })),
     });
+  } catch (err) { next(err); }
+});
+
+// ─── GET /payroll/audit-logs ─ Payroll audit trail ──────────────────────────
+router.get('/audit-logs', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const { page = 1, limit = 50, action, entityId, runId } = req.query;
+    const pageNum  = Math.max(1, Number(page));
+    const limitNum = Math.min(200, Math.max(1, Number(limit)));
+    const where = {};
+    if (action)            where.action   = { contains: action, mode: 'insensitive' };
+    if (entityId || runId) where.entityId = entityId || runId;
+
+    const [logs, total] = await Promise.all([
+      prisma.auditLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum,
+      }),
+      prisma.auditLog.count({ where }),
+    ]);
+
+    res.json({ logs, total, page: pageNum, pages: Math.ceil(total / limitNum) });
   } catch (err) { next(err); }
 });
 
