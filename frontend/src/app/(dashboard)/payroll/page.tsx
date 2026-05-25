@@ -986,6 +986,13 @@ function AdminPayrollDashboard() {
               <span className="label-form">Active Engine</span>
               <span className="text-[10px] font-black text-indigo-600 uppercase mt-1">SG-CPF-STABLE-2026</span>
            </div>
+           <a
+             href="/payroll/iras-submissions"
+             className="px-6 py-5 bg-white border border-slate-200 text-slate-700 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:border-indigo-400 hover:text-indigo-700 transition-all flex items-center gap-2"
+             title="CPF e-Submit, IR8A, Appendix 8A/8B, IR21 submission tracking"
+           >
+              <span>◉</span> IRAS Submissions
+           </a>
            <button
              onClick={() => setIsRunModalOpen(true)}
              className="px-10 py-5 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-indigo-700 shadow-2xl shadow-indigo-500/20 transition-all active:scale-95 flex items-center gap-3"
