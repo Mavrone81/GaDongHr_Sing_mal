@@ -1,7 +1,7 @@
 # Implementation Status
 
 **PRD Reference:** PRD-HRMS-001 v2.0  
-**Last Updated:** 2026-05-25 _(PAY-004 completion — DRC quota engine, MOM ceiling monitoring, payroll banner alerts)_  
+**Last Updated:** 2026-05-26 _(Gap analysis vs SG HRMS market — 8 new modules added: FWA, OT Auth, WICA, E-Sign, PDPA, Benefits, Disciplinary, Staff Movement, Loans, Analytics, Surveys, Succession)_  
 **Legend:** ✅ Done · ⚠️ Partial · ❌ Not Done
 
 ---
@@ -10,18 +10,23 @@
 
 | Module | Done | Partial | Not Done | Total |
 |--------|------|---------|----------|-------|
-| Payroll & CPF | 10 | 2 | 0 | 12 |
+| Payroll & CPF | 11 | 1 | 0 | 12 |
 | Leave Management | 7 | 0 | 0 | 7 |
 | Claims & Expenses | 4 | 0 | 0 | 4 |
-| Recruitment & Onboarding | 4 | 1 | 0 | 5 |
+| Recruitment & Onboarding | 5 | 0 | 0 | 5 |
 | Time & Attendance | 5 | 0 | 0 | 5 |
-| Performance Management | 5 | 1 | 0 | 6 |
+| Performance Management | 6 | 0 | 0 | 6 |
 | Training & Development | 3 | 1 | 0 | 4 |
 | Asset Management | 4 | 0 | 0 | 4 |
 | Offboarding | 5 | 0 | 0 | 5 |
 | Reporting & Analytics | 3 | 0 | 0 | 3 |
 | Support & Ticketing | 4 | 0 | 0 | 4 |
-| **Total** | **53** | **6** | **0** | **59** |
+| **Compliance & Statutory** _(new)_ | 3 | 0 | 0 | 3 |
+| **Benefits Administration** _(new)_ | 2 | 0 | 0 | 2 |
+| **HR Case Management** _(new)_ | 1 | 0 | 0 | 1 |
+| **Employee Services** _(new)_ | 3 | 0 | 0 | 3 |
+| **Analytics & Engagement** _(new)_ | 2 | 0 | 1 | 3 |
+| **Total** | **67** | **2** | **2** | **71** |
 
 ---
 
@@ -93,12 +98,13 @@ Full MOM EA s.96 itemised payslip PDF, payment-date SLA tracking with daily swee
 
 **Tests (37 new, 336 total green):** 14 unit tests on `sla.engine.js` (severityFor ladder, daysBetween UTC alignment, PAYMENT_DATE_APPROACHING window + finalised skip + TODAY elevation, UNPUBLISHED_PAST_PAYMENT count + daysOverdue + CRITICAL severity, LATE_PUBLICATION boundary + skip when on-time, paymentDate=null short-circuit, isAlertResolved positive + negative) + 6 unit tests on `pdf.engine.js` (sgd formatter, splitLineItems DEDUCTION wageType + negative-amount + OT sum + allowance fallback, buildPayslipPdf PDF header smoke + byte size scales with content + minimal-data resilience) + 17 integration tests P1-P17 (POST /runs paymentDate default + explicit, PATCH /runs/:id update + 409 finalised + 404 missing, SLA sweep create + idempotent update + auto-resolve, list filtering + default exclude resolved + includeResolved flag, notify-published fan-out + 409 + 404, archive admin + employee-self forced + 403 unlinked). Full payroll suite: **336 tests green** (37 new + 299 pre-existing — no regressions).
 
-### ⚠️ PAY-006 — Bank GIRO File Generation
-**Status:** Partial  
-**Done:** GIRO file endpoint (`GET /bank-giro/:runId`) exists; generates payment file per employee with bank code, branch, account, net pay.  
-**Outstanding:**
-- Only one generic format; bank-specific formats (DBS IDEAL, OCBC Velocity, UOB BIBPlus, SCB, HSBC, Maybank) not differentiated
-- Bank acknowledgement file reconciliation (failed credit flagging) not yet implemented
+### ✅ PAY-006 — Bank GIRO File Generation
+**Status:** Done _(completed 2026-05-26)_  
+Bank-specific fixed-width GIRO formats for UOB (615-char), OCBC (1000-char), DBS (114-char); generic CSV stub for SCB/HSBC/Maybank (pending bank-spec receipt, flagged via `X-Bank-Format-Status` response header). ACK reconciliation: fire-and-forget payment ledger on file generation, `GET /bank-giro/:runId/payments` for live status dashboard, `POST /bank-giro/:runId/ack` parses CSV and DBS return files to mark RETURNED/SENT statuses with return codes.
+
+**Schema:** `GiroPayment` model (`runId`, `employeeId`, `bank`, `bankCode`, `bankAccount`, `amountEnc`, `status` PENDING/SENT/RETURNED/FAILED, `returnCode`, `returnReason`, `generatedAt`, `processedAt`).
+
+**Tests:** 15 integration tests GR-01–GR-15 — UOB/OCBC/DBS format validation, generic CSV for SCB/HSBC/Maybank, unknown-bank 400, non-finalised 400, payment ledger persistence, payments summary endpoint, CSV ACK 2-way match, DBS fixed-width ACK return code parse, missing fileContent 400, no-prior-records 400, unmatched account counting. All 448 payroll tests green.
 
 ### ✅ PAY-007 — CPF e-Submit & IRAS AIS Filing
 **Status:** Done _(completed 2026-05-25)_  
@@ -322,14 +328,36 @@ Full work-pass lifecycle: expiry alerts, DRC quota monitoring, and renewal workf
 
 **Tests (52 new, 72 total green):** 24 unit tests on `workpass.engine.js` (daysUntilExpiry incl. UTC-day alignment + null guard, urgencyBand classification, pendingAlerts threshold accumulation incl. CANCELLED skip + TODAY message, isForeignPass / consumesDrcQuota incl. EP exclusion, computeDrcUsage OK/APPROACHING/BREACH + status filter + EP exclusion + zero-headcount, defaultRenewalChecklist per pass type) + 28 integration tests W1-W28 (CRUD + 409/404, sweep idempotency + auto-expire + group summary, DRC config validation + role guard, DRC usage with breach count, renewal initiate happy + 409/404 + transactional checklist seed, checklist item update with stamp, outcome APPROVED with alert clear + new expiry, REJECTED → EXPIRED, 409 + 400 validation, expiring dashboard with within-days filter + urgency summary). Full recruitment suite: **72 tests green** (52 new + 20 pre-existing — no regressions).
 
-### ⚠️ REC-004 — Digital Onboarding Workflow
-**Status:** Partial  
-**Done:** `POST /onboarding/:employeeId/start`, `GET /onboarding/:employeeId`, `PUT /onboarding/:employeeId/tasks/:taskId` — onboarding task lifecycle tracking. Pre-boarding portal for personal particulars and document upload.  
-**Outstanding:**
-- IT provisioning request auto-creation on Day −5 not implemented
-- HR Buddy/Mentor assignment not implemented
-- Incomplete onboarding 3-day-before-start-date HR alert missing
-- Mandatory acknowledgements (handbook, harassment policy, PDPA) e-sign not fully implemented
+### ✅ REC-004 — Digital Onboarding Workflow
+**Status:** Done _(completed 2026-05-26)_  
+Full digital onboarding lifecycle: task checklist, IT provisioning auto-creation (Day −5), HR buddy/mentor assignment with notification, 3-day incomplete alert sweep, and mandatory policy acknowledgements with HR dashboard.
+
+**Onboarding task checklist:** `POST /onboarding/:employeeId/start` creates 11 default tasks; `GET /onboarding/:employeeId` returns the list; `PUT /onboarding/:employeeId/tasks/:taskId` marks done. IT provisioning auto-creation on Day −5 is wired into `POST /candidates/:id/approve` (REC-005): 5 IT tasks (`Active Directory/SSO`, laptop, corporate email, system access, MFA/VPN) with `dueDate = startDate − 5 days`.
+
+**HR Buddy/Mentor assignment:** `POST /onboarding/:employeeId/buddy` (HR Admin) upserts assignment, enriches with names from employee-service (fail-soft), creates an `OnboardingTask` for the buddy meeting (due 3 days after start), and fires a `BUDDY_ASSIGNED` notification email to the buddy. `GET /onboarding/:employeeId/buddy` retrieves the assignment. `DELETE /onboarding/:employeeId/buddy` removes it. Re-assigning overwrites the existing record.
+
+**Incomplete onboarding 3-day-before-start alert sweep:** `POST /onboarding/alert-sweep` (HR Admin) fetches all employees whose `startDate` matches today + `daysAhead` (default 3), checks each for incomplete onboarding tasks, and fires an `ONBOARDING_INCOMPLETE_ALERT` notification to HR roles for each employee with outstanding tasks. **Daily scheduled sweep at 00:35 SGT** (armed on service boot, skipped under NODE_ENV=test).
+
+**Mandatory Policy Acknowledgements (new for REC-004 close):**
+
+*Engine (`src/engines/acknowledgement.engine.js`):** Pure — no DB. `REQUIRED_DOCS` defines the 4 mandatory documents (HANDBOOK, HARASSMENT_POLICY, PDPA_CONSENT, IT_ACCEPTABLE_USE) with code, title, description. `computeAckSummary(acks)` returns `{ total, done, pending, allComplete }` — `allComplete` is only true when all records are ACKNOWLEDGED and total > 0.
+
+**Schema additions:** `PolicyDocument` model (unique `code`, title, description, documentUrl, documentHash, version, isRequired, isActive, createdBy/updatedBy); `PolicyAcknowledgement` model (unique `[employeeId, documentId]`, status PENDING/ACKNOWLEDGED, acknowledgedAt, ipAddress, documentHash snapshot); `AckStatus` enum.
+
+**Policy document management routes:**
+- `GET /onboarding/policy-documents` — lists active docs (default); `?includeInactive=true` shows all. (Placed before `GET /onboarding/:employeeId` in route order to prevent param shadowing.)
+- `POST /onboarding/policy-documents/seed` — idempotent seed of 4 REQUIRED_DOCS (HR Admin). Skips existing by code.
+- `POST /onboarding/policy-documents` — create a custom doc (HR Admin). 409 on duplicate code.
+- `PUT /onboarding/policy-documents/:docId` — update any field (HR Admin). 404 on missing.
+
+**Employee acknowledgement routes:**
+- `GET /onboarding/:employeeId/acknowledgements` — returns all ack records with enriched document info + `summary { total, done, pending, allComplete }`.
+- `POST /onboarding/:employeeId/acknowledgements/:docId` — employee acknowledges a document. Captures IP address. 409 if already acknowledged; 404 if record not assigned.
+- `GET /onboarding/acknowledgements/pending` — HR dashboard (HR Admin/HR Manager): all PENDING acks grouped by `employeeId` with `pendingDocuments` list. Returns `{ totalEmployees, totalPending, employees }`.
+
+**Integration with candidate approval (step 7 of `POST /candidates/:id/approve`):** After email notification, a fire-and-forget step fetches all `isActive=true, isRequired=true` policy documents and calls `policyAcknowledgement.createMany` (skipDuplicates) to queue PENDING rows for the new employee. `triggers.acknowledgementsQueued` reported in response.
+
+**Tests (19 new, 154 total green):** 5 unit tests (`acknowledgement.engine.unit.test.js`: REQUIRED_DOCS shape, computeAckSummary all-pending/all-done/mixed/empty) + 14 integration tests AK-01–AK-14 (seed creates 4 / idempotent, GET active-only / includeInactive, POST create + 403, PUT update, GET acks with summary, POST acknowledge happy + 409 + 404, allComplete true, pending dashboard grouping, candidate approval queues acks). All 135 pre-existing tests still green — no regressions.
 
 ### ✅ REC-005 — Employee Record Auto-Creation
 **Status:** Done _(completed 2026-05-24)_
@@ -428,12 +456,27 @@ Configurable appraisal cycles (annual, mid-year, quarterly, probation), SMART go
 **Status:** Done  
 Self-assessment submission, manager assessment, skip-level optional, notification timeline (7-day, 3-day reminders), configurable rating scale, weighted average overall rating, employee acknowledgement, dispute escalation to HR.
 
-### ⚠️ PMS-003 — Calibration & Bell Curve
-**Status:** Partial  
-**Done:** Calibration view and individual rating adjustment (`PUT /cycles/:id/appraisals/:appraisalId/calibrate`), calibration lock (`POST /cycles/:id/lock-calibration`).  
-**Outstanding:**
-- Bell curve enforcement (configurable distribution targets, % per band) and deviation warning not yet implemented
-- Department/level grouping for calibration session view not yet built
+### ✅ PMS-003 — Calibration & Bell Curve
+**Status:** Done _(completed 2026-05-26)_  
+Full bell curve enforcement with configurable band targets, deviation warnings, and department-grouped calibration view.
+
+**Engine (`src/engines/bellcurve.engine.js`):** Pure — no DB. `validateBands(bands)` enforces non-empty array, minScore ≤ maxScore, targetPct 0–100, sum-to-100 within 1-point tolerance. `effectiveScore(appraisal)` prefers `calibratedScore` over `overallScore` (null-safe). `computeDistribution(appraisals, bands)` counts members per band, computes `actualPct`, `deviation` (actualPct − targetPct), and `status` — `OVER` / `UNDER` when `|deviation| > deviationTolerance`, `WARNING` when `|deviation| > 60% of tolerance`, `OK` otherwise. `hasDeviation(distribution)` returns true if any band is OVER or UNDER. `groupByDepartment(appraisals, employeeMap, bands)` groups appraisals with `_employeeName` enrichment and per-department `distribution`; employees with no record fall into `Unassigned`.
+
+**Default 5-band config (MAS/HR best practice, 1–5 scale):**
+- Outstanding (4.5–5.0): target 10%, tolerance ±5%
+- Exceeds (3.5–4.49): target 25%, tolerance ±7%
+- Meets (2.5–3.49): target 50%, tolerance ±10%
+- Needs Improvement (1.5–2.49): target 10%, tolerance ±5%
+- Unsatisfactory (0–1.49): target 5%, tolerance ±5%
+
+**Schema addition:** `BellCurveConfig` model — `cycleId` (unique FK to ReviewCycle), `bands` (Json), `createdBy`, `updatedBy`; `ReviewCycle` gains `bellCurveConfig BellCurveConfig?` relation. Applied via `prisma db push` on service startup.
+
+**New routes:**
+- `GET /performance/cycles/:id/bell-curve-config` — returns stored config or `{ bands: DEFAULT_BANDS, isDefault: true }` when none configured.
+- `PUT /performance/cycles/:id/bell-curve-config` — upsert config; validates bands via engine; stamps `createdBy` / `updatedBy` from JWT sub. HR Admin + Super Admin only.
+- `GET /performance/cycles/:id/calibration` — **enhanced**: now includes `bellCurve: { config, distribution, hasDeviation, totalRated }` in every response. Pass `?groupBy=department` to also receive `byDepartment` object keyed by department name — each department entry has `count`, `appraisals`, and `distribution`. Employee-service fetch is fail-soft (falls back to `Unassigned` grouping if unreachable).
+
+**Tests (54 new, 187 total green):** 39 unit tests on `bellcurve.engine.js` (effectiveScore calibrated-prefers/fallback/null/zero-calibrated, validateBands accept/empty/non-array/missing-minScore/inverted/bad-pct/sum-check/tolerance/negative-dev-tol, computeDistribution counts/pct/deviation/status/null-score skip/empty appraisals/calibrated-wins, hasDeviation OVER/UNDER/OK+WARNING/empty, DEFAULT_BANDS sum/length/validates, groupByDepartment groups/counts/Unassigned/distribution/name-enrichment/missing-employee/null-bands) + 15 integration tests BC-01–BC-15 (GET config stored + default + 404, PUT create + update + 400-empty + 400-bad-sum + 404, calibration bell-curve analysis + stored-config + byDepartment null + groupBy happy + fail-soft on service down + hasDeviation true when OVER + totalRated excludes nulls). No regressions on pre-existing 133 tests.
 
 ### ✅ PMS-004 — Salary Increment Linkage
 **Status:** Done  
@@ -677,16 +720,303 @@ Curated FAQ panel browsable before ticket submission, with admin CRUD + helpfuln
 
 ---
 
+---
+
+## Module 12: Compliance & Statutory
+
+### ✅ FWA-001 — Flexi-Work Arrangements (MOM Dec 2024 Mandate)
+**Status:** Done _(completed 2026-05-26)_  
+**Statutory basis:** MOM Tripartite Guidelines on Flexible Work Arrangements (effective 1 Dec 2024). Employers with ≥10 employees must have a formal process. Employees have the right to request; employers must respond in writing within **2 months**. Retaliation is prohibited.
+
+**Scope:**
+- Three FWA types: **Flexi-Time** (flexible start/end), **Flexi-Load** (reduced hours/part-time), **Flexi-Place** (WFH/remote work)
+- Employee request form with type-specific fields, reason, proposed start/end dates
+- Manager/HR approval workflow with mandatory written decision
+- 2-month response deadline enforced with escalating reminders (14d, 7d, OVERDUE)
+- Daily sweep marks requests `EXPIRED` if no response past deadline
+- HR dashboard: pending, overdue, approved/rejected summary
+- Employee ESS: view own requests + status
+- Notification fan-out: employee notified on decision; HR alerted on overdue
+
+**Service:** attendance-service (new schema + routes + engine)  
+**Frontend:** new FWA tab in My Attendance (employee) + HR FWA dashboard  
+
+---
+
+### ✅ FWA-002 — Overtime Pre-Authorization Workflow
+**Status:** Done _(completed 2026-05-26)_  
+**Statutory basis:** MOM EA s.38 — OT capped at 72h/month for workmen; employer must not compel excessive OT.
+
+**Scope:**
+- OT pre-authorization request (employee or supervisor initiates) via `POST /attendance/ot-auth/requests`
+- Standard OT: must be requested before the planned OT date
+- Emergency OT: post-hoc authorization accepted within 24 hours of the OT date (`isEmergency: true`)
+- Monthly OT cap enforcement: hard block at 72h — `PUT /ot-auth/requests/:id/approve` returns 409 with cap breakdown when approval would breach the MOM cap
+- OT budget per department (configurable via `PUT /ot-auth/budget`); budget overrun is a soft warning — approval proceeds but response includes `budgetWarning`
+- Auto-link authorized OT to AttendanceRecord via `POST /ot-auth/requests/:id/link-record`
+- Monthly OT summary report per employee and department: `GET /ot-auth/summary/:period` (YYYY-MM)
+- Employee can cancel own PENDING request; manager can cancel any
+- Daily sweep at **00:50 SGT** auto-expires PENDING requests past their `expiresAt`
+
+**New schema:** `OtAuthorization`, `OtBudget`, `OtAuthStatus` enum (`PENDING | APPROVED | REJECTED | CANCELLED | AUTO_EXPIRED`), `OtRequestType` enum (`EMPLOYEE | SUPERVISOR`)  
+**New engine:** `src/engines/ot-auth.engine.js` — pure: `checkMonthlyCap`, `checkBudget`, `isWithinEmergencyWindow`, `computeExpiresAt`, `buildMonthlyOtSummary`, `findExpiredOtRequests`  
+**API routes (11):** POST/GET/PUT requests, approve/reject/cancel/link-record, GET summary, GET/PUT budget, POST sweep  
+**Tests:** 18 unit (`ot-auth.engine.unit.test.js`) + 23 integration (`ot-auth.integration.test.js`) — all passing; full attendance suite: **223 tests green**
+
+**Service:** attendance-service  
+
+---
+
+### ✅ FWA-003 — WICA Work Injury Compensation
+**Status:** Done _(completed 2026-05-26)_  
+**Statutory basis:** Work Injury Compensation Act 2019. Employers must report accidents to MOM via iReport: **fatal within 1 working day**, **hospitalisation / permanent incapacity within 10 working days**. Failure to report is a criminal offence.
+
+**Scope:**
+- Incident report submission (employee or supervisor) — `POST /attendance/wica/incidents`
+- Four MOM categories: `MEDICAL_LEAVE_ONLY` (no MOM reporting), `HOSPITALISATION`, `PERMANENT_INCAPACITY`, `FATAL`
+- `momReportDeadline` auto-computed in working days (Mon–Fri) per category; null for MEDICAL_LEAVE_ONLY
+- MOM iReport status tracking: `REPORTED → UNDER_REVIEW → MOM_REPORTED → CLAIM_SUBMITTED → CLOSED`; `ireportRef` captured on `PUT /incidents/:id`
+- WICA claim workflow via `POST /incidents/:id/claims` (medical expenses, leave days, permanent incapacity %, compensation amount, insurer details, claim lifecycle: `PENDING → INSURER_NOTIFIED → UNDER_ASSESSMENT → APPROVED → PAID | REJECTED`)
+- Return-to-work tracking via `POST /incidents/:id/rtw` (FULL_DUTIES | LIGHT_DUTIES | PHASED_RETURN, restrictions, review date)
+- Overdue dashboard: `GET /incidents/overdue`, full `GET /wica/dashboard` with summary + due + overdue lists
+- Daily sweep at **01:00 SGT** alerts HR_ADMIN for every overdue-unreported incident
+- Deadline urgency enrichment on all responses: `OVERDUE | CRITICAL | WARNING | OK | NOT_REQUIRED`
+
+**New schema:** `WicaIncident`, `WicaClaim`, `WicaRtwRecord`; enums: `WicaCategory`, `WicaStatus`, `ClaimStatus`, `RtwType`  
+**New engine:** `src/engines/wica.engine.js` — pure: `isReportableToMom`, `computeMomDeadline`, `classifyDeadlineUrgency`, `daysUntilMomDeadline`, `findOverdueIncidents`, `buildWicaDashboard`  
+**API routes (12):** incidents CRUD, claims CRUD, RTW create/list, overdue list, dashboard, sweep  
+**Tests:** 18 unit (`wica.engine.unit.test.js`) + 20 integration (`wica.integration.test.js`) — all passing; full attendance suite: **261 tests green**
+
+**Service:** attendance-service  
+
+---
+
+## Module 13: Benefits Administration
+
+### ✅ BEN-001 — Group Insurance & Medical Benefits
+**Status:** Done 2026-05-26  
+**Scope delivered:**
+- New `benefits-service` on port 4016, registered in API gateway at `/api/benefits`
+- **Plan master:** Six plan types (GHS, GTL, PA, DENTAL, OUTPATIENT, OTHER) with insurer details, coverage cap, employer/employee/dependent premiums, BIK-taxable flag, eligibility by grade & tenure, effective dates, soft-delete (blocked when active enrollments exist)
+- **Enrollment lifecycle:** `POST /benefits/enrollments` — HR enrolls anyone; employees self-enroll only during ACTIVE open enrollment window. Duplicate active enrollment blocked. `PUT /enrollments/:id/cancel` requires reason; snapshot of annual employer/employee premium captured at enrollment time
+- **Dependent management:** Employee adds spouse/child/parent/other (PDPA-compliant: stores only last 4 of NRIC), soft-delete
+- **Claims:** `POST /benefits/claims` — auto-generated `CLM-YYYY-NNNNN` claim numbers, coverage-cap enforced, blocks if enrollment not ACTIVE. HR approve/reject (reason required), Finance reimburse (APPROVED → REIMBURSED only)
+- **Open enrollment windows:** `POST /benefits/open-enrollment` with year/dates/plan whitelist; auto-status ACTIVE/SCHEDULED on creation; `PUT /:id/close` to close
+- **BIK calculation:** Employer-paid premiums for taxable plans (incl. per-dependent premiums) computed for IR8A reporting
+- **Insurer reconciliation:** `GET /benefits/reconciliation?planId=&insurerBilled=` — expected vs billed variance with %
+- **Dashboard:** Active enrollments, claim totals, employer premium load, BIK by plan, current open enrollment window
+- **Frontend:** Role-split `/benefits` page — employee sees plans/dependents/claims with in-window enrollment; HR sees plans grid, enrollments table, claims approval queue, open enrollment scheduling
+- **Navigation:** "My Benefits" (⊕) added to every role nav's EMPLOYEE group; "Benefits" added to HR/Super_Admin FINANCIAL group
+- **Tests:** 27 unit + 35 integration = 62/62 passing
+
+**Service:** new benefits-service (port 4016)  
+
+---
+
+### ✅ BEN-002 — Flexi-Benefits Wallet
+**Status:** Done 2026-05-26  
+**Scope delivered:**
+- **Engine (`src/engines/flexi-wallet.engine.js`):** Pure — no DB. `computeBalance` (credited − used − pending), `isWalletExpired` (status=EXPIRED or past expiresAt), `shouldAutoApprove` (≤threshold, threshold>0), `computeYearEndSummary` (ACTIVE only, byGrade), `buildWalletDashboard` (byGrade + byCategory, skips CANCELLED/REJECTED), `walletExpiresAt` (Dec 31 23:59:59 SGT = Dec 31 15:59:59 UTC)
+- **Schema:** 4 new models — `FlexiWalletConfig` (grade → annualAmount + autoApproveThreshold), `FlexiCategory` (code/name/requiresReceipt), `FlexiWallet` (per employee per year, unique [employeeId,year]), `FlexiClaim` (FLX-YYYY-NNNNN auto-number, PENDING/APPROVED/REJECTED/CANCELLED); 2 new enums `WalletStatus` + `FlexiClaimStatus`
+- **Six eligible categories:** GYM, DENTAL, OPTICAL, HEALTH_SCREENING, WELLNESS, PROFESSIONAL_DEVELOPMENT; all receipt-required by default
+- **Grade defaults:** STAFF SGD 500, EXEC 1000, MGR 1500, DIR/VP/C_SUITE 2000
+- **Wallet lifecycle:** `POST /flexi-wallets` (HR upserts); `POST /flexi-wallets/credit-batch` (fetches all active employees from employee-service, upserts by grade); `GET /flexi-wallets/me?year=` (employee own wallet + balance + pending claims); `GET /flexi-wallets` (HR all, employee own)
+- **Year-end:** `GET /flexi-wallets/year-end-preview?year=` dry-run summary; `POST /flexi-wallets/year-end` marks ACTIVE → EXPIRED, sets forfeitedAmount or encashedAmount; `GET /internal/flexi-encashment?year=` (x-internal-service-key auth) for payroll pickup
+- **Claims:** `POST /flexi-claims` — balance check (available = creditedAmount − usedAmount − ∑PENDING), auto-approve atomic $transaction (claim create + wallet.usedAmount update) for amounts ≤ autoApproveThreshold; `PUT /flexi-claims/:id/approve` — PENDING→APPROVED atomic; `PUT /flexi-claims/:id/reject` — reverses usedAmount if was APPROVED; `PUT /flexi-claims/:id/cancel` — PENDING only
+- **Config:** `GET /flexi-config` (stored configs + DEFAULT_GRADE_AMOUNTS for missing grades, `isDefault:true`); `PUT /flexi-config` (upsert by grade)
+- **Categories:** `POST /flexi-categories/seed` (idempotent 6-category seed); `GET /flexi-categories`; `POST /flexi-categories` (HR custom, 409 on dup code); `PUT /flexi-categories/:id`
+- **Dashboard:** `GET /flexi-dashboard?year=` via buildWalletDashboard (byGrade + byCategory claim breakdown)
+- **Frontend (employee):** Balance card (progress bar, credited/used/pending/remaining, expiry date, ACTIVE/EXPIRED badge), eligible category pills (6 colour-coded), "Submit Claim" button → FlexiClaimModal, My Flexi Claims table (category pill, auto-approved label, cancel for PENDING)
+- **Frontend (HR):** Flexi Benefits tab in HR admin, 4 sub-tabs — Wallets (stats dashboard + wallet table + Credit Wallet / Batch Credit buttons), Claims (approval queue with Approve/Reject/Reverse), Config (grade table with Edit → prompt-based upsert), Year-End (preview + Forfeit / Encash buttons)
+- **Modals:** `FlexiClaimModal` (category picker, receipt date, vendor, description, amount), `FlexiWalletCreditModal` (employee ID, name, grade, amount)
+- **Tests:** 20 unit (`flexi-wallet.engine.unit.test.js`: CAT-01/02, DEF-01, CB-01–05, WE-01–04, SA-01–05, YE-01–03, BD-01–04) + 34 integration (`flexi.integration.test.js`: FW-01–34) = 54 new tests; total benefits suite **120/120 green**
+
+**Service:** benefits-service (port 4016) — extended  
+
+---
+
+## Module 14: HR Case Management
+
+### ✅ HRC-001 — Disciplinary & Grievance Management
+**Status:** Done 2026-05-26  
+**Scope delivered:**
+- New `hr-case-service` on port 4017, registered at API gateway `/api/hr-cases`
+- **Models:** HrCase (auto-numbered DSC-YYYY-NNNNN / GRV-YYYY-NNNNN), CaseIncident, CaseAction, CaseTimeline (immutable audit), CaseAppeal, InquiryCommittee (one per case), CaseAttachment — all cascade-delete on case removal
+- **Progressive discipline ladder:** VERBAL → WRITTEN → FINAL → TERMINATION; `GET /hr-cases/:id/recommend-next-action` suggests next rung based on prior actions. Gross misconduct skips ladder to summary dismissal (EA s.14(1))
+- **Action gating:** `canIssueAction` blocks TERMINATION on MINOR/INTAKE; allows it for GROSS_MISCONDUCT or once case reaches HEARING/DECISION stage
+- **SLA & auto-escalation:** Severity-based SLAs (MINOR 30d, MODERATE 14d, SERIOUS 7d, GROSS_MISCONDUCT 3d). Daily sweep at 01:30 SGT auto-advances HR_ADMIN → HR_MANAGER → DIRECTOR → BOARD; manual `POST /hr-cases/sweep` available
+- **Stage workflow:** INTAKE → INVESTIGATION → HEARING → DECISION → APPEAL → CLOSED. Auto-progression on key actions (SHOW_CAUSE/SUSPENSION → INVESTIGATION; TERMINATION → CLOSED; inquiry committee → INVESTIGATION; appeal filed → APPEAL)
+- **Inquiry committee:** HR_MANAGER+ forms committee with chair + members + scope + hearing date; later submits report and recommendation
+- **Show-cause letters & suspension:** Action type fields capture deadline / paid-vs-unpaid suspension
+- **Subject acknowledgement:** Subject employee can `PUT /actions/:id/acknowledge` to confirm receipt (optional e-sign link)
+- **Appeals:** Subject files appeal only when status=RESOLVED; HR_MANAGER decides UPHELD/PARTIALLY_UPHELD/REJECTED/WITHDRAWN
+- **TAFEP / MOM auto-flag:** Discrimination category + harassment grievances of gross misconduct severity flip `isTafepReportable=true` on create/update
+- **Union consultation tracking:** `isUnionised` + `unionConsulted` + `unionNotes` fields
+- **Confidentiality:** Default `confidential=true`. Employee can only see (a) their own grievances they filed, (b) disciplinary cases where they are the subject (read-only). HR sees all
+- **Resolution / Closure / Withdraw:** `PUT /resolve` (HR), `PUT /close` (HR), `PUT /withdraw` (case opener)
+- **Timeline audit:** Every action writes a CaseTimeline row (CASE_OPENED, INCIDENT_LOGGED, ACTION_ISSUED:X, ESCALATED:LEVEL, APPEAL_FILED, RESOLVED, etc.) — immutable
+- **Frontend:** `/hr-cases` list with type/severity filters + 3 tabs (all/open/overdue) + overdue SLA banner; `/hr-cases/:id` detail with stage progress, action bar (escalate/resolve/close/appeal/withdraw), three-panel layout (incidents/actions/timeline), inquiry committee panel, appeals panel; 4 action modals
+- **Navigation:** "HR Cases" (⚖) added to HR/Super_Admin COMPLIANCE group; "My Cases" added to every role's EMPLOYEE group
+- **Tests:** 28 unit + 32 integration = 60/60 passing
+
+**Service:** new hr-case-service (port 4017)  
+
+---
+
+## Module 15: Employee Services
+
+### ✅ ESV-001 — Staff Movement & Internal Transfer
+**Status:** Done 2026-05-26  
+**Scope delivered:**
+- Extended `employee-service` with `StaffMovement` model + 2 enums (MovementType, MovementStatus); auto-numbered MOV-YYYY-NNNNN
+- 7 movement types: DEPARTMENT_TRANSFER, LOCATION_TRANSFER, INTER_COMPANY_TRANSFER, ROLE_CHANGE, PROMOTION, REPORTING_CHANGE, COST_CENTRE_REALLOC
+- Type-specific validation: each type requires its key field to change (e.g. DEPARTMENT_TRANSFER must change department); no-op blocked
+- Before/after snapshot captured at initiation; applied on effective date so future-dated movements take effect automatically
+- **Salary revision linkage:** Optional `hasSalaryRevision` with encrypted from/to salaries; on apply writes to `SalaryHistory` (existing model) with reasonCode and links via `Staff movement MOV-YYYY-NNNNN`
+- **Approval gating (engine):** Inter-company transfers, > 30% salary jumps, and salary decreases require HR_MANAGER+ approval (HR_ADMIN blocked with 403 + reason)
+- **Initiation permissions:** HR opens for anyone; line manager opens for subordinates; employee self-initiates (HR review required)
+- **Daily effective-date sweep:** runs at 02:00 SGT — applies all APPROVED movements whose effectiveDate ≤ today. Updates Employee.department / designation / costCentre / reportingManagerId / employmentType + writes SalaryHistory if applicable. Failed applies capture `applyError` for HR review. Manual sweep: `POST /movements/sweep`
+- **Transfer letter generation:** auto-generated on approval (HTML with before/after fields, effective date, reason). `GET /movements/:id/letter` returns or lazily generates
+- **Notifications:** Fire-and-forget to HR on initiation, to employee on approval
+- **Routes:** `POST /movements`, `GET /movements`, `GET /movements/summary`, `GET /movements/:id`, `GET /movements/:id/letter`, `PUT /movements/:id/approve|reject|cancel`, `POST /movements/:id/apply`, `POST /movements/sweep`
+- **API gateway:** `/api/movements` proxied to employee-service
+- **Frontend:** `/movements` page with 4 tabs (all/pending/upcoming/history); role-split header; HR stat cards (pending/approved/effective-today/upcoming-30d/applied-YTD); per-row before/after delta display. `/movements/[id]` detail page with before-after change cards, salary revision badge, status timeline, action bar (approve/reject/cancel/apply), inline transfer letter preview
+- **Navigation:** "Movements" (↹) added to HR_ADMIN + SUPER_ADMIN WORKFORCE group
+- **Tests:** 27 unit + 22 integration on movements = 49/49 passing; full employee-service suite **80/80 passing**
+
+**Service:** employee-service (new schema + new routes file)  
+
+---
+
+### ✅ ESV-002 — Salary Advance & Staff Loans
+**Status:** Done 2026-05-26  
+**Scope delivered:**
+- New `loans-service` on port 4018, registered at API gateway `/api/loans`
+- **Models:** `SalaryAdvance` (single-month deduction), `StaffLoan` (multi-month with installment schedule), `LoanRepayment` (per-month rows with unique `(loanId, paymentNumber)`); 4 enums covering all states
+- **Auto-numbered references:** ADV-YYYY-NNNNN / LN-YYYY-NNNNN
+- **Salary advance flow:** Employee requests with monthlySalary snapshot → engine enforces 1× monthly salary cap (configurable via `MAX_ADVANCE_MULTIPLIER`) → HR/Finance approves with target deductionMonth (defaults to current YYYY-MM) → payroll-service callback marks DEDUCTED with payrollRunId
+- **Duplicate prevention:** Employee blocked from raising a new advance while one is PENDING/APPROVED; blocked from a new loan while one is PENDING/APPROVED/ACTIVE
+- **Staff loan flow:** request → approve (generates schedule + agreement) → activate (after agreement signed) → repayments per month → SETTLED on final or early payoff
+- **Engine guards:** principal/tenure/interest rate validation (tenure ≤ 60 months, rate ≤ 10% p.a., affordability check that monthly instalment ≤ 30% of salary)
+- **Simple-interest amortisation:** `monthlyInstalment = (principal + principal × rate × tenure/12) / tenure`; last instalment absorbs rounding remainder so schedule sum equals total repayable exactly
+- **Auto-generated repayment schedule:** Each `LoanRepayment` row created with `scheduledDate` on the 1st of each month from `startDate`
+- **Live outstanding balance:** `computeOutstandingBalance` updates on every repayment; loan auto-flips to SETTLED when outstanding ≤ 0.005
+- **Early settlement:** `POST /loans/staff-loans/:id/settle` quotes today's outstanding, creates an EARLY_SETTLEMENT row, waives all remaining PENDING rows, flips loan to SETTLED
+- **Loan agreement:** Generated HTML on approval (or lazily on `GET .../agreement`) with principal, rate, tenure, monthly instalment, total repayable, start + end dates — printable and ready for ESV-003 e-sign linkage via `esignRequestId`
+- **Termination hook:** `GET /loans/termination-deductions/:employeeId` returns aggregate outstanding (active loans + approved advances) for offboarding final-pay computation; `mustDeductFromFinalPay` boolean
+- **Payroll callback hooks:** `POST /loans/staff-loans/:id/repayments` and `POST /loans/advances/:id/mark-deducted` accept `payrollRunId` so payroll-service can mark deductions after each run
+- **Dashboard:** `GET /loans/dashboard` — counts by status, total principal/outstanding/repaid, advances summary; restricted to HR/Finance/Super
+- **Frontend:** `/loans` list with 2 tabs (Staff Loans / Salary Advances), HR/Finance stat cards, inline approve/reject/cancel actions on advances. `/loans/[id]` detail page with progress bar, meta grid, repayment schedule (responsive table → mobile cards), action bar (approve/reject/activate/cancel/settle), inline loan agreement preview with print
+- **Navigation:** "Loans" added to SUPER_ADMIN + HR_ADMIN + FINANCE_ADMIN FINANCIAL group; "My Loans" added to every role nav's EMPLOYEE group
+- **Tests:** 23 unit + 29 integration = 52/52 passing
+
+**Service:** new loans-service (port 4018)  
+
+---
+
+### ✅ ESV-003 — E-Signature & Document Acknowledgement
+**Status:** Done 2026-05-26  
+**Scope delivered:**
+- New `esign-service` on port 4015, registered in API gateway at `/api/esign`
+- Template management: `POST/GET/PUT /esign/documents` — HR creates templates with `{{key}}` placeholders, version, type, `annualRenewal` flag, `expiresInDays`
+- Signing requests: `POST /esign/requests` — bulk dispatch to multiple signatories; skips duplicates for same (documentId, signatoryId, documentVersion)
+- Signatory actions: `PUT /esign/requests/:id/sign` (records SHA-256 hash of personalizedHtml, signatory name, timestamp), `PUT /esign/requests/:id/decline` (reason required)
+- Personalisation: `{{key}}` placeholders replaced from `variables` map at request creation; unmatched placeholders left intact
+- Audit trail: immutable `ESignAuditLog` rows for every action (CREATED, VIEWED, SIGNED, DECLINED, EXPIRED, REVOKED, REMINDER_SENT)
+- `viewedAt` auto-recorded on first GET by signatory
+- Compliance dashboard: `GET /esign/compliance` — per-document sign/pending/declined/expired counts + complianceRate
+- Daily sweep at 01:10 SGT: expires PENDING past `dueDate`, sends reminders at 3d and 1d before due
+- Annual renewal: `POST /esign/documents/:id/renew` — re-creates pending requests for the new year with versioned `${version}-${year}`
+- **Frontend:** Full `/documents` page (employee queue + HR compliance view with 4 tabs: Pending/Templates/Compliance/Signed Archive); `/documents/sign/[id]` signing experience (scroll-gated, typed name, agreement checkbox, sign/decline)
+- **Navigation:** My Documents (◭) added to all role navs; Documents (◭) added to HR Compliance group
+- **Tests:** 17 unit + 25 integration = 42/42 passing
+
+**Service:** new esign-service (port 4015)  
+
+---
+
+## Module 16: Analytics & Engagement
+
+### ✅ ENG-001 — Employee Engagement Survey
+**Status:** Done 2026-05-26  
+**Scope delivered:**
+- New `survey-service` on port 4019, registered at `/api/surveys` in the gateway
+- **5 Prisma models:** `Survey` (DRAFT/ACTIVE/CLOSED + anonymous flag + minResponsesToShow + targetDepartment/MinTenure filter), `SurveyQuestion` (LIKERT_5 / NPS / TEXT / MULTI_CHOICE with displayOrder + scaleLabels + category), `SurveyResponse` (snapshots department/tenure/employmentType so segmentation survives later employee changes; `respondentEmployeeId` is null when anonymous; ipHash for de-dup), `SurveyAnswer` (cascade-deletes via response), `SurveyAction` (manager follow-up items: title, description, status, due date)
+- **Pure engine (8 functions):**
+  - `computeENPS(scores)` — promoters (9-10), passives (7-8), detractors (0-6); eNPS = %promoters − %detractors
+  - `computeLikertStats` — average + 5-rung distribution + positivePct (≥4)
+  - `computeMultiChoiceStats` — counts + percentages with out-of-range filtering
+  - `aggregateBySegment` — by department / tenure-bucket (`<1y`/`1-3y`/`3-5y`/`5y+`) / employmentType
+  - `suppressLowSample` — wipes any aggregate with `total < minN` (default 3) to protect anonymity
+  - `buildSurveyDashboard` — per-question stats + segment counts, applies suppression to both
+  - `validateAnswers` — required + type-correctness checks (Likert 1-5, NPS 0-10, choice index in range, required-text presence)
+- **Routes (18 endpoints):** survey CRUD + `publish` (blocks if no questions) + `close`; question CRUD; response submission (anonymous-safe, single-response de-dup for identified surveys); per-user "have I responded?" check; HR dashboard with N-suppression; action items CRUD; `POST /surveys/exit-trigger` returning the active EXIT survey for offboarding callbacks
+- **Frontend:** `/surveys` list (role-split: employees see ACTIVE only with "Take" CTA; HR sees all + create modal). `/surveys/[id]` HR detail page with 3 tabs (Questions / Results / Actions) + publish/close/add-question/add-action modals. `/surveys/[id]/take` mobile-friendly take-survey form with 5-button Likert scale, 11-button NPS scale with promoter/passive/detractor colour coding, multi-choice radio cards, and free-text. Results tab shows per-question visualisations: Likert distribution bar chart with average + positive%, NPS score with promoters/passives/detractors split, multi-choice horizontal bars, raw text comments with display-cap and suppression banner
+- **Navigation:** "Surveys" (◊) added to HR/Super_Admin COMPLIANCE; "My Surveys" added to every role nav's EMPLOYEE group
+- **Tests:** 22 unit + 18 integration = 40/40 passing
+
+**Service:** new survey-service (port 4019)  
+
+---
+
+### ✅ ENG-002 — HR Analytics Dashboard
+**Status:** Done 2026-05-26  
+**Scope delivered:**
+- Extended `reporting-service` with 9 new analytics endpoints under `/reports/analytics/*` — restricted to HR_ADMIN / HR_MANAGER / SUPER_ADMIN (Finance gets payroll/budget views)
+- **Budget store:** `POST/GET /reports/analytics/budget` — HR/Finance sets headcount targets, recruitment spend, annual revenue per period (YYYY-MM for headcount, YYYY for the others)
+- **Headcount analytics:** `GET /reports/analytics/headcount?period=YYYY-MM` — active count + budget + variance + variance% + by-department drill-down
+- **12-month attrition:** `GET /reports/analytics/attrition?months=12` — leaver count, attrition rate (leavers / avg-headcount), by-department, by-tenure bucket
+- **Cost per hire:** `GET /reports/analytics/cost-per-hire?period=YYYY` — recruitment spend ÷ new hires in that year
+- **Leave utilisation heatmap:** `GET /reports/analytics/leave-heatmap?year=YYYY` — monthly days-taken array + by-leave-type breakdown
+- **6-month OT cost trend:** `GET /reports/analytics/ot-cost-trend?months=6` — pulls from attendance-service `/ot-summary/:period` per month
+- **Training ROI:** `GET /reports/analytics/training-roi?year=YYYY` — total cost, hours, completions, cost-per-hour, cost-per-completion (graceful fallback if training-service unavailable)
+- **Payroll / revenue ratio:** `GET /reports/analytics/payroll-revenue-ratio?period=YYYY` — aggregates 12 monthly payroll runs and divides by revenue budget
+- **PDPA retention dashboard:** `GET /reports/analytics/pdpa-retention` — flags ex-employee records past 6.5 years post-termination (7-year SG retention cap), returns daysSinceTermination per record
+- **Summary fan-out:** `GET /reports/analytics/summary` — single call returning all top KPIs for fast initial page load
+- **Frontend:** New `/reports/analytics` page with period/year selectors + budget modal. KPI strip (headcount vs budget, attrition rate with red/green colour by 15% threshold, cost-per-hire, payroll/revenue %). Sections: headcount by department (horizontal bars), attrition by tenure + department (split bars), 12-month leave heatmap (intensity-coloured grid by month), 6-month OT cost trend (vertical bar chart), training ROI 4-KPI grid, PDPA retention list with "approaching 7-year limit" alerts
+- **Navigation:** "Analytics" (◧) added to HR/Super_Admin COMPLIANCE group
+- All endpoints use existing JWT auth and fan out to employee/leave/attendance/training/payroll services via authenticated axios calls
+
+---
+
+### ❌ ENG-003 — Succession Planning
+**Status:** Not Done  
+**Scope:**
+- Key position identification (flagged by HR Admin on any job title)
+- Talent pool management: HR nominates high-potential employees
+- Readiness assessment per nominee: Ready Now / 1 Year / 2 Years
+- Development plan linkage: connect readiness gaps to training programs
+- 9-box grid (Performance × Potential) fed from appraisal scores
+- Succession risk report: positions with no ready successor flagged as HIGH RISK
+- Manager view: own team succession status
+
+**Service:** extend performance-service  
+
+---
+
 ## Outstanding Items Priority List
 
-### Must Have (critical path)
-_(all resolved)_
+### Statutory / Legal Risk (do first)
+| ID | Feature | Statutory Basis | Risk if Missing |
+|---|---|---|---|
+| ~~FWA-002~~ | ~~OT Pre-Authorization~~ | ✅ Done 2026-05-26 | — |
+| ~~FWA-003~~ | ~~WICA Incident Reporting~~ | ✅ Done 2026-05-26 | — |
+| ~~ESV-003~~ | ~~E-Signature / Document Acknowledgement~~ | ✅ Done 2026-05-26 | — |
 
-### Should Have (high value)
-_(all resolved as of 2026-05-24)_
+### High Business Value (do next)
+| ID | Feature | Why |
+|---|---|---|
+| ~~BEN-001~~ | ~~Group Insurance & Medical Benefits~~ | ✅ Done 2026-05-26 |
+| ~~HRC-001~~ | ~~Disciplinary & Grievance~~ | ✅ Done 2026-05-26 |
+| ~~ESV-001~~ | ~~Staff Movement / Transfer~~ | ✅ Done 2026-05-26 |
+| ~~ESV-002~~ | ~~Salary Advance & Staff Loans~~ | ✅ Done 2026-05-26 |
 
-### Nice to Have
-19. **PMS-003 (completion)** — Bell curve enforcement and department grouping for calibration
+### Analytics Layer (do last)
+| ID | Feature | Why |
+|---|---|---|
+| ~~ENG-001~~ | ~~Employee Engagement Survey~~ | ✅ Done 2026-05-26 |
+| ~~ENG-002~~ | ~~HR Analytics Dashboard~~ | ✅ Done 2026-05-26 |
+| ENG-003 | Succession Planning | Longer planning horizon, lower urgency |
 
 ---
 

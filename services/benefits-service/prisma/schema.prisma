@@ -1,0 +1,289 @@
+// Prisma schema for benefits-service
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── BEN-001: Group Insurance & Medical Benefits ───────────────────────────────
+
+// Master catalog of insurance plans HR offers.
+model InsurancePlan {
+  id                String         @id @default(uuid())
+  code              String         @unique  // e.g. 'GHS-PLATINUM', 'GTL-STD'
+  name              String
+  type              PlanType
+  insurerName       String
+  insurerContact    String?
+  policyNumber      String?
+  coverageAmount    Float          // SGD coverage cap (e.g. 50000 for GHS)
+  premiumEmployer   Float          // annual employer-paid premium per employee (SGD)
+  premiumEmployee   Float          @default(0) // annual employee co-pay (SGD)
+  premiumDependent  Float          @default(0) // annual per-dependent premium (SGD)
+  bikTaxable        Boolean        @default(false) // employer premium counted as benefit-in-kind for IR8A
+  eligibilityGrades String[]       @default([])   // empty = all grades; else list of grades (e.g. ["MGR","DIR"])
+  minTenureMonths   Int            @default(0)    // minimum months of service to enroll
+  coversDependents  Boolean        @default(false)
+  effectiveFrom     DateTime
+  effectiveTo       DateTime?
+  isActive          Boolean        @default(true)
+  description       String?
+  createdBy         String?
+  updatedBy         String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  enrollments       EmployeeEnrollment[]
+  claims            InsuranceClaim[]
+
+  @@index([type, isActive])
+  @@index([effectiveFrom])
+}
+
+enum PlanType {
+  GHS           // Group Hospitalisation & Surgical
+  GTL           // Group Term Life
+  PA            // Personal Accident
+  DENTAL
+  OUTPATIENT
+  OTHER
+}
+
+// Employee enrollment to a plan.
+model EmployeeEnrollment {
+  id                String           @id @default(uuid())
+  employeeId        String
+  employeeName      String
+  employeeGrade     String?
+  plan              InsurancePlan    @relation(fields: [planId], references: [id])
+  planId            String
+  status            EnrollmentStatus @default(ACTIVE)
+  enrollmentSource  EnrollSource     @default(MANUAL) // ONBOARDING / OPEN_ENROLLMENT / MANUAL
+  policyMemberNumber String?
+  effectiveFrom     DateTime
+  effectiveTo       DateTime?
+  cancelledAt       DateTime?
+  cancelReason      String?
+  enrolledDependentIds String[]      @default([])  // Dependent.id list
+  annualPremiumEmployer Float?       // snapshot at enrollment time
+  annualPremiumEmployee Float?
+  createdBy         String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  claims            InsuranceClaim[]
+
+  @@unique([employeeId, planId, effectiveFrom])
+  @@index([employeeId, status])
+  @@index([planId, status])
+  @@index([status])
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+enum EnrollSource {
+  ONBOARDING
+  OPEN_ENROLLMENT
+  MANUAL
+}
+
+// Employee dependents (spouse, children, etc.)
+model Dependent {
+  id              String           @id @default(uuid())
+  employeeId      String
+  fullName        String
+  relationship    Relationship
+  dateOfBirth     DateTime
+  nric            String?          // last 4 only for PDPA
+  gender          String?
+  isActive        Boolean          @default(true)
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([employeeId, isActive])
+}
+
+enum Relationship {
+  SPOUSE
+  CHILD
+  PARENT
+  OTHER
+}
+
+// Insurance claim submission.
+model InsuranceClaim {
+  id                String           @id @default(uuid())
+  claimNumber       String           @unique  // e.g. CLM-2026-00001
+  enrollment        EmployeeEnrollment @relation(fields: [enrollmentId], references: [id])
+  enrollmentId     String
+  plan              InsurancePlan    @relation(fields: [planId], references: [id])
+  planId            String
+  employeeId        String
+  employeeName      String
+  patientName       String           // employee or dependent name
+  patientDependentId String?         // null if employee themselves
+  treatmentDate     DateTime
+  treatmentType     String           // outpatient, hospitalisation, surgery, dental
+  hospitalProvider  String?
+  diagnosis         String?
+  claimAmount       Float
+  approvedAmount    Float?
+  status            ClaimStatus      @default(SUBMITTED)
+  attachments       String[]         @default([])  // file IDs / URLs
+  insurerRefNumber  String?
+  reimbursedAt      DateTime?
+  rejectedReason    String?
+  submittedAt       DateTime         @default(now())
+  reviewedAt        DateTime?
+  reviewedBy        String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([employeeId, status])
+  @@index([planId, status])
+  @@index([status, submittedAt])
+}
+
+enum ClaimStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  REIMBURSED
+  CANCELLED
+}
+
+// Annual open-enrollment window. Multiple plans can be elected during a window.
+model OpenEnrollmentPeriod {
+  id              String           @id @default(uuid())
+  name            String           // e.g. "2026 Open Enrollment"
+  year            Int
+  startDate       DateTime
+  endDate         DateTime
+  status          PeriodStatus     @default(SCHEDULED)
+  planIds         String[]         @default([])   // plans available during this window
+  defaultPlanIds  String[]         @default([])   // auto-enroll on accept
+  notifiedAt      DateTime?
+  closedAt        DateTime?
+  createdBy       String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([year, name])
+  @@index([status, startDate])
+}
+
+enum PeriodStatus {
+  SCHEDULED
+  ACTIVE
+  CLOSED
+}
+
+// ── BEN-002: Flexi-Benefits Wallet ────────────────────────────────────────────
+
+// Per-grade wallet funding configuration.
+model FlexiWalletConfig {
+  id                   String   @id @default(uuid())
+  grade                String   @unique
+  annualAmount         Float
+  autoApproveThreshold Float    @default(50)  // claims ≤ this are auto-approved
+  isActive             Boolean  @default(true)
+  createdBy            String?
+  updatedBy            String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+// Eligible spend categories (gym, dental, optical, etc.)
+model FlexiCategory {
+  id              String       @id @default(uuid())
+  code            String       @unique
+  name            String
+  description     String?
+  requiresReceipt Boolean      @default(true)
+  isActive        Boolean      @default(true)
+  createdBy       String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  claims          FlexiClaim[]
+
+  @@index([isActive])
+}
+
+// Employee annual flexi-benefits balance.
+model FlexiWallet {
+  id              String       @id @default(uuid())
+  employeeId      String
+  employeeName    String
+  employeeGrade   String?
+  year            Int
+  creditedAmount  Float
+  usedAmount      Float        @default(0)
+  forfeitedAmount Float        @default(0)
+  encashedAmount  Float        @default(0)
+  status          WalletStatus @default(ACTIVE)
+  expiresAt       DateTime     // Dec 31 23:59:59 SGT of year
+  createdBy       String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  claims          FlexiClaim[]
+
+  @@unique([employeeId, year])
+  @@index([year, status])
+  @@index([employeeId, status])
+}
+
+enum WalletStatus {
+  ACTIVE
+  EXPIRED
+}
+
+// Claim against a flexi wallet.
+model FlexiClaim {
+  id             String           @id @default(uuid())
+  claimNumber    String           @unique   // FLX-YYYY-NNNNN
+  wallet         FlexiWallet      @relation(fields: [walletId], references: [id])
+  walletId       String
+  employeeId     String
+  employeeName   String
+  category       FlexiCategory    @relation(fields: [categoryId], references: [id])
+  categoryId     String
+  categoryCode   String
+  categoryName   String
+  receiptDate    DateTime
+  vendor         String?
+  description    String
+  claimAmount    Float
+  approvedAmount Float?
+  receipts       String[]         @default([])
+  status         FlexiClaimStatus @default(PENDING)
+  autoApproved   Boolean          @default(false)
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  rejectedReason String?
+  submittedAt    DateTime         @default(now())
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([employeeId, status])
+  @@index([walletId, status])
+  @@index([status, submittedAt])
+}
+
+enum FlexiClaimStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
