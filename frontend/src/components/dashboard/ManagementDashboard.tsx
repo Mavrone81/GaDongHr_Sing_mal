@@ -199,15 +199,15 @@ export default function ManagementDashboard() {
       </div>
 
       {/* ── ROW 2: Payroll + Compliance ───────────────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
 
         {/* PAYROLL ENGINE PANEL */}
         <div className="xl:col-span-2 bg-white rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 overflow-hidden">
-          <div className="p-8 border-b border-slate-50">
+          <div className="p-4 sm:p-6 lg:p-8 border-b border-slate-50">
             <SectionHeader title="Payroll Engine" badge={payrollBadge} href="/payroll" color="indigo" />
           </div>
 
-          <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="p-4 sm:p-6 lg:p-8 grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-indigo-50/60 p-6 rounded-[1.5rem] border border-indigo-100 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-600/5 rounded-full blur-xl"></div>
               <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-3">Net Payout</p>
@@ -318,10 +318,10 @@ export default function ManagementDashboard() {
       </div>
 
       {/* ── ROW 3: Workforce + Action Queue ──────────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
 
         {/* Departmental Loads */}
-        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 p-8">
+        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 p-4 sm:p-6 lg:p-8">
           <SectionHeader title="Departmental Loads" href="/employees" color="slate" />
           {loading ? (
             <div className="space-y-6">
@@ -352,7 +352,7 @@ export default function ManagementDashboard() {
         </div>
 
         {/* Onboarding Pipeline */}
-        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 p-8">
+        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 p-4 sm:p-6 lg:p-8">
           <SectionHeader title="Onboarding Pipeline" href="/recruitment" color="indigo" />
           <div className="grid grid-cols-2 gap-4">
             {[
@@ -370,7 +370,7 @@ export default function ManagementDashboard() {
         </div>
 
         {/* Action Queue */}
-        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 p-8">
+        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 p-4 sm:p-6 lg:p-8">
           <SectionHeader title="Command Queue" badge="Actions Due" color="amber" />
           <div className="space-y-3">
             {[
@@ -402,7 +402,7 @@ export default function ManagementDashboard() {
       </div>
 
       {/* ── ROW 4: Quick Access Module Grid ───────────────────────────────── */}
-      <div className="bg-white rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 p-8">
+      <div className="bg-white rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 p-4 sm:p-6 lg:p-8">
         <SectionHeader title="All Modules" badge="RBAC Enabled" color="indigo" />
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           {[

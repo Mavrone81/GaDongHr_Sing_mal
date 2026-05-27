@@ -321,3 +321,32 @@
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ── Mobile fallback for wide tables ──────────────────────────────────
+   Any <table> that isn't already wrapped in an overflow container gets
+   one when the viewport is below 768px. Lets existing pages remain
+   usable on mobile even before they migrate to ResponsiveTable.
+*/
+@media (max-width: 767px) {
+  /* Wrap raw tables in a horizontal scroller so columns don't overflow the viewport */
+  table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+  table thead,
+  table tbody {
+    display: table;
+    width: 100%;
+    min-width: max-content;
+  }
+  /* Tighten oversized card padding on mobile.
+     Cards using p-8 lg:p-* keep their lg padding; the rule below targets
+     elements that ONLY declare p-8 (no responsive override). */
+  .mobile-tight {
+    padding: 1rem !important;
+  }
+}
+

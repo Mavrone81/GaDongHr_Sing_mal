@@ -107,7 +107,7 @@ function SubmitClaimModal({ onClose, onCreated, categories }: SubmitModalProps) 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg border border-slate-100 overflow-hidden animate-in slide-in-from-bottom-8 duration-300 max-h-[90vh] flex flex-col">
-        <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+        <div className="px-4 sm:px-6 lg:px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
           <div>
             <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest">Submit Claim</h3>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Expense reimbursement request</p>
@@ -115,7 +115,7 @@ function SubmitClaimModal({ onClose, onCreated, categories }: SubmitModalProps) 
           <button onClick={onClose} className="w-9 h-9 flex items-center justify-center bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-red-500 hover:border-red-200 transition-all text-lg font-black">&times;</button>
         </div>
 
-        <div className="px-8 py-6 flex flex-col gap-5 overflow-y-auto">
+        <div className="px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-5 overflow-y-auto">
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Expense Date</label>
@@ -189,12 +189,12 @@ function SubmitClaimModal({ onClose, onCreated, categories }: SubmitModalProps) 
           {error && <p className="text-[10px] font-black text-red-600 bg-red-50 border border-red-100 px-4 py-3 rounded-xl">{error}</p>}
         </div>
 
-        <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+        <div className="px-4 sm:px-6 lg:px-8 py-5 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
           <div className="text-sm font-black text-slate-900">Total: <span className="text-indigo-600">SGD {amountNum.toFixed(2)}</span></div>
           <div className="flex gap-3">
             <button onClick={onClose} className="px-6 py-3 bg-white border border-slate-200 text-slate-500 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-50 transition-all">Cancel</button>
             <button onClick={handleSubmit} disabled={!form.merchant.trim() || !form.amount || !form.description.trim() || !form.categoryId || submitting}
-              className="px-8 py-3 bg-indigo-600 text-white font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:pointer-events-none flex items-center gap-2">
+              className="px-4 sm:px-6 lg:px-8 py-3 bg-indigo-600 text-white font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:pointer-events-none flex items-center gap-2">
               {submitting ? <><svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Submitting…</> : 'Submit Claim'}
             </button>
           </div>
@@ -264,7 +264,7 @@ function EditClaimModal({ claim, onClose, onSaved, categories }: EditModalProps)
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg border border-slate-100 overflow-hidden animate-in slide-in-from-bottom-8 duration-300 max-h-[90vh] flex flex-col">
-        <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+        <div className="px-4 sm:px-6 lg:px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
           <div>
             <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest">Amend Claim</h3>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Edit pending expense · changes saved immediately</p>
@@ -272,7 +272,7 @@ function EditClaimModal({ claim, onClose, onSaved, categories }: EditModalProps)
           <button onClick={onClose} className="w-9 h-9 flex items-center justify-center bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-red-500 hover:border-red-200 transition-all text-lg font-black">&times;</button>
         </div>
 
-        <div className="px-8 py-6 flex flex-col gap-5 overflow-y-auto">
+        <div className="px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-5 overflow-y-auto">
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Expense Date</label>
@@ -328,12 +328,12 @@ function EditClaimModal({ claim, onClose, onSaved, categories }: EditModalProps)
           {error && <p className="text-[10px] font-black text-red-600 bg-red-50 border border-red-100 px-4 py-3 rounded-xl">{error}</p>}
         </div>
 
-        <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+        <div className="px-4 sm:px-6 lg:px-8 py-5 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
           <div className="text-sm font-black text-slate-900">Total: <span className="text-indigo-600">SGD {amountNum.toFixed(2)}</span></div>
           <div className="flex gap-3">
             <button onClick={onClose} className="px-6 py-3 bg-white border border-slate-200 text-slate-500 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-50 transition-all">Cancel</button>
             <button onClick={handleSave} disabled={!form.merchant.trim() || !form.amount || !form.description.trim() || submitting}
-              className="px-8 py-3 bg-indigo-600 text-white font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:pointer-events-none flex items-center gap-2">
+              className="px-4 sm:px-6 lg:px-8 py-3 bg-indigo-600 text-white font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:pointer-events-none flex items-center gap-2">
               {submitting ? <><svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Saving…</> : 'Save Changes'}
             </button>
           </div>
@@ -413,7 +413,7 @@ function EmployeeClaimsView() {
   return (
     <div className="flex flex-col gap-6 max-w-[1100px] mx-auto pb-16 animate-in fade-in duration-700">
 
-      <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5">
+      <div className="bg-white p-4 sm:p-6 lg:p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tighter">My <span className="text-indigo-600">Claims</span></h1>
           <p className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-widest">Submit and track expense reimbursements</p>
@@ -446,7 +446,7 @@ function EmployeeClaimsView() {
       </div>
 
       {categories.length > 0 && (
-        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 p-6">
+        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 p-4 sm:p-6">
           <p className="eyebrow-tight mb-4">Your Eligible Claim Categories</p>
           <div className="flex flex-wrap gap-2">
             {categories.map(c => (
@@ -459,7 +459,7 @@ function EmployeeClaimsView() {
       )}
 
       <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 overflow-hidden">
-        <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+        <div className="px-4 sm:px-6 lg:px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">My Submissions</h3>
           <span className="eyebrow-tight">{claims.length} total</span>
         </div>
@@ -471,7 +471,7 @@ function EmployeeClaimsView() {
         ) : (
           <div className="divide-y divide-slate-50">
             {claims.map(c => (
-              <div key={c.id} className="flex items-center gap-5 px-8 py-5 hover:bg-slate-50/50 transition-all">
+              <div key={c.id} className="flex items-center gap-5 px-4 sm:px-6 lg:px-8 py-5 hover:bg-slate-50/50 transition-all">
                 <div className="w-11 h-11 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center justify-center text-lg shrink-0">
                   {CATEGORY_ICONS[c.categoryCode] ?? '◎'}
                 </div>
@@ -499,7 +499,7 @@ function EmployeeClaimsView() {
             ))}
           </div>
         )}
-        <div className="px-8 py-4 border-t border-slate-100 bg-slate-50/50">
+        <div className="px-4 sm:px-6 lg:px-8 py-4 border-t border-slate-100 bg-slate-50/50">
           <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest text-center">Approved claims are reimbursed with monthly payroll</p>
         </div>
       </div>
@@ -509,7 +509,7 @@ function EmployeeClaimsView() {
 
       {toast && (
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-8 duration-400">
-          <div className="bg-slate-900 border border-slate-700 px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-4">
+          <div className="bg-slate-900 border border-slate-700 px-4 sm:px-6 lg:px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-4">
             <div className="w-2 h-2 bg-emerald-500 rounded-full" />
             <span className="text-[10px] font-black text-white uppercase tracking-widest">{toast}</span>
           </div>

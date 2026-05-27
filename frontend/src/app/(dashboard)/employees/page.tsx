@@ -481,7 +481,7 @@ export default function EmployeeDirectoryPage() {
       )}
 
       {/* 1. Header */}
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 relative overflow-hidden group">
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 lg:gap-8 bg-white p-4 sm:p-6 lg:p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 relative overflow-hidden group">
         <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
           <div className="w-32 h-32 bg-indigo-600 rounded-full blur-3xl" />
         </div>
@@ -497,14 +497,14 @@ export default function EmployeeDirectoryPage() {
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4 relative z-10">
-          <div className="relative">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 relative z-10 w-full lg:w-auto">
+          <div className="relative w-full sm:w-64 lg:w-80">
             <input
               type="text"
               placeholder="Filter by Name, ID, or Role..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full sm:w-80 bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-xs font-bold text-slate-900 placeholder:text-slate-300 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/5 outline-none transition-all"
+              className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 sm:px-6 py-3 sm:py-4 text-xs font-bold text-slate-900 placeholder:text-slate-300 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/5 outline-none transition-all"
             />
             <div className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
@@ -513,7 +513,7 @@ export default function EmployeeDirectoryPage() {
 
           <button
             onClick={() => { setUploadResult(null); setCsvRows([]); setCsvFile(''); setBulkOpen(true); }}
-            className="px-8 py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10 active:scale-95 flex items-center gap-2"
+            className="px-4 sm:px-6 lg:px-8 py-3 sm:py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10 active:scale-95 flex items-center gap-2 justify-center"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
@@ -523,7 +523,7 @@ export default function EmployeeDirectoryPage() {
 
           <button
             onClick={() => { loadApplications(); setApplicationsOpen(true); }}
-            className="px-8 py-4 bg-amber-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-amber-600 shadow-xl shadow-amber-500/20 transition-all active:scale-95 flex items-center gap-2 relative"
+            className="px-4 sm:px-6 lg:px-8 py-3 sm:py-4 bg-amber-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-amber-600 shadow-xl shadow-amber-500/20 transition-all active:scale-95 flex items-center gap-2 justify-center relative"
           >
             Pending Profiles
             {(applications.length + pendingInvites.length) > 0 && (
@@ -535,7 +535,7 @@ export default function EmployeeDirectoryPage() {
 
           <button
             onClick={() => { setProvisionResult(null); setInviteSent(false); openProvision(); }}
-            className="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-indigo-700 shadow-xl shadow-indigo-500/30 transition-all active:scale-95 flex items-center gap-3"
+            className="px-4 sm:px-6 lg:px-8 py-3 sm:py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-indigo-700 shadow-xl shadow-indigo-500/30 transition-all active:scale-95 flex items-center gap-3 justify-center"
           >
             <span>+</span> Provision Identity
           </button>

@@ -303,7 +303,7 @@ function QuickLinksCard({ employeeId }: { employeeId: string }) {
   ];
 
   return (
-    <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-8">
+    <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-4 sm:p-6 lg:p-8">
       <h3 className="text-sm font-black text-slate-900 mb-6">Quick Actions</h3>
       <div className="grid grid-cols-3 gap-3">
         {links.map(l => (
@@ -326,7 +326,7 @@ function UpcomingCard() {
   ];
 
   return (
-    <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-8">
+    <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-4 sm:p-6 lg:p-8">
       <h3 className="text-sm font-black text-slate-900 mb-6">Milestones & Celebrations</h3>
       <div className="flex flex-col gap-4">
         {items.map((item, i) => (
@@ -373,11 +373,11 @@ export default function EmployeeDashboard() {
       </div>
 
       {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
 
         {/* Left column (2/3) */}
-        <div className="lg:col-span-2 flex flex-col gap-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="lg:col-span-2 flex flex-col gap-4 sm:gap-6 lg:gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
             <LeaveCard employeeId={employeeId} />
             <LeaveRequestsCard employeeId={employeeId} />
           </div>
@@ -386,7 +386,7 @@ export default function EmployeeDashboard() {
         </div>
 
         {/* Right column (1/3) */}
-        <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-4 sm:gap-6 lg:gap-8">
           <AttendanceCard employeeId={employeeId} />
         </div>
 
