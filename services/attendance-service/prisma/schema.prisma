@@ -392,3 +392,224 @@ model AnomalyThreshold {
 
   @@map("anomaly_thresholds")
 }
+
+// ── FWA-001: Flexi-Work Arrangements (MOM Dec 2024 mandate) ──────────────────
+// Employees submit FWA requests; managers/HR must respond within 2 months.
+// Non-response past the deadline auto-flags as EXPIRED via daily sweep.
+
+model FwaRequest {
+  id              String    @id @default(uuid())
+  employeeId      String
+  type            FwaType
+  status          FwaStatus @default(PENDING)
+  proposedStart   DateTime                      // when FWA takes effect
+  proposedEnd     DateTime?                     // null = open-ended / permanent
+  reason          String
+  details         Json?                         // type-specific config (see FwaType notes)
+  reviewedById    String?
+  reviewedAt      DateTime?
+  reviewDeadline  DateTime                      // proposedStart date + 2 months (MOM)
+  decisionNote    String?                       // written decision per MOM requirement
+  notifiedAt      DateTime?                     // when employee was notified of decision
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([employeeId])
+  @@index([status])
+  @@index([reviewDeadline])
+  @@map("fwa_requests")
+}
+
+// FwaType details (stored in `details` JSON):
+// FLEXI_TIME  → { proposedStartTime: "09:00", proposedEndTime: "18:00", daysApplied: ["MON","TUE","WED","THU","FRI"] }
+// FLEXI_LOAD  → { hoursPerWeek: 32, daysPerWeek: 4, reducedDays: ["FRI"] }
+// FLEXI_PLACE → { wfhDaysPerWeek: 3, wfhDays: ["MON","WED","FRI"], primaryLocation: "Home" }
+enum FwaType {
+  FLEXI_TIME   // flexible start/end hours
+  FLEXI_LOAD   // reduced hours or days
+  FLEXI_PLACE  // work-from-home / remote
+}
+
+enum FwaStatus {
+  PENDING     // awaiting manager/HR response (within 2 months)
+  APPROVED    // FWA granted
+  REJECTED    // declined (decisionNote mandatory)
+  WITHDRAWN   // employee withdrew before decision
+  EXPIRED     // no response within 2-month deadline (MOM violation)
+}
+
+// ── FWA-002: OT Pre-Authorization Workflow (MOM EA s.38 — 72h/month cap) ──────
+// Employees or supervisors request OT pre-authorization before OT is worked.
+// Emergency OT may be authorized post-hoc within 24 hours.
+// Approved hours are tracked against MOM 72h monthly cap and dept budget.
+
+model OtAuthorization {
+  id                    String        @id @default(uuid())
+  employeeId            String
+  departmentId          String?
+  requestedById         String        // who submitted (employee or supervisor)
+  requestType           OtRequestType @default(EMPLOYEE)
+  isEmergency           Boolean       @default(false)
+  requestedHours        Float
+  plannedDate           DateTime      @db.Date
+  reason                String
+  businessJustification String?
+  status                OtAuthStatus  @default(PENDING)
+  reviewedById          String?
+  reviewedAt            DateTime?
+  decisionNote          String?
+  linkedRecordId        String?       // AttendanceRecord.id once OT is worked
+  expiresAt             DateTime      // PENDING expires at plannedDate (or +24h for emergency)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@index([employeeId])
+  @@index([status])
+  @@index([plannedDate])
+  @@index([departmentId])
+  @@map("ot_authorizations")
+}
+
+enum OtAuthStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  AUTO_EXPIRED
+}
+
+enum OtRequestType {
+  EMPLOYEE
+  SUPERVISOR
+}
+
+// OT budget per department per calendar month. Approved hours are incremented
+// on each approval; usedHours tracks actuals fed from attendance records.
+model OtBudget {
+  id           String   @id @default(uuid())
+  departmentId String
+  period       String   // YYYY-MM
+  budgetHours  Float
+  usedHours    Float    @default(0)
+  updatedBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([departmentId, period])
+  @@index([period])
+  @@map("ot_budgets")
+}
+
+// ── FWA-003: WICA Work Injury Compensation Act 2019 ───────────────────────────
+// Employers must report to MOM via iReport: fatal within 1 working day,
+// hospitalisation/permanent incapacity within 10 working days.
+// Medical-leave-only incidents do not require MOM reporting (keep 3-year records).
+
+model WicaIncident {
+  id                String        @id @default(uuid())
+  employeeId        String
+  reportedById      String        // employee or supervisor who submitted the report
+  incidentDate      DateTime      @db.Date
+  incidentTime      String?       // HH:mm (local time at incident)
+  incidentLocation  String
+  description       String
+  category          WicaCategory
+  injuryType        String?       // e.g., "Laceration", "Fracture"
+  bodyPart          String?       // e.g., "Right hand"
+  status            WicaStatus    @default(REPORTED)
+  momReportDeadline DateTime?     // null for MEDICAL_LEAVE_ONLY (not reportable)
+  momReportedAt     DateTime?
+  ireportRef        String?       // MOM iReport reference number
+  closedAt          DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  claims WicaClaim[]
+  rtw    WicaRtwRecord[]
+
+  @@index([employeeId])
+  @@index([status])
+  @@index([category])
+  @@index([momReportDeadline])
+  @@map("wica_incidents")
+}
+
+enum WicaCategory {
+  MEDICAL_LEAVE_ONLY    // < 3 days MC; no MOM reporting required
+  HOSPITALISATION       // hospital admission; report within 10 working days
+  PERMANENT_INCAPACITY  // partial or total; report within 10 working days
+  FATAL                 // death; report within 1 working day
+}
+
+enum WicaStatus {
+  REPORTED        // logged, awaiting review
+  UNDER_REVIEW    // HR/safety officer reviewing
+  MOM_REPORTED    // submitted via iReport; ireportRef captured
+  CLAIM_SUBMITTED // WICA claim filed with insurer
+  CLOSED          // incident resolved
+}
+
+model WicaClaim {
+  id                      String      @id @default(uuid())
+  incidentId              String
+  employeeId              String
+  medicalExpenses         Float?
+  medicalLeaveDays        Int?
+  hospitalLeaveDays       Int?
+  permanentIncapacityPct  Float?      // 0–100%
+  compensationAmount      Float?      // computed or agreed
+  insurerName             String?
+  insurerPolicyNo         String?
+  claimRef                String?     // insurer's claim reference
+  status                  ClaimStatus @default(PENDING)
+  assessedBy              String?
+  assessedAt              DateTime?
+  approvedBy              String?
+  approvedAt              DateTime?
+  paidAt                  DateTime?
+  rejectionReason         String?
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
+
+  incident WicaIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId])
+  @@index([status])
+  @@index([employeeId])
+  @@map("wica_claims")
+}
+
+enum ClaimStatus {
+  PENDING
+  INSURER_NOTIFIED
+  UNDER_ASSESSMENT
+  APPROVED
+  PAID
+  REJECTED
+}
+
+// Return-to-work record — tracks employee's gradual return after injury
+model WicaRtwRecord {
+  id          String    @id @default(uuid())
+  incidentId  String
+  employeeId  String
+  rtwDate     DateTime  @db.Date
+  rtwType     RtwType
+  restrictions String?  // free-text medical restrictions
+  reviewDate  DateTime? @db.Date  // next scheduled review
+  clearedAt   DateTime? // cleared for full duties
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+
+  incident WicaIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId])
+  @@index([employeeId])
+  @@map("wica_rtw_records")
+}
+
+enum RtwType {
+  FULL_DUTIES
+  LIGHT_DUTIES
+  PHASED_RETURN
+}
