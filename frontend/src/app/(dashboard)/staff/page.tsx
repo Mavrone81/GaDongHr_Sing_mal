@@ -73,7 +73,7 @@ export default function StaffDirectoryPage() {
         <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
           <div className="w-32 h-32 bg-indigo-600 rounded-full blur-3xl" />
         </div>
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 relative z-10">
+        <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6 relative z-10">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <div className="w-2 h-2 bg-indigo-600 rounded-full" />

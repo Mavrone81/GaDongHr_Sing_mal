@@ -1966,7 +1966,7 @@ export default function TrainingPage() {
     <div className="flex flex-col gap-10 max-w-[1400px] mx-auto pb-20 animate-in fade-in duration-700">
       <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-amber-500/5 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-48 h-48 bg-amber-500/5 rounded-full blur-3xl" />
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+        <div className="relative z-10 flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <div className="w-2 h-2 bg-amber-500 rounded-full" />
@@ -1980,7 +1980,7 @@ export default function TrainingPage() {
             </p>
           </div>
           {stats && (
-            <div className="flex gap-6">
+            <div className="flex flex-wrap gap-6">
               {[
                 { label: 'Published', value: stats.published, color: 'text-emerald-600' },
                 { label: 'Mandatory', value: stats.mandatory, color: 'text-red-600' },

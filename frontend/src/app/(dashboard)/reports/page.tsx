@@ -1637,7 +1637,7 @@ export default function ReportsPage() {
     <div className="flex flex-col gap-10 max-w-[1400px] mx-auto pb-20 animate-in fade-in duration-700">
 
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 relative overflow-hidden">
+      <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6 bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/5 rounded-full blur-3xl" />
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-2">
@@ -1649,7 +1649,7 @@ export default function ReportsPage() {
             Statutory filings, workforce analytics, and custom report generation for MOM, IRAS, and CPF Board compliance.
           </p>
         </div>
-        <div className="flex gap-4 relative z-10">
+        <div className="flex flex-wrap gap-4 relative z-10">
           <button onClick={() => setCustomOpen(true)}
             className="px-8 py-4 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 shadow-xl shadow-emerald-500/20 transition-all active:scale-95">
             + Custom Report

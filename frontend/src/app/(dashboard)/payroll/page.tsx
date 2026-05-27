@@ -1053,7 +1053,7 @@ function AdminPayrollDashboard() {
       )}
 
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 relative overflow-hidden group">
+      <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-8 bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 relative overflow-hidden group">
         <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
            <div className="w-32 h-32 bg-indigo-600 rounded-full blur-3xl"></div>
         </div>
@@ -1067,7 +1067,7 @@ function AdminPayrollDashboard() {
             Sovereign salary disbursement, CPF/SDL statutory tracking, and automated GIRO bank generations.
           </p>
         </div>
-        <div className="flex items-center gap-6 relative z-10">
+        <div className="flex flex-wrap items-center gap-6 relative z-10">
            <div className="hidden lg:flex flex-col items-end justify-center px-6 border-r border-slate-100">
               <span className="label-form">Active Engine</span>
               <span className="text-[10px] font-black text-indigo-600 uppercase mt-1">SG-CPF-STABLE-2026</span>

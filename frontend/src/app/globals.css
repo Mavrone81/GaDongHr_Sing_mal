@@ -322,6 +322,26 @@
   to { transform: rotate(360deg); }
 }
 
+/* ── Modal sizing safety net ──────────────────────────────────────────
+   Any modal dialog (direct child of a `fixed inset-0` overlay) is
+   constrained to viewport height with vertical scrolling so prompt
+   content stays reachable at narrow widths or non-100% zoom.
+   Modals that already declare flex-col + internal overflow-y-auto on
+   their body keep working — the y-axis override here only kicks in
+   when their content would have exceeded the viewport. Horizontal
+   overflow stays per the dialog's own rule (preserving rounded
+   corners on `overflow-hidden` dialogs).
+*/
+.fixed.inset-0 > div:first-child {
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+@media (max-height: 640px) {
+  .fixed.inset-0 > div:first-child {
+    max-height: calc(100vh - 1rem);
+  }
+}
+
 /* ── Mobile fallback for wide tables ──────────────────────────────────
    Any <table> that isn't already wrapped in an overflow container gets
    one when the viewport is below 768px. Lets existing pages remain
