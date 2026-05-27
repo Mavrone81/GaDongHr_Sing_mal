@@ -1,0 +1,136 @@
+// Prisma schema for survey-service
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── ENG-001: Employee Engagement Survey ───────────────────────────────────────
+
+model Survey {
+  id               String         @id @default(uuid())
+  code             String         @unique  // e.g. "ANNUAL-2026", "Q2-PULSE-2026"
+  title            String
+  description      String?
+  type             SurveyType
+  status           SurveyStatus   @default(DRAFT)
+  anonymous        Boolean        @default(true)
+  minResponsesToShow Int          @default(3)  // suppress aggregates below this N
+  targetDepartment String?        // null = all
+  targetMinTenureMonths Int?      // null = any
+  openedAt         DateTime?
+  closedAt         DateTime?
+  dueDate          DateTime?
+  createdBy        String?
+  createdByName    String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  questions        SurveyQuestion[]
+  responses        SurveyResponse[]
+  actions          SurveyAction[]
+
+  @@index([status, type])
+}
+
+enum SurveyType {
+  ANNUAL
+  PULSE
+  EXIT
+  CUSTOM
+}
+
+enum SurveyStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+}
+
+model SurveyQuestion {
+  id           String           @id @default(uuid())
+  survey       Survey           @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  surveyId     String
+  type         QuestionType
+  text         String
+  required     Boolean          @default(true)
+  displayOrder Int              @default(0)
+  // For MULTI_CHOICE only
+  choices      String[]         @default([])
+  // For LIKERT_5 — set custom labels (e.g. "Strongly Disagree" ... "Strongly Agree"). Defaults applied if empty.
+  scaleLabels  String[]         @default([])
+  category     String?          // 'engagement', 'leadership', 'culture', ...
+
+  answers      SurveyAnswer[]
+
+  @@index([surveyId, displayOrder])
+}
+
+enum QuestionType {
+  LIKERT_5      // 1-5 rating
+  NPS           // 0-10 scale (recommend likelihood)
+  TEXT          // free-text comment
+  MULTI_CHOICE  // single selection from choices[]
+}
+
+model SurveyResponse {
+  id                    String         @id @default(uuid())
+  survey                Survey         @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  surveyId              String
+  respondentEmployeeId  String?        // null when anonymous=true (privacy)
+  // Snapshots at submission time for segmentation (preserved even if employee changes dept)
+  respondentDepartment  String?
+  respondentTenureMonths Int?
+  respondentEmploymentType String?
+  submittedAt           DateTime       @default(now())
+  ipHash                String?        // for de-duplication on anonymous surveys
+
+  answers               SurveyAnswer[]
+
+  @@index([surveyId, submittedAt])
+  @@index([respondentEmployeeId])
+}
+
+model SurveyAnswer {
+  id          String         @id @default(uuid())
+  response    SurveyResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  responseId  String
+  question    SurveyQuestion @relation(fields: [questionId], references: [id])
+  questionId  String
+  // Exactly one of these is populated based on question type
+  numericValue Float?        // for LIKERT_5 / NPS / MULTI_CHOICE (encoded as index)
+  textValue   String?        // for TEXT / MULTI_CHOICE label
+
+  @@unique([responseId, questionId])
+  @@index([questionId])
+}
+
+// Manager follow-up actions tied to a survey
+model SurveyAction {
+  id          String          @id @default(uuid())
+  survey      Survey          @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  surveyId    String
+  managerId   String
+  managerName String?
+  department  String?         // scope of the action
+  title       String
+  description String?
+  status      ActionStatus    @default(OPEN)
+  dueDate     DateTime?
+  closedAt    DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([surveyId])
+  @@index([managerId, status])
+}
+
+enum ActionStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  DISMISSED
+}
