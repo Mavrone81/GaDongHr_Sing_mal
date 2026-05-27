@@ -521,3 +521,31 @@ enum PeriodHalf {
   FIRST
   SECOND
 }
+
+model GiroPayment {
+  id           String            @id @default(uuid())
+  runId        String
+  employeeId   String
+  employeeName String?
+  bank         String            // uob | ocbc | dbs | scb | hsbc | maybank
+  bankCode     String?
+  bankAccount  String?
+  amountEnc    String?           // encrypted net pay
+  status       GiroPaymentStatus @default(PENDING)
+  returnCode   String?
+  returnReason String?
+  generatedAt  DateTime          @default(now())
+  processedAt  DateTime?
+
+  @@index([runId])
+  @@index([status])
+  @@index([employeeId])
+  @@map("giro_payments")
+}
+
+enum GiroPaymentStatus {
+  PENDING
+  SENT
+  RETURNED
+  FAILED
+}

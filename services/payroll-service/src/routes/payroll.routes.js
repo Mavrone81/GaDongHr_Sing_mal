@@ -1089,12 +1089,15 @@ router.get('/cpf-file/:runId', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.
   } catch (err) { next(err); }
 });
 
-// ─── GET /payroll/bank-giro/:runId?bank=uob|ocbc|dbs ─ Bank GIRO file ───────
+const SUPPORTED_BANKS = ['uob', 'ocbc', 'dbs', 'scb', 'hsbc', 'maybank'];
+const GENERIC_FORMAT_BANKS = ['scb', 'hsbc', 'maybank'];
+
+// ─── GET /payroll/bank-giro/:runId?bank=uob|ocbc|dbs|scb|hsbc|maybank ────────
 router.get('/bank-giro/:runId', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
   try {
     const bank = (req.query.bank || 'uob').toLowerCase();
-    if (!['uob', 'ocbc', 'dbs'].includes(bank)) {
-      return res.status(400).json({ error: 'Unsupported bank. Use: uob, ocbc, dbs' });
+    if (!SUPPORTED_BANKS.includes(bank)) {
+      return res.status(400).json({ error: `Unsupported bank. Use: ${SUPPORTED_BANKS.join(', ')}` });
     }
 
     const run = await prisma.payrollRun.findUnique({ where: { id: req.params.runId }, include: { payslips: true } });
@@ -1139,16 +1142,178 @@ router.get('/bank-giro/:runId', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES
     } else if (bank === 'ocbc') {
       content = generateOcbcGiro(payments, totalAmount, run, today, opts);
       filename = `OCBC-GIRO-${run.period}.txt`;
-    } else {
+    } else if (bank === 'dbs') {
       content = generateDbsGiro(payments, totalAmount, run, today, opts);
       filename = `DBS-GIRO-${run.period}.txt`;
+    } else {
+      // SCB / HSBC / Maybank — generic CSV (replace when bank-specific spec received)
+      content = generateGenericCsvGiro(payments, totalAmount, run, today, opts, bank);
+      filename = `${bank.toUpperCase()}-GIRO-${run.period}.csv`;
     }
 
+    // Persist payment records for ACK reconciliation (fire-and-forget)
+    const crypto = require('crypto');
+    prisma.giroPayment.deleteMany({ where: { runId: run.id } }).then(() =>
+      prisma.giroPayment.createMany({
+        data: payments.map(p => ({
+          id: crypto.randomUUID(),
+          runId: run.id,
+          employeeId: p.employeeId,
+          employeeName: p.name,
+          bank,
+          bankCode: p.bankCode || null,
+          bankAccount: p.bankAccount || null,
+          amountEnc: encrypt(String(p.netPay)),
+          status: 'PENDING',
+        })),
+      })
+    ).catch(e => console.error('[giro] Failed to persist payment records:', e.message));
+
+    if (GENERIC_FORMAT_BANKS.includes(bank)) {
+      res.setHeader('X-Bank-Format-Status', 'GENERIC - replace with bank-specific template when spec is received');
+    }
     res.setHeader('Content-Type', 'text/plain');
     res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
     res.send(content);
   } catch (err) { next(err); }
 });
+
+// ─── GET /payroll/bank-giro/:runId/payments ─ ACK payment status list ────────
+router.get('/bank-giro/:runId/payments', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const payments = await prisma.giroPayment.findMany({
+      where: { runId: req.params.runId },
+      orderBy: { generatedAt: 'desc' },
+    });
+    const total   = payments.length;
+    const pending  = payments.filter(p => p.status === 'PENDING').length;
+    const sent     = payments.filter(p => p.status === 'SENT').length;
+    const returned = payments.filter(p => p.status === 'RETURNED').length;
+    const failed   = payments.filter(p => p.status === 'FAILED').length;
+    const failed_payments = payments.filter(p => ['RETURNED', 'FAILED'].includes(p.status));
+    res.json({ runId: req.params.runId, total, summary: { pending, sent, returned, failed }, failedPayments: failed_payments, payments });
+  } catch (err) { next(err); }
+});
+
+// ─── POST /payroll/bank-giro/:runId/ack ─ Parse bank ACK / return file ────────
+// Query: ?bank=dbs|uob|ocbc|scb|hsbc|maybank&format=auto|csv|dbs
+// Body: { fileContent: '<raw text of the return file>' }
+router.post('/bank-giro/:runId/ack', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const { runId } = req.params;
+    const bank   = (req.query.bank || 'dbs').toLowerCase();
+    const format = (req.query.format || 'auto').toLowerCase();
+    const { fileContent } = req.body;
+    if (!fileContent || typeof fileContent !== 'string') {
+      return res.status(400).json({ error: 'fileContent (string) is required in request body' });
+    }
+
+    const run = await prisma.payrollRun.findUnique({ where: { id: runId } });
+    if (!run) return res.status(404).json({ error: 'Run not found' });
+
+    const stored = await prisma.giroPayment.findMany({ where: { runId } });
+    if (!stored.length) return res.status(400).json({ error: 'No payment records found for this run — generate the GIRO file first' });
+
+    // Build account → payment map for matching
+    const byAccount = {};
+    for (const p of stored) byAccount[normaliseAcct(p.bankAccount)] = p;
+
+    let parsed;
+    if (format === 'dbs' || (format === 'auto' && bank === 'dbs')) {
+      parsed = parseDbsAck(fileContent);
+    } else {
+      parsed = parseCsvAck(fileContent);
+    }
+
+    let matched = 0; let unmatched = 0;
+    const updates = [];
+    for (const row of parsed) {
+      const key = normaliseAcct(row.account);
+      const rec = byAccount[key];
+      if (!rec) { unmatched++; continue; }
+      matched++;
+      const isReturn = row.returned;
+      updates.push(
+        prisma.giroPayment.update({
+          where: { id: rec.id },
+          data: {
+            status:      isReturn ? 'RETURNED' : 'SENT',
+            returnCode:  row.returnCode   || null,
+            returnReason: row.returnReason || null,
+            processedAt: new Date(),
+          },
+        })
+      );
+    }
+
+    await Promise.all(updates);
+
+    const failed = await prisma.giroPayment.findMany({
+      where: { runId, status: { in: ['RETURNED', 'FAILED'] } },
+    });
+
+    res.json({
+      runId,
+      bank,
+      parsedRows: parsed.length,
+      matched,
+      unmatched,
+      failedCount: failed.length,
+      failedPayments: failed,
+    });
+  } catch (err) { next(err); }
+});
+
+function normaliseAcct(acct) { return (acct || '').replace(/[-\s]/g, '').toLowerCase(); }
+
+// Parse DBS CLEARS return file — failed records have a non-zero return code in pos 94-96
+function parseDbsAck(content) {
+  const results = [];
+  for (const line of content.split(/\r?\n/)) {
+    if (!line) continue;
+    const type = line.slice(-1); // last char = record type
+    if (type !== '1') continue;  // only detail records
+    const account    = line.slice(4, 18).trim();
+    const returnCode = line.slice(93, 96).trim();
+    const returned   = returnCode !== '' && returnCode !== '000' && returnCode !== '00';
+    results.push({ account, returnCode, returnReason: DBS_RETURN_CODES[returnCode] || null, returned });
+  }
+  return results;
+}
+
+// Parse generic CSV return file: account,status,return_code,reason
+// Status: R/RETURNED/FAILED = failed; S/SENT/OK = success
+function parseCsvAck(content) {
+  const results = [];
+  const lines = content.split(/\r?\n/).filter(l => l.trim() && !l.trim().startsWith('#'));
+  const isHeader = l => /account|status|code/i.test(l.split(',')[0]);
+  const rows = lines.filter(l => !isHeader(l));
+  for (const row of rows) {
+    const cols = row.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+    if (cols.length < 2) continue;
+    const account    = cols[0];
+    const status     = (cols[1] || '').toUpperCase();
+    const returnCode = cols[2] || '';
+    const reason     = cols[3] || '';
+    const returned   = ['R', 'RETURNED', 'FAILED', 'F', 'REJECT', 'REJECTED'].includes(status);
+    results.push({ account, returnCode, returnReason: reason || null, returned });
+  }
+  return results;
+}
+
+// DBS GIRO return / rejection codes (partial — add more from bank spec)
+const DBS_RETURN_CODES = {
+  '01': 'Insufficient funds',
+  '02': 'Account closed',
+  '03': 'Account not found',
+  '04': 'Payment stopped by payer',
+  '05': 'Invalid account number',
+  '06': 'Account frozen',
+  '07': 'Amount exceeds limit',
+  '08': 'Account dormant',
+  '09': 'Account not accepting GIRO',
+  '10': 'Currency mismatch',
+};
 
 // ─── GIRO generator helpers ──────────────────────────────────────────────────
 function pad2(n) { return String(n).padStart(2, '0'); }
@@ -1370,6 +1535,51 @@ function generateDbsGiro(payments, totalAmount, run, today, opts = {}) {
   );
 
   return lines.join('\r\n');
+}
+
+// ── Generic CSV GIRO (SCB / HSBC / Maybank — replace with bank-specific format) ─
+// Column headers match the common bulk-payment CSV accepted by most SG corporate portals.
+function generateGenericCsvGiro(payments, totalAmount, run, today, opts = {}, bank = 'generic') {
+  const payDesc = opts.payDesc || `SALARY ${run.period}`;
+  const ref     = opts.ref     || `PAYROLL${run.period.replace('-', '')}`;
+  const csvEsc  = v => `"${String(v || '').replace(/"/g, '""')}"`;
+  const fmt     = v => v.toFixed(2);
+
+  const header = [
+    '# GENERIC PAYROLL GIRO FILE',
+    `# Bank: ${bank.toUpperCase()}-GIRO`,
+    `# Period: ${run.period}`,
+    `# Generated: ${today.toISOString()}`,
+    `# IMPORTANT: This file uses a generic CSV format.`,
+    `#            Replace with bank-specific format when spec is received.`,
+    `# Total payments: ${payments.length}  Total amount: SGD ${totalAmount.toFixed(2)}`,
+    '',
+    'PAYMENT_DATE,PAYEE_NAME,BANK_CODE,ACCOUNT_NO,CURRENCY,AMOUNT,REFERENCE,DESCRIPTION,PURPOSE_CODE',
+  ].join('\r\n');
+
+  const valueDateStr = opts.valueDate
+    ? `${opts.valueDate.getFullYear()}-${pad2(opts.valueDate.getMonth()+1)}-${pad2(opts.valueDate.getDate())}`
+    : `${today.getFullYear()}-${pad2(today.getMonth()+1)}-${pad2(today.getDate())}`;
+
+  const rows = payments.map(p => [
+    csvEsc(valueDateStr),
+    csvEsc(p.name),
+    csvEsc(p.bankCode || ''),
+    csvEsc((p.bankAccount || '').replace(/[-\s]/g, '')),
+    csvEsc('SGD'),
+    csvEsc(fmt(p.netPay)),
+    csvEsc(`${ref}-${p.employeeId}`.slice(0, 35)),
+    csvEsc(payDesc.slice(0, 50)),
+    csvEsc('SALA'),
+  ].join(','));
+
+  const trailer = [
+    '',
+    `# TOTAL RECORDS: ${payments.length}`,
+    `# TOTAL AMOUNT SGD: ${totalAmount.toFixed(2)}`,
+  ].join('\r\n');
+
+  return [header, ...rows, trailer].join('\r\n');
 }
 
 // ─── GET /payroll/period-config/:period ─ MOM working-day config for a period ─
