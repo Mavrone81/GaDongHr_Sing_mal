@@ -1,0 +1,102 @@
+// Prisma schema for esign-service
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── ESV-003: E-Signature & Document Acknowledgement ───────────────────────────
+// 7-year signed document retention per EA. Audit trail is immutable.
+
+// Document templates. HR creates once; requests are generated per signatory.
+model ESignDocument {
+  id            String       @id @default(uuid())
+  code          String       @unique  // e.g. 'EMPLOYMENT_CONTRACT', 'HANDBOOK_2026'
+  title         String
+  description   String?
+  documentType  ESignDocType
+  templateHtml  String       // HTML body with {{name}}, {{start_date}} etc.
+  version       String       @default("1.0")
+  isActive      Boolean      @default(true)
+  annualRenewal Boolean      @default(false) // triggers re-sign each calendar year
+  expiresInDays Int?         // how long a sign request stays open (null = no expiry)
+  createdBy     String?
+  updatedBy     String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  requests ESignRequest[]
+
+  @@index([documentType])
+  @@map("esign_documents")
+}
+
+enum ESignDocType {
+  EMPLOYMENT_CONTRACT
+  POLICY_ACKNOWLEDGEMENT
+  CUSTOM
+}
+
+// One request per (document version, signatory). Holds the personalised copy.
+model ESignRequest {
+  id                 String      @id @default(uuid())
+  documentId         String
+  documentVersion    String      // snapshot of doc version at dispatch time
+  documentHash       String      // SHA-256 of templateHtml at dispatch time
+  signatoryId        String      // employeeId of person who must sign
+  requestedById      String      // HR user who sent the request
+  title              String      // display title (doc title + employee name)
+  personalizedHtml   String      // template with placeholders resolved
+  status             ESignStatus @default(PENDING)
+  dueDate            DateTime?
+  message            String?     // optional note from HR to signatory
+  viewedAt           DateTime?   // first time signatory opened the document
+  signedAt           DateTime?
+  signatoryIp        String?     // IP at time of signing
+  signedDocHash      String?     // SHA-256 of personalizedHtml at sign time
+  signatureStatement String?     // "I, [name], agree to the terms of [title]"
+  declineReason      String?
+  revokedAt          DateTime?
+  revokedById        String?
+  remindersSent      Int         @default(0)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  document     ESignDocument  @relation(fields: [documentId], references: [id])
+  auditEntries ESignAuditLog[]
+
+  @@unique([documentId, signatoryId, documentVersion])
+  @@index([signatoryId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("esign_requests")
+}
+
+enum ESignStatus {
+  PENDING
+  SIGNED
+  DECLINED
+  EXPIRED
+  REVOKED
+}
+
+// Immutable audit trail — one row per action on a request.
+model ESignAuditLog {
+  id        String   @id @default(uuid())
+  requestId String
+  action    String   // CREATED | VIEWED | SIGNED | DECLINED | EXPIRED | REVOKED | REMINDER_SENT
+  actorId   String?
+  actorIp   String?
+  timestamp DateTime @default(now())
+  detail    Json?
+
+  request ESignRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@index([timestamp])
+  @@map("esign_audit_logs")
+}
