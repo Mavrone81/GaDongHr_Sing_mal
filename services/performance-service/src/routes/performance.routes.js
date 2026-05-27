@@ -4,8 +4,10 @@ const router = require('express').Router();
 const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
+const { DEFAULT_BANDS, validateBands, computeDistribution, hasDeviation, groupByDepartment } = require('../engines/bellcurve.engine');
 
 const prisma = new PrismaClient();
+const EMPLOYEE_URL_BC = process.env.EMPLOYEE_SERVICE_URL || 'http://employee-service:4002';
 
 const PHASE_ORDER = ['GOAL_SETTING', 'SELF_ASSESSMENT', 'MANAGER_REVIEW', 'CALIBRATION', 'COMPLETED'];
 
@@ -467,9 +469,13 @@ router.put('/pips/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMI
 });
 
 // ── GET /performance/cycles/:id/calibration ──────────────────────────────────
+// Query params: groupBy=department
 router.get('/cycles/:id/calibration', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER), async (req, res, next) => {
   try {
-    const cycle = await prisma.reviewCycle.findUnique({ where: { id: req.params.id } });
+    const cycle = await prisma.reviewCycle.findUnique({
+      where: { id: req.params.id },
+      include: { bellCurveConfig: true },
+    });
     if (!cycle) return res.status(404).json({ error: 'Cycle not found' });
 
     const appraisals = await prisma.appraisal.findMany({
@@ -478,7 +484,64 @@ router.get('/cycles/:id/calibration', authenticate, authorize(ROLES.SUPER_ADMIN,
       include: { incrementProposal: true },
     });
 
-    res.json({ cycle, appraisals, locked: !!cycle.calibrationLockedAt });
+    const bands = cycle.bellCurveConfig?.bands || DEFAULT_BANDS;
+    const distribution = computeDistribution(appraisals, bands);
+    const bellCurve = {
+      config: cycle.bellCurveConfig || { bands: DEFAULT_BANDS, isDefault: true },
+      distribution,
+      hasDeviation: hasDeviation(distribution),
+      totalRated: appraisals.filter(a => (a.calibratedScore ?? a.overallScore) !== null).length,
+    };
+
+    let byDepartment = null;
+    if (req.query.groupBy === 'department') {
+      let employeeMap = {};
+      try {
+        const empRes = await fetch(`${EMPLOYEE_URL_BC}/employees?limit=2000`, {
+          headers: { Authorization: req.headers.authorization },
+        });
+        if (empRes.ok) {
+          const data = await empRes.json();
+          for (const e of (data.employees || [])) employeeMap[e.id] = e;
+        }
+      } catch {}
+      byDepartment = groupByDepartment(appraisals, employeeMap, bands);
+    }
+
+    res.json({ cycle, appraisals, locked: !!cycle.calibrationLockedAt, bellCurve, byDepartment });
+  } catch (err) { next(err); }
+});
+
+// ── GET /performance/cycles/:id/bell-curve-config ─────────────────────────────
+router.get('/cycles/:id/bell-curve-config', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER), async (req, res, next) => {
+  try {
+    const cycle = await prisma.reviewCycle.findUnique({ where: { id: req.params.id } });
+    if (!cycle) return res.status(404).json({ error: 'Cycle not found' });
+    const config = await prisma.bellCurveConfig.findUnique({ where: { cycleId: req.params.id } });
+    res.json(config || { bands: DEFAULT_BANDS, isDefault: true });
+  } catch (err) { next(err); }
+});
+
+// ── PUT /performance/cycles/:id/bell-curve-config ─────────────────────────────
+router.put('/cycles/:id/bell-curve-config', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const cycle = await prisma.reviewCycle.findUnique({ where: { id: req.params.id } });
+    if (!cycle) return res.status(404).json({ error: 'Cycle not found' });
+
+    const { bands } = req.body;
+    const err = validateBands(bands);
+    if (err) return res.status(400).json({ error: err });
+
+    const existing = await prisma.bellCurveConfig.findUnique({ where: { cycleId: req.params.id } });
+    const config = existing
+      ? await prisma.bellCurveConfig.update({
+          where: { cycleId: req.params.id },
+          data: { bands, updatedBy: req.user.sub },
+        })
+      : await prisma.bellCurveConfig.create({
+          data: { id: uuidv4(), cycleId: req.params.id, bands, createdBy: req.user.sub },
+        });
+    res.json(config);
   } catch (err) { next(err); }
 });
 

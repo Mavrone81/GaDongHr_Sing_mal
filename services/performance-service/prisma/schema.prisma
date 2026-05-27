@@ -99,8 +99,23 @@ model ReviewCycle {
   feedbackWeight      Float?              @default(0.0)
   feedbackRequests    FeedbackRequest[]
   feedbackQuestions   FeedbackQuestion[]
+  bellCurveConfig     BellCurveConfig?
 
   @@map("review_cycles")
+}
+
+model BellCurveConfig {
+  id        String   @id @default(uuid())
+  cycleId   String   @unique
+  bands     Json
+  createdBy String
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cycle ReviewCycle @relation(fields: [cycleId], references: [id])
+
+  @@map("bell_curve_configs")
 }
 
 model Appraisal {
