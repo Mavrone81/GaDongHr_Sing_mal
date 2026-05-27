@@ -737,6 +737,261 @@ app.get('/reports/training-summary',
 // RPT-003 Phase 1 — report builder + schedules mounted under /reports
 app.use('/reports', builderRoutes);
 
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║          ENG-002 — HR Analytics Dashboard (extended endpoints)            ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
+
+const ANALYTICS_ROLES = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER];
+
+// In-memory budget store (TODO: move to dedicated table later)
+const _budgetStore = { headcount: {}, recruitment: {}, revenue: {} };
+
+// POST /reports/analytics/budget — HR sets headcount/recruitment/revenue budgets per period
+app.post('/reports/analytics/budget',
+  authenticate, authorize(...ANALYTICS_ROLES, ROLES.FINANCE_ADMIN),
+  (req, res) => {
+    const { category, period, value } = req.body || {};
+    if (!['headcount','recruitment','revenue'].includes(category))
+      return res.status(400).json({ error: 'category must be headcount|recruitment|revenue' });
+    if (!period) return res.status(400).json({ error: 'period (YYYY or YYYY-MM) is required' });
+    _budgetStore[category][period] = parseFloat(value);
+    res.json({ category, period, value: _budgetStore[category][period] });
+  }
+);
+
+// GET /reports/analytics/budget — read current budgets
+app.get('/reports/analytics/budget', authenticate, authorize(...ANALYTICS_ROLES, ROLES.FINANCE_ADMIN), (req, res) => {
+  res.json(_budgetStore);
+});
+
+// GET /reports/analytics/headcount?period=YYYY-MM
+app.get('/reports/analytics/headcount', authenticate, authorize(...ANALYTICS_ROLES), async (req, res, next) => {
+  try {
+    const period = req.query.period || new Date().toISOString().slice(0, 7);
+    const empRes = await axios.get(`${EMPLOYEE_URL}/employees?limit=1000`, { headers: authHeaders(req) });
+    const employees = empRes.data.employees || [];
+    const active = employees.filter(e => e.isActive);
+    const byDept = active.reduce((acc, e) => { acc[e.department] = (acc[e.department] || 0) + 1; return acc; }, {});
+    const budget = _budgetStore.headcount[period] || _budgetStore.headcount[period.slice(0, 4)] || null;
+    const variance = budget !== null ? active.length - budget : null;
+    res.json({
+      period,
+      actual: active.length,
+      budget,
+      variance,
+      variancePct: budget ? Math.round((variance / budget) * 100) : null,
+      byDepartment: byDept,
+      total: employees.length,
+      inactive: employees.length - active.length,
+    });
+  } catch (err) { next(err); }
+});
+
+// GET /reports/analytics/attrition?months=12
+app.get('/reports/analytics/attrition', authenticate, authorize(...ANALYTICS_ROLES), async (req, res, next) => {
+  try {
+    const months = parseInt(req.query.months || '12');
+    const empRes = await axios.get(`${EMPLOYEE_URL}/employees?limit=1000`, { headers: authHeaders(req) });
+    const employees = empRes.data.employees || [];
+    const now = new Date();
+    const cutoff = new Date(now.getFullYear(), now.getMonth() - months, 1);
+    const leavers = employees.filter(e => e.endDate && new Date(e.endDate) >= cutoff && new Date(e.endDate) <= now);
+    const active = employees.filter(e => e.isActive);
+    const avgHeadcount = (active.length + (active.length + leavers.length)) / 2 || 1;
+    const rate = (leavers.length / avgHeadcount) * 100;
+
+    // Bucket by department + tenure
+    const byDept = {}, byTenure = { '<1y': 0, '1-3y': 0, '3-5y': 0, '5y+': 0 };
+    for (const l of leavers) {
+      byDept[l.department] = (byDept[l.department] || 0) + 1;
+      const tm = l.startDate && l.endDate
+        ? Math.floor((new Date(l.endDate).getTime() - new Date(l.startDate).getTime()) / (30 * 86_400_000))
+        : 0;
+      if (tm < 12) byTenure['<1y'] += 1;
+      else if (tm < 36) byTenure['1-3y'] += 1;
+      else if (tm < 60) byTenure['3-5y'] += 1;
+      else byTenure['5y+'] += 1;
+    }
+    res.json({
+      windowMonths: months,
+      leaversCount: leavers.length,
+      activeCount: active.length,
+      attritionRatePct: Math.round(rate * 10) / 10,
+      byDepartment: byDept,
+      byTenure,
+    });
+  } catch (err) { next(err); }
+});
+
+// GET /reports/analytics/cost-per-hire?period=YYYY
+app.get('/reports/analytics/cost-per-hire', authenticate, authorize(...ANALYTICS_ROLES, ROLES.FINANCE_ADMIN), async (req, res, next) => {
+  try {
+    const period = req.query.period || String(new Date().getFullYear());
+    const empRes = await axios.get(`${EMPLOYEE_URL}/employees?limit=1000`, { headers: authHeaders(req) });
+    const employees = empRes.data.employees || [];
+    // Hires within the period (start year matches)
+    const startYear = period.slice(0, 4);
+    const hires = employees.filter(e => e.startDate && String(new Date(e.startDate).getFullYear()) === startYear);
+    const recruitmentBudget = _budgetStore.recruitment[period] || 0;
+    const cph = hires.length > 0 ? recruitmentBudget / hires.length : 0;
+    res.json({
+      period,
+      hires: hires.length,
+      recruitmentSpend: recruitmentBudget,
+      costPerHire: Math.round(cph * 100) / 100,
+    });
+  } catch (err) { next(err); }
+});
+
+// GET /reports/analytics/leave-heatmap?year=YYYY
+app.get('/reports/analytics/leave-heatmap', authenticate, authorize(...ANALYTICS_ROLES), async (req, res, next) => {
+  try {
+    const year = req.query.year || new Date().getFullYear();
+    const from = `${year}-01-01`, to = `${year}-12-31`;
+    const lvRes = await axios.get(`${LEAVE_URL}/leave/applications?from=${from}&to=${to}&limit=2000`, { headers: authHeaders(req) }).catch(() => ({ data: { applications: [] } }));
+    const applications = lvRes.data.applications || lvRes.data || [];
+
+    const months = Array.from({ length: 12 }, () => 0);
+    const byType = {};
+    for (const a of applications) {
+      if (a.status !== 'APPROVED' && a.status !== 'COMPLETED' && a.status !== 'TAKEN') continue;
+      const start = new Date(a.startDate || a.from);
+      if (start.getFullYear() !== Number(year)) continue;
+      const m = start.getMonth();
+      months[m] += (a.totalDays || a.days || 1);
+      const t = a.leaveType?.name || a.type || 'Other';
+      byType[t] = (byType[t] || 0) + (a.totalDays || a.days || 1);
+    }
+    res.json({
+      year: Number(year),
+      monthlyDaysTaken: months,
+      byLeaveType: byType,
+      totalDays: months.reduce((a, b) => a + b, 0),
+    });
+  } catch (err) { next(err); }
+});
+
+// GET /reports/analytics/ot-cost-trend?months=6
+app.get('/reports/analytics/ot-cost-trend', authenticate, authorize(...ANALYTICS_ROLES, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
+  try {
+    const months = parseInt(req.query.months || '6');
+    const now = new Date();
+    const periods = [];
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      periods.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+
+    const result = await Promise.all(periods.map(async p => {
+      try {
+        const r = await axios.get(`${ATTENDANCE_URL}/attendance/ot-summary/${p}`, { headers: authHeaders(req) });
+        return { period: p, ...r.data };
+      } catch { return { period: p, totalHours: 0, totalCost: 0 }; }
+    }));
+    res.json({ periods: result });
+  } catch (err) { next(err); }
+});
+
+// GET /reports/analytics/training-roi?year=YYYY
+app.get('/reports/analytics/training-roi', authenticate, authorize(...ANALYTICS_ROLES), async (req, res, next) => {
+  try {
+    const year = req.query.year || new Date().getFullYear();
+    let trainings = [];
+    try {
+      const r = await axios.get(`${TRAINING_URL}/training/courses?year=${year}`, { headers: authHeaders(req) });
+      trainings = r.data.courses || r.data || [];
+    } catch (_) { /* training service optional */ }
+
+    let totalCost = 0, totalHours = 0, totalCompletions = 0;
+    for (const t of trainings) {
+      totalCost  += Number(t.totalCost || t.cost || 0);
+      totalHours += Number(t.totalTrainingHours || t.duration || 0);
+      totalCompletions += Number(t.completedCount || 0);
+    }
+    res.json({
+      year: Number(year),
+      trainings: trainings.length,
+      totalCost,
+      totalHours,
+      totalCompletions,
+      costPerHour: totalHours > 0 ? Math.round((totalCost / totalHours) * 100) / 100 : 0,
+      costPerCompletion: totalCompletions > 0 ? Math.round((totalCost / totalCompletions) * 100) / 100 : 0,
+    });
+  } catch (err) { next(err); }
+});
+
+// GET /reports/analytics/payroll-revenue-ratio?period=YYYY
+app.get('/reports/analytics/payroll-revenue-ratio',
+  authenticate, authorize(...ANALYTICS_ROLES, ROLES.FINANCE_ADMIN),
+  async (req, res, next) => {
+    try {
+      const year = req.query.period || String(new Date().getFullYear());
+      // Aggregate payroll cost from 12 month-summary calls
+      let totalPayrollCost = 0;
+      for (let m = 1; m <= 12; m++) {
+        const period = `${year}-${String(m).padStart(2, '0')}`;
+        try {
+          const r = await axios.get(`${PAYROLL_URL}/payroll/runs?period=${period}&status=FINALISED`, { headers: authHeaders(req) });
+          const runs = r.data.runs || r.data || [];
+          for (const run of runs) totalPayrollCost += Number(run.totalGross || run.netPayout || 0);
+        } catch (_) {/* swallow */}
+      }
+      const revenue = _budgetStore.revenue[year] || 0;
+      const ratio = revenue > 0 ? Math.round((totalPayrollCost / revenue) * 10000) / 100 : 0;
+      res.json({
+        period: year,
+        payrollCost: Math.round(totalPayrollCost * 100) / 100,
+        revenue,
+        payrollToRevenueRatioPct: ratio,
+      });
+    } catch (err) { next(err); }
+  }
+);
+
+// GET /reports/analytics/pdpa-retention — placeholder for records nearing deletion threshold
+app.get('/reports/analytics/pdpa-retention',
+  authenticate, authorize(...ANALYTICS_ROLES),
+  async (req, res, next) => {
+    try {
+      const empRes = await axios.get(`${EMPLOYEE_URL}/employees?limit=1000`, { headers: authHeaders(req) });
+      const employees = empRes.data.employees || [];
+      // PDPA: retain ex-employee records for 7 years post-termination. Flag those past 6.5 years.
+      const now = new Date();
+      const sixHalfYrs = 6.5 * 365 * 86_400_000;
+      const approaching = employees.filter(e => !e.isActive && e.endDate && (now.getTime() - new Date(e.endDate).getTime()) > sixHalfYrs);
+      res.json({
+        total: employees.length,
+        approachingDeletion: approaching.length,
+        records: approaching.slice(0, 50).map(e => ({
+          id: e.id, code: e.employeeCode, name: e.fullName,
+          endDate: e.endDate,
+          daysSinceTermination: Math.floor((now.getTime() - new Date(e.endDate).getTime()) / 86_400_000),
+        })),
+      });
+    } catch (err) { next(err); }
+  }
+);
+
+// GET /reports/analytics/summary — single-call aggregate for the analytics page
+app.get('/reports/analytics/summary',
+  authenticate, authorize(...ANALYTICS_ROLES),
+  async (req, res, next) => {
+    try {
+      const period = req.query.period || new Date().toISOString().slice(0, 7);
+      const year = period.slice(0, 4);
+      // Parallel fan-out
+      const [hc, attr, cph, leaveHm, pdpa] = await Promise.all([
+        axios.get(`http://localhost:${PORT}/reports/analytics/headcount?period=${period}`, { headers: authHeaders(req) }).then(r => r.data).catch(() => null),
+        axios.get(`http://localhost:${PORT}/reports/analytics/attrition?months=12`, { headers: authHeaders(req) }).then(r => r.data).catch(() => null),
+        axios.get(`http://localhost:${PORT}/reports/analytics/cost-per-hire?period=${year}`, { headers: authHeaders(req) }).then(r => r.data).catch(() => null),
+        axios.get(`http://localhost:${PORT}/reports/analytics/leave-heatmap?year=${year}`, { headers: authHeaders(req) }).then(r => r.data).catch(() => null),
+        axios.get(`http://localhost:${PORT}/reports/analytics/pdpa-retention`, { headers: authHeaders(req) }).then(r => r.data).catch(() => null),
+      ]);
+      res.json({ period, headcount: hc, attrition: attr, costPerHire: cph, leaveHeatmap: leaveHm, pdpa });
+    } catch (err) { next(err); }
+  }
+);
+
 app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: err.message || 'Internal server error' }); });
 
 if (require.main === module) {
