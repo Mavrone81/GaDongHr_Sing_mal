@@ -1,0 +1,144 @@
+// Prisma schema for loans-service
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── ESV-002: Salary Advance & Staff Loans ─────────────────────────────────────
+
+// ── Salary Advance (single-month deduction) ───────────────────────────────────
+model SalaryAdvance {
+  id                String          @id @default(uuid())
+  advanceNumber     String          @unique  // ADV-2026-00001
+  employeeId        String
+  employeeName      String
+  monthlySalary     Float           // snapshot at request time (for max-cap enforcement)
+  amount            Float           // SGD requested
+  reason            String
+  status            AdvanceStatus   @default(PENDING)
+
+  requestedBy       String          // userId of requester
+  requestedAt       DateTime        @default(now())
+  approvedBy        String?
+  approvedByName    String?
+  approvedAt        DateTime?
+  rejectedBy        String?
+  rejectedAt        DateTime?
+  rejectionReason   String?
+
+  // Payroll-side flow
+  deductionMonth    String?         // YYYY-MM — which payroll month deducts this
+  deductedAt        DateTime?       // when payroll-service actually deducted it
+  payrollRunId      String?         // payroll run id when deducted
+
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([employeeId, status])
+  @@index([status, deductionMonth])
+}
+
+enum AdvanceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  DEDUCTED      // payroll has applied the deduction
+}
+
+// ── Staff Loan (multi-month repayment) ────────────────────────────────────────
+model StaffLoan {
+  id                String          @id @default(uuid())
+  loanNumber        String          @unique  // LN-2026-00001
+  employeeId        String
+  employeeName      String
+  monthlySalary     Float           // snapshot at request time
+  principal         Float           // SGD borrowed
+  interestRate      Float           @default(0)   // annual % (0 = interest-free)
+  tenureMonths      Int             // repayment period
+  monthlyInstalment Float           // computed at approval
+  totalRepayable    Float           // principal + total interest
+  outstandingBalance Float          // updated as repayments come in
+  totalRepaid       Float           @default(0)
+  reason            String
+  status            LoanStatus      @default(PENDING)
+
+  requestedBy       String
+  requestedAt       DateTime        @default(now())
+  approvedBy        String?
+  approvedByName    String?
+  approvedAt        DateTime?
+  rejectedBy        String?
+  rejectedAt        DateTime?
+  rejectionReason   String?
+
+  startDate         DateTime?       // first deduction month start
+  expectedEndDate   DateTime?       // computed at approval
+  actualEndDate     DateTime?       // when fully repaid
+
+  agreementHtml     String?         // generated on approval
+  agreementGeneratedAt DateTime?
+  esignRequestId    String?         // optional ESV-003 e-sign linkage
+
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  repayments        LoanRepayment[]
+
+  @@index([employeeId, status])
+  @@index([status])
+}
+
+enum LoanStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  ACTIVE        // approved + agreement signed + first deduction scheduled
+  SETTLED       // fully repaid (early or natural)
+  WRITTEN_OFF   // termination/exception
+}
+
+// ── Loan Repayment (single monthly payment / payoff entry) ────────────────────
+model LoanRepayment {
+  id              String          @id @default(uuid())
+  loan            StaffLoan       @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  loanId          String
+  paymentNumber   Int             // 1, 2, 3, ... order in the schedule
+  scheduledDate   DateTime
+  scheduledAmount Float
+  paidDate        DateTime?
+  paidAmount      Float?
+  type            RepaymentType   @default(SCHEDULED)
+  status          RepaymentStatus @default(PENDING)
+  payrollRunId    String?         // if deducted via payroll
+  notes           String?
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([loanId, paymentNumber])
+  @@index([loanId, status])
+  @@index([scheduledDate, status])
+}
+
+enum RepaymentType {
+  SCHEDULED
+  EARLY_SETTLEMENT
+  TERMINATION_DEDUCTION
+  WAIVED
+}
+
+enum RepaymentStatus {
+  PENDING
+  PAID
+  OVERDUE
+  WAIVED
+}
