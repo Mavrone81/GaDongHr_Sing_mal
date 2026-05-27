@@ -40,8 +40,35 @@ function scheduleWorkPassSweep() {
   console.log('[workpass-sweep] daily scheduler armed for 00:20 SGT');
 }
 
+// REC-004: daily onboarding-incomplete alert sweep at 00:35 SGT.
+function scheduleOnboardingAlertSweep() {
+  if (process.env.NODE_ENV === 'test') return;
+  const sgtOffsetMs = 8 * 60 * 60 * 1000;
+  function msUntilNext0035Sgt() {
+    const sgtNow = new Date(Date.now() + sgtOffsetMs);
+    const target = new Date(Date.UTC(sgtNow.getUTCFullYear(), sgtNow.getUTCMonth(), sgtNow.getUTCDate(), 0, 35, 0, 0));
+    if (target <= sgtNow) target.setUTCDate(target.getUTCDate() + 1);
+    return target.getTime() - sgtNow.getTime();
+  }
+  async function tick() {
+    try {
+      const sweep = recruitmentRoutes.runOnboardingAlertSweep;
+      if (typeof sweep === 'function') {
+        const result = await sweep();
+        console.log(`[onboarding-sweep] checked=${result.checked} alerted=${result.alerted} skipped=${result.skipped} targetDate=${result.targetDate}`);
+      }
+    } catch (err) {
+      console.error('[onboarding-sweep] failed:', err.message);
+    }
+    setTimeout(tick, 24 * 60 * 60 * 1000);
+  }
+  setTimeout(tick, msUntilNext0035Sgt());
+  console.log('[onboarding-sweep] daily scheduler armed for 00:35 SGT');
+}
+
 if (require.main === module) {
   app.listen(PORT, () => console.log(`[recruitment-service] Running on port ${PORT}`));
   scheduleWorkPassSweep();
+  scheduleOnboardingAlertSweep();
 }
 module.exports = { app };

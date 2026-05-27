@@ -266,7 +266,7 @@ router.post('/candidates/:id/approve',
       if (!startDate) return res.status(400).json({ error: 'startDate is required' });
 
       const authHeader = req.headers.authorization || '';
-      const triggers = { employeeCreated: false, leaveProvisioned: false, itTaskCreated: false, payrollSetupQueued: false, probationStarted: false, emailSent: false };
+      const triggers = { employeeCreated: false, leaveProvisioned: false, itTaskCreated: false, payrollSetupQueued: false, probationStarted: false, emailSent: false, acknowledgementsQueued: false };
 
       // ── 1. Create employee record via employee service ──────────────────────
       let createdEmployee = null;
@@ -381,7 +381,21 @@ router.post('/candidates/:id/approve',
         triggers.probationStarted = true;
       });
 
-      // ── 7. Send confirmation emails ─────────────────────────────────────────
+      // ── 7. Queue mandatory policy acknowledgements ──────────────────────────
+      // Creates one PENDING PolicyAcknowledgement row per active required doc.
+      // skipDuplicates guards against re-running approve on a mis-hire edge case.
+      await fireAndForget(async () => {
+        const docs = await prisma.policyDocument.findMany({ where: { isActive: true, isRequired: true } });
+        if (docs.length) {
+          await prisma.policyAcknowledgement.createMany({
+            data: docs.map(d => ({ id: uuidv4(), employeeId, documentId: d.id })),
+            skipDuplicates: true,
+          });
+        }
+        triggers.acknowledgementsQueued = true;
+      });
+
+      // ── 8. Send confirmation emails ─────────────────────────────────────────
       await fireAndForget(async () => {
         await fetch(`${NOTIFICATION_SERVICE_URL}/notifications/email`, {
           method: 'POST',
@@ -597,6 +611,93 @@ router.post('/onboarding/:employeeId/start', authenticate, authorize(ROLES.SUPER
   } catch (err) { next(err); }
 });
 
+// ── Policy Documents (REC-004) ─────────────────────────────────────────────────
+// NOTE: These static routes MUST be defined before GET /onboarding/:employeeId
+// so that Express doesn't treat "policy-documents" as an employeeId.
+
+const { REQUIRED_DOCS, computeAckSummary } = require('../engines/acknowledgement.engine');
+
+// GET /onboarding/policy-documents — list active policy documents
+router.get('/onboarding/policy-documents', authenticate, async (req, res, next) => {
+  try {
+    const { includeInactive } = req.query;
+    const where = includeInactive === 'true' ? {} : { isActive: true };
+    const docs = await prisma.policyDocument.findMany({ where, orderBy: { createdAt: 'asc' } });
+    res.json(docs);
+  } catch (err) { next(err); }
+});
+
+// POST /onboarding/policy-documents/seed — idempotent seed of 4 default docs
+router.post('/onboarding/policy-documents/seed',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN),
+  async (req, res, next) => {
+    try {
+      let created = 0, skipped = 0;
+      for (const doc of REQUIRED_DOCS) {
+        const existing = await prisma.policyDocument.findUnique({ where: { code: doc.code } });
+        if (existing) { skipped++; continue; }
+        await prisma.policyDocument.create({
+          data: { id: uuidv4(), ...doc, createdBy: req.user.sub },
+        });
+        created++;
+      }
+      res.status(201).json({ created, skipped, total: REQUIRED_DOCS.length });
+    } catch (err) { next(err); }
+  }
+);
+
+// POST /onboarding/policy-documents — create a policy document
+router.post('/onboarding/policy-documents',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN),
+  async (req, res, next) => {
+    try {
+      const { code, title, description, documentUrl, documentHash, version, isRequired } = req.body;
+      if (!code || !title) return res.status(400).json({ error: 'code and title are required' });
+      const doc = await prisma.policyDocument.create({
+        data: {
+          id: uuidv4(), code: code.toUpperCase(), title, description: description || null,
+          documentUrl: documentUrl || null, documentHash: documentHash || null,
+          version: version || '1.0',
+          isRequired: isRequired !== false,
+          createdBy: req.user.sub,
+        },
+      });
+      res.status(201).json(doc);
+    } catch (err) {
+      if (err?.code === 'P2002') return res.status(409).json({ error: 'A document with this code already exists' });
+      next(err);
+    }
+  }
+);
+
+// PUT /onboarding/policy-documents/:docId — update a policy document
+router.put('/onboarding/policy-documents/:docId',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN),
+  async (req, res, next) => {
+    try {
+      const { title, description, documentUrl, documentHash, version, isRequired, isActive } = req.body;
+      const data = { updatedBy: req.user.sub };
+      if (title          != null) data.title         = title;
+      if (description    != null) data.description   = description;
+      if (documentUrl    != null) data.documentUrl   = documentUrl;
+      if (documentHash   != null) data.documentHash  = documentHash;
+      if (version        != null) data.version       = version;
+      if (isRequired     != null) data.isRequired    = isRequired;
+      if (isActive       != null) data.isActive      = isActive;
+      const doc = await prisma.policyDocument.update({ where: { id: req.params.docId }, data });
+      res.json(doc);
+    } catch (err) {
+      if (err?.code === 'P2025') return res.status(404).json({ error: 'Policy document not found' });
+      next(err);
+    }
+  }
+);
+
+// ── (existing) Onboarding task list ───────────────────────────────────────────
+
 router.get('/onboarding/:employeeId', authenticate, async (req, res, next) => {
   try {
     const tasks = await prisma.onboardingTask.findMany({ where: { employeeId: req.params.employeeId }, orderBy: { createdAt: 'asc' } });
@@ -608,6 +709,184 @@ router.put('/onboarding/:employeeId/tasks/:taskId', authenticate, async (req, re
   try {
     const task = await prisma.onboardingTask.update({ where: { id: req.params.taskId }, data: { isDone: true, completedAt: new Date() } });
     res.json(task);
+  } catch (err) { next(err); }
+});
+
+// ── HR Buddy Assignment ────────────────────────────────────────────────────────
+
+// Fetch employee profile from employee-service (fail-soft: returns null on error)
+async function fetchEmployee(employeeId, authHeader) {
+  try {
+    const r = await fetch(`${EMPLOYEE_SERVICE_URL}/employees/${employeeId}`, {
+      headers: { Authorization: authHeader || '', 'x-internal-service-key': INTERNAL_SERVICE_KEY },
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
+// POST /onboarding/:employeeId/buddy — HR Admin assigns a buddy to a new hire
+router.post('/onboarding/:employeeId/buddy', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const { employeeId } = req.params;
+    const { buddyId, note } = req.body;
+
+    if (!buddyId) return res.status(400).json({ error: 'buddyId is required' });
+    if (buddyId === employeeId) return res.status(400).json({ error: 'Buddy cannot be the same person as the new hire' });
+
+    const authHeader = req.headers.authorization || '';
+
+    // Enrich with names (best-effort — assignment proceeds even if service is down)
+    const [buddyEmp, newHireEmp] = await Promise.all([
+      fetchEmployee(buddyId, authHeader),
+      fetchEmployee(employeeId, authHeader),
+    ]);
+
+    const buddyName   = buddyEmp   ? `${buddyEmp.firstName || ''} ${buddyEmp.lastName || ''}`.trim()   : null;
+    const newHireName = newHireEmp ? `${newHireEmp.firstName || ''} ${newHireEmp.lastName || ''}`.trim() : null;
+    const startDate   = newHireEmp?.startDate ? new Date(newHireEmp.startDate) : null;
+
+    // Upsert — HR can reassign the buddy at any time
+    const existing = await prisma.buddyAssignment.findUnique({ where: { employeeId } });
+    let assignment;
+    if (existing) {
+      assignment = await prisma.buddyAssignment.update({
+        where: { employeeId },
+        data: { buddyId, buddyName, newHireName, startDate, assignedBy: req.user.sub, assignedAt: new Date(), note: note || null },
+      });
+    } else {
+      assignment = await prisma.buddyAssignment.create({
+        data: { id: uuidv4(), employeeId, buddyId, buddyName, newHireName, startDate, assignedBy: req.user.sub, note: note || null },
+      });
+    }
+
+    // Fire-and-forget: create an onboarding task so the buddy meeting appears in the new hire's checklist
+    fireAndForget(async () => {
+      const dueDate = startDate
+        ? new Date(startDate.getTime() + 3 * 24 * 60 * 60 * 1000)  // 3 days after start
+        : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      await prisma.onboardingTask.create({
+        data: {
+          id: uuidv4(),
+          employeeId,
+          taskName: `HR Buddy introduction${buddyName ? ` with ${buddyName}` : ''}`,
+          description: `Your HR Buddy${buddyName ? ` (${buddyName})` : ''} will meet with you to help you settle in. Reach out to them with any questions.`,
+          assignedTo: buddyId,
+          dueDate,
+        },
+      });
+    });
+
+    // Fire-and-forget: notify the buddy via notification-service
+    fireAndForget(async () => {
+      const buddyEmail = buddyEmp?.email;
+      if (buddyEmail) {
+        await fetch(`${NOTIFICATION_SERVICE_URL}/notifications/email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: authHeader },
+          body: JSON.stringify({
+            type: 'BUDDY_ASSIGNED',
+            recipients: [buddyEmail],
+            data: {
+              buddyName,
+              newHireName: newHireName || 'a new team member',
+              startDate: startDate ? startDate.toISOString().slice(0, 10) : null,
+              note: note || null,
+            },
+          }),
+        });
+      }
+    });
+
+    res.status(201).json({ assignment, triggers: { taskCreated: true, notificationSent: !!buddyEmp?.email } });
+  } catch (err) { next(err); }
+});
+
+// GET /onboarding/:employeeId/buddy — retrieve buddy assignment for a new hire
+router.get('/onboarding/:employeeId/buddy', authenticate, async (req, res, next) => {
+  try {
+    const assignment = await prisma.buddyAssignment.findUnique({ where: { employeeId: req.params.employeeId } });
+    if (!assignment) return res.status(404).json({ error: 'No buddy assigned for this employee' });
+    res.json(assignment);
+  } catch (err) { next(err); }
+});
+
+// DELETE /onboarding/:employeeId/buddy — remove buddy assignment (HR Admin only)
+router.delete('/onboarding/:employeeId/buddy', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const existing = await prisma.buddyAssignment.findUnique({ where: { employeeId: req.params.employeeId } });
+    if (!existing) return res.status(404).json({ error: 'No buddy assignment found' });
+    await prisma.buddyAssignment.delete({ where: { employeeId: req.params.employeeId } });
+    res.status(204).send();
+  } catch (err) { next(err); }
+});
+
+// ── Policy Acknowledgements (REC-004) ─────────────────────────────────────────
+
+// GET /onboarding/acknowledgements/pending — HR dashboard: employees with
+// at least one PENDING acknowledgement, grouped by employeeId.
+router.get('/onboarding/acknowledgements/pending',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER),
+  async (req, res, next) => {
+    try {
+      const pending = await prisma.policyAcknowledgement.findMany({
+        where: { status: 'PENDING' },
+        include: { document: { select: { code: true, title: true } } },
+        orderBy: { createdAt: 'asc' },
+      });
+      // Group by employeeId
+      const byEmployee = {};
+      for (const ack of pending) {
+        if (!byEmployee[ack.employeeId]) byEmployee[ack.employeeId] = [];
+        byEmployee[ack.employeeId].push({ documentId: ack.documentId, code: ack.document.code, title: ack.document.title, createdAt: ack.createdAt });
+      }
+      const employees = Object.entries(byEmployee).map(([employeeId, docs]) => ({ employeeId, pendingCount: docs.length, pendingDocuments: docs }));
+      res.json({ totalEmployees: employees.length, totalPending: pending.length, employees });
+    } catch (err) { next(err); }
+  }
+);
+
+// GET /onboarding/:employeeId/acknowledgements — list all ack records for one employee
+router.get('/onboarding/:employeeId/acknowledgements', authenticate, async (req, res, next) => {
+  try {
+    const acks = await prisma.policyAcknowledgement.findMany({
+      where: { employeeId: req.params.employeeId },
+      include: { document: { select: { code: true, title: true, description: true, version: true, documentUrl: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    const summary = computeAckSummary(acks);
+    res.json({ employeeId: req.params.employeeId, summary, acknowledgements: acks });
+  } catch (err) { next(err); }
+});
+
+// POST /onboarding/:employeeId/acknowledgements/:docId — employee acknowledges a document.
+// Captures IP and document hash at time of acknowledgement.
+router.post('/onboarding/:employeeId/acknowledgements/:docId', authenticate, async (req, res, next) => {
+  try {
+    const { employeeId, docId } = req.params;
+
+    const existing = await prisma.policyAcknowledgement.findUnique({
+      where: { employeeId_documentId: { employeeId, documentId: docId } },
+      include: { document: true },
+    });
+    if (!existing) return res.status(404).json({ error: 'Acknowledgement record not found — document may not be assigned to this employee' });
+    if (existing.status === 'ACKNOWLEDGED') {
+      return res.status(409).json({ error: 'Already acknowledged', acknowledgedAt: existing.acknowledgedAt });
+    }
+
+    const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.ip || null;
+    const ack = await prisma.policyAcknowledgement.update({
+      where: { employeeId_documentId: { employeeId, documentId: docId } },
+      data: {
+        status: 'ACKNOWLEDGED',
+        acknowledgedAt: new Date(),
+        ipAddress: ip,
+        documentHash: existing.document.documentHash || null,
+      },
+      include: { document: { select: { code: true, title: true, version: true } } },
+    });
+    res.json(ack);
   } catch (err) { next(err); }
 });
 
@@ -912,5 +1191,80 @@ router.get('/work-passes/expiring', authenticate, authorize(...WORK_PASS_VIEW_RO
   } catch (err) { next(err); }
 });
 
+// ── Onboarding Incomplete Alert Sweep (REC-004) ───────────────────────────────
+
+/**
+ * Sweep: find employees whose start date is `daysAhead` days from now (default 3)
+ * and who still have incomplete onboarding tasks. Fires an HR notification for each.
+ * Returns { targetDate, checked, alerted, skipped }.
+ */
+async function runOnboardingAlertSweep(daysAhead = 3, authHeader = '') {
+  // Target date = today + daysAhead (UTC date string YYYY-MM-DD)
+  const ref = new Date();
+  ref.setUTCDate(ref.getUTCDate() + daysAhead);
+  const targetDateStr = ref.toISOString().slice(0, 10);
+
+  // Fetch employee list from employee-service
+  const empRes = await fetch(`${EMPLOYEE_SERVICE_URL}/employees?limit=2000`, {
+    headers: {
+      'x-internal-service-key': INTERNAL_SERVICE_KEY,
+      Authorization: authHeader,
+    },
+  });
+  if (!empRes.ok) throw new Error(`employee-service responded ${empRes.status}`);
+  const body = await empRes.json();
+  // Normalise: accept { employees: [] } or plain array
+  const allEmployees = Array.isArray(body) ? body : (body.employees || body.data || []);
+
+  // Keep only those whose startDate matches the target
+  const upcoming = allEmployees.filter(e => e.startDate && String(e.startDate).slice(0, 10) === targetDateStr);
+
+  let alerted = 0, skipped = 0;
+  for (const emp of upcoming) {
+    const tasks = await prisma.onboardingTask.findMany({ where: { employeeId: emp.id } });
+    const incomplete = tasks.filter(t => !t.isDone);
+
+    if (incomplete.length === 0) { skipped++; continue; }
+
+    const empName = `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.id;
+    await fireAndForget(async () => {
+      await fetch(`${NOTIFICATION_SERVICE_URL}/notifications/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-internal-service-key': INTERNAL_SERVICE_KEY, Authorization: authHeader },
+        body: JSON.stringify({
+          type: 'ONBOARDING_INCOMPLETE_ALERT',
+          roles: ['HR_ADMIN', 'SUPER_ADMIN'],
+          data: {
+            employeeId: emp.id,
+            employeeName: empName,
+            startDate: targetDateStr,
+            daysUntilStart: daysAhead,
+            incompleteTasks: incomplete.length,
+            totalTasks: tasks.length,
+            pendingTaskNames: incomplete.slice(0, 5).map(t => t.taskName),
+          },
+        }),
+      });
+    });
+    alerted++;
+  }
+
+  return { targetDate: targetDateStr, checked: upcoming.length, alerted, skipped };
+}
+
+// POST /recruitment/onboarding/alert-sweep — manual trigger (HR Admin) or internal sweep
+router.post('/onboarding/alert-sweep',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN),
+  async (req, res, next) => {
+    try {
+      const daysAhead = Math.max(1, parseInt(req.body.daysAhead ?? 3, 10) || 3);
+      const result = await runOnboardingAlertSweep(daysAhead, req.headers.authorization || '');
+      res.json(result);
+    } catch (err) { next(err); }
+  }
+);
+
 module.exports = router;
-module.exports.runWorkPassAlertSweep = runWorkPassAlertSweep;
+module.exports.runWorkPassAlertSweep    = runWorkPassAlertSweep;
+module.exports.runOnboardingAlertSweep = runOnboardingAlertSweep;
