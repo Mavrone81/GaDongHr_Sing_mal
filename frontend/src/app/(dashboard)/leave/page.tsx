@@ -99,7 +99,7 @@ function ApplyLeaveModal({ onClose, onCreated, leaveTypes, balances }: ApplyModa
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg border border-slate-100 overflow-hidden animate-in slide-in-from-bottom-8 duration-300">
-        <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+        <div className="px-4 sm:px-6 lg:px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
           <div>
             <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest">Apply for Leave</h3>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Submit leave request for approval</p>
@@ -107,7 +107,7 @@ function ApplyLeaveModal({ onClose, onCreated, leaveTypes, balances }: ApplyModa
           <button onClick={onClose} className="w-9 h-9 flex items-center justify-center bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-red-500 hover:border-red-200 transition-all text-lg font-black">&times;</button>
         </div>
 
-        <div className="px-8 py-6 flex flex-col gap-5">
+        <div className="px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-5">
           <div className="flex flex-col gap-2">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Leave Type</label>
             <select value={form.typeId} onChange={e => set('typeId', e.target.value)}
@@ -188,10 +188,10 @@ function ApplyLeaveModal({ onClose, onCreated, leaveTypes, balances }: ApplyModa
           {error && <p className="text-[10px] font-black text-red-600 bg-red-50 border border-red-100 px-4 py-3 rounded-xl">{error}</p>}
         </div>
 
-        <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
+        <div className="px-4 sm:px-6 lg:px-8 py-5 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
           <button onClick={onClose} className="px-6 py-3 bg-white border border-slate-200 text-slate-500 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-50 transition-all">Cancel</button>
           <button onClick={handleSubmit} disabled={!form.from || !form.to || !form.reason.trim() || !form.typeId || submitting}
-            className="px-8 py-3 bg-indigo-600 text-white font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:pointer-events-none flex items-center gap-2">
+            className="px-4 sm:px-6 lg:px-8 py-3 bg-indigo-600 text-white font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:pointer-events-none flex items-center gap-2">
             {submitting ? <><svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Submitting…</> : 'Submit Request'}
           </button>
         </div>
@@ -301,7 +301,7 @@ function EmployeeLeaveView() {
     <div className="flex flex-col gap-6 max-w-[1100px] mx-auto pb-16 animate-in fade-in duration-700">
 
       {/* Header */}
-      <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5">
+      <div className="bg-white p-4 sm:p-6 lg:p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tighter">My <span className="text-indigo-600">Leave</span></h1>
           <p className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-widest">Leave balances, applications & history</p>
@@ -326,7 +326,7 @@ function EmployeeLeaveView() {
           {balances.map(b => (
             <div key={b.type} className="bg-white rounded-[1.5rem] border border-slate-100 shadow-lg shadow-indigo-500/5 overflow-hidden group hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300">
               <div className={`h-1.5 bg-gradient-to-r ${b.color}`} />
-              <div className="p-6">
+              <div className="p-4 sm:p-6">
                 <p className="eyebrow-tight leading-tight mb-4">{b.label}</p>
                 <div className="flex items-baseline gap-1.5 mb-3">
                   <span className={`text-4xl font-black tracking-tighter ${b.statColor}`}>{b.balance}</span>
@@ -344,7 +344,7 @@ function EmployeeLeaveView() {
 
       {/* Tabs + history */}
       <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 overflow-hidden">
-        <div className="border-b border-slate-100 px-8 flex gap-8 bg-slate-50/50">
+        <div className="border-b border-slate-100 px-4 sm:px-6 lg:px-8 flex gap-8 bg-slate-50/50">
           {(['balance', 'history'] as const).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={`py-5 text-[11px] font-black uppercase tracking-widest border-b-2 transition-all ${activeTab === tab ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
@@ -353,7 +353,7 @@ function EmployeeLeaveView() {
           ))}
         </div>
 
-        <div className="p-8">
+        <div className="p-4 sm:p-6 lg:p-8">
           {activeTab === 'balance' && balances.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full text-left">
@@ -430,7 +430,7 @@ function EmployeeLeaveView() {
 
       {toast && (
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-8 duration-400">
-          <div className="bg-slate-900 border border-slate-700 px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-4">
+          <div className="bg-slate-900 border border-slate-700 px-4 sm:px-6 lg:px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-4">
             <div className="w-2 h-2 bg-emerald-500 rounded-full" />
             <span className="text-[10px] font-black text-white uppercase tracking-widest">{toast}</span>
           </div>
@@ -514,7 +514,7 @@ function HRLeaveAnalytics() {
     <div className="flex flex-col gap-6 max-w-[1200px] mx-auto pb-16 animate-in fade-in duration-700">
 
       {/* Header */}
-      <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-rose-500/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5">
+      <div className="bg-white p-4 sm:p-6 lg:p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-rose-500/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tighter">Sick Leave <span className="text-rose-600">Analytics</span></h1>
           <p className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-widest">MC pattern detection &amp; sick leave trends</p>
@@ -534,7 +534,7 @@ function HRLeaveAnalytics() {
 
       {/* Tabs */}
       <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-rose-500/5 overflow-hidden">
-        <div className="border-b border-slate-100 px-8 flex gap-8 bg-slate-50/50">
+        <div className="border-b border-slate-100 px-4 sm:px-6 lg:px-8 flex gap-8 bg-slate-50/50">
           {([
             { key: 'patterns', label: `MC Pattern Alerts${flagged.length ? ` (${flagged.length})` : ''}` },
             { key: 'trends',   label: 'Sick Leave Trends' },
@@ -546,7 +546,7 @@ function HRLeaveAnalytics() {
           ))}
         </div>
 
-        <div className="p-8">
+        <div className="p-4 sm:p-6 lg:p-8">
 
           {/* ── MC Pattern Alerts ── */}
           {tab === 'patterns' && (
