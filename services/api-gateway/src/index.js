@@ -32,6 +32,7 @@ const SERVICES = {
   esign:        process.env.ESIGN_SERVICE_URL        || 'http://esign-service:4015',
   hrCase:       process.env.HR_CASE_SERVICE_URL      || 'http://hr-case-service:4017',
   loans:        process.env.LOANS_SERVICE_URL        || 'http://loans-service:4018',
+  survey:       process.env.SURVEY_SERVICE_URL       || 'http://survey-service:4019',
 };
 
 const corsOptions = { 
@@ -138,6 +139,7 @@ app.use('/api/support',      proxy(SERVICES.support,      { ...proxyOpts, proxyR
 app.use('/api/esign',        proxy(SERVICES.esign,        { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/esign', '/esign') }));
 app.use('/api/hr-cases',     proxy(SERVICES.hrCase,       { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/hr-cases', '/hr-cases') }));
 app.use('/api/loans',        proxy(SERVICES.loans,        { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/loans', '/loans') }));
+app.use('/api/surveys',      proxy(SERVICES.survey,       { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/surveys', '/surveys') }));
 
 app.use((err, req, res, next) => { console.error(err.message); res.status(502).json({ error: 'Gateway error', message: err.message }); });
 
