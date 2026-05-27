@@ -129,6 +129,21 @@ model OnboardingTask {
   @@map("onboarding_tasks")
 }
 
+model BuddyAssignment {
+  id          String    @id @default(uuid())
+  employeeId  String    @unique   // the new hire
+  buddyId     String              // buddy's employeeId from employee-service
+  buddyName   String?             // cached display name
+  newHireName String?             // cached display name
+  startDate   DateTime?           // new hire's start date (for buddy planning)
+  assignedBy  String              // HR user sub who made the assignment
+  assignedAt  DateTime  @default(now())
+  note        String?
+
+  @@index([buddyId])
+  @@map("buddy_assignments")
+}
+
 model WorkPass {
   id           String   @id @default(uuid())
   employeeId   String   @unique
@@ -210,6 +225,53 @@ model DrcQuotaConfig {
 
   @@unique([sector, workerTier])
   @@map("drc_quota_configs")
+}
+
+// REC-004: HR-managed policy documents requiring new-hire acknowledgement.
+// HR Admin seeds / manages these; employees acknowledge each one during onboarding.
+model PolicyDocument {
+  id           String   @id @default(uuid())
+  code         String   @unique  // HANDBOOK | HARASSMENT_POLICY | PDPA_CONSENT | IT_ACCEPTABLE_USE | OTHER
+  title        String
+  description  String?
+  documentUrl  String?           // link to hosted document content
+  documentHash String?           // SHA-256 of current document version (for audit)
+  version      String   @default("1.0")
+  isRequired   Boolean  @default(true)
+  isActive     Boolean  @default(true)
+  createdBy    String?
+  updatedBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  acknowledgements PolicyAcknowledgement[]
+
+  @@map("policy_documents")
+}
+
+// Per-employee acknowledgement record. Created PENDING when a candidate is
+// hired; employee flips to ACKNOWLEDGED via the ESS portal.
+model PolicyAcknowledgement {
+  id             String    @id @default(uuid())
+  employeeId     String
+  documentId     String
+  status         AckStatus @default(PENDING)
+  acknowledgedAt DateTime?
+  ipAddress      String?   // client IP captured at moment of acknowledgement
+  documentHash   String?   // document version hash at acknowledgement time
+  createdAt      DateTime  @default(now())
+
+  document PolicyDocument @relation(fields: [documentId], references: [id])
+
+  @@unique([employeeId, documentId])
+  @@index([employeeId])
+  @@index([status])
+  @@map("policy_acknowledgements")
+}
+
+enum AckStatus {
+  PENDING
+  ACKNOWLEDGED
 }
 
 enum JobStatus {
