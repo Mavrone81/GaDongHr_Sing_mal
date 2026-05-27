@@ -1,0 +1,225 @@
+// Prisma schema for hr-case-service
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── HRC-001: Disciplinary & Grievance Management ──────────────────────────────
+
+model HrCase {
+  id              String          @id @default(uuid())
+  caseNumber      String          @unique  // DSC-2026-00001 / GRV-2026-00001
+  type            CaseType
+  status          CaseStatus      @default(OPEN)
+  severity        CaseSeverity    @default(MINOR)
+  subjectEmployeeId   String      // employee the case is about (disciplinary) or who filed (grievance)
+  subjectEmployeeName String
+  subjectDepartment   String?
+  // For grievances, the respondent/accused (optional). For disciplinary, the complainant (optional).
+  respondentId       String?
+  respondentName     String?
+  title             String
+  summary           String
+  category          String?       // 'misconduct', 'harassment', 'attendance', 'performance', 'discrimination', etc.
+  isTafepReportable Boolean       @default(false) // discrimination cases
+  isUnionised       Boolean       @default(false)
+  unionConsulted    Boolean       @default(false)
+  unionNotes        String?
+  currentStage      CaseStage     @default(INTAKE)
+  escalationLevel   EscalationLevel @default(HR_ADMIN)
+  openedBy          String        // user id of opener
+  openedByName      String?
+  openedAt          DateTime      @default(now())
+  closedAt          DateTime?
+  resolvedAt        DateTime?
+  resolution        String?
+  dueDate           DateTime?     // for resolution SLA
+  confidential      Boolean       @default(true)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  incidents   CaseIncident[]
+  actions     CaseAction[]
+  timeline    CaseTimeline[]
+  appeals     CaseAppeal[]
+  committee   InquiryCommittee?
+  attachments CaseAttachment[]
+
+  @@index([subjectEmployeeId, status])
+  @@index([type, status])
+  @@index([status, escalationLevel])
+  @@index([openedAt])
+}
+
+enum CaseType {
+  DISCIPLINARY
+  GRIEVANCE
+}
+
+enum CaseStatus {
+  OPEN
+  UNDER_INVESTIGATION
+  PENDING_DECISION
+  RESOLVED
+  CLOSED
+  WITHDRAWN
+}
+
+enum CaseSeverity {
+  MINOR
+  MODERATE
+  SERIOUS
+  GROSS_MISCONDUCT
+}
+
+enum CaseStage {
+  INTAKE
+  INVESTIGATION
+  HEARING
+  DECISION
+  APPEAL
+  CLOSED
+}
+
+enum EscalationLevel {
+  HR_ADMIN
+  HR_MANAGER
+  DIRECTOR
+  BOARD
+}
+
+// ── Incidents (factual events on a case) ──────────────────────────────────────
+model CaseIncident {
+  id           String      @id @default(uuid())
+  case         HrCase      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId       String
+  occurredAt   DateTime
+  location     String?
+  description  String
+  witnesses    String[]    @default([])  // names or employee IDs
+  evidenceUrls String[]    @default([])  // links to attachments
+  loggedBy     String
+  loggedByName String?
+  loggedAt     DateTime    @default(now())
+
+  @@index([caseId])
+}
+
+// ── Actions (warnings, suspensions, terminations, etc.) ───────────────────────
+model CaseAction {
+  id            String       @id @default(uuid())
+  case          HrCase       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId        String
+  actionType    ActionType
+  actionDate    DateTime     @default(now())
+  performedBy   String
+  performedByName String?
+  notes         String?
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+  suspensionPaid Boolean?    // for SUSPENSION
+  showCauseDeadline DateTime? // for SHOW_CAUSE
+  esignRequestId String?      // link to e-signed acknowledgement
+  acknowledged   Boolean     @default(false)
+  acknowledgedAt DateTime?
+  createdAt     DateTime     @default(now())
+
+  @@index([caseId, actionType])
+}
+
+enum ActionType {
+  VERBAL_WARNING
+  WRITTEN_WARNING
+  FINAL_WARNING
+  SHOW_CAUSE
+  SUSPENSION
+  TRANSFER
+  DEMOTION
+  TERMINATION_FOR_CAUSE
+  COUNSELLING
+  MEDIATION
+  TRAINING_ORDER
+  APOLOGY
+  COMPENSATION
+  POLICY_CLARIFICATION
+  NO_ACTION
+}
+
+// ── Timeline (audit log of every event on a case) ─────────────────────────────
+model CaseTimeline {
+  id          String      @id @default(uuid())
+  case        HrCase      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId      String
+  event       String      // 'CASE_OPENED', 'INCIDENT_LOGGED', 'ACTION_ISSUED:VERBAL_WARNING', 'ESCALATED:HR_MANAGER', 'APPEAL_FILED', 'RESOLVED', etc.
+  actorId     String?
+  actorName   String?
+  detail      String?
+  createdAt   DateTime    @default(now())
+
+  @@index([caseId, createdAt])
+}
+
+// ── Appeals ───────────────────────────────────────────────────────────────────
+model CaseAppeal {
+  id            String        @id @default(uuid())
+  case          HrCase        @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId        String
+  filedBy       String
+  filedByName   String?
+  filedAt       DateTime      @default(now())
+  groundsForAppeal String
+  status        AppealStatus  @default(PENDING)
+  decidedBy     String?
+  decidedByName String?
+  decidedAt     DateTime?
+  outcome       String?
+  outcomeNotes  String?
+
+  @@index([caseId])
+}
+
+enum AppealStatus {
+  PENDING
+  UPHELD
+  PARTIALLY_UPHELD
+  REJECTED
+  WITHDRAWN
+}
+
+// ── Inquiry Committee (for serious/gross misconduct cases) ────────────────────
+model InquiryCommittee {
+  id           String      @id @default(uuid())
+  case         HrCase      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId       String      @unique
+  formedAt     DateTime    @default(now())
+  formedBy     String
+  chairId      String
+  chairName    String
+  members      String[]    @default([])  // member employee IDs
+  memberNames  String[]    @default([])
+  scope        String
+  hearingDate  DateTime?
+  reportSubmittedAt DateTime?
+  reportSummary String?
+  recommendation String?
+}
+
+// ── Attachments (uploaded documents on a case) ────────────────────────────────
+model CaseAttachment {
+  id          String      @id @default(uuid())
+  case        HrCase      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId      String
+  fileName    String
+  fileUrl     String
+  fileSize    Int?
+  mimeType    String?
+  uploadedBy  String
+  uploadedAt  DateTime    @default(now())
+
+  @@index([caseId])
+}
