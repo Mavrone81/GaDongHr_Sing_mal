@@ -53,6 +53,7 @@ function EmployeeAttendanceView() {
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   const [photoSource, setPhotoSource] = useState<'file' | 'camera'>('file');
+  const [retakeKey, setRetakeKey] = useState(0);
   const uploadVideoRef   = useRef<HTMLVideoElement>(null);
   const uploadStreamRef  = useRef<MediaStream | null>(null);
   const uploadCanvasRef  = useRef<HTMLCanvasElement>(null);
@@ -128,11 +129,13 @@ function EmployeeAttendanceView() {
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
   }, []);
 
   const stopUploadCamera = useCallback(() => {
     uploadStreamRef.current?.getTracks().forEach(t => t.stop());
     uploadStreamRef.current = null;
+    if (uploadVideoRef.current) uploadVideoRef.current.srcObject = null;
   }, []);
 
   // ── Start webcam for profile photo capture ────────────────────────────────
@@ -160,7 +163,7 @@ function EmployeeAttendanceView() {
       }
     });
     return () => { active = false; stopUploadCamera(); };
-  }, [photoSource, clockState, stopUploadCamera]);
+  }, [photoSource, clockState, retakeKey, stopUploadCamera]);
 
   const captureUploadPhoto = () => {
     const video  = uploadVideoRef.current;
@@ -174,6 +177,7 @@ function EmployeeAttendanceView() {
     canvas.height = Math.round(vh * scale);
     canvas.getContext('2d')!.drawImage(video, 0, 0, canvas.width, canvas.height);
     setUploadPreview(canvas.toDataURL('image/jpeg', 0.75));
+    stopUploadCamera();
   };
 
   const startCamera = async () => {
@@ -434,11 +438,11 @@ function EmployeeAttendanceView() {
               <div className="flex gap-4">
                 <button
                   onClick={() => { setUploadPreview(null); setUploadError(null); setPhotoSource('file'); setClockState('upload_photo'); }}
-                  className="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all active:scale-95 shadow-xl shadow-indigo-500/20"
+                  className="px-4 sm:px-6 lg:px-8 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all active:scale-95 shadow-xl shadow-indigo-500/20"
                 >
                   Add Profile Photo
                 </button>
-                <button onClick={() => setClockState('idle')} className="px-8 py-4 bg-white/5 border border-white/10 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white/8 transition-all">
+                <button onClick={() => setClockState('idle')} className="px-4 sm:px-6 lg:px-8 py-4 bg-white/5 border border-white/10 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white/8 transition-all">
                   Cancel
                 </button>
               </div>
@@ -522,7 +526,7 @@ function EmployeeAttendanceView() {
                     {uploadPreview && (
                       <div className="absolute inset-0 flex items-end justify-center pb-3">
                         <button
-                          onClick={() => setUploadPreview(null)}
+                          onClick={() => { setUploadPreview(null); setRetakeKey(k => k + 1); }}
                           className="px-4 py-1.5 bg-black/60 text-white rounded-xl text-[9px] font-black uppercase tracking-wider backdrop-blur-sm"
                         >
                           Retake
@@ -533,7 +537,7 @@ function EmployeeAttendanceView() {
                   {!uploadPreview && (
                     <button
                       onClick={captureUploadPhoto}
-                      className="px-8 py-3 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-500/20 flex items-center gap-2"
+                      className="px-4 sm:px-6 lg:px-8 py-3 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-500/20 flex items-center gap-2"
                     >
                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" /><path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm0 18a8 8 0 110-16 8 8 0 010 16z" /></svg>
                       Capture
@@ -716,12 +720,12 @@ function EmployeeAttendanceView() {
                 </div>
               </div>
               <div className="flex gap-4 mt-2">
-                <button onClick={retry} className="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-500/20">
+                <button onClick={retry} className="px-4 sm:px-6 lg:px-8 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-500/20">
                   Try Again
                 </button>
                 <button
                   onClick={() => { retry(); setPhotoSource('file'); setClockState('upload_photo'); setUploadPreview(null); setUploadError(null); }}
-                  className="px-8 py-4 bg-white/5 border border-white/10 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white/8 transition-all"
+                  className="px-4 sm:px-6 lg:px-8 py-4 bg-white/5 border border-white/10 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white/8 transition-all"
                 >
                   Update Photo
                 </button>
@@ -806,7 +810,7 @@ function EmployeeAttendanceView() {
           return (
             <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 overflow-hidden">
               {/* Header */}
-              <div className="px-8 py-5 border-b border-slate-100 bg-slate-50/50">
+              <div className="px-4 sm:px-6 lg:px-8 py-5 border-b border-slate-100 bg-slate-50/50">
                 <div className="flex flex-wrap items-center gap-4">
                   {/* View tabs */}
                   <div className="flex rounded-xl bg-slate-100 p-0.5 gap-0.5">
@@ -837,7 +841,7 @@ function EmployeeAttendanceView() {
                 </div>
               </div>
               {/* Calendar grid */}
-              <div className="p-6">
+              <div className="p-4 sm:p-6">
                 <div className="grid grid-cols-7 gap-1.5 mb-1.5">
                   {dayHeaders.map(d => (
                     <div key={d} className="text-center label-form py-1">{d}</div>
@@ -881,7 +885,7 @@ function EmployeeAttendanceView() {
         return (
           <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 overflow-hidden">
             {/* Header */}
-            <div className="px-8 py-5 border-b border-slate-100 bg-slate-50/50">
+            <div className="px-4 sm:px-6 lg:px-8 py-5 border-b border-slate-100 bg-slate-50/50">
               <div className="flex flex-wrap items-center gap-4">
                 {/* View tabs */}
                 <div className="flex rounded-xl bg-slate-100 p-0.5 gap-0.5">
@@ -915,7 +919,7 @@ function EmployeeAttendanceView() {
             <div className="divide-y divide-slate-50">
               {weekLoading ? (
                 Array.from({ length: viewMode === 'work-week' ? 5 : 7 }).map((_, i) => (
-                  <div key={i} className="flex items-center px-8 py-4 animate-pulse">
+                  <div key={i} className="flex items-center px-4 sm:px-6 lg:px-8 py-4 animate-pulse">
                     <div className="w-28 h-4 bg-slate-100 rounded" />
                     <div className="flex-1 ml-6 h-4 bg-slate-100 rounded" />
                   </div>
@@ -925,7 +929,7 @@ function EmployeeAttendanceView() {
                 const badge = statusBadge(rec.status);
                 const isWeekendRow = rec.status === 'weekend';
                 return (
-                  <div key={rec.isoDate} className={`flex items-center px-8 transition-all ${compact ? 'py-3' : 'py-4'} ${isToday ? 'bg-indigo-50/40' : 'hover:bg-slate-50/50'} ${isWeekendRow ? 'opacity-50' : ''}`}>
+                  <div key={rec.isoDate} className={`flex items-center px-4 sm:px-6 lg:px-8 transition-all ${compact ? 'py-3' : 'py-4'} ${isToday ? 'bg-indigo-50/40' : 'hover:bg-slate-50/50'} ${isWeekendRow ? 'opacity-50' : ''}`}>
                     <div className={`${compact ? 'w-24' : 'w-32'} flex items-center gap-2`}>
                       {isToday && <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />}
                       <p className={`font-black text-slate-700 uppercase tracking-tight ${compact ? 'text-[10px]' : 'text-[11px]'}`}>{rec.date}</p>
