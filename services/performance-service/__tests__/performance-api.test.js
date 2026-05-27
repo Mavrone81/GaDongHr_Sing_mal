@@ -37,6 +37,10 @@ const mockDb = {
   incrementProposal: {
     upsert: jest.fn(), findMany: jest.fn(), update: jest.fn(),
   },
+  bellCurveConfig: {
+    findUnique: jest.fn().mockResolvedValue(null),
+    create: jest.fn(), update: jest.fn(),
+  },
   $disconnect: jest.fn(),
 };
 
