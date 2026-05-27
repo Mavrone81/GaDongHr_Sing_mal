@@ -11,10 +11,13 @@ datasource db {
 
 model Notification {
   id          String           @id @default(uuid())
+  // userId holds either a real user sub OR 'role:HR_ADMIN' for role broadcasts
   userId      String
   type        NotifType        @default(IN_APP)
   title       String
   body        String
+  category    String?          // PAYROLL | LEAVE | ONBOARDING | ATTENDANCE | SYSTEM etc.
+  link        String?          // frontend path to navigate to on click
   isRead      Boolean          @default(false)
   readAt      DateTime?
   meta        Json?
@@ -22,6 +25,7 @@ model Notification {
 
   @@index([userId])
   @@index([isRead])
+  @@index([createdAt])
   @@map("notifications")
 }
 
