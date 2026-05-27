@@ -142,3 +142,36 @@ enum AppStatus {
   CANCELLED
   WITHDRAWN
 }
+
+// ── Child records for CCL / UICL / ECL entitlement automation ─────────────────
+
+model ChildRecord {
+  id                 String           @id @default(uuid())
+  employeeId         String
+  fullName           String
+  dateOfBirth        DateTime
+  citizenship        ChildCitizenship
+  verificationStatus ChildVerifStatus @default(PENDING)
+  verifiedBy         String?          // userId who verified
+  verifiedAt         DateTime?
+  rejectedReason     String?
+  notes              String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@index([employeeId])
+  @@index([verificationStatus])
+  @@map("child_records")
+}
+
+enum ChildCitizenship {
+  SC
+  PR
+  FOREIGNER
+}
+
+enum ChildVerifStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}

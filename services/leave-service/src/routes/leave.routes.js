@@ -994,5 +994,218 @@ router.get('/sick-leave-trends', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
   } catch (err) { next(err); }
 });
 
+// ─── CCL / UICL / ECL — Child record workflow ────────────────────────────────
+const { computeEmployeeEntitlements, ageBracketLabel, LEAVE_TYPE_SEEDS } = require('../engines/ccl.engine');
+
+// Ensure a LeaveType row exists for the given code; create with defaults if missing.
+async function ensureLeaveType(code) {
+  let lt = await prisma.leaveType.findFirst({ where: { code } });
+  if (!lt) {
+    const seed = LEAVE_TYPE_SEEDS[code];
+    if (!seed) throw new Error(`No seed data for leave type code: ${code}`);
+    lt = await prisma.leaveType.create({ data: seed });
+  }
+  return lt;
+}
+
+// Apply computed entitlements to LeaveEntitlement rows for the current year.
+async function applyEntitlements(employeeId, entitlements, year) {
+  const results = [];
+  for (const { code, days } of entitlements) {
+    const lt = await ensureLeaveType(code);
+    const existing = await prisma.leaveEntitlement.findFirst({
+      where: { employeeId, leaveTypeId: lt.id, year },
+    });
+    if (existing) {
+      // Only update if the new entitlement is different
+      if (existing.entitledDays !== days) {
+        await prisma.leaveEntitlement.update({
+          where: { id: existing.id },
+          data: { entitledDays: days },
+        });
+        results.push({ code, days, action: 'updated', leaveTypeId: lt.id });
+      } else {
+        results.push({ code, days, action: 'unchanged', leaveTypeId: lt.id });
+      }
+    } else {
+      await prisma.leaveEntitlement.create({
+        data: { id: uuidv4(), employeeId, leaveTypeId: lt.id, year, entitledDays: days },
+      });
+      results.push({ code, days, action: 'created', leaveTypeId: lt.id });
+    }
+  }
+  return results;
+}
+
+// POST /leave/children — register a child record (employee or HR)
+router.post('/children', authenticate, async (req, res, next) => {
+  try {
+    const { fullName, dateOfBirth, citizenship, notes } = req.body;
+    if (!fullName || !dateOfBirth || !citizenship) {
+      return res.status(400).json({ error: 'fullName, dateOfBirth and citizenship are required' });
+    }
+    const VALID_CITIZENSHIP = ['SC', 'PR', 'FOREIGNER'];
+    if (!VALID_CITIZENSHIP.includes(citizenship)) {
+      return res.status(400).json({ error: `citizenship must be one of: ${VALID_CITIZENSHIP.join(', ')}` });
+    }
+    const dob = new Date(dateOfBirth);
+    if (isNaN(dob.getTime())) return res.status(400).json({ error: 'Invalid dateOfBirth' });
+    if (dob > new Date()) return res.status(400).json({ error: 'dateOfBirth cannot be in the future' });
+
+    // HR/Admin can supply employeeId; employees use their own
+    const isAdmin = ADMIN_ROLES.has(req.user.role) || req.user.role === ROLES.HR_MANAGER;
+    const employeeId = isAdmin && req.body.employeeId ? req.body.employeeId : req.user.employeeId || req.user.sub;
+
+    const child = await prisma.childRecord.create({
+      data: {
+        id: uuidv4(),
+        employeeId,
+        fullName: fullName.trim(),
+        dateOfBirth: dob,
+        citizenship,
+        notes: notes || null,
+        verificationStatus: 'PENDING',
+      },
+    });
+    res.status(201).json(child);
+  } catch (err) { next(err); }
+});
+
+// GET /leave/children — list children (own if employee; all if HR with ?employeeId filter)
+router.get('/children', authenticate, async (req, res, next) => {
+  try {
+    const isAdmin = ADMIN_ROLES.has(req.user.role) || req.user.role === ROLES.HR_MANAGER;
+    const where = {};
+    if (!isAdmin) {
+      where.employeeId = req.user.employeeId || req.user.sub;
+    } else if (req.query.employeeId) {
+      where.employeeId = req.query.employeeId;
+    }
+    if (req.query.status) where.verificationStatus = req.query.status;
+
+    const children = await prisma.childRecord.findMany({
+      where,
+      orderBy: { dateOfBirth: 'asc' },
+    });
+    res.json({ total: children.length, children });
+  } catch (err) { next(err); }
+});
+
+// GET /leave/children/pending — HR only: verification queue
+router.get('/children/pending', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER), async (req, res, next) => {
+  try {
+    const children = await prisma.childRecord.findMany({
+      where: { verificationStatus: 'PENDING' },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json({ total: children.length, children });
+  } catch (err) { next(err); }
+});
+
+// GET /leave/children/:id — get a single child record
+router.get('/children/:id', authenticate, async (req, res, next) => {
+  try {
+    const child = await prisma.childRecord.findUnique({ where: { id: req.params.id } });
+    if (!child) return res.status(404).json({ error: 'Child record not found' });
+    const isAdmin = ADMIN_ROLES.has(req.user.role) || req.user.role === ROLES.HR_MANAGER;
+    const selfId = req.user.employeeId || req.user.sub;
+    if (!isAdmin && child.employeeId !== selfId) return res.status(403).json({ error: 'Forbidden' });
+    res.json(child);
+  } catch (err) { next(err); }
+});
+
+// PUT /leave/children/:id/verify — HR Admin: verify or reject a child record
+// Body: { status: 'VERIFIED'|'REJECTED', rejectedReason?: string, notes?: string }
+// On VERIFIED: auto-upserts CCL/UICL/ECL entitlements for the current year.
+router.put('/children/:id/verify', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
+  try {
+    const { status, rejectedReason, notes } = req.body;
+    if (!['VERIFIED', 'REJECTED'].includes(status)) {
+      return res.status(400).json({ error: 'status must be VERIFIED or REJECTED' });
+    }
+    if (status === 'REJECTED' && !rejectedReason) {
+      return res.status(400).json({ error: 'rejectedReason is required when rejecting' });
+    }
+
+    const child = await prisma.childRecord.findUnique({ where: { id: req.params.id } });
+    if (!child) return res.status(404).json({ error: 'Child record not found' });
+    if (child.verificationStatus === 'VERIFIED' && status === 'VERIFIED') {
+      return res.status(409).json({ error: 'Child record is already verified' });
+    }
+
+    const updated = await prisma.childRecord.update({
+      where: { id: req.params.id },
+      data: {
+        verificationStatus: status,
+        verifiedBy: req.user.sub,
+        verifiedAt: status === 'VERIFIED' ? new Date() : null,
+        rejectedReason: status === 'REJECTED' ? (rejectedReason || null) : null,
+        notes: notes !== undefined ? notes : child.notes,
+      },
+    });
+
+    let entitlementResult = null;
+    if (status === 'VERIFIED') {
+      // Recompute based on all verified children for this employee
+      const verifiedChildren = await prisma.childRecord.findMany({
+        where: { employeeId: child.employeeId, verificationStatus: 'VERIFIED' },
+      });
+      const year = new Date().getFullYear();
+      const { youngest, entitlements, ageYears: age } = computeEmployeeEntitlements(verifiedChildren);
+      const applied = await applyEntitlements(child.employeeId, entitlements, year);
+      entitlementResult = {
+        youngestChildId: youngest ? youngest.id : null,
+        ageBracket: ageBracketLabel(age),
+        year,
+        applied,
+      };
+    }
+
+    res.json({ child: updated, entitlementResult });
+  } catch (err) { next(err); }
+});
+
+// GET /leave/children/:employeeId/entitlement-preview
+// HR: preview what CCL/UICL/ECL entitlements would be computed for an employee
+// based on their verified children (no DB write).
+router.get('/children/:employeeId/entitlement-preview', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER), async (req, res, next) => {
+  try {
+    const { employeeId } = req.params;
+    const verifiedChildren = await prisma.childRecord.findMany({
+      where: { employeeId, verificationStatus: 'VERIFIED' },
+      orderBy: { dateOfBirth: 'asc' },
+    });
+    const allChildren = await prisma.childRecord.findMany({
+      where: { employeeId },
+      orderBy: { dateOfBirth: 'asc' },
+    });
+    const { youngest, entitlements, ageYears: age } = computeEmployeeEntitlements(verifiedChildren);
+    const year = new Date().getFullYear();
+    const existing = await prisma.leaveEntitlement.findMany({
+      where: { employeeId, year },
+      include: { leaveType: { select: { code: true, name: true } } },
+    });
+
+    res.json({
+      employeeId,
+      year,
+      allChildren: allChildren.map(c => ({
+        id: c.id, fullName: c.fullName, dateOfBirth: c.dateOfBirth,
+        citizenship: c.citizenship, verificationStatus: c.verificationStatus,
+      })),
+      youngestVerifiedChild: youngest ? {
+        id: youngest.id, fullName: youngest.fullName,
+        dateOfBirth: youngest.dateOfBirth, citizenship: youngest.citizenship,
+        ageBracket: ageBracketLabel(age),
+      } : null,
+      computedEntitlements: entitlements,
+      existingEntitlements: existing.map(e => ({
+        code: e.leaveType.code, name: e.leaveType.name,
+        entitledDays: e.entitledDays, usedDays: e.usedDays,
+      })),
+    });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
 module.exports.runAutoProvision = runAutoProvision;
