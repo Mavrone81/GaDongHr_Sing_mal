@@ -9,6 +9,7 @@ const fs = require('fs');
 
 const employeeRoutes = require('./routes/employee.routes');
 const documentRoutes = require('./routes/document.routes');
+const movementRoutes = require('./routes/movement.routes');
 
 const app = express();
 const PORT = process.env.PORT || 4002;
@@ -25,6 +26,7 @@ app.use(morgan('combined'));
 app.get('/health', (req, res) => res.json({ service: 'employee-service', status: 'ok', ts: new Date() }));
 app.use('/employees', employeeRoutes);
 app.use('/documents', documentRoutes);
+app.use('/movements', movementRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);

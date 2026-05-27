@@ -257,3 +257,88 @@ enum AppStatus {
   APPROVED
   REJECTED
 }
+
+// ── ESV-001: Staff Movement & Internal Transfer ───────────────────────────────
+// Tracks every internal transfer / role change with before/after snapshots,
+// HR approval, effective-date application, and an audit-grade history per employee.
+
+model StaffMovement {
+  id                  String          @id @default(uuid())
+  movementNumber      String          @unique  // e.g. MOV-2026-00001
+  employeeId          String
+  employeeName        String
+  type                MovementType
+  status              MovementStatus  @default(PENDING)
+
+  // Before/after snapshot (taken at initiation; applied on effective date)
+  fromDepartment      String
+  toDepartment        String
+  fromDesignation     String
+  toDesignation       String
+  fromCostCentre      String?
+  toCostCentre        String?
+  fromLocation        String?
+  toLocation          String?
+  fromReportingManagerId String?
+  toReportingManagerId   String?
+  fromCompany         String?
+  toCompany           String?
+  fromEmploymentType  EmploymentType?
+  toEmploymentType    EmploymentType?
+
+  // Salary revision linkage (encrypted)
+  hasSalaryRevision   Boolean         @default(false)
+  fromSalaryEnc       String?         // AES-256-GCM
+  toSalaryEnc         String?         // AES-256-GCM
+  salaryReasonCode    String?         // PROMOTION | ROLE_CHANGE | MARKET_ADJUSTMENT | OTHER
+
+  reason              String          // free-text justification
+  effectiveDate       DateTime
+  initiatedBy         String          // user id of initiator
+  initiatedByName     String?
+  initiatedByRole     String?         // EMPLOYEE | LINE_MANAGER | HR_ADMIN | ...
+  approvedBy          String?
+  approvedByName      String?
+  approvedAt          DateTime?
+  rejectedBy          String?
+  rejectedAt          DateTime?
+  rejectionReason     String?
+  cancelledAt         DateTime?
+  appliedAt           DateTime?       // when the change was actually applied to employee record
+  applyError          String?         // captures failure reason if effective-apply fails
+
+  letterHtml          String?         // generated transfer letter (HTML)
+  letterGeneratedAt   DateTime?
+  esignRequestId      String?         // optional link to ESV-003 e-sign
+
+  notifiedIt          Boolean         @default(false)
+  notifiedPayroll     Boolean         @default(false)
+  notifiedOldManager  Boolean         @default(false)
+  notifiedNewManager  Boolean         @default(false)
+
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@index([employeeId, effectiveDate])
+  @@index([status])
+  @@index([effectiveDate])
+  @@map("staff_movements")
+}
+
+enum MovementType {
+  DEPARTMENT_TRANSFER
+  LOCATION_TRANSFER
+  INTER_COMPANY_TRANSFER
+  ROLE_CHANGE
+  PROMOTION
+  REPORTING_CHANGE
+  COST_CENTRE_REALLOC
+}
+
+enum MovementStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  APPLIED       // effective date passed and snapshot applied to employee record
+}
