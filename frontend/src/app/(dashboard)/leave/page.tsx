@@ -98,8 +98,8 @@ function ApplyLeaveModal({ onClose, onCreated, leaveTypes, balances }: ApplyModa
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg border border-slate-100 overflow-hidden animate-in slide-in-from-bottom-8 duration-300">
-        <div className="px-4 sm:px-6 lg:px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+      <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col border border-slate-100 overflow-hidden animate-in slide-in-from-bottom-8 duration-300">
+        <div className="px-4 sm:px-6 lg:px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
           <div>
             <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest">Apply for Leave</h3>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Submit leave request for approval</p>
@@ -107,7 +107,7 @@ function ApplyLeaveModal({ onClose, onCreated, leaveTypes, balances }: ApplyModa
           <button onClick={onClose} className="w-9 h-9 flex items-center justify-center bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-red-500 hover:border-red-200 transition-all text-lg font-black">&times;</button>
         </div>
 
-        <div className="px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-5">
+        <div className="px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-5 flex-1 overflow-y-auto">
           <div className="flex flex-col gap-2">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Leave Type</label>
             <select value={form.typeId} onChange={e => set('typeId', e.target.value)}
@@ -188,7 +188,7 @@ function ApplyLeaveModal({ onClose, onCreated, leaveTypes, balances }: ApplyModa
           {error && <p className="text-[10px] font-black text-red-600 bg-red-50 border border-red-100 px-4 py-3 rounded-xl">{error}</p>}
         </div>
 
-        <div className="px-4 sm:px-6 lg:px-8 py-5 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
+        <div className="px-4 sm:px-6 lg:px-8 py-5 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
           <button onClick={onClose} className="px-6 py-3 bg-white border border-slate-200 text-slate-500 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-50 transition-all">Cancel</button>
           <button onClick={handleSubmit} disabled={!form.from || !form.to || !form.reason.trim() || !form.typeId || submitting}
             className="px-4 sm:px-6 lg:px-8 py-3 bg-indigo-600 text-white font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:pointer-events-none flex items-center gap-2">

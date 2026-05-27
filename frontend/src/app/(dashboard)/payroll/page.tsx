@@ -1483,15 +1483,15 @@ function AdminPayrollDashboard() {
       {/* Initiation Modal */}
       {isRunModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden border border-slate-100 animate-in slide-in-from-bottom-10">
-            <div className="bg-slate-50 border-b border-slate-100 p-10 flex justify-between items-center">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-100 animate-in slide-in-from-bottom-10">
+            <div className="bg-slate-50 border-b border-slate-100 p-10 flex justify-between items-center shrink-0">
               <div>
                 <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">Initiate Engine</h3>
                 <p className="eyebrow-tight mt-2">Fiscal Cycle Alignment v2.4</p>
               </div>
               <button onClick={() => setIsRunModalOpen(false)} className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-2xl text-slate-400 hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-all font-black">&times;</button>
             </div>
-            <div className="p-10 flex flex-col gap-8">
+            <div className="p-10 flex flex-col gap-8 flex-1 overflow-y-auto">
               <div className="flex flex-col gap-3">
                 <label className="eyebrow-tight">Accounting Period (YYYY-MM)</label>
                 <input type="month" value={selectedPeriod} onChange={e => setSelectedPeriod(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-sm font-black text-slate-900 outline-none focus:border-indigo-600 transition-all" />
@@ -1610,7 +1610,7 @@ function AdminPayrollDashboard() {
                 </label>
               </div>
             </div>
-            <div className="bg-slate-50 border-t border-slate-100 p-10 flex justify-end gap-5">
+            <div className="bg-slate-50 border-t border-slate-100 p-10 flex justify-end gap-5 shrink-0">
                <button onClick={() => setIsRunModalOpen(false)} className="px-8 py-4 bg-white border border-slate-200 text-slate-500 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-slate-100 transition-all">Abort</button>
                <button onClick={handleExecute} disabled={isProcessing} className={`px-10 py-4 bg-indigo-600 text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all shadow-2xl shadow-indigo-500/20 flex items-center gap-3 active:scale-95 ${isProcessing ? 'opacity-70 pointer-events-none' : 'hover:bg-indigo-700'}`}>
                 {isProcessing ? (<><svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Simulating Compute…</>) : (<><span>⚡</span>Execute Nexus Pipeline</>)}
@@ -1902,15 +1902,15 @@ function AdminPayrollDashboard() {
       {/* Payslip overlay */}
       {payslipRunId && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/40 backdrop-blur-md p-8 animate-in fade-in duration-300">
-           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-3xl overflow-hidden border border-slate-100 animate-in slide-in-from-bottom-5">
-              <div className="p-10 border-b border-slate-100 flex justify-between items-center">
+           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-100 animate-in slide-in-from-bottom-5">
+              <div className="p-10 border-b border-slate-100 flex justify-between items-center shrink-0">
                  <div>
                    <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase leading-none">Payslips</h3>
                    <p className="eyebrow-tight mt-3">{payslipRunPeriod ? fmtPeriod(payslipRunPeriod) : 'Loading…'} · {payslipRows.length} records</p>
                  </div>
                  <button onClick={() => setPayslipRunId(null)} className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-red-500 transition-all font-black">&times;</button>
               </div>
-              <div className="max-h-[50vh] overflow-y-auto">
+              <div className="flex-1 overflow-y-auto">
                  {payslipLoading ? (
                    <div className="py-16 flex items-center justify-center gap-3">
                      <div className="w-6 h-6 border-2 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin" />
@@ -1963,7 +1963,7 @@ function AdminPayrollDashboard() {
                  </table>
                  )}
               </div>
-              <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center">
+              <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center shrink-0">
                  <p className="label-form">{payslipRows.filter(p => p.isPublished).length} published · {payslipRows.filter(p => !p.isPublished).length} pending</p>
                  <button
                    onClick={async () => {
@@ -2008,15 +2008,15 @@ function AdminPayrollDashboard() {
       {/* Employee detail drawer */}
       {selectedEmployee && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-500">
-          <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-500">
-            <div className="bg-slate-900 px-10 py-8 flex justify-between items-start text-white relative">
+          <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-500">
+            <div className="bg-slate-900 px-10 py-8 flex justify-between items-start text-white relative shrink-0">
               <div className="flex flex-col gap-1 relative z-10">
                 <h3 className="text-3xl font-black tracking-tighter uppercase whitespace-nowrap">{selectedEmployee.name}</h3>
                 <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mt-2">{selectedEmployee.role} · {selectedEmployee.department}</p>
               </div>
               <button onClick={() => setSelectedEmployee(null)} className="w-10 h-10 flex items-center justify-center bg-slate-800 border border-slate-700 rounded-2xl text-slate-400 hover:text-white transition-all text-2xl font-black">&times;</button>
             </div>
-            <div className="p-10 space-y-6">
+            <div className="p-10 space-y-6 flex-1 overflow-y-auto">
               <div className="space-y-3">
                 <div className="flex justify-between items-center bg-slate-50 px-6 py-4 rounded-2xl border border-slate-100"><span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Contractual Base</span><span className="text-sm font-black text-slate-900">${selectedEmployee.base.toFixed(2)}</span></div>
                 <div className="flex justify-between items-center bg-slate-50 px-6 py-4 rounded-2xl border border-slate-100"><span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Allowance</span><span className="text-sm font-black text-slate-900">${selectedEmployee.allowance.toFixed(2)}</span></div>
@@ -2028,7 +2028,7 @@ function AdminPayrollDashboard() {
                 <div className="flex justify-between items-center px-4"><span className="text-xs font-bold text-slate-400 uppercase">SDL</span><span className="text-xs font-black text-slate-500">${selectedEmployee.sdl.toFixed(2)}</span></div>
               </div>
             </div>
-            <div className="bg-indigo-600 px-10 py-10 flex justify-between items-center">
+            <div className="bg-indigo-600 px-10 py-10 flex justify-between items-center shrink-0">
               <span className="text-[10px] font-black text-indigo-100 uppercase tracking-[0.3em] italic">Net Liquidity Transfer</span>
               <span className="text-5xl font-black text-white tracking-tighter italic">${selectedEmployee.net.toFixed(2)}</span>
             </div>
