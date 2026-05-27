@@ -481,7 +481,7 @@ export default function EmployeeDirectoryPage() {
       )}
 
       {/* 1. Header */}
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 lg:gap-8 bg-white p-4 sm:p-6 lg:p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 relative overflow-hidden group">
+      <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6 xl:gap-8 bg-white p-4 sm:p-6 lg:p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 relative overflow-hidden group">
         <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
           <div className="w-32 h-32 bg-indigo-600 rounded-full blur-3xl" />
         </div>
@@ -497,7 +497,7 @@ export default function EmployeeDirectoryPage() {
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 relative z-10 w-full lg:w-auto">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 relative z-10 w-full xl:w-auto">
           <div className="relative w-full sm:w-64 lg:w-80">
             <input
               type="text"
