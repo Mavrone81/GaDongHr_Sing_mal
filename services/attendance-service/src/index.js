@@ -17,6 +17,34 @@ const {
   ANOMALY_TYPES,
   DEFAULT_THRESHOLDS,
 } = require('./engines/anomaly.engine');
+const {
+  FWA_TYPES,
+  TYPE_LABELS,
+  computeReviewDeadline,
+  classifyDeadlineUrgency,
+  daysUntilDeadline,
+  validateDetails,
+  buildDashboardSummary,
+  findExpiredRequests,
+} = require('./engines/fwa.engine');
+const {
+  MOM_MONTHLY_CAP_HOURS,
+  checkMonthlyCap,
+  checkBudget,
+  isWithinEmergencyWindow,
+  computeExpiresAt,
+  buildMonthlyOtSummary,
+  findExpiredOtRequests,
+} = require('./engines/ot-auth.engine');
+const {
+  CATEGORY_LABELS: WICA_CATEGORY_LABELS,
+  isReportableToMom,
+  computeMomDeadline,
+  classifyDeadlineUrgency: wicaDeadlineUrgency,
+  daysUntilMomDeadline,
+  findOverdueIncidents,
+  buildWicaDashboard,
+} = require('./engines/wica.engine');
 
 const EMPLOYEE_SERVICE_URL     = process.env.EMPLOYEE_SERVICE_URL     || 'http://employee-service:4002';
 const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:4009';
@@ -183,7 +211,7 @@ app.get('/attendance/admin/records', authenticate, authorize(ROLES.SUPER_ADMIN, 
 });
 
 // ── Employee records ──────────────────────────────────────────────────────────
-const ATTENDANCE_RESERVED = new Set(['shifts', 'roster', 'locations', 'admin', 'records', 'periods', 'pending-approvals', 'internal', 'anomalies', 'thresholds', 'today']);
+const ATTENDANCE_RESERVED = new Set(['shifts', 'roster', 'locations', 'admin', 'records', 'periods', 'pending-approvals', 'internal', 'anomalies', 'thresholds', 'today', 'fwa', 'ot-auth']);
 app.get('/attendance/:employeeId', authenticate, async (req, res, next) => {
   if (ATTENDANCE_RESERVED.has(req.params.employeeId)) return next();
   try {
@@ -1546,12 +1574,1128 @@ function scheduleDailyAnomalySweep() {
   console.log('[anomaly-sweep] daily scheduler armed for 00:30 SGT');
 }
 
+// ── FWA-001: Flexi-Work Arrangements ─────────────────────────────────────────
+// MOM Tripartite Guidelines on FWA (effective 1 Dec 2024):
+// Employers with ≥10 employees must respond in writing within 2 months.
+
+const FWA_MANAGER_ROLES = [ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.SUPER_ADMIN, ROLES.LINE_MANAGER];
+
+function enrichFwa(r, now = new Date()) {
+  return {
+    ...r,
+    typeLabel:          TYPE_LABELS[r.type] || r.type,
+    deadlineUrgency:    r.status === 'PENDING' ? classifyDeadlineUrgency(r.reviewDeadline, now) : null,
+    daysUntilDeadline:  r.status === 'PENDING' ? daysUntilDeadline(r.reviewDeadline, now) : null,
+  };
+}
+
+// POST /attendance/fwa/requests — employee submits a new FWA request
+app.post('/attendance/fwa/requests', authenticate, async (req, res, next) => {
+  try {
+    const { type, proposedStart, proposedEnd, reason, details } = req.body;
+    if (!type || !FWA_TYPES.includes(type))
+      return res.status(400).json({ error: `type must be one of: ${FWA_TYPES.join(', ')}` });
+    if (!proposedStart) return res.status(400).json({ error: 'proposedStart is required' });
+    if (!reason || !reason.trim()) return res.status(400).json({ error: 'reason is required' });
+
+    const detailsCheck = validateDetails(type, details);
+    if (!detailsCheck.valid) return res.status(400).json({ error: detailsCheck.reason });
+
+    const reviewDeadline = computeReviewDeadline(new Date());
+
+    const fwa = await prisma.fwaRequest.create({
+      data: {
+        id: uuidv4(),
+        employeeId:     req.user.sub,
+        type,
+        status:         'PENDING',
+        proposedStart:  new Date(proposedStart),
+        proposedEnd:    proposedEnd ? new Date(proposedEnd) : null,
+        reason:         reason.trim(),
+        details:        details || null,
+        reviewDeadline,
+      },
+    });
+
+    // Notify HR Admin (fire-and-forget)
+    fetch(`${NOTIFICATION_SERVICE_URL}/notifications/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'SYSTEM',
+        roles: ['HR_ADMIN', 'HR_MANAGER'],
+        data: {
+          title: `FWA Request: ${TYPE_LABELS[type]}`,
+          body:  `Employee ${req.user.sub} has submitted a ${TYPE_LABELS[type]} request. Deadline to respond: ${reviewDeadline.toISOString().slice(0,10)}.`,
+        },
+        link: '/attendance',
+      }),
+    }).catch(() => {});
+
+    res.status(201).json(enrichFwa(fwa));
+  } catch (err) { next(err); }
+});
+
+// GET /attendance/fwa/requests — list requests
+// Employees see own; managers/HR see all (filterable)
+app.get('/attendance/fwa/requests', authenticate, async (req, res, next) => {
+  try {
+    const isManager = FWA_MANAGER_ROLES.includes(req.user.role);
+    const { status, type, employeeId } = req.query;
+
+    const where = {};
+    if (!isManager) {
+      where.employeeId = req.user.sub; // employees see only own
+    } else {
+      if (employeeId) where.employeeId = employeeId;
+    }
+    if (status) where.status = status;
+    if (type)   where.type   = type;
+
+    const requests = await prisma.fwaRequest.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+
+    const now = new Date();
+    const enriched = requests.map(r => enrichFwa(r, now));
+    const summary  = isManager ? buildDashboardSummary(requests, now) : undefined;
+
+    res.json({ requests: enriched, ...(summary ? { summary } : {}) });
+  } catch (err) { next(err); }
+});
+
+// GET /attendance/fwa/requests/overdue — HR: PENDING requests past 2-month deadline
+app.get('/attendance/fwa/requests/overdue', authenticate, authorize(...FWA_MANAGER_ROLES), async (req, res, next) => {
+  try {
+    const pending = await prisma.fwaRequest.findMany({
+      where:   { status: 'PENDING' },
+      orderBy: { reviewDeadline: 'asc' },
+    });
+    const now     = new Date();
+    const overdue = pending.filter(r => new Date(r.reviewDeadline) < now);
+    res.json({ overdue: overdue.map(r => enrichFwa(r, now)), count: overdue.length });
+  } catch (err) { next(err); }
+});
+
+// GET /attendance/fwa/requests/:id — single request
+app.get('/attendance/fwa/requests/:id', authenticate, async (req, res, next) => {
+  try {
+    const fwa = await prisma.fwaRequest.findUnique({ where: { id: req.params.id } });
+    if (!fwa) return res.status(404).json({ error: 'FWA request not found' });
+
+    const isManager = FWA_MANAGER_ROLES.includes(req.user.role);
+    if (!isManager && fwa.employeeId !== req.user.sub)
+      return res.status(403).json({ error: 'Forbidden' });
+
+    res.json(enrichFwa(fwa));
+  } catch (err) { next(err); }
+});
+
+// PUT /attendance/fwa/requests/:id/approve — manager/HR approves
+app.put('/attendance/fwa/requests/:id/approve', authenticate, authorize(...FWA_MANAGER_ROLES), async (req, res, next) => {
+  try {
+    const { decisionNote } = req.body;
+    const fwa = await prisma.fwaRequest.findUnique({ where: { id: req.params.id } });
+    if (!fwa) return res.status(404).json({ error: 'FWA request not found' });
+    if (fwa.status !== 'PENDING') return res.status(409).json({ error: `Cannot approve a request in ${fwa.status} status` });
+
+    const updated = await prisma.fwaRequest.update({
+      where: { id: req.params.id },
+      data: {
+        status:       'APPROVED',
+        reviewedById: req.user.sub,
+        reviewedAt:   new Date(),
+        decisionNote: decisionNote?.trim() || null,
+        notifiedAt:   new Date(),
+      },
+    });
+
+    // Notify employee (fire-and-forget)
+    fetch(`${NOTIFICATION_SERVICE_URL}/notifications/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'SYSTEM',
+        recipientIds: [fwa.employeeId],
+        data: {
+          title: `Your FWA request has been approved`,
+          body:  `Your ${TYPE_LABELS[fwa.type]} request starting ${fwa.proposedStart.toISOString().slice(0,10)} has been approved.${decisionNote ? ` Note: ${decisionNote}` : ''}`,
+        },
+        link: '/attendance',
+      }),
+    }).catch(() => {});
+
+    res.json(enrichFwa(updated));
+  } catch (err) { next(err); }
+});
+
+// PUT /attendance/fwa/requests/:id/reject — manager/HR rejects (decisionNote mandatory per MOM)
+app.put('/attendance/fwa/requests/:id/reject', authenticate, authorize(...FWA_MANAGER_ROLES), async (req, res, next) => {
+  try {
+    const { decisionNote } = req.body;
+    if (!decisionNote || !decisionNote.trim())
+      return res.status(400).json({ error: 'decisionNote is required when rejecting an FWA request (MOM written-response requirement)' });
+
+    const fwa = await prisma.fwaRequest.findUnique({ where: { id: req.params.id } });
+    if (!fwa) return res.status(404).json({ error: 'FWA request not found' });
+    if (fwa.status !== 'PENDING') return res.status(409).json({ error: `Cannot reject a request in ${fwa.status} status` });
+
+    const updated = await prisma.fwaRequest.update({
+      where: { id: req.params.id },
+      data: {
+        status:       'REJECTED',
+        reviewedById: req.user.sub,
+        reviewedAt:   new Date(),
+        decisionNote: decisionNote.trim(),
+        notifiedAt:   new Date(),
+      },
+    });
+
+    // Notify employee (fire-and-forget)
+    fetch(`${NOTIFICATION_SERVICE_URL}/notifications/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'SYSTEM',
+        recipientIds: [fwa.employeeId],
+        data: {
+          title: `Your FWA request was not approved`,
+          body:  `Your ${TYPE_LABELS[fwa.type]} request has been declined. Reason: ${decisionNote.trim()}`,
+        },
+        link: '/attendance',
+      }),
+    }).catch(() => {});
+
+    res.json(enrichFwa(updated));
+  } catch (err) { next(err); }
+});
+
+// PUT /attendance/fwa/requests/:id/withdraw — employee withdraws own request
+app.put('/attendance/fwa/requests/:id/withdraw', authenticate, async (req, res, next) => {
+  try {
+    const fwa = await prisma.fwaRequest.findUnique({ where: { id: req.params.id } });
+    if (!fwa) return res.status(404).json({ error: 'FWA request not found' });
+    if (fwa.employeeId !== req.user.sub)
+      return res.status(403).json({ error: 'You can only withdraw your own FWA request' });
+    if (fwa.status !== 'PENDING') return res.status(409).json({ error: `Cannot withdraw a request in ${fwa.status} status` });
+
+    const updated = await prisma.fwaRequest.update({
+      where: { id: req.params.id },
+      data: { status: 'WITHDRAWN', updatedAt: new Date() },
+    });
+    res.json(enrichFwa(updated));
+  } catch (err) { next(err); }
+});
+
+// POST /attendance/fwa/sweep — daily sweep: mark overdue PENDING → EXPIRED, send reminders
+async function runFwaSweep() {
+  const now     = new Date();
+  const pending = await prisma.fwaRequest.findMany({ where: { status: 'PENDING' } });
+  const expired = findExpiredRequests(pending, now);
+
+  let expiredCount  = 0;
+  let reminderCount = 0;
+
+  for (const r of expired) {
+    await prisma.fwaRequest.update({
+      where: { id: r.id },
+      data:  { status: 'EXPIRED', updatedAt: now },
+    });
+    expiredCount++;
+    // Notify HR of MOM compliance violation (fire-and-forget)
+    fetch(`${NOTIFICATION_SERVICE_URL}/notifications/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'SYSTEM',
+        roles: ['HR_ADMIN'],
+        data: {
+          title: `FWA Request EXPIRED — MOM deadline missed`,
+          body:  `Employee ${r.employeeId}'s ${TYPE_LABELS[r.type]} request (submitted ${r.createdAt.toISOString().slice(0,10)}) exceeded the 2-month MOM response deadline. This may constitute a guideline violation.`,
+        },
+        link: '/attendance',
+      }),
+    }).catch(() => {});
+  }
+
+  // Send reminders for requests approaching deadline (14d and 7d)
+  for (const r of pending) {
+    if (expired.find(e => e.id === r.id)) continue; // already handled
+    const days = daysUntilDeadline(r.reviewDeadline, now);
+    if (days === 14 || days === 7) {
+      fetch(`${NOTIFICATION_SERVICE_URL}/notifications/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'SYSTEM',
+          roles: ['HR_ADMIN', 'HR_MANAGER'],
+          data: {
+            title: `FWA Response Due in ${days} days`,
+            body:  `Employee ${r.employeeId}'s ${TYPE_LABELS[r.type]} FWA request must be responded to by ${r.reviewDeadline.toISOString().slice(0,10)} (MOM requirement).`,
+          },
+          link: '/attendance',
+        }),
+      }).catch(() => {});
+      reminderCount++;
+    }
+  }
+
+  return { checked: pending.length, expired: expiredCount, reminders: reminderCount };
+}
+
+app.post('/attendance/fwa/sweep', authenticate, authorize(ROLES.HR_ADMIN, ROLES.SUPER_ADMIN), async (req, res, next) => {
+  try {
+    const result = await runFwaSweep();
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// GET /attendance/fwa/dashboard — HR summary dashboard
+app.get('/attendance/fwa/dashboard', authenticate, authorize(...FWA_MANAGER_ROLES), async (req, res, next) => {
+  try {
+    const requests = await prisma.fwaRequest.findMany({ orderBy: { createdAt: 'desc' } });
+    const now      = new Date();
+    const summary  = buildDashboardSummary(requests, now);
+
+    // Pending sorted by deadline urgency
+    const pending = requests
+      .filter(r => r.status === 'PENDING')
+      .map(r => enrichFwa(r, now))
+      .sort((a, b) => new Date(a.reviewDeadline) - new Date(b.reviewDeadline));
+
+    const recentDecisions = requests
+      .filter(r => ['APPROVED', 'REJECTED'].includes(r.status))
+      .slice(0, 10)
+      .map(r => enrichFwa(r, now));
+
+    res.json({ summary, pending, recentDecisions, asOf: now });
+  } catch (err) { next(err); }
+});
+
+// ── FWA-002: OT Pre-Authorization Workflow ────────────────────────────────────
+const OT_AUTH_MANAGER_ROLES = [ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.SUPER_ADMIN, ROLES.LINE_MANAGER];
+
+// POST /attendance/ot-auth/requests — employee or supervisor submits OT request
+app.post('/attendance/ot-auth/requests', authenticate, async (req, res, next) => {
+  try {
+    const { employeeId, departmentId, isEmergency = false, requestedHours, plannedDate, reason, businessJustification, requestType = 'EMPLOYEE' } = req.body;
+    const targetEmployee = employeeId || req.user.sub;
+
+    if (!requestedHours || requestedHours <= 0)
+      return res.status(400).json({ error: 'requestedHours must be a positive number' });
+    if (requestedHours > MOM_MONTHLY_CAP_HOURS)
+      return res.status(400).json({ error: `requestedHours cannot exceed the MOM monthly cap of ${MOM_MONTHLY_CAP_HOURS}h` });
+    if (!plannedDate) return res.status(400).json({ error: 'plannedDate is required (YYYY-MM-DD)' });
+    if (!reason || !reason.trim()) return res.status(400).json({ error: 'reason is required' });
+
+    const now = new Date();
+    const planned = new Date(plannedDate + 'T00:00:00');
+
+    // Emergency OT: the date must be ≤ now and within the 24h post-hoc window
+    if (isEmergency && !isWithinEmergencyWindow(planned, now))
+      return res.status(400).json({ error: 'Emergency OT must be submitted within 24 hours of the planned date' });
+
+    // Standard OT: must be requested before the OT date
+    if (!isEmergency && planned <= now)
+      return res.status(400).json({ error: 'Standard OT request must be submitted before the planned OT date. Use isEmergency:true for post-hoc authorization.' });
+
+    if (!['EMPLOYEE', 'SUPERVISOR'].includes(requestType))
+      return res.status(400).json({ error: 'requestType must be EMPLOYEE or SUPERVISOR' });
+
+    const expiresAt = computeExpiresAt(planned, isEmergency);
+
+    const otAuth = await prisma.otAuthorization.create({
+      data: {
+        id: uuidv4(),
+        employeeId:           targetEmployee,
+        departmentId:         departmentId || null,
+        requestedById:        req.user.sub,
+        requestType,
+        isEmergency:          Boolean(isEmergency),
+        requestedHours:       Number(requestedHours),
+        plannedDate:          planned,
+        reason:               reason.trim(),
+        businessJustification: businessJustification?.trim() || null,
+        status:               'PENDING',
+        expiresAt,
+      },
+    });
+
+    await writeAudit({ entityType: 'OtAuthorization', entityId: otAuth.id, action: 'SUBMITTED', actor: req.user, req });
+
+    res.status(201).json(otAuth);
+  } catch (err) { next(err); }
+});
+
+// GET /attendance/ot-auth/requests — list (employees see own; managers see all)
+app.get('/attendance/ot-auth/requests', authenticate, async (req, res, next) => {
+  try {
+    const isManager = OT_AUTH_MANAGER_ROLES.includes(req.user.role);
+    const { status, employeeId, departmentId, period } = req.query;
+
+    const where = {};
+    if (!isManager) {
+      where.employeeId = req.user.sub;
+    } else {
+      if (employeeId)    where.employeeId   = employeeId;
+      if (departmentId)  where.departmentId = departmentId;
+    }
+    if (status) where.status = status;
+    if (period) {
+      const [y, m] = period.split('-');
+      const start  = new Date(parseInt(y), parseInt(m) - 1, 1);
+      const end    = new Date(parseInt(y), parseInt(m), 1);
+      where.plannedDate = { gte: start, lt: end };
+    }
+
+    const requests = await prisma.otAuthorization.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
+
+    res.json({ requests, total: requests.length });
+  } catch (err) { next(err); }
+});
+
+// GET /attendance/ot-auth/requests/pending — manager: pending requests sorted by expiresAt
+app.get('/attendance/ot-auth/requests/pending', authenticate, authorize(...OT_AUTH_MANAGER_ROLES), async (req, res, next) => {
+  try {
+    const requests = await prisma.otAuthorization.findMany({
+      where: { status: 'PENDING' },
+      orderBy: { expiresAt: 'asc' },
+    });
+    res.json({ requests, total: requests.length });
+  } catch (err) { next(err); }
+});
+
+// GET /attendance/ot-auth/requests/:id — single request
+app.get('/attendance/ot-auth/requests/:id', authenticate, async (req, res, next) => {
+  try {
+    const otAuth = await prisma.otAuthorization.findUnique({ where: { id: req.params.id } });
+    if (!otAuth) return res.status(404).json({ error: 'OT authorization request not found' });
+
+    const isManager = OT_AUTH_MANAGER_ROLES.includes(req.user.role);
+    if (!isManager && otAuth.employeeId !== req.user.sub)
+      return res.status(403).json({ error: 'Forbidden' });
+
+    res.json(otAuth);
+  } catch (err) { next(err); }
+});
+
+// PUT /attendance/ot-auth/requests/:id/approve — manager approves; enforces 72h cap
+app.put('/attendance/ot-auth/requests/:id/approve', authenticate, authorize(...OT_AUTH_MANAGER_ROLES), async (req, res, next) => {
+  try {
+    const { decisionNote } = req.body;
+    const otAuth = await prisma.otAuthorization.findUnique({ where: { id: req.params.id } });
+    if (!otAuth) return res.status(404).json({ error: 'OT authorization request not found' });
+    if (otAuth.status !== 'PENDING') return res.status(409).json({ error: `Cannot approve a request in ${otAuth.status} status` });
+
+    const now = new Date();
+    if (new Date(otAuth.expiresAt) < now)
+      return res.status(409).json({ error: 'This OT authorization request has expired and can no longer be approved' });
+
+    // ── MOM 72h monthly cap check (hard block) ──────────────────────────────
+    const period     = otAuth.plannedDate.toISOString().slice(0, 7); // YYYY-MM
+    const [y, m]     = period.split('-');
+    const periodStart = new Date(parseInt(y), parseInt(m) - 1, 1);
+    const periodEnd   = new Date(parseInt(y), parseInt(m), 1);
+
+    const existingApproved = await prisma.otAuthorization.findMany({
+      where: {
+        employeeId: otAuth.employeeId,
+        status:     'APPROVED',
+        plannedDate: { gte: periodStart, lt: periodEnd },
+      },
+    });
+    const alreadyApproved = existingApproved.reduce((s, r) => s + r.requestedHours, 0);
+    const capCheck = checkMonthlyCap(alreadyApproved, otAuth.requestedHours);
+
+    if (!capCheck.canProceed) {
+      return res.status(409).json({
+        error: `Approval would breach the MOM 72h monthly OT cap. Employee has ${alreadyApproved.toFixed(1)}h approved for ${period}; requested ${otAuth.requestedHours}h would total ${capCheck.projectedTotal.toFixed(1)}h.`,
+        cap: capCheck,
+      });
+    }
+
+    // ── Department budget check (soft — warn but do not block) ───────────────
+    let budgetWarning = null;
+    if (otAuth.departmentId) {
+      const budget = await prisma.otBudget.findUnique({
+        where: { departmentId_period: { departmentId: otAuth.departmentId, period } },
+      });
+      if (budget) {
+        const budgetCheck = checkBudget(budget.budgetHours, budget.usedHours, otAuth.requestedHours);
+        if (!budgetCheck.canProceed) {
+          budgetWarning = `Department OT budget exceeded: ${budget.usedHours}h used of ${budget.budgetHours}h budget for ${period}.`;
+        }
+        // Update usedHours regardless of warning (approved regardless)
+        await prisma.otBudget.update({
+          where: { departmentId_period: { departmentId: otAuth.departmentId, period } },
+          data:  { usedHours: { increment: otAuth.requestedHours } },
+        });
+      }
+    }
+
+    const updated = await prisma.otAuthorization.update({
+      where: { id: req.params.id },
+      data: {
+        status:       'APPROVED',
+        reviewedById: req.user.sub,
+        reviewedAt:   now,
+        decisionNote: decisionNote?.trim() || null,
+      },
+    });
+
+    await writeAudit({ entityType: 'OtAuthorization', entityId: otAuth.id, action: 'APPROVED', actor: req.user, changedFields: { status: 'APPROVED', period, approvedHours: otAuth.requestedHours }, req });
+
+    // Notify employee (fire-and-forget)
+    fetch(`${NOTIFICATION_SERVICE_URL}/notifications/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type:       'SYSTEM',
+        recipients: [otAuth.employeeId],
+        data: {
+          title: 'OT Request Approved',
+          body:  `Your OT request for ${otAuth.plannedDate.toISOString().slice(0, 10)} (${otAuth.requestedHours}h) has been approved.${budgetWarning ? ` Note: ${budgetWarning}` : ''}`,
+        },
+        link: '/attendance',
+      }),
+    }).catch(() => {});
+
+    res.json({ ...updated, budgetWarning });
+  } catch (err) { next(err); }
+});
+
+// PUT /attendance/ot-auth/requests/:id/reject — manager rejects (decisionNote required)
+app.put('/attendance/ot-auth/requests/:id/reject', authenticate, authorize(...OT_AUTH_MANAGER_ROLES), async (req, res, next) => {
+  try {
+    const { decisionNote } = req.body;
+    if (!decisionNote || !decisionNote.trim())
+      return res.status(400).json({ error: 'decisionNote is required when rejecting an OT request' });
+
+    const otAuth = await prisma.otAuthorization.findUnique({ where: { id: req.params.id } });
+    if (!otAuth) return res.status(404).json({ error: 'OT authorization request not found' });
+    if (otAuth.status !== 'PENDING') return res.status(409).json({ error: `Cannot reject a request in ${otAuth.status} status` });
+
+    const updated = await prisma.otAuthorization.update({
+      where: { id: req.params.id },
+      data: {
+        status:       'REJECTED',
+        reviewedById: req.user.sub,
+        reviewedAt:   new Date(),
+        decisionNote: decisionNote.trim(),
+      },
+    });
+
+    await writeAudit({ entityType: 'OtAuthorization', entityId: otAuth.id, action: 'REJECTED', actor: req.user, req });
+
+    fetch(`${NOTIFICATION_SERVICE_URL}/notifications/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type:       'SYSTEM',
+        recipients: [otAuth.employeeId],
+        data: {
+          title: 'OT Request Rejected',
+          body:  `Your OT request for ${otAuth.plannedDate.toISOString().slice(0, 10)} (${otAuth.requestedHours}h) was not approved. Reason: ${decisionNote.trim()}`,
+        },
+        link: '/attendance',
+      }),
+    }).catch(() => {});
+
+    res.json(updated);
+  } catch (err) { next(err); }
+});
+
+// PUT /attendance/ot-auth/requests/:id/cancel — employee cancels own PENDING request
+app.put('/attendance/ot-auth/requests/:id/cancel', authenticate, async (req, res, next) => {
+  try {
+    const otAuth = await prisma.otAuthorization.findUnique({ where: { id: req.params.id } });
+    if (!otAuth) return res.status(404).json({ error: 'OT authorization request not found' });
+
+    const isManager = OT_AUTH_MANAGER_ROLES.includes(req.user.role);
+    if (!isManager && otAuth.employeeId !== req.user.sub)
+      return res.status(403).json({ error: 'You can only cancel your own OT requests' });
+    if (otAuth.status !== 'PENDING')
+      return res.status(409).json({ error: `Cannot cancel a request in ${otAuth.status} status` });
+
+    const updated = await prisma.otAuthorization.update({
+      where: { id: req.params.id },
+      data:  { status: 'CANCELLED' },
+    });
+
+    await writeAudit({ entityType: 'OtAuthorization', entityId: otAuth.id, action: 'CANCELLED', actor: req.user, req });
+
+    res.json(updated);
+  } catch (err) { next(err); }
+});
+
+// POST /attendance/ot-auth/requests/:id/link-record — link approved OT to AttendanceRecord
+app.post('/attendance/ot-auth/requests/:id/link-record', authenticate, authorize(...OT_AUTH_MANAGER_ROLES), async (req, res, next) => {
+  try {
+    const { attendanceRecordId } = req.body;
+    if (!attendanceRecordId) return res.status(400).json({ error: 'attendanceRecordId is required' });
+
+    const otAuth = await prisma.otAuthorization.findUnique({ where: { id: req.params.id } });
+    if (!otAuth) return res.status(404).json({ error: 'OT authorization request not found' });
+    if (otAuth.status !== 'APPROVED') return res.status(409).json({ error: 'Only APPROVED requests can be linked to attendance records' });
+
+    const record = await prisma.attendanceRecord.findUnique({ where: { id: attendanceRecordId } });
+    if (!record) return res.status(404).json({ error: 'Attendance record not found' });
+
+    const updated = await prisma.otAuthorization.update({
+      where: { id: req.params.id },
+      data:  { linkedRecordId: attendanceRecordId },
+    });
+
+    await writeAudit({ entityType: 'OtAuthorization', entityId: otAuth.id, action: 'LINKED_RECORD', actor: req.user, changedFields: { linkedRecordId: attendanceRecordId }, req });
+
+    res.json(updated);
+  } catch (err) { next(err); }
+});
+
+// GET /attendance/ot-auth/summary/:period — monthly OT summary (YYYY-MM)
+app.get('/attendance/ot-auth/summary/:period', authenticate, authorize(...OT_AUTH_MANAGER_ROLES), async (req, res, next) => {
+  try {
+    const { period } = req.params;
+    if (!/^\d{4}-\d{2}$/.test(period))
+      return res.status(400).json({ error: 'period must be YYYY-MM' });
+
+    const [y, m] = period.split('-');
+    const start  = new Date(parseInt(y), parseInt(m) - 1, 1);
+    const end    = new Date(parseInt(y), parseInt(m), 1);
+
+    const authorizations = await prisma.otAuthorization.findMany({
+      where: { plannedDate: { gte: start, lt: end } },
+    });
+
+    const summary = buildMonthlyOtSummary(authorizations, period);
+
+    // Attach budget info per department
+    const deptIds = [...new Set(authorizations.map(a => a.departmentId).filter(Boolean))];
+    const budgets = deptIds.length
+      ? await prisma.otBudget.findMany({ where: { period, departmentId: { in: deptIds } } })
+      : [];
+    const budgetMap = Object.fromEntries(budgets.map(b => [b.departmentId, b]));
+    summary.byDepartment = summary.byDepartment.map(d => ({
+      ...d,
+      budget: budgetMap[d.departmentId] || null,
+    }));
+
+    res.json(summary);
+  } catch (err) { next(err); }
+});
+
+// GET /attendance/ot-auth/budget — list department OT budgets
+app.get('/attendance/ot-auth/budget', authenticate, authorize(...OT_AUTH_MANAGER_ROLES), async (req, res, next) => {
+  try {
+    const { period, departmentId } = req.query;
+    const where = {};
+    if (period)       where.period       = period;
+    if (departmentId) where.departmentId = departmentId;
+
+    const budgets = await prisma.otBudget.findMany({ where, orderBy: [{ period: 'desc' }, { departmentId: 'asc' }] });
+    res.json({ budgets, total: budgets.length });
+  } catch (err) { next(err); }
+});
+
+// PUT /attendance/ot-auth/budget — upsert department OT budget (HR Admin only)
+app.put('/attendance/ot-auth/budget', authenticate, authorize(ROLES.HR_ADMIN, ROLES.SUPER_ADMIN), async (req, res, next) => {
+  try {
+    const { departmentId, period, budgetHours } = req.body;
+    if (!departmentId) return res.status(400).json({ error: 'departmentId is required' });
+    if (!period || !/^\d{4}-\d{2}$/.test(period)) return res.status(400).json({ error: 'period must be YYYY-MM' });
+    if (!budgetHours || budgetHours <= 0) return res.status(400).json({ error: 'budgetHours must be a positive number' });
+
+    const budget = await prisma.otBudget.upsert({
+      where:  { departmentId_period: { departmentId, period } },
+      update: { budgetHours: Number(budgetHours), updatedBy: req.user.sub },
+      create: { id: uuidv4(), departmentId, period, budgetHours: Number(budgetHours), updatedBy: req.user.sub },
+    });
+
+    await writeAudit({ entityType: 'OtBudget', entityId: budget.id, action: 'UPSERTED', actor: req.user, changedFields: { departmentId, period, budgetHours }, req });
+
+    res.json(budget);
+  } catch (err) { next(err); }
+});
+
+// POST /attendance/ot-auth/sweep — expire PENDING requests past their expiresAt
+async function runOtAuthSweep() {
+  const now     = new Date();
+  const pending = await prisma.otAuthorization.findMany({ where: { status: 'PENDING' } });
+  const expired = findExpiredOtRequests(pending, now);
+
+  for (const r of expired) {
+    await prisma.otAuthorization.update({
+      where: { id: r.id },
+      data:  { status: 'AUTO_EXPIRED' },
+    });
+    // Notify submitter (fire-and-forget)
+    fetch(`${NOTIFICATION_SERVICE_URL}/notifications/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type:       'SYSTEM',
+        recipients: [r.requestedById],
+        data: {
+          title: 'OT Request Auto-Expired',
+          body:  `An OT request for employee ${r.employeeId} on ${r.plannedDate.toISOString().slice(0, 10)} (${r.requestedHours}h) was not approved in time and has expired.`,
+        },
+        link: '/attendance',
+      }),
+    }).catch(() => {});
+  }
+
+  return { checked: pending.length, expired: expired.length };
+}
+
+app.post('/attendance/ot-auth/sweep', authenticate, authorize(ROLES.HR_ADMIN, ROLES.SUPER_ADMIN), async (req, res, next) => {
+  try {
+    const result = await runOtAuthSweep();
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// OT auth daily sweep scheduler — 00:50 SGT (after FWA sweep at 00:40)
+function scheduleOtAuthSweep() {
+  if (process.env.NODE_ENV === 'test') return;
+  const sgtOffsetMs = 8 * 60 * 60 * 1000;
+  function msUntilNext0050Sgt() {
+    const sgtNow = new Date(Date.now() + sgtOffsetMs);
+    const target = new Date(Date.UTC(sgtNow.getUTCFullYear(), sgtNow.getUTCMonth(), sgtNow.getUTCDate(), 0, 50, 0, 0));
+    if (target <= sgtNow) target.setUTCDate(target.getUTCDate() + 1);
+    return target.getTime() - sgtNow.getTime();
+  }
+  async function tick() {
+    try {
+      const result = await runOtAuthSweep();
+      console.log(`[ot-auth-sweep] checked=${result.checked} expired=${result.expired}`);
+    } catch (err) {
+      console.error('[ot-auth-sweep] failed:', err.message);
+    }
+    setTimeout(tick, 24 * 60 * 60 * 1000);
+  }
+  setTimeout(tick, msUntilNext0050Sgt());
+  console.log('[ot-auth-sweep] daily scheduler armed for 00:50 SGT');
+}
+
+// FWA daily sweep scheduler — 00:40 SGT (after anomaly sweep at 00:30)
+function scheduleFwaSweep() {
+  if (process.env.NODE_ENV === 'test') return;
+  const sgtOffsetMs = 8 * 60 * 60 * 1000;
+  function msUntilNext0040Sgt() {
+    const sgtNow = new Date(Date.now() + sgtOffsetMs);
+    const target = new Date(Date.UTC(sgtNow.getUTCFullYear(), sgtNow.getUTCMonth(), sgtNow.getUTCDate(), 0, 40, 0, 0));
+    if (target <= sgtNow) target.setUTCDate(target.getUTCDate() + 1);
+    return target.getTime() - sgtNow.getTime();
+  }
+  async function tick() {
+    try {
+      const result = await runFwaSweep();
+      console.log(`[fwa-sweep] checked=${result.checked} expired=${result.expired} reminders=${result.reminders}`);
+    } catch (err) {
+      console.error('[fwa-sweep] failed:', err.message);
+    }
+    setTimeout(tick, 24 * 60 * 60 * 1000);
+  }
+  setTimeout(tick, msUntilNext0040Sgt());
+  console.log('[fwa-sweep] daily scheduler armed for 00:40 SGT');
+}
+
+// ── FWA-003: WICA Work Injury Compensation Act 2019 ───────────────────────────
+const WICA_CATEGORIES  = ['MEDICAL_LEAVE_ONLY', 'HOSPITALISATION', 'PERMANENT_INCAPACITY', 'FATAL'];
+const WICA_STATUSES    = ['REPORTED', 'UNDER_REVIEW', 'MOM_REPORTED', 'CLAIM_SUBMITTED', 'CLOSED'];
+const CLAIM_STATUSES   = ['PENDING', 'INSURER_NOTIFIED', 'UNDER_ASSESSMENT', 'APPROVED', 'PAID', 'REJECTED'];
+const RTW_TYPES        = ['FULL_DUTIES', 'LIGHT_DUTIES', 'PHASED_RETURN'];
+const WICA_MGMT_ROLES  = [ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.SUPER_ADMIN, ROLES.LINE_MANAGER];
+
+function enrichIncident(incident, now = new Date()) {
+  return {
+    ...incident,
+    deadlineUrgency: wicaDeadlineUrgency(incident.momReportDeadline, now),
+    daysUntilDeadline: daysUntilMomDeadline(incident.momReportDeadline, now),
+    categoryLabel: WICA_CATEGORY_LABELS[incident.category] || incident.category,
+  };
+}
+
+// POST /attendance/wica/incidents — employee or supervisor reports an incident
+app.post('/attendance/wica/incidents', authenticate, async (req, res, next) => {
+  try {
+    const {
+      employeeId, incidentDate, incidentTime, incidentLocation,
+      description, category, injuryType, bodyPart,
+    } = req.body;
+
+    const targetEmployee = employeeId || req.user.sub;
+    if (!incidentDate) return res.status(400).json({ error: 'incidentDate is required (YYYY-MM-DD)' });
+    if (!incidentLocation || !incidentLocation.trim()) return res.status(400).json({ error: 'incidentLocation is required' });
+    if (!description || !description.trim()) return res.status(400).json({ error: 'description is required' });
+    if (!category || !WICA_CATEGORIES.includes(category))
+      return res.status(400).json({ error: `category must be one of: ${WICA_CATEGORIES.join(', ')}` });
+
+    const incDate         = new Date(incidentDate + 'T00:00:00');
+    const momDeadline     = computeMomDeadline(incDate, category);
+
+    const incident = await prisma.wicaIncident.create({
+      data: {
+        id:               uuidv4(),
+        employeeId:       targetEmployee,
+        reportedById:     req.user.sub,
+        incidentDate:     incDate,
+        incidentTime:     incidentTime || null,
+        incidentLocation: incidentLocation.trim(),
+        description:      description.trim(),
+        category,
+        injuryType:       injuryType?.trim() || null,
+        bodyPart:         bodyPart?.trim() || null,
+        status:           'REPORTED',
+        momReportDeadline: momDeadline,
+      },
+    });
+
+    await writeAudit({ entityType: 'WicaIncident', entityId: incident.id, action: 'REPORTED', actor: req.user, changedFields: { category, employeeId: targetEmployee }, req });
+
+    // Notify HR of new incident (fire-and-forget)
+    if (category === 'FATAL' || category === 'HOSPITALISATION') {
+      fetch(`${NOTIFICATION_SERVICE_URL}/notifications/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type:  'SYSTEM',
+          roles: ['HR_ADMIN', 'HR_MANAGER'],
+          data: {
+            title: `WICA Incident — ${WICA_CATEGORY_LABELS[category]}`,
+            body:  `A ${WICA_CATEGORY_LABELS[category]} incident was reported for employee ${targetEmployee} on ${incidentDate}. MOM report due: ${momDeadline ? momDeadline.toISOString().slice(0, 10) : 'N/A'}.`,
+          },
+          link: '/attendance/wica',
+        }),
+      }).catch(() => {});
+    }
+
+    res.status(201).json(enrichIncident(incident));
+  } catch (err) { next(err); }
+});
+
+// GET /attendance/wica/incidents — list (employees see own; managers see all)
+app.get('/attendance/wica/incidents', authenticate, async (req, res, next) => {
+  try {
+    const isManager = WICA_MGMT_ROLES.includes(req.user.role);
+    const { status, category, employeeId } = req.query;
+
+    const where = {};
+    if (!isManager) {
+      where.employeeId = req.user.sub;
+    } else {
+      if (employeeId) where.employeeId = employeeId;
+    }
+    if (status)   where.status   = status;
+    if (category) where.category = category;
+
+    const incidents = await prisma.wicaIncident.findMany({
+      where,
+      orderBy: { incidentDate: 'desc' },
+      include: { claims: true, rtw: true },
+      take: 500,
+    });
+
+    const now = new Date();
+    res.json({ incidents: incidents.map(i => enrichIncident(i, now)), total: incidents.length });
+  } catch (err) { next(err); }
+});
+
+// GET /attendance/wica/incidents/overdue — manager: MOM-reportable incidents past deadline
+app.get('/attendance/wica/incidents/overdue', authenticate, authorize(...WICA_MGMT_ROLES), async (req, res, next) => {
+  try {
+    const all = await prisma.wicaIncident.findMany({
+      where: { momReportDeadline: { not: null }, momReportedAt: null, status: { notIn: ['MOM_REPORTED', 'CLOSED'] } },
+      orderBy: { momReportDeadline: 'asc' },
+    });
+    const now     = new Date();
+    const overdue = findOverdueIncidents(all, now);
+    res.json({ overdue: overdue.map(i => enrichIncident(i, now)), count: overdue.length });
+  } catch (err) { next(err); }
+});
+
+// GET /attendance/wica/incidents/:id — single incident
+app.get('/attendance/wica/incidents/:id', authenticate, async (req, res, next) => {
+  try {
+    const incident = await prisma.wicaIncident.findUnique({
+      where: { id: req.params.id },
+      include: { claims: true, rtw: true },
+    });
+    if (!incident) return res.status(404).json({ error: 'WICA incident not found' });
+
+    const isManager = WICA_MGMT_ROLES.includes(req.user.role);
+    if (!isManager && incident.employeeId !== req.user.sub)
+      return res.status(403).json({ error: 'Forbidden' });
+
+    res.json(enrichIncident(incident));
+  } catch (err) { next(err); }
+});
+
+// PUT /attendance/wica/incidents/:id — HR updates status / captures ireportRef
+app.put('/attendance/wica/incidents/:id', authenticate, authorize(...WICA_MGMT_ROLES), async (req, res, next) => {
+  try {
+    const { status, ireportRef, momReportedAt } = req.body;
+
+    const incident = await prisma.wicaIncident.findUnique({ where: { id: req.params.id } });
+    if (!incident) return res.status(404).json({ error: 'WICA incident not found' });
+    if (status && !WICA_STATUSES.includes(status))
+      return res.status(400).json({ error: `status must be one of: ${WICA_STATUSES.join(', ')}` });
+
+    const data = {};
+    if (status) data.status = status;
+    if (ireportRef) data.ireportRef = ireportRef.trim();
+    if (momReportedAt) data.momReportedAt = new Date(momReportedAt);
+    if (status === 'MOM_REPORTED' && !data.momReportedAt) data.momReportedAt = new Date();
+    if (status === 'CLOSED') data.closedAt = new Date();
+
+    const updated = await prisma.wicaIncident.update({
+      where: { id: req.params.id },
+      data,
+      include: { claims: true, rtw: true },
+    });
+
+    await writeAudit({ entityType: 'WicaIncident', entityId: incident.id, action: 'UPDATED', actor: req.user, changedFields: data, req });
+
+    res.json(enrichIncident(updated));
+  } catch (err) { next(err); }
+});
+
+// POST /attendance/wica/incidents/:id/claims — create claim for incident
+app.post('/attendance/wica/incidents/:id/claims', authenticate, authorize(...WICA_MGMT_ROLES), async (req, res, next) => {
+  try {
+    const incident = await prisma.wicaIncident.findUnique({ where: { id: req.params.id } });
+    if (!incident) return res.status(404).json({ error: 'WICA incident not found' });
+
+    const {
+      medicalExpenses, medicalLeaveDays, hospitalLeaveDays,
+      permanentIncapacityPct, compensationAmount,
+      insurerName, insurerPolicyNo, claimRef,
+    } = req.body;
+
+    const claim = await prisma.wicaClaim.create({
+      data: {
+        id:                     uuidv4(),
+        incidentId:             incident.id,
+        employeeId:             incident.employeeId,
+        medicalExpenses:        medicalExpenses != null ? Number(medicalExpenses) : null,
+        medicalLeaveDays:       medicalLeaveDays != null ? parseInt(medicalLeaveDays) : null,
+        hospitalLeaveDays:      hospitalLeaveDays != null ? parseInt(hospitalLeaveDays) : null,
+        permanentIncapacityPct: permanentIncapacityPct != null ? Number(permanentIncapacityPct) : null,
+        compensationAmount:     compensationAmount != null ? Number(compensationAmount) : null,
+        insurerName:            insurerName?.trim() || null,
+        insurerPolicyNo:        insurerPolicyNo?.trim() || null,
+        claimRef:               claimRef?.trim() || null,
+        status:                 'PENDING',
+      },
+    });
+
+    // Auto-advance incident status to CLAIM_SUBMITTED
+    if (!['CLAIM_SUBMITTED', 'CLOSED'].includes(incident.status)) {
+      await prisma.wicaIncident.update({
+        where: { id: incident.id },
+        data:  { status: 'CLAIM_SUBMITTED' },
+      });
+    }
+
+    await writeAudit({ entityType: 'WicaClaim', entityId: claim.id, action: 'CREATED', actor: req.user, req });
+
+    res.status(201).json(claim);
+  } catch (err) { next(err); }
+});
+
+// GET /attendance/wica/incidents/:id/claims — list claims for incident
+app.get('/attendance/wica/incidents/:id/claims', authenticate, async (req, res, next) => {
+  try {
+    const incident = await prisma.wicaIncident.findUnique({ where: { id: req.params.id } });
+    if (!incident) return res.status(404).json({ error: 'WICA incident not found' });
+
+    const isManager = WICA_MGMT_ROLES.includes(req.user.role);
+    if (!isManager && incident.employeeId !== req.user.sub)
+      return res.status(403).json({ error: 'Forbidden' });
+
+    const claims = await prisma.wicaClaim.findMany({
+      where: { incidentId: req.params.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ claims, total: claims.length });
+  } catch (err) { next(err); }
+});
+
+// PUT /attendance/wica/incidents/:id/claims/:claimId — update claim status
+app.put('/attendance/wica/incidents/:id/claims/:claimId', authenticate, authorize(...WICA_MGMT_ROLES), async (req, res, next) => {
+  try {
+    const { status, compensationAmount, claimRef, rejectionReason } = req.body;
+    if (status && !CLAIM_STATUSES.includes(status))
+      return res.status(400).json({ error: `status must be one of: ${CLAIM_STATUSES.join(', ')}` });
+
+    const claim = await prisma.wicaClaim.findUnique({ where: { id: req.params.claimId } });
+    if (!claim || claim.incidentId !== req.params.id)
+      return res.status(404).json({ error: 'Claim not found' });
+
+    const now  = new Date();
+    const data = {};
+    if (status) {
+      data.status = status;
+      if (status === 'INSURER_NOTIFIED') data.assessedAt = null;
+      if (status === 'UNDER_ASSESSMENT') data.assessedBy = req.user.sub;
+      if (status === 'APPROVED')  { data.approvedBy = req.user.sub; data.approvedAt = now; }
+      if (status === 'PAID')      data.paidAt = now;
+      if (status === 'REJECTED')  { data.rejectionReason = rejectionReason?.trim() || null; }
+    }
+    if (compensationAmount != null) data.compensationAmount = Number(compensationAmount);
+    if (claimRef)                   data.claimRef = claimRef.trim();
+
+    const updated = await prisma.wicaClaim.update({ where: { id: req.params.claimId }, data });
+    await writeAudit({ entityType: 'WicaClaim', entityId: claim.id, action: 'UPDATED', actor: req.user, changedFields: data, req });
+
+    res.json(updated);
+  } catch (err) { next(err); }
+});
+
+// POST /attendance/wica/incidents/:id/rtw — record return-to-work
+app.post('/attendance/wica/incidents/:id/rtw', authenticate, authorize(...WICA_MGMT_ROLES), async (req, res, next) => {
+  try {
+    const { rtwDate, rtwType, restrictions, reviewDate } = req.body;
+    if (!rtwDate) return res.status(400).json({ error: 'rtwDate is required (YYYY-MM-DD)' });
+    if (!rtwType || !RTW_TYPES.includes(rtwType))
+      return res.status(400).json({ error: `rtwType must be one of: ${RTW_TYPES.join(', ')}` });
+
+    const incident = await prisma.wicaIncident.findUnique({ where: { id: req.params.id } });
+    if (!incident) return res.status(404).json({ error: 'WICA incident not found' });
+
+    const rtw = await prisma.wicaRtwRecord.create({
+      data: {
+        id:          uuidv4(),
+        incidentId:  incident.id,
+        employeeId:  incident.employeeId,
+        rtwDate:     new Date(rtwDate + 'T00:00:00'),
+        rtwType,
+        restrictions: restrictions?.trim() || null,
+        reviewDate:  reviewDate ? new Date(reviewDate + 'T00:00:00') : null,
+        createdBy:   req.user.sub,
+      },
+    });
+
+    await writeAudit({ entityType: 'WicaRtwRecord', entityId: rtw.id, action: 'CREATED', actor: req.user, req });
+
+    res.status(201).json(rtw);
+  } catch (err) { next(err); }
+});
+
+// GET /attendance/wica/incidents/:id/rtw — RTW records for incident
+app.get('/attendance/wica/incidents/:id/rtw', authenticate, async (req, res, next) => {
+  try {
+    const incident = await prisma.wicaIncident.findUnique({ where: { id: req.params.id } });
+    if (!incident) return res.status(404).json({ error: 'WICA incident not found' });
+
+    const isManager = WICA_MGMT_ROLES.includes(req.user.role);
+    if (!isManager && incident.employeeId !== req.user.sub)
+      return res.status(403).json({ error: 'Forbidden' });
+
+    const records = await prisma.wicaRtwRecord.findMany({
+      where: { incidentId: req.params.id },
+      orderBy: { rtwDate: 'desc' },
+    });
+    res.json({ records, total: records.length });
+  } catch (err) { next(err); }
+});
+
+// GET /attendance/wica/dashboard — HR WICA summary dashboard
+app.get('/attendance/wica/dashboard', authenticate, authorize(...WICA_MGMT_ROLES), async (req, res, next) => {
+  try {
+    const [incidents, claims] = await Promise.all([
+      prisma.wicaIncident.findMany({ orderBy: { incidentDate: 'desc' } }),
+      prisma.wicaClaim.findMany(),
+    ]);
+    const now      = new Date();
+    const summary  = buildWicaDashboard(incidents, claims, now);
+    const overdue  = findOverdueIncidents(incidents, now).map(i => enrichIncident(i, now));
+    const due      = incidents
+      .filter(i => i.momReportDeadline && !i.momReportedAt && !['MOM_REPORTED', 'CLOSED'].includes(i.status))
+      .filter(i => new Date(i.momReportDeadline).getTime() >= now.getTime())
+      .map(i => enrichIncident(i, now))
+      .sort((a, b) => new Date(a.momReportDeadline) - new Date(b.momReportDeadline));
+
+    res.json({ summary, overdue, due, asOf: now });
+  } catch (err) { next(err); }
+});
+
+// POST /attendance/wica/sweep — flag overdue MOM reports, send HR alerts
+async function runWicaSweep() {
+  const now = new Date();
+  const all = await prisma.wicaIncident.findMany({
+    where: { momReportDeadline: { not: null }, momReportedAt: null, status: { notIn: ['MOM_REPORTED', 'CLOSED'] } },
+  });
+  const overdue = findOverdueIncidents(all, now);
+
+  for (const incident of overdue) {
+    fetch(`${NOTIFICATION_SERVICE_URL}/notifications/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type:  'SYSTEM',
+        roles: ['HR_ADMIN'],
+        data: {
+          title: `WICA MOM Report OVERDUE — ${WICA_CATEGORY_LABELS[incident.category]}`,
+          body:  `MOM iReport for employee ${incident.employeeId}'s ${WICA_CATEGORY_LABELS[incident.category]} incident on ${incident.incidentDate.toISOString().slice(0, 10)} is overdue (deadline: ${incident.momReportDeadline.toISOString().slice(0, 10)}). File immediately to avoid MOM enforcement action.`,
+        },
+        link: '/attendance/wica',
+      }),
+    }).catch(() => {});
+  }
+
+  return { checked: all.length, overdue: overdue.length };
+}
+
+app.post('/attendance/wica/sweep', authenticate, authorize(ROLES.HR_ADMIN, ROLES.SUPER_ADMIN), async (req, res, next) => {
+  try {
+    const result = await runWicaSweep();
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// WICA daily sweep scheduler — 01:00 SGT (after OT auth sweep at 00:50)
+function scheduleWicaSweep() {
+  if (process.env.NODE_ENV === 'test') return;
+  const sgtOffsetMs = 8 * 60 * 60 * 1000;
+  function msUntilNext0100Sgt() {
+    const sgtNow = new Date(Date.now() + sgtOffsetMs);
+    const target = new Date(Date.UTC(sgtNow.getUTCFullYear(), sgtNow.getUTCMonth(), sgtNow.getUTCDate(), 1, 0, 0, 0));
+    if (target <= sgtNow) target.setUTCDate(target.getUTCDate() + 1);
+    return target.getTime() - sgtNow.getTime();
+  }
+  async function tick() {
+    try {
+      const result = await runWicaSweep();
+      console.log(`[wica-sweep] checked=${result.checked} overdue=${result.overdue}`);
+    } catch (err) {
+      console.error('[wica-sweep] failed:', err.message);
+    }
+    setTimeout(tick, 24 * 60 * 60 * 1000);
+  }
+  setTimeout(tick, msUntilNext0100Sgt());
+  console.log('[wica-sweep] daily scheduler armed for 01:00 SGT');
+}
+
+// ── Error handler ─────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: err.message || 'Internal server error' }); });
 
 if (require.main === module) {
   app.listen(PORT, () => console.log(`[attendance-service] Running on port ${PORT}`));
   scheduleDailyAnomalySweep();
+  scheduleFwaSweep();
+  scheduleOtAuthSweep();
+  scheduleWicaSweep();
 }
 
 module.exports = app;
+module.exports.runFwaSweep     = runFwaSweep;
 module.exports.runAnomalySweep = runAnomalySweep;
+module.exports.runOtAuthSweep  = runOtAuthSweep;
+module.exports.runWicaSweep    = runWicaSweep;
