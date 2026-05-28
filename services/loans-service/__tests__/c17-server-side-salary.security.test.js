@@ -29,11 +29,21 @@ const mockLoanCreate    = jest.fn();
 const mockLoanFindFirst = jest.fn().mockResolvedValue(null);
 const mockLoanCount     = jest.fn().mockResolvedValue(0);
 
+// H-21: loans-service now uses DB SEQUENCE via $queryRawUnsafe.
+let _seqCounter = 0;
+const mockQueryRawUnsafe = jest.fn(async (sql) => {
+  if (sql && sql.includes("nextval")) return [{ n: ++_seqCounter }];
+  return [];
+});
+const mockExecuteRawUnsafe = jest.fn().mockResolvedValue(0);
+
 jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({
     salaryAdvance: { create: mockAdvCreate, findUnique: jest.fn(), findFirst: mockAdvFindFirst, findMany: jest.fn(), update: jest.fn(), count: mockAdvCount },
     staffLoan: { create: mockLoanCreate, findUnique: jest.fn(), findFirst: mockLoanFindFirst, findMany: jest.fn(), update: jest.fn(), count: mockLoanCount },
     loanRepayment: { create: jest.fn(), createMany: jest.fn(), findMany: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
+    $queryRawUnsafe: mockQueryRawUnsafe,
+    $executeRawUnsafe: mockExecuteRawUnsafe,
   })),
 }));
 

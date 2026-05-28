@@ -389,10 +389,23 @@ app.delete('/benefits/dependents/:id', authenticate, async (req, res, next) => {
 
 // ── Claims ────────────────────────────────────────────────────────────────────
 
+// H-21: DB sequence — race-safe alternative to prisma.count()+1.
+let _benefitsSeqInit = null;
+async function ensureBenefitsSequences() {
+  if (_benefitsSeqInit) return _benefitsSeqInit;
+  _benefitsSeqInit = Promise.all([
+    prisma.$executeRawUnsafe(`CREATE SEQUENCE IF NOT EXISTS benefits_clm_seq START 1`),
+    prisma.$executeRawUnsafe(`CREATE SEQUENCE IF NOT EXISTS benefits_flx_seq START 1`),
+  ]);
+  return _benefitsSeqInit;
+}
+ensureBenefitsSequences().catch(err => console.error('[benefits-service] sequence init failed', err.message));
+
 async function nextClaimNumber() {
+  await ensureBenefitsSequences();
   const year = new Date().getFullYear();
-  const count = await prisma.insuranceClaim.count();
-  return `CLM-${year}-${String(count + 1).padStart(5, '0')}`;
+  const rows = await prisma.$queryRawUnsafe(`SELECT nextval('benefits_clm_seq') AS n`);
+  return `CLM-${year}-${String(Number(rows[0].n)).padStart(5, '0')}`;
 }
 
 // POST /benefits/claims — employee submits claim against an active enrollment
@@ -686,9 +699,10 @@ const {
 const FINANCE_VIEW_ROLES = [...FINANCE_ROLES, ...HR_ROLES];
 
 async function nextFlexiClaimNumber() {
-  const year  = new Date().getFullYear();
-  const count = await prisma.flexiClaim.count();
-  return `FLX-${year}-${String(count + 1).padStart(5, '0')}`;
+  await ensureBenefitsSequences();
+  const year = new Date().getFullYear();
+  const rows = await prisma.$queryRawUnsafe(`SELECT nextval('benefits_flx_seq') AS n`);
+  return `FLX-${year}-${String(Number(rows[0].n)).padStart(5, '0')}`;
 }
 
 // ── Flexi Categories ─────────────────────────────────────────────────────────

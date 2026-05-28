@@ -61,6 +61,14 @@ router.post('/', authenticate, async (req, res, next) => {
 
     if (!employeeId) return res.status(400).json({ error: 'No employee profile linked to your account. Contact HR to link your employee record before submitting claims.' });
     if (!categoryId || !title || !claimDate || !totalAmount) return res.status(400).json({ error: 'categoryId, title, claimDate, totalAmount required' });
+    // SECURITY (H-15): negative or zero totalAmount must never be accepted.
+    // !totalAmount catches 0/undefined; negative values pass !totalAmount, so check separately.
+    if (Number.isNaN(Number(totalAmount)) || Number(totalAmount) <= 0) {
+      return res.status(400).json({ error: 'totalAmount must be a positive number' });
+    }
+    if (gstAmount !== undefined && Number(gstAmount) < 0) {
+      return res.status(400).json({ error: 'gstAmount cannot be negative' });
+    }
 
     const cat = await prisma.claimCategory.findUnique({ where: { id: categoryId } });
     if (cat?.maxAmount && totalAmount > cat.maxAmount) return res.status(400).json({ error: `Amount exceeds category limit of SGD ${cat.maxAmount}` });
@@ -113,10 +121,23 @@ router.patch('/:id', authenticate, async (req, res, next) => {
 
     const { categoryId, title, description, claimDate, totalAmount, gstAmount } = req.body;
 
-    if (categoryId) {
-      const cat = await prisma.claimCategory.findUnique({ where: { id: categoryId } });
-      if (cat?.maxAmount && (totalAmount ?? claim.totalAmount) > cat.maxAmount)
+    // SECURITY (H-15): reject zero / negative amounts.
+    if (totalAmount !== undefined && (Number.isNaN(Number(totalAmount)) || Number(totalAmount) <= 0)) {
+      return res.status(400).json({ error: 'totalAmount must be a positive number' });
+    }
+    if (gstAmount !== undefined && Number(gstAmount) < 0) {
+      return res.status(400).json({ error: 'gstAmount cannot be negative' });
+    }
+    // SECURITY (H-14): always re-validate the cap, including when the caller
+    // omitted `categoryId` from the patch (the prior version skipped the
+    // cap check entirely in that case, letting amounts blow past the cap).
+    const effectiveCategoryId = categoryId ?? claim.categoryId;
+    if (effectiveCategoryId) {
+      const cat = await prisma.claimCategory.findUnique({ where: { id: effectiveCategoryId } });
+      const effectiveAmount = totalAmount ?? claim.totalAmount;
+      if (cat?.maxAmount && Number(effectiveAmount) > cat.maxAmount) {
         return res.status(400).json({ error: `Amount exceeds category limit of SGD ${cat.maxAmount}` });
+      }
     }
 
     const updated = await prisma.claim.update({
@@ -142,6 +163,13 @@ router.put('/:id/approve', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_A
     const claim = await prisma.claim.findUnique({ where: { id: req.params.id } });
     if (!claim) return res.status(404).json({ error: 'Claim not found' });
     if (!['SUBMITTED'].includes(claim.status)) return res.status(400).json({ error: 'Only SUBMITTED claims can be approved' });
+
+    // SECURITY (H-16) maker-checker: an approver may not approve their own
+    // claim. A delegatee acting on behalf of another approver is OK; the
+    // attribution audit (approvedByDelegateeId) is preserved separately.
+    if (req.user.employeeId && claim.employeeId === req.user.employeeId && !delegationId) {
+      return res.status(409).json({ error: 'Approver may not approve their own claim (maker-checker)' });
+    }
 
     let approvedById      = req.user.sub;
     let approvedByDelegateeId = null;

@@ -255,7 +255,7 @@ router.get('/grants/ets/report', authenticate, authorize(...ADMIN_ROLES), async 
 // ── GET /training/sfc/balance/:employeeId ─────────────────────────────────────
 router.get('/sfc/balance/:employeeId', authenticate, async (req, res, next) => {
   try {
-    const requesterEmpId = req.headers['x-employee-id'];
+    const requesterEmpId = req.user.employeeId;
     const role = req.user?.role;
     const isAdmin = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER].includes(role);
     if (!isAdmin && requesterEmpId !== req.params.employeeId) {
@@ -309,7 +309,7 @@ router.post('/sfc/declarations', authenticate, async (req, res, next) => {
     if (!employeeId || !enrollmentId || amount == null) {
       return res.status(400).json({ error: 'employeeId, enrollmentId, amount required' });
     }
-    const requesterEmpId = req.headers['x-employee-id'];
+    const requesterEmpId = req.user.employeeId;
     const role = req.user?.role;
     const isAdmin = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER].includes(role);
     if (!isAdmin && requesterEmpId !== employeeId) {

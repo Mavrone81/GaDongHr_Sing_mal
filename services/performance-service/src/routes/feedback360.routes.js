@@ -107,7 +107,7 @@ router.post('/cycles/:id/360/nominations',
       const cycle = await prisma.reviewCycle.findUnique({ where: { id: req.params.id } });
       if (!cycle) return res.status(404).json({ error: 'Cycle not found' });
 
-      const subjectEmployeeId = req.headers['x-employee-id'];
+      const subjectEmployeeId = req.user.employeeId;
       if (!subjectEmployeeId) return res.status(400).json({ error: 'No employee profile linked to this account' });
 
       const { nominations } = req.body;
@@ -166,7 +166,7 @@ router.get('/cycles/:id/360/nominations',
   async (req, res, next) => {
     try {
       const role = req.user.role;
-      const empId = req.headers['x-employee-id'];
+      const empId = req.user.employeeId;
       const { status, subjectEmployeeId } = req.query;
 
       const where = { cycleId: req.params.id };
@@ -241,7 +241,7 @@ router.get('/cycles/:id/360/my-reviews',
   authenticate,
   async (req, res, next) => {
     try {
-      const reviewerEmployeeId = req.headers['x-employee-id'];
+      const reviewerEmployeeId = req.user.employeeId;
       if (!reviewerEmployeeId) return res.status(400).json({ error: 'No employee profile linked' });
 
       const requests = await prisma.feedbackRequest.findMany({
@@ -266,7 +266,7 @@ router.post('/360/submit/:requestId',
   authenticate,
   async (req, res, next) => {
     try {
-      const reviewerEmployeeId = req.headers['x-employee-id'];
+      const reviewerEmployeeId = req.user.employeeId;
       const request = await prisma.feedbackRequest.findUnique({
         where: { id: req.params.requestId },
         include: { responses: true },
@@ -341,7 +341,7 @@ router.get('/cycles/:id/360/report/:employeeId',
   async (req, res, next) => {
     try {
       const role = req.user.role;
-      const empId = req.headers['x-employee-id'];
+      const empId = req.user.employeeId;
 
       // Employees can only see their own report
       if (!['SUPER_ADMIN', 'HR_ADMIN', 'HR_MANAGER', 'MANAGER'].includes(role)) {

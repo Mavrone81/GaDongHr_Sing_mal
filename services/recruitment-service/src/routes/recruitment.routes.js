@@ -446,7 +446,7 @@ router.post('/candidates/:id/tag-job', authenticate, authorize(ROLES.SUPER_ADMIN
   } catch (err) { next(err); }
 });
 
-router.get('/candidates/:id', authenticate, async (req, res, next) => {
+router.get('/candidates/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.RECRUITER), async (req, res, next) => {
   try {
     const candidate = await prisma.candidate.findUnique({
       where: { id: req.params.id },
@@ -521,7 +521,7 @@ router.post('/candidates/:id/resume', authenticate, authorize(ROLES.SUPER_ADMIN,
   } catch (err) { next(err); }
 });
 
-router.get('/candidates/:id/resume', authenticate, async (req, res, next) => {
+router.get('/candidates/:id/resume', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.RECRUITER), async (req, res, next) => {
   try {
     const candidate = await prisma.candidate.findUnique({ where: { id: req.params.id }, select: { resumePath: true, resumeName: true } });
     if (!candidate?.resumePath) return res.status(404).json({ error: 'No resume uploaded' });

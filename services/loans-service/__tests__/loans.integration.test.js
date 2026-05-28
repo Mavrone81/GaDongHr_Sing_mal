@@ -68,6 +68,15 @@ const mockRepayFindMany   = jest.fn();
 const mockRepayUpdate     = jest.fn();
 const mockRepayUpdateMany = jest.fn();
 
+// H-21: loans-service now uses DB SEQUENCE for reference numbers via $queryRawUnsafe.
+// Mock both raw helpers to return a synthetic incrementing sequence.
+let _seqCounter = 0;
+const mockQueryRawUnsafe = jest.fn(async (sql) => {
+  if (sql && sql.includes("nextval")) return [{ n: ++_seqCounter }];
+  return [];
+});
+const mockExecuteRawUnsafe = jest.fn().mockResolvedValue(0);
+
 jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({
     salaryAdvance: {
@@ -84,6 +93,8 @@ jest.mock('@prisma/client', () => ({
       create: mockRepayCreate, createMany: mockRepayCreateMany,
       findMany: mockRepayFindMany, update: mockRepayUpdate, updateMany: mockRepayUpdateMany,
     },
+    $queryRawUnsafe: mockQueryRawUnsafe,
+    $executeRawUnsafe: mockExecuteRawUnsafe,
   })),
 }));
 
@@ -189,7 +200,8 @@ test('AD-05 HR sees all', async () => {
 });
 
 test('AD-06 HR approves with default month', async () => {
-  setUser({ role: 'HR_ADMIN', sub: 'hr-1' });
+  // H-16 maker-checker: HR approver must not be the advance owner.
+  setUser({ role: 'HR_ADMIN', sub: 'hr-1', employeeId: 'hr-1' });
   mockAdvFindUnique.mockResolvedValueOnce(makeAdvance());
   mockAdvUpdate.mockResolvedValueOnce(makeAdvance({ status: 'APPROVED', deductionMonth: '2026-05' }));
   const res = await request(app).put('/loans/advances/adv-001/approve').send({});
@@ -219,7 +231,7 @@ test('AD-09 requester cancels PENDING', async () => {
 });
 
 test('AD-10 payroll callback marks deducted', async () => {
-  setUser({ role: 'PAYROLL_OFFICER' });
+  setUser({ role: 'PAYROLL_OFFICER', sub: 'payroll-1', employeeId: 'payroll-1' });
   mockAdvFindUnique.mockResolvedValueOnce(makeAdvance({ status: 'APPROVED' }));
   mockAdvUpdate.mockResolvedValueOnce(makeAdvance({ status: 'DEDUCTED', deductedAt: new Date() }));
   const res = await request(app).post('/loans/advances/adv-001/mark-deducted').send({ payrollRunId: 'run-1' });
@@ -285,7 +297,8 @@ test('LN-06 returns outstanding + schedule', async () => {
 });
 
 test('LN-07 approve generates schedule + agreement', async () => {
-  setUser({ role: 'HR_ADMIN', sub: 'hr-1' });
+  // H-16 maker-checker: approver employeeId must differ from loan.employeeId.
+  setUser({ role: 'HR_ADMIN', sub: 'hr-1', employeeId: 'hr-1' });
   mockLoanFindUnique.mockResolvedValueOnce(makeLoan());
   mockLoanUpdate.mockResolvedValueOnce(makeLoan({ status: 'APPROVED', agreementHtml: '<html>...' }));
   mockRepayCreateMany.mockResolvedValueOnce({ count: 12 });

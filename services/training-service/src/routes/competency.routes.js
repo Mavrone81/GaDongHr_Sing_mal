@@ -199,7 +199,7 @@ router.get(
       const role = req.headers['x-user-role'];
       const self = req.headers['x-employee-id'];
       // Employees may read their own assessments. Managers+admins may read any.
-      const isAdmin = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.MANAGER].includes(role);
+      const isAdmin = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.LINE_MANAGER].includes(role);
       if (!isAdmin && self !== employeeId) {
         return res.status(403).json({ error: 'Forbidden' });
       }
@@ -215,7 +215,7 @@ router.get(
 
 router.put(
   '/employees/:employeeId/competencies/:competencyId',
-  authenticate, authorize(...ADMIN_ROLES, ROLES.MANAGER),
+  authenticate, authorize(...ADMIN_ROLES, ROLES.LINE_MANAGER),
   async (req, res, next) => {
     try {
       const { assessedLevel, notes } = req.body;
@@ -256,7 +256,7 @@ router.get(
       const employeeId = req.params.employeeId;
       const role = req.headers['x-user-role'];
       const self = req.headers['x-employee-id'];
-      const isAdmin = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.MANAGER].includes(role);
+      const isAdmin = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.LINE_MANAGER].includes(role);
       if (!isAdmin && self !== employeeId) {
         return res.status(403).json({ error: 'Forbidden' });
       }

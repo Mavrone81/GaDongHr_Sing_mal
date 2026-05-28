@@ -7,7 +7,46 @@ const { authenticator } = require('otplib');
 const qrcode = require('qrcode');
 const rateLimit = require('express-rate-limit');
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 // Node 20 has native fetch — no import needed
+
+// SECURITY (H-09): verify OAuth id_token signatures against the provider's
+// JWKS instead of decoding the payload blindly. Keys are cached in-process
+// for an hour to avoid one JWKS fetch per login.
+const JWKS_CACHE = new Map(); // url → { fetchedAt, keys }
+const JWKS_TTL_MS = 60 * 60 * 1000;
+
+async function fetchJwks(jwksUrl) {
+  const cached = JWKS_CACHE.get(jwksUrl);
+  if (cached && Date.now() - cached.fetchedAt < JWKS_TTL_MS) return cached.keys;
+  const r = await fetch(jwksUrl, { headers: { Accept: 'application/json' } });
+  if (!r.ok) throw new Error(`JWKS fetch failed: ${r.status}`);
+  const body = await r.json();
+  JWKS_CACHE.set(jwksUrl, { fetchedAt: Date.now(), keys: body.keys || [] });
+  return body.keys || [];
+}
+
+function jwkToPem(jwk) {
+  // Use Node 16+ native KeyObject -> PEM conversion via crypto.createPublicKey.
+  const keyObj = crypto.createPublicKey({ key: jwk, format: 'jwk' });
+  return keyObj.export({ format: 'pem', type: 'spki' });
+}
+
+async function verifyOidcIdToken({ idToken, jwksUrl, issuers, audience }) {
+  const headerB64 = idToken.split('.')[0];
+  const header = JSON.parse(Buffer.from(headerB64, 'base64url').toString('utf8'));
+  if (!header.kid) throw new Error('id_token missing kid header');
+  const keys = await fetchJwks(jwksUrl);
+  const jwk = keys.find(k => k.kid === header.kid);
+  if (!jwk) throw new Error('id_token kid not found in JWKS');
+  const pem = jwkToPem(jwk);
+  const issArr = Array.isArray(issuers) ? issuers : [issuers];
+  return jwt.verify(idToken, pem, {
+    algorithms: [header.alg || 'RS256'],
+    issuer: issArr,
+    audience,
+  });
+}
 
 const prisma = require('../utils/prisma');
 const { signAccessToken, signRefreshToken, verifyToken } = require('../utils/jwt.utils');
@@ -40,14 +79,17 @@ async function sendEmailOtp(user) {
     INSERT INTO otp_tokens (id, "userId", "codeHash", "expiresAt", used, "createdAt")
     VALUES (${uuidv4()}, ${user.id}, ${codeHash}, ${expiresAt}, false, now())
   `;
-  // Send via notification service (internal call)
+  // Send via notification service (internal call).
+  // H-07: use x-internal-service-key instead of a forged SUPER_ADMIN JWT —
+  // the JWT used to land in morgan logs as a literal Bearer, giving anyone
+  // who read the log file 8 hours of SUPER_ADMIN access. The internal key
+  // is not logged because morgan doesn't capture request bodies/headers
+  // by default.
   const notifUrl = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:4009';
   try {
-    // Get a service token — sign with a minimal payload
-    const svcToken = signAccessToken({ sub: 'auth-service', role: 'SUPER_ADMIN', permissions: ['*'] });
     await fetch(`${notifUrl}/notifications/email`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${svcToken}` },
+      headers: { 'Content-Type': 'application/json', 'x-internal-service-key': process.env.INTERNAL_SERVICE_KEY || '' },
       body: JSON.stringify({
         to: user.email,
         subject: 'Your Vorkhive login code',
@@ -139,6 +181,25 @@ function setAuthCookies(res, { accessToken, refreshToken }) {
 function clearAuthCookies(res) {
   res.clearCookie(ACCESS_TOKEN_COOKIE,  { path: COOKIE_PATH });
   res.clearCookie(REFRESH_TOKEN_COOKIE, { path: REFRESH_COOKIE_PATH });
+}
+
+// SECURITY (H-19): SSO pending tokens are scoped HttpOnly cookies and are
+// path-restricted to /api/auth so they cannot be replayed against general API
+// endpoints. Previously the SSO callback returned the pending token in JSON
+// and the frontend stored it in sessionStorage, where any XSS could read it.
+const PENDING_TOKEN_COOKIE = 'vorkhive_sso_pending';
+const PENDING_TTL_SECONDS  = 5 * 60; // 5 min — matches signAccessToken expiresIn
+
+function setPendingTokenCookie(res, pendingToken) {
+  const secure = process.env.NODE_ENV === 'production';
+  res.cookie(PENDING_TOKEN_COOKIE, pendingToken, {
+    httpOnly: true, secure, sameSite: 'strict',
+    path: '/api/auth',
+    maxAge: PENDING_TTL_SECONDS * 1000,
+  });
+}
+function clearPendingTokenCookie(res) {
+  res.clearCookie(PENDING_TOKEN_COOKIE, { path: '/api/auth' });
 }
 
 async function logAudit(prismaClient, { userId, action, resource, resourceId, req, success = true, before, after }) {
@@ -310,14 +371,22 @@ router.post('/refresh', async (req, res, next) => {
       return res.status(401).json({ error: 'Refresh token expired or revoked' });
     }
 
-    const user = await prisma.user.findUnique({ 
+    const user = await prisma.user.findUnique({
       where: { id: stored.userId },
       include: { role: { include: { permissions: { include: { permission: true } } } } }
     });
     if (!user || !user.isActive) return res.status(401).json({ error: 'User not found or inactive' });
 
-    // Rotate: revoke old, issue new
-    await prisma.refreshToken.update({ where: { id: stored.id }, data: { isRevoked: true } });
+    // SECURITY (H-12): rotate atomically — updateMany scoped on isRevoked=false
+    // returns count=0 if a concurrent refresh already revoked the token, so we
+    // abort instead of issuing a second new pair against the same old token.
+    const { count: revokedCount } = await prisma.refreshToken.updateMany({
+      where: { id: stored.id, isRevoked: false },
+      data:  { isRevoked: true },
+    });
+    if (revokedCount === 0) {
+      return res.status(401).json({ error: 'Refresh token already rotated' });
+    }
 
     const permissions = user.role?.permissions.map(p => p.permission.code) || [];
     const tokenPayload = {
@@ -620,6 +689,8 @@ router.get('/sso/google/config', async (req, res, next) => {
 
 // ── SSO MFA helper ────────────────────────────────────────────────────────────
 // Returns a pending-token response if MFA is required, or null if not needed.
+// The caller is expected to write the pendingToken to an HttpOnly cookie via
+// setPendingTokenCookie(res, result.pendingToken) before responding.
 async function checkSsoMfa(user, req) {
   const mfaExempt = user.mfaExempt ?? false;
   const [orgMfaRequired, orgMethod] = await Promise.all([getOrgMfaRequired(), getOrgMfaMethod()]);
@@ -642,7 +713,9 @@ async function checkSsoMfa(user, req) {
 // POST /auth/sso/mfa-verify — public, verifies MFA after SSO identity check
 router.post('/sso/mfa-verify', async (req, res, next) => {
   try {
-    const { pendingToken, mfaCode } = req.body;
+    // H-19: prefer the HttpOnly cookie; accept body for transitional compat.
+    const pendingToken = req.cookies?.[PENDING_TOKEN_COOKIE] || req.body?.pendingToken;
+    const { mfaCode }  = req.body;
     if (!pendingToken || !mfaCode) return res.status(400).json({ error: 'pendingToken and mfaCode required' });
 
     let payload;
@@ -684,6 +757,8 @@ router.post('/sso/mfa-verify', async (req, res, next) => {
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date(), failedLogins: 0, lockedUntil: null } });
     await logAudit(prisma, { userId: user.id, action: 'SSO_LOGIN_SUCCESS', resource: 'auth', req, after: { sso_mfa: true } });
 
+    setAuthCookies(res, { accessToken, refreshToken: refreshTokenStr });
+    clearPendingTokenCookie(res);
     res.json({
       accessToken, refreshToken: refreshTokenStr,
       user: { id: user.id, name: user.name, email: user.email, role: user.role?.name, employeeId: user.employeeId, permissions },
@@ -715,13 +790,27 @@ router.post('/sso/google/callback', async (req, res, next) => {
     });
     const tokenData = await tokenRes.json();
     if (!tokenRes.ok || !tokenData.id_token) {
-      console.error('[sso/google] Token exchange failed:', tokenData);
+      // H-11: redact — never log access_token / refresh_token / id_token payloads.
+      console.error('[sso/google] Token exchange failed:', {
+        error: tokenData?.error, error_description: tokenData?.error_description,
+        status: tokenRes.status,
+      });
       return res.status(401).json({ error: tokenData.error_description || 'Google token exchange failed' });
     }
 
-    // Decode the id_token (JWT) — verify with Google's certs for production; for now decode payload only
-    const [, payloadB64] = tokenData.id_token.split('.');
-    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    // H-09: verify id_token signature against Google's JWKS, plus iss/aud/exp.
+    let payload;
+    try {
+      payload = await verifyOidcIdToken({
+        idToken: tokenData.id_token,
+        jwksUrl: 'https://www.googleapis.com/oauth2/v3/certs',
+        issuers: ['https://accounts.google.com', 'accounts.google.com'],
+        audience: clientId,
+      });
+    } catch (e) {
+      console.error('[sso/google] id_token verification failed:', e.message);
+      return res.status(401).json({ error: 'Google id_token verification failed' });
+    }
     const { email, name, email_verified } = payload;
 
     if (!email_verified) return res.status(401).json({ error: 'Google email not verified' });
@@ -743,7 +832,10 @@ router.post('/sso/google/callback', async (req, res, next) => {
 
     // MFA check — same rules as regular login
     const mfaResult = await checkSsoMfa(user, req);
-    if (mfaResult) return res.json(mfaResult);
+    if (mfaResult) {
+      setPendingTokenCookie(res, mfaResult.pendingToken);
+      return res.json(mfaResult);
+    }
 
     // Issue Vorkhive JWT
     const permissions = user.role?.permissions.map(p => p.permission.code) || [];
@@ -759,6 +851,7 @@ router.post('/sso/google/callback', async (req, res, next) => {
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date(), failedLogins: 0, lockedUntil: null } });
     await logAudit(prisma, { userId: user.id, action: 'SSO_LOGIN_SUCCESS', resource: 'auth', req, after: { provider: 'google' } });
 
+    setAuthCookies(res, { accessToken, refreshToken: refreshTokenStr });
     res.json({
       accessToken, refreshToken: refreshTokenStr,
       user: { id: user.id, name: user.name, email: user.email, role: user.role?.name, employeeId: user.employeeId, permissions },
@@ -811,13 +904,40 @@ router.post('/sso/microsoft/callback', async (req, res, next) => {
     });
     const tokenData = await tokenRes.json();
     if (!tokenRes.ok || !tokenData.id_token) {
-      console.error('[sso/microsoft] Token exchange failed:', tokenData);
+      // H-11: redact — never log access_token / refresh_token / id_token payloads.
+      console.error('[sso/microsoft] Token exchange failed:', {
+        error: tokenData?.error, error_description: tokenData?.error_description,
+        status: tokenRes.status,
+      });
       return res.status(401).json({ error: tokenData.error_description || tokenData.error || 'Microsoft token exchange failed' });
     }
 
-    // Decode the id_token payload
-    const [, payloadB64] = tokenData.id_token.split('.');
-    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    // H-09: verify id_token signature against the tenant's JWKS, plus iss/aud/exp.
+    // For 'common' multi-tenant we accept v1 (sts.windows.net) AND v2.0 issuers
+    // for both the requested tenant and the {tid} embedded in the token.
+    let payload;
+    try {
+      // Peek at the unverified payload to learn the tid (needed for issuer match
+      // when using the common endpoint). Verification still happens below; the
+      // peek is purely to construct the allowed-issuer list.
+      const peekB64 = tokenData.id_token.split('.')[1];
+      const peek = JSON.parse(Buffer.from(peekB64, 'base64url').toString('utf8'));
+      const peekedTid = peek?.tid || tenant;
+      const allowedIssuers = ['https://login.microsoftonline.com', 'https://sts.windows.net']
+        .flatMap(prefix => [
+          `${prefix}/${peekedTid}/v2.0`, `${prefix}/${peekedTid}/`,
+          `${prefix}/${tenant}/v2.0`,    `${prefix}/${tenant}/`,
+        ]);
+      payload = await verifyOidcIdToken({
+        idToken: tokenData.id_token,
+        jwksUrl: `https://login.microsoftonline.com/${tenant}/discovery/v2.0/keys`,
+        issuers: allowedIssuers,
+        audience: clientId,
+      });
+    } catch (e) {
+      console.error('[sso/microsoft] id_token verification failed:', e.message);
+      return res.status(401).json({ error: 'Microsoft id_token verification failed' });
+    }
     const email = (payload.email || payload.preferred_username || '').toLowerCase();
     const name = payload.name || email;
 
@@ -849,7 +969,10 @@ router.post('/sso/microsoft/callback', async (req, res, next) => {
 
     // MFA check — same rules as regular login
     const mfaResult = await checkSsoMfa(user, req);
-    if (mfaResult) return res.json(mfaResult);
+    if (mfaResult) {
+      setPendingTokenCookie(res, mfaResult.pendingToken);
+      return res.json(mfaResult);
+    }
 
     // Issue Vorkhive JWT
     const permissions = user.role?.permissions.map(p => p.permission.code) || [];
@@ -864,6 +987,7 @@ router.post('/sso/microsoft/callback', async (req, res, next) => {
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date(), failedLogins: 0, lockedUntil: null } });
     await logAudit(prisma, { userId: user.id, action: 'SSO_LOGIN_SUCCESS', resource: 'auth', req, after: { provider: 'microsoft' } });
 
+    setAuthCookies(res, { accessToken, refreshToken: refreshTokenStr });
     res.json({
       accessToken, refreshToken: refreshTokenStr,
       user: { id: user.id, name: user.name, email: user.email, role: user.role?.name, employeeId: user.employeeId, permissions },

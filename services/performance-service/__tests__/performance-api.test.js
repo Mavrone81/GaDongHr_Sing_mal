@@ -5,8 +5,8 @@ const request = require('supertest');
 // ── Mocks must be declared before require('../src/index') ─────────────────────
 jest.mock('/app/shared/auth-middleware', () => ({
   authenticate: (req, _res, next) => {
-    req.user = { sub: 'admin-001', role: 'SUPER_ADMIN', email: 'admin@test.com' };
-    req.headers['x-employee-id'] = 'emp-admin';
+    // H-17: routes now read req.user.employeeId, not the spoofable header.
+    req.user = { sub: 'admin-001', role: 'SUPER_ADMIN', email: 'admin@test.com', employeeId: 'emp-admin' };
     next();
   },
   authorize: (..._roles) => (_req, _res, next) => next(),

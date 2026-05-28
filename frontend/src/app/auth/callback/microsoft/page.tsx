@@ -45,6 +45,7 @@ export default function MicrosoftCallbackPage() {
 
     fetch(`${apiUrl()}/auth/sso/microsoft/callback`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, redirectUri }),
       signal: controller.signal,
@@ -57,7 +58,8 @@ export default function MicrosoftCallbackPage() {
       .then(async data => {
         navigating = true;
         if (data.ssoMfaPending) {
-          sessionStorage.setItem('sso_pending_token', data.pendingToken);
+          // H-19: pendingToken is held in an HttpOnly cookie; do not store
+          // it in JS-accessible sessionStorage. Only routing hints are kept.
           sessionStorage.setItem('sso_mfa_method', data.mfaMethod || 'TOTP');
           sessionStorage.setItem('sso_mfa_setup', data.mfaSetupRequired ? '1' : '0');
           router.replace('/login?sso_mfa=1');

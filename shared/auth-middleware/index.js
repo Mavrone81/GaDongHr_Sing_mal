@@ -22,7 +22,13 @@ function getPublicKey() {
 }
 
 /**
- * Express middleware: verify JWT bearer token
+ * Express middleware: verify JWT bearer token.
+ *
+ * SECURITY (H-08): enforce both algorithm and issuer at verification time.
+ * Previously the verify call accepted any RS256-signed token, which let the
+ * 5-minute SSO-pending token reach routes it should never have. We also
+ * reject SSO-pending tokens here as defense-in-depth, since they carry a
+ * truthy `sso_pending` claim but no role.
  */
 function authenticate(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -31,7 +37,10 @@ function authenticate(req, res, next) {
   }
   const token = authHeader.slice(7);
   try {
-    const payload = jwt.verify(token, getPublicKey(), { algorithms: ['RS256'] });
+    const payload = jwt.verify(token, getPublicKey(), { algorithms: ['RS256'], issuer: 'vorkhive' });
+    if (payload?.sso_pending === true) {
+      return res.status(401).json({ error: 'SSO pending token is not accepted on protected endpoints' });
+    }
     req.user = payload;
     next();
   } catch (err) {
@@ -49,21 +58,28 @@ function authenticate(req, res, next) {
  *   router.get('/admin', authenticate, authorize('SUPER_ADMIN'), handler)
  */
 function authorize(...allowed) {
+  // SECURITY (H-08): drop falsy entries from the allowed list. A typo such as
+  // `ROLES.MANAGER` (which is `undefined`, since the canonical name is
+  // LINE_MANAGER) used to match a JWT whose `role` claim was also undefined,
+  // letting half-authenticated tokens through. The .filter(Boolean) blocks
+  // that even if a future ROLES.X typo recurs.
+  const allowedClean = allowed.filter(Boolean);
   return (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
-    
+
     const userRole = req.user.role;
     const userPerms = req.user.permissions || [];
 
-    // Allow if role is explicitly in list OR if permission is in list
-    const hasAccess = allowed.some(item => 
-      item === userRole || userPerms.includes(item)
+    // Allow if role is explicitly in list OR if permission is in list.
+    // The role check uses strict equality to a non-falsy entry.
+    const hasAccess = allowedClean.some(item =>
+      (item && item === userRole) || userPerms.includes(item)
     );
 
     if (!hasAccess) {
       return res.status(403).json({
         error: 'Forbidden',
-        message: `You do not have the required role or permission. Required one of: ${allowed.join(', ')}`,
+        message: `You do not have the required role or permission. Required one of: ${allowedClean.join(', ')}`,
       });
     }
     next();

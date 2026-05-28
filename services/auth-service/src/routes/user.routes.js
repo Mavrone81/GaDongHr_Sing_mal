@@ -18,10 +18,13 @@ if (!INVITE_SECRET || INVITE_SECRET.length < 32) {
 }
 
 function signInviteJwt(userId, rawToken) {
+  // H-10: 7-day invite expiry (was 30 days). The DB row carries the
+  // authoritative inviteExpiry too; this JWT expiry stops a stolen URL token
+  // from being usable beyond a week even if the DB is briefly inconsistent.
   return jwt.sign(
     { sub: userId, jti: rawToken, purpose: 'onboard' },
     INVITE_SECRET,
-    { algorithm: 'HS256', expiresIn: '30d' }
+    { algorithm: 'HS256', expiresIn: '7d' }
   );
 }
 
@@ -119,6 +122,30 @@ router.post('/', checkInternal, (req, res, next) => {
   }
 });
 
+// SECURITY (H-20): role hierarchy. Higher rank = more privileged. Any user
+// granting a role must (a) have rank >= the target role's rank, and (b) when
+// editing another user, the actor's rank must be > the target user's current
+// rank (cannot demote a peer, cannot grant peer-or-higher). Internal callers
+// (x-internal-service-key) bypass the hierarchy check — they are by definition
+// trusted backend code.
+const ROLE_RANK = {
+  SUPER_ADMIN: 100,
+  ADMIN:        90,
+  HR_ADMIN:     80,
+  HR_MANAGER:   70,
+  FINANCE_ADMIN:70,
+  IT_ADMIN:     70,
+  PAYROLL_OFFICER: 60,
+  TRAINING_MANAGER: 60,
+  RECRUITER:    50,
+  LINE_MANAGER: 50,
+  EMPLOYEE:     10,
+};
+function rankOf(roleName) {
+  if (!roleName) return 0;
+  return ROLE_RANK[roleName.toUpperCase()] ?? 0;
+}
+
 // PUT /users/:id  (update user — admin or internal service)
 router.put('/:id', checkInternal, (req, res, next) => {
   if (req.isInternal) return next();
@@ -127,6 +154,25 @@ router.put('/:id', checkInternal, (req, res, next) => {
   try {
     const { name, role, isActive, employeeId } = req.body;
     let roleId = undefined;
+
+    // Hierarchy guard for role changes by non-internal callers.
+    if (role && !req.isInternal) {
+      const actorRank = rankOf(req.user?.role);
+      const targetRoleRank = rankOf(role);
+      if (targetRoleRank > actorRank) {
+        return res.status(403).json({ error: 'Cannot grant a role higher than your own' });
+      }
+      // Also prevent escalation of an existing user above the actor: load the
+      // target user's current role and forbid the edit if they're already at
+      // or above the actor's rank.
+      const targetUser = await prisma.user.findUnique({
+        where: { id: req.params.id },
+        include: { role: true },
+      });
+      if (targetUser && rankOf(targetUser.role?.name) >= actorRank && req.user.sub !== targetUser.id) {
+        return res.status(403).json({ error: 'Cannot edit a user at or above your role rank' });
+      }
+    }
 
     if (role) {
       const targetRole = await prisma.role.findFirst({
@@ -293,7 +339,39 @@ router.get('/invite/:token', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /users/consume-invite — internal: validate JWT + consume raw token
+// POST /users/invite/derive-key — internal: verify JWT signature and return
+// the rawToken used as HKDF input for form-payload decryption WITHOUT
+// consuming. This replaces the previous flow where employee-service decoded
+// the JWT locally (without signature verification) to pluck the jti claim,
+// which let a malicious caller forge a token with any jti value and recover
+// the decryption key for someone else's pending application (H-10, H-23).
+router.post('/invite/derive-key', async (req, res, next) => {
+  const key = req.headers['x-internal-service-key'];
+  if (!key || key !== process.env.INTERNAL_SERVICE_KEY) return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: 'token required' });
+    let rawToken;
+    try {
+      const payload = verifyInviteJwt(token);
+      if (payload.purpose !== 'onboard') throw new Error('wrong purpose');
+      rawToken = payload.jti;
+    } catch {
+      return res.status(404).json({ error: 'Invalid or expired invite token' });
+    }
+    // Confirm rawToken still binds to an active invite row (not consumed).
+    const user = await prisma.user.findFirst({
+      where: { inviteToken: rawToken, inviteExpiry: { gt: new Date() } },
+      select: { id: true },
+    });
+    if (!user) return res.status(404).json({ error: 'Invalid or expired invite token' });
+    res.json({ rawToken });
+  } catch (err) { next(err); }
+});
+
+// POST /users/consume-invite — internal: validate JWT + consume raw token.
+// Note: rawToken is intentionally NOT returned anymore. Callers needing the
+// HKDF input must use /users/invite/derive-key BEFORE consuming.
 router.post('/consume-invite', async (req, res, next) => {
   const key = req.headers['x-internal-service-key'];
   if (!key || key !== process.env.INTERNAL_SERVICE_KEY) return res.status(403).json({ error: 'Forbidden' });
@@ -313,8 +391,7 @@ router.post('/consume-invite', async (req, res, next) => {
     });
     if (!user) return res.status(404).json({ error: 'Invalid or expired invite token' });
     await prisma.user.update({ where: { id: user.id }, data: { inviteToken: null, inviteExpiry: null } });
-    // Include rawToken so employee service can derive the decryption key
-    res.json({ ...user, rawToken });
+    res.json({ id: user.id, name: user.name, email: user.email });
   } catch (err) { next(err); }
 });
 

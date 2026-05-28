@@ -56,19 +56,28 @@ function isHr(role) { return HR_ROLES.includes(role); }
 function isApprover(role) { return APPROVER_ROLES.includes(role); }
 
 // ── Number generators ────────────────────────────────────────────────────────
+// SECURITY (H-21): use DB-backed sequences so concurrent creates can't
+// collide on the same ADV-YYYY-NNNNN / LN-YYYY-NNNNN. The previous count()
+// + 1 pattern was racy under any concurrent write — two requests could read
+// the same count and produce duplicate human-readable numbers, triggering
+// P2002 or (worse) silently overwriting.
+async function ensureRefSequences() {
+  await prisma.$executeRawUnsafe(`CREATE SEQUENCE IF NOT EXISTS loans_adv_seq START 1`);
+  await prisma.$executeRawUnsafe(`CREATE SEQUENCE IF NOT EXISTS loans_loan_seq START 1`);
+}
+ensureRefSequences().catch(err => console.error('[loans-service] sequence init failed', err.message));
+
 async function generateAdvanceNumber() {
   const year = new Date().getFullYear();
-  const count = await prisma.salaryAdvance.count({
-    where: { createdAt: { gte: new Date(`${year}-01-01`) } },
-  });
-  return nextAdvanceNumber(count, year);
+  const rows = await prisma.$queryRawUnsafe(`SELECT nextval('loans_adv_seq') AS n`);
+  const n = Number(rows[0].n);
+  return nextAdvanceNumber(n - 1, year); // nextAdvanceNumber adds 1 internally
 }
 async function generateLoanNumber() {
   const year = new Date().getFullYear();
-  const count = await prisma.staffLoan.count({
-    where: { createdAt: { gte: new Date(`${year}-01-01`) } },
-  });
-  return nextLoanNumber(count, year);
+  const rows = await prisma.$queryRawUnsafe(`SELECT nextval('loans_loan_seq') AS n`);
+  const n = Number(rows[0].n);
+  return nextLoanNumber(n - 1, year);
 }
 
 // ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -176,6 +185,13 @@ app.put('/loans/advances/:id/approve', authenticate, authorize(...APPROVER_ROLES
     const adv = await prisma.salaryAdvance.findUnique({ where: { id: req.params.id } });
     if (!adv) return res.status(404).json({ error: 'Advance not found' });
     if (adv.status !== 'PENDING') return res.status(409).json({ error: `Cannot approve advance in status ${adv.status}` });
+
+    // SECURITY (H-16) maker-checker: an approver may not approve their own
+    // advance — a FINANCE_ADMIN/HR_ADMIN cannot self-disburse to themselves.
+    const approverEmpId = req.user.employeeId || req.user.sub;
+    if (adv.employeeId === approverEmpId) {
+      return res.status(409).json({ error: 'Approver may not approve their own advance (maker-checker)' });
+    }
 
     const updated = await prisma.salaryAdvance.update({
       where: { id: adv.id },
@@ -431,6 +447,12 @@ app.put('/loans/staff-loans/:id/approve', authenticate, authorize(...APPROVER_RO
     const loan = await prisma.staffLoan.findUnique({ where: { id: req.params.id } });
     if (!loan) return res.status(404).json({ error: 'Loan not found' });
     if (loan.status !== 'PENDING') return res.status(409).json({ error: `Cannot approve loan in status ${loan.status}` });
+
+    // SECURITY (H-16) maker-checker: cannot approve own staff loan.
+    const approverEmpId = req.user.employeeId || req.user.sub;
+    if (loan.employeeId === approverEmpId) {
+      return res.status(409).json({ error: 'Approver may not approve their own loan (maker-checker)' });
+    }
 
     const start = startDate
       ? new Date(startDate)

@@ -9,6 +9,22 @@ const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
 
+// SECURITY (H-07): service-to-service callers (e.g. auth-service sending
+// login OTP emails) authenticate with x-internal-service-key instead of a
+// forged SUPER_ADMIN JWT. The previous pattern was logged in plaintext by
+// morgan on every call; a single log line gave an attacker an 8h SUPER_ADMIN
+// bearer.
+const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY || '';
+function internalOrAuth(req, res, next) {
+  const key = req.headers['x-internal-service-key'];
+  if (INTERNAL_SERVICE_KEY && key && key === INTERNAL_SERVICE_KEY) {
+    req.isInternal = true;
+    req.user = req.user || { sub: 'internal:notification', role: 'INTERNAL_SERVICE' };
+    return next();
+  }
+  return authenticate(req, res, next);
+}
+
 const prisma = new PrismaClient();
 const app    = express();
 const PORT   = process.env.PORT || 4009;
@@ -250,12 +266,24 @@ app.put('/notifications/me/read-all', authenticate, async (req, res, next) => {
 });
 
 // ── PUT /notifications/:id/read ───────────────────────────────────────────────
+// SECURITY (H-04): scope the update to the caller's own notifications OR to
+// notifications addressed to a role the caller holds (`role:HR_ADMIN` etc.).
+// Previously this update had no ownership filter — any authenticated user
+// could mark any other user's notification as read, hiding payroll variance
+// or anomaly alerts from supervisors.
 app.put('/notifications/:id/read', authenticate, async (req, res, next) => {
   try {
-    const notif = await prisma.notification.update({
-      where: { id: req.params.id },
+    const userId  = req.user.sub;
+    const roleKey = `role:${req.user.role}`;
+    const isAdmin = ['SUPER_ADMIN', 'HR_ADMIN', 'IT_ADMIN'].includes(req.user.role);
+    const ownerFilter = isAdmin ? {} : { userId: { in: [userId, roleKey] } };
+
+    const { count } = await prisma.notification.updateMany({
+      where: { id: req.params.id, ...ownerFilter },
       data: { isRead: true, readAt: new Date() },
     });
+    if (count === 0) return res.status(404).json({ error: 'Notification not found' });
+    const notif = await prisma.notification.findUnique({ where: { id: req.params.id } });
     res.json(notif);
   } catch (err) { next(err); }
 });
@@ -287,7 +315,7 @@ app.post('/notifications/in-app', authenticate, async (req, res, next) => {
 
 // ── Legacy: POST /notifications/email ────────────────────────────────────────
 // Accepts either old { to, subject, html } OR structured { type, recipients, roles, data }
-app.post('/notifications/email', authenticate, async (req, res, next) => {
+app.post('/notifications/email', internalOrAuth, async (req, res, next) => {
   try {
     const { to, subject, html, text, type, recipients, roles, data } = req.body;
 
@@ -323,10 +351,17 @@ app.post('/notifications/email', authenticate, async (req, res, next) => {
 });
 
 // ── Legacy: GET /notifications/:userId ───────────────────────────────────────
+// SECURITY (H-05): the prior version only guarded against the literal 'me'.
+// Authenticated users could enumerate any userId. We now require either:
+//   (a) caller's own sub matches, OR
+//   (b) caller is in the admin allowlist.
 app.get('/notifications/:userId', authenticate, async (req, res, next) => {
   try {
-    // Guard against route collision with /me paths
     if (req.params.userId === 'me') return res.status(400).json({ error: 'Use /notifications/me' });
+    const isAdmin = ['SUPER_ADMIN', 'HR_ADMIN', 'IT_ADMIN'].includes(req.user.role);
+    if (req.params.userId !== req.user.sub && !isAdmin) {
+      return res.status(403).json({ error: 'Forbidden — you may only read your own notifications' });
+    }
     const notifs = await prisma.notification.findMany({
       where: { userId: req.params.userId }, orderBy: { createdAt: 'desc' }, take: 50,
     });
