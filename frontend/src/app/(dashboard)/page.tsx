@@ -1,30 +1,21 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import EmployeeDashboard from '@/components/dashboard/EmployeeDashboard';
 import ManagementDashboard from '@/components/dashboard/ManagementDashboard';
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
-  const [cachedAdmin, setCachedAdmin] = useState(false);
 
+  // SECURITY (M-07): one-time migration — drop the legacy
+  // 'vorkhive_admin_confirmed' cache key so a stale value cannot influence
+  // the management-vs-employee dashboard branch.
   useEffect(() => {
-    // Check localStorage for resilient admin detection
-    const stored = localStorage.getItem('vorkhive_admin_confirmed');
-    if (stored === '1') setCachedAdmin(true);
-
-    // Only cache the SUPER_ADMIN flag for true system admins —
-    // scoped roles (ADMIN, HR_ADMIN, etc.) must not be promoted.
-    // Role comes from the server; no email-based override.
-    if (user) {
-      const role = (user.role || '').toUpperCase().trim();
-      if (role === 'SUPER_ADMIN') {
-        localStorage.setItem('vorkhive_admin_confirmed', '1');
-        setCachedAdmin(true);
-      }
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('vorkhive_admin_confirmed');
     }
-  }, [user]);
+  }, []);
 
   if (loading) {
     return (
@@ -42,9 +33,7 @@ export default function DashboardPage() {
     user?.role === 'SUPER_ADMIN' ||
     user?.role === 'ADMIN' ||
     user?.role === 'HR_ADMIN' ||
-    user?.role === 'HR_MANAGER' ||
-    cachedAdmin;
+    user?.role === 'HR_MANAGER';
 
-  // Toggle between Executive Intelligence and Employee Workspace
   return isAdmin ? <ManagementDashboard /> : <EmployeeDashboard />;
 }

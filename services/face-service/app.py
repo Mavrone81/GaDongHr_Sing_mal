@@ -13,6 +13,13 @@ log = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+# SECURITY (M-10): cap the request body size at 8 MB. The default Flask is
+# unbounded, so a malicious caller could submit a giant base64 PNG that
+# Flask buffers fully into memory and then base64.b64decode() allocates a
+# second copy, before cv2.imdecode() decompresses into a third copy. With
+# crafted pixel-bomb PNGs this could OOM the container.
+app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024  # 8 MB
+
 # Initialise once at startup — buffalo_sc = MobileFaceNet recognition + SCRFD-500M detection
 # Both models are small (~70 MB total) and accurate enough for HRMS use.
 fa = FaceAnalysis('buffalo_sc', providers=['CPUExecutionProvider'])
@@ -20,6 +27,9 @@ fa.prepare(ctx_id=-1, det_size=(320, 320))
 log.info('InsightFace buffalo_sc ready')
 
 MAX_SIDE = 640  # resize before inference to cap memory/latency
+# SECURITY (M-10): hard caps on encoded payload and decoded pixel count.
+MAX_B64_LEN = 8 * 1024 * 1024
+MAX_PIXELS = 25_000_000  # 25 MP — fits any sane camera photo, blocks decompression bombs
 
 
 def b64_to_bgr(b64_str: str) -> np.ndarray | None:
@@ -27,12 +37,18 @@ def b64_to_bgr(b64_str: str) -> np.ndarray | None:
     try:
         if ',' in b64_str:
             b64_str = b64_str.split(',', 1)[1]
+        if len(b64_str) > MAX_B64_LEN:
+            log.warning('b64_to_bgr rejected: payload exceeds %d bytes', MAX_B64_LEN)
+            return None
         data = base64.b64decode(b64_str)
         arr = np.frombuffer(data, np.uint8)
         img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
         if img is None:
             return None
         h, w = img.shape[:2]
+        if h * w > MAX_PIXELS:
+            log.warning('b64_to_bgr rejected: decoded pixel count %d exceeds %d', h * w, MAX_PIXELS)
+            return None
         if max(h, w) > MAX_SIDE:
             scale = MAX_SIDE / max(h, w)
             img = cv2.resize(img, (int(w * scale), int(h * scale)))

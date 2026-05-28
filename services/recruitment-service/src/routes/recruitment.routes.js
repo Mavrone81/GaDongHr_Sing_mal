@@ -293,11 +293,20 @@ router.post('/candidates/:id/approve',
           createdEmployee = await empRes.json();
           triggers.employeeCreated = true;
         } else {
+          // SECURITY (M-18): don't reflect the full upstream JSON to the
+          // caller — it can include internal error codes, schema names, and
+          // sometimes raw exception text. Surface only the upstream `error`
+          // message (already user-facing). Log the full body server-side.
           const errBody = await empRes.json().catch(() => ({}));
-          return res.status(502).json({ error: 'Failed to create employee record', details: errBody });
+          console.error('[recruitment] employee create failed:', errBody);
+          return res.status(502).json({
+            error: 'Failed to create employee record',
+            upstreamMessage: typeof errBody?.error === 'string' ? errBody.error : undefined,
+          });
         }
       } catch (fetchErr) {
-        return res.status(502).json({ error: 'Employee service unreachable', details: fetchErr.message });
+        console.error('[recruitment] employee-service unreachable:', fetchErr.message);
+        return res.status(502).json({ error: 'Employee service unreachable' });
       }
 
       const employeeId = createdEmployee.id || createdEmployee.employee?.id;

@@ -373,14 +373,34 @@ app.get('/notifications/:userId', authenticate, async (req, res, next) => {
 app.get('/notifications/smtp-config', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN), (_req, res) => {
   res.json({ host: smtpConfig.host, port: smtpConfig.port, user: smtpConfig.user, pass: smtpConfig.pass ? '••••••••' : '', from: smtpConfig.from, hasPassword: !!smtpConfig.pass });
 });
-app.put('/notifications/smtp-config', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN), (req, res) => {
+app.put('/notifications/smtp-config', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN), async (req, res) => {
   const { host, port, user, pass, from } = req.body;
+  const before = { host: smtpConfig.host, port: smtpConfig.port, user: smtpConfig.user, from: smtpConfig.from };
   if (host !== undefined) smtpConfig.host = host;
   if (port !== undefined) smtpConfig.port = parseInt(port) || 587;
   if (user !== undefined) smtpConfig.user = user;
-  if (pass !== undefined && pass !== '••••••••') smtpConfig.pass = pass;
+  // Never log the password — capture only whether it was changed.
+  const passwordChanged = pass !== undefined && pass !== '••••••••';
+  if (passwordChanged) smtpConfig.pass = pass;
   if (from !== undefined) smtpConfig.from = from;
   transporter = buildTransporter();
+  // SECURITY (M-20): audit SMTP-host changes. SMTP is a credential-handling
+  // surface: rerouting it points outbound mail (including login OTPs) at
+  // an attacker-controlled relay. notification-service has no AuditLog
+  // table of its own, so we emit a structured log line that container log
+  // aggregators (and the future shared audit aggregation) can pick up.
+  console.log(JSON.stringify({
+    audit:     'SMTP_CONFIG_CHANGED',
+    actor:     req.user?.sub || 'unknown',
+    actorRole: req.user?.role || null,
+    ip:        req.ip,
+    before,
+    after: {
+      host: smtpConfig.host, port: smtpConfig.port, user: smtpConfig.user, from: smtpConfig.from,
+      passwordChanged,
+    },
+    ts: new Date().toISOString(),
+  }));
   res.json({ message: 'SMTP configuration updated', host: smtpConfig.host, port: smtpConfig.port });
 });
 app.post('/notifications/smtp-test', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN), async (req, res, next) => {
@@ -398,7 +418,7 @@ app.put('/notifications/config', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
   res.json({ smtpFrom: smtpConfig.from });
 });
 
-app.use((err, _req, res, _next) => { console.error(err); res.status(err.status || 500).json({ error: err.message || 'Internal server error' }); });
+app.use((err, _req, res, _next) => { console.error(err); res.status(err.status || 500).json({ error: (process.env.NODE_ENV === 'production' && (err.status || 500) >= 500) ? 'Internal server error' : (err.message || 'Internal server error') }); });
 
 if (require.main === module) {
   app.listen(PORT, () => console.log(`[notification-service] Running on port ${PORT}`));

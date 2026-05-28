@@ -112,6 +112,15 @@ jest.mock('@prisma/client', () => ({
       findMany: mockClaimFindMany, update: mockClaimUpdate, count: mockClaimCount,
     },
     $transaction: mockTransaction,
+    // M-05: atomic conditional UPDATE on flexi_wallets. Tests mock a
+    // successful single-row update by default; specific tests can override
+    // to simulate the race-loss path.
+    $executeRaw: jest.fn().mockResolvedValue(1),
+    $executeRawUnsafe: jest.fn().mockResolvedValue(0),
+    $queryRawUnsafe: jest.fn(async (sql) => {
+      if (sql && sql.includes('nextval')) return [{ n: 1 }];
+      return [];
+    }),
   })),
 }));
 
@@ -383,14 +392,17 @@ test('FW-19 POST /flexi-claims — employee submits → 201 PENDING', async () =
 });
 
 test('FW-20 POST /flexi-claims — auto-approves when amount ≤ threshold', async () => {
+  // M-05: the auto-approve path now uses an atomic conditional UPDATE via
+  // $executeRaw on the wallet AND a separate flexiClaim.create. The test
+  // mock of $executeRaw returns 1 (one row updated) by default, which is
+  // the success case.
   setUser({ role: 'EMPLOYEE', employeeId: 'emp-001' });
   mockWalletFindUnique.mockResolvedValueOnce(makeWallet({ usedAmount: 0 }));
   mockClaimFindMany.mockResolvedValueOnce([]);
   mockCatFindUnique.mockResolvedValueOnce(makeCat());
   mockCfgFindUnique.mockResolvedValueOnce({ autoApproveThreshold: 50, grade: 'STAFF' }); // threshold = 50
   const approvedClaim = makeClaim({ claimAmount: 40, status: 'APPROVED', autoApproved: true, approvedAmount: 40 });
-  // $transaction returns [claim, wallet]
-  mockTransaction.mockResolvedValueOnce([approvedClaim, makeWallet()]);
+  mockClaimCreate.mockResolvedValueOnce(approvedClaim);
 
   const res = await request(app).post('/benefits/flexi-claims').send({
     walletId: 'wallet-001', categoryId: 'cat-gym',
@@ -399,7 +411,7 @@ test('FW-20 POST /flexi-claims — auto-approves when amount ≤ threshold', asy
   expect(res.status).toBe(201);
   expect(res.body.status).toBe('APPROVED');
   expect(res.body.autoApproved).toBe(true);
-  expect(mockTransaction).toHaveBeenCalledTimes(1);
+  expect(mockClaimCreate).toHaveBeenCalledTimes(1);
 });
 
 test('FW-21 POST /flexi-claims — 409 insufficient balance', async () => {

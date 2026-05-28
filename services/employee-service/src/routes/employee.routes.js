@@ -511,6 +511,14 @@ router.post('/bulk-import', authenticate, authorize('employee:manage', ROLES.SUP
         if (data.bankAccount) { fieldsToEncrypt.bankAccountEncrypted = data.bankAccount; delete data.bankAccount; }
         const encrypted = encryptFields(fieldsToEncrypt, Object.keys(fieldsToEncrypt));
         const employeeCode = await nextEmployeeCode();
+        // SECURITY (M-13): explicitly strip server-managed fields from the
+        // spread so a malicious payload cannot override id / employeeCode /
+        // createdAt / updatedAt / userId via the ...data spread.
+        delete data.id;
+        delete data.employeeCode;
+        delete data.createdAt;
+        delete data.updatedAt;
+        delete data.userId;
         const emp = await prisma.employee.create({
           data: { id: uuidv4(), employeeCode, ...data, ...encrypted, dateOfBirth: new Date(data.dateOfBirth), startDate: new Date(data.startDate) },
         });

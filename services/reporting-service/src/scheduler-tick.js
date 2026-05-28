@@ -68,12 +68,20 @@ async function tick(now = new Date()) {
         const { buf, ext, contentType, rowCount: rc } = await buildAttachment(sched.template, sched.format, authHeader);
         rowCount = rc;
 
+        // SECURITY (M-14): HR-stored template name is interpolated into the
+        // outbound email's HTML body. Escape so a hostile name field can't
+        // inject script tags or unsafe attributes into the recipient's mail.
+        const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
+          '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+        }[c]));
+        const safeName = esc(sched.template.name);
+
         const recipients = sched.recipients.split(',').map(r => r.trim()).filter(Boolean);
         const filename = `${sched.template.name.replace(/[^\w.-]+/g, '_')}.${ext}`;
         const result = await sendReportEmail({
           recipients,
           subject: `[Vorkhive Report] ${sched.template.name}`,
-          html: `<p>Your scheduled report <strong>${sched.template.name}</strong> is ready (${rowCount} rows).</p>` +
+          html: `<p>Your scheduled report <strong>${safeName}</strong> is ready (${rowCount} rows).</p>` +
                 `<p>Generated: ${now.toISOString()}</p>`,
           attachmentName: filename,
           attachmentBuffer: buf,

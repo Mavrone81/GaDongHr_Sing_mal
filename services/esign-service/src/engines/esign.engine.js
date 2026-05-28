@@ -42,11 +42,30 @@ function fillTemplate(templateHtml, variables) {
 }
 
 /**
- * SHA-256 hex digest of content string. Used to detect tampering of
+ * Keyed HMAC-SHA-256 digest of content string. Used to detect tampering of
  * the template at dispatch time and the personalised copy at sign time.
+ *
+ * SECURITY (M-01): bare SHA-256 was tamper-evident only against accidental
+ * corruption — an attacker with DB write access could swap both the
+ * personalisedHtml and the hash together. HMAC keyed by a server-only secret
+ * means the hash cannot be regenerated without knowing the key, so any
+ * DB-only mutation is detectable.
  */
+function getHashKey() {
+  // Prefer a dedicated secret; fall back to ENCRYPTION_KEY only if not set
+  // (e.g. dev). In production both should be defined.
+  return process.env.ESIGN_HMAC_KEY || process.env.ENCRYPTION_KEY || '';
+}
+
 function computeDocumentHash(content) {
-  return crypto.createHash('sha256').update(content, 'utf8').digest('hex');
+  const key = getHashKey();
+  if (!key) {
+    // Degrade to bare SHA-256 so the function still returns something useful
+    // in test/dev environments without the key set. Production deployments
+    // must provide ESIGN_HMAC_KEY or ENCRYPTION_KEY.
+    return crypto.createHash('sha256').update(content, 'utf8').digest('hex');
+  }
+  return crypto.createHmac('sha256', key).update(content, 'utf8').digest('hex');
 }
 
 /**

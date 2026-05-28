@@ -114,6 +114,13 @@ jest.mock('@prisma/client', () => ({
       create: mockPeriodCreate, findFirst: mockPeriodFindFirst,
       findMany: mockPeriodFindMany, update: mockPeriodUpdate,
     },
+    // H-21 / M-05: DB sequences and atomic conditional updates.
+    $executeRaw: jest.fn().mockResolvedValue(1),
+    $executeRawUnsafe: jest.fn().mockResolvedValue(0),
+    $queryRawUnsafe: jest.fn(async (sql) => {
+      if (sql && sql.includes('nextval')) return [{ n: 1 }];
+      return [];
+    }),
   })),
 }));
 

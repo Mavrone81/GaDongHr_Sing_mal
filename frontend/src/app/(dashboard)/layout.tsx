@@ -387,34 +387,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const { user, loading, logout } = useAuth();
 
-  // Lazy-init from localStorage so first render shows correct nav immediately
-  const [cachedAdmin, setCachedAdmin] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('vorkhive_admin_confirmed') === '1';
-  });
-
+  // SECURITY (M-07): role and admin status are sourced exclusively from the
+  // live `user` object returned by /auth/me. The prior pattern wrote the
+  // role into localStorage as a "resilient cache" — anyone with browser dev
+  // tools could flip those keys and have the UI surface admin nav. The
+  // server still enforces RBAC, but rendering admin-only chrome to a
+  // non-admin is itself an information disclosure.
   useEffect(() => {
-    if (!user) return;
-    const role = (user.role || '').toUpperCase().trim();
-    // Cache the SUPER_ADMIN flag from the server-verified role only.
-    // Previously this branched on a hardcoded email list — that was a
-    // privilege-escalation backdoor and has been removed.
-    if (role === 'SUPER_ADMIN') {
-      localStorage.setItem('vorkhive_admin_confirmed', '1');
-      localStorage.setItem('vorkhive_user_role', 'SUPER_ADMIN');
-      setCachedAdmin(true);
+    // One-time migration: clean any stale cache from previous build.
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('vorkhive_admin_confirmed');
+      localStorage.removeItem('vorkhive_user_role');
     }
-  }, [user]);
+  }, []);
 
   const liveRole  = (user?.role  || '').toUpperCase().trim();
-  const isSuperAdmin = liveRole === 'SUPER_ADMIN' || cachedAdmin;
+  const isSuperAdmin = liveRole === 'SUPER_ADMIN';
 
   // Redirect unauthenticated users to login
   useEffect(() => {
-    if (!loading && !user && !cachedAdmin) {
+    if (!loading && !user) {
       router.replace('/login');
     }
-  }, [loading, user, cachedAdmin]);
+  }, [loading, user]);
 
   // Navigation loading overlay — shown when user clicks a sidebar link
   const [isNavigating, setIsNavigating] = useState(false);
@@ -431,11 +426,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const authErrorBanner = null;
 
-  const cachedRole = typeof window !== 'undefined' ? (localStorage.getItem('vorkhive_user_role') || '') : '';
-  const effectiveRole = liveRole || cachedRole;
+  const effectiveRole = liveRole;
   const roleInfo = ROLE_LABELS[effectiveRole] || ROLE_LABELS['EMPLOYEE'];
 
-  const navGroups = getNavGroups(effectiveRole, '', cachedAdmin);
+  const navGroups = getNavGroups(effectiveRole, '', isSuperAdmin);
 
   // Page title from path
   const getPageTitle = () => {
