@@ -36,9 +36,11 @@ model Claim {
   currency        String       @default("SGD")
   status          ClaimStatus  @default(DRAFT)
   submittedAt     DateTime?
-  approvedById    String?      // Finance Admin
-  approvedAt      DateTime?
-  rejectedReason  String?
+  approvedById          String?   // Finance Admin (or delegator on whose behalf approved)
+  approvedAt            DateTime?
+  approvedByDelegateeId String?   // set when approval was made via delegation
+  delegationId          String?   // which ApproverDelegation was used
+  rejectedReason        String?
   payrollPeriod   String?      // period this will be reimbursed in
   receiptPaths    String[]
   notes           String?
@@ -119,4 +121,26 @@ model CategoryBudget {
   @@unique([categoryId, period])
   @@index([period])
   @@map("category_budgets")
+}
+
+// CLM-002: Approver delegation — when an approver is on leave they delegate
+// their claim-approval authority to a colleague for a defined period.
+// categoryIds is empty array = covers ALL categories; otherwise restricts.
+model ApproverDelegation {
+  id          String   @id @default(uuid())
+  delegatorId String   // employeeId of the approver delegating authority
+  delegateeId String   // employeeId receiving the authority
+  startDate   DateTime
+  endDate     DateTime
+  categoryIds String[] // empty = all categories; else specific categoryId list
+  reason      String?
+  isActive    Boolean  @default(true)
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([delegatorId])
+  @@index([delegateeId])
+  @@index([startDate, endDate])
+  @@map("approver_delegations")
 }

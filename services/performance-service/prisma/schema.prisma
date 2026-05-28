@@ -259,3 +259,85 @@ model FeedbackResponse {
   @@unique([requestId, questionId])
   @@map("feedback_responses")
 }
+
+// ─── ENG-003 Succession Planning ──────────────────────────────────────────────
+
+enum ReadinessLevel {
+  READY_NOW
+  ONE_YEAR
+  TWO_YEARS
+}
+
+enum SuccessionRisk {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum DevPlanStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model KeyPosition {
+  id              String         @id @default(uuid())
+  jobTitle        String
+  department      String?
+  description     String?
+  currentHolderId String?
+  isActive        Boolean        @default(true)
+  riskLevel       SuccessionRisk @default(HIGH)
+  createdBy       String
+  updatedBy       String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  nominees SuccessorNominee[]
+
+  @@index([department])
+  @@index([riskLevel])
+  @@map("key_positions")
+}
+
+model SuccessorNominee {
+  id            String         @id @default(uuid())
+  positionId    String
+  employeeId    String
+  readiness     ReadinessLevel
+  potentialBand Int
+  notes         String?
+  nominatedBy   String
+  nominatedAt   DateTime       @default(now())
+  updatedBy     String?
+  updatedAt     DateTime       @updatedAt
+
+  position KeyPosition        @relation(fields: [positionId], references: [id])
+  devPlans SuccessionDevPlan[]
+
+  @@unique([positionId, employeeId])
+  @@index([employeeId])
+  @@map("successor_nominees")
+}
+
+model SuccessionDevPlan {
+  id                String        @id @default(uuid())
+  nomineeId         String
+  competencyGap     String
+  action            String
+  trainingProgramId String?
+  targetDate        DateTime?
+  status            DevPlanStatus @default(PENDING)
+  completedAt       DateTime?
+  notes             String?
+  createdBy         String
+  updatedBy         String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  nominee SuccessorNominee @relation(fields: [nomineeId], references: [id])
+
+  @@index([nomineeId])
+  @@map("succession_dev_plans")
+}

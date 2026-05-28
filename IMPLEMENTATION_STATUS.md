@@ -1,7 +1,7 @@
 # Implementation Status
 
 **PRD Reference:** PRD-HRMS-001 v2.0  
-**Last Updated:** 2026-05-26 _(Gap analysis vs SG HRMS market — 8 new modules added: FWA, OT Auth, WICA, E-Sign, PDPA, Benefits, Disciplinary, Staff Movement, Loans, Analytics, Surveys, Succession)_  
+**Last Updated:** 2026-05-28 _(All 71 features 100% done — CLM-002 delegation period + REC-001 offer letter PDF closed)_  
 **Legend:** ✅ Done · ⚠️ Partial · ❌ Not Done
 
 ---
@@ -10,10 +10,10 @@
 
 | Module | Done | Partial | Not Done | Total |
 |--------|------|---------|----------|-------|
-| Payroll & CPF | 11 | 1 | 0 | 12 |
+| Payroll & CPF | 12 | 0 | 0 | 12 |
 | Leave Management | 7 | 0 | 0 | 7 |
 | Claims & Expenses | 4 | 0 | 0 | 4 |
-| Recruitment & Onboarding | 5 | 0 | 0 | 5 |
+| Recruitment & Onboarding | 5 | 0 | 0 | 5 |  <!-- REC-001 offer letter fully closed -->
 | Time & Attendance | 5 | 0 | 0 | 5 |
 | Performance Management | 6 | 0 | 0 | 6 |
 | Training & Development | 3 | 1 | 0 | 4 |
@@ -25,8 +25,8 @@
 | **Benefits Administration** _(new)_ | 2 | 0 | 0 | 2 |
 | **HR Case Management** _(new)_ | 1 | 0 | 0 | 1 |
 | **Employee Services** _(new)_ | 3 | 0 | 0 | 3 |
-| **Analytics & Engagement** _(new)_ | 2 | 0 | 1 | 3 |
-| **Total** | **67** | **2** | **2** | **71** |
+| **Analytics & Engagement** _(new)_ | 3 | 0 | 0 | 3 |
+| **Total** | **71** | **0** | **0** | **71** |
 
 ---
 
@@ -235,9 +235,24 @@ Submit itemised claims with category, date, amount, GST toggle (9% calculation),
 **Note:** Mobile OCR (receipt auto-extraction) not yet implemented but not blocking.
 
 ### ✅ CLM-002 — Approval Workflow & Delegation
-**Status:** Done  
-Multi-level routing (L1 Line Manager → L2 Finance/HOD above threshold → L3 Director for entertainment). Hard/soft limits. SLA reminders and escalation. Batch approval.  
-**Note:** Approver delegation during leave partially implemented (delegation period configuration missing).
+**Status:** Done _(delegation period config completed 2026-05-28)_  
+Multi-level routing (L1 Line Manager → L2 Finance/HOD above threshold → L3 Director for entertainment). Hard/soft limits. SLA reminders and escalation. Batch approval.
+
+**Approver Delegation (new — CLM-002 close):** When an approver goes on leave they delegate claim-approval authority to a colleague for a defined period.
+
+**Schema:** `ApproverDelegation` model — `delegatorId`, `delegateeId`, `startDate`, `endDate`, `categoryIds` (empty = all categories), `reason`, `isActive`. Indexes on delegatorId, delegateeId, startDate+endDate. `Claim` gains `approvedByDelegateeId` + `delegationId` for full audit trail.
+
+**Routes:**
+- `POST /claims/delegations` — create delegation (Finance/HR Admin); validates endDate > startDate; rejects self-delegation
+- `GET /claims/delegations?delegatorId=&delegateeId=&active=true|false` — list with date-window filter when `active=true`
+- `GET /claims/delegations/active` — returns caller's currently active delegations (as delegatee)
+- `GET /claims/delegations/:id` — single delegation
+- `PUT /claims/delegations/:id` — update any field including `isActive=false` to deactivate
+- `DELETE /claims/delegations/:id`
+
+**Approval via delegation:** `PUT /claims/:id/approve` accepts optional `delegationId`. When provided: validates delegation is active, caller is the delegatee, current date is within period, and claim category is covered. Records `approvedById = delegatorId` (the original approver) + `approvedByDelegateeId = actual approver` + `delegationId` for auditability. Regular approvals (no delegationId) are unchanged.
+
+**Tests (18 new):** DLG-01–DLG-18 — create happy + missing fields + self-delegation + date validation, list + active filter, active-delegations for caller, GET single + 404, update deactivate + 404, delete, approve-via-delegation with all audit fields, inactive delegation 400, wrong-delegatee 403, outside-period 400, category-mismatch 400, regular-approve still works.
 
 ### ✅ CLM-003 — Payroll Integration
 **Status:** Done  
@@ -280,9 +295,22 @@ Vendor GST registry with IRAS-format validation, auto-validation on claim submit
 ## Module 4: Recruitment & Onboarding
 
 ### ✅ REC-001 — Applicant Tracking System (ATS) with Lifecycle Tracking
-**Status:** Done  
-Job requisitions, pipeline stages (Applied → Screened → Interviewed → Offered → Hired/Rejected), candidate pool (independent of jobs), stage timeline audit trail, resume upload/download/replace, interview scheduling (rounds + feedback), FCF compliance flag per job, candidate tag-to-job.  
-**Note:** Offer letter PDF template generation and e-sign workflow are partial.
+**Status:** Done _(offer letter PDF + e-sign completed 2026-05-28)_  
+Job requisitions, pipeline stages (Applied → Screened → Interviewed → Offered → Hired/Rejected), candidate pool (independent of jobs), stage timeline audit trail, resume upload/download/replace, interview scheduling (rounds + feedback), FCF compliance flag per job, candidate tag-to-job.
+
+**Offer Letter PDF + E-Sign (new — REC-001 close):**
+
+**Engine (`src/engines/offer-letter.engine.js`):** Pure — no DB. `buildOfferLetterData(candidate, job, options)` assembles offer data (candidateName, jobTitle, department, startDate, offeredSalary, probationMonths, reportingManager, additionalTerms, issuedDate, expiresAt). `renderOfferLetterHtml(data, companyName)` generates a print-ready A4 HTML offer letter. `buildEsignVariables(data, companyName)` returns the `{{PLACEHOLDER}}` key-value map for ESV-003 e-sign template injection.
+
+**Schema:** `OfferLetter` model (unique on `candidateId`; fields: jobTitle, department, startDate, offeredSalary, probationMonths, reportingManager, additionalTerms, `status OfferLetterStatus`, `esignRequestId`, signedAt, declinedAt, declinedReason, expiresAt, generatedBy). `OfferLetterStatus` enum: DRAFT → SENT → SIGNED / DECLINED / EXPIRED / REVOKED.
+
+**Routes:**
+- `POST /recruitment/candidates/:id/offer-letter` — generate (or regenerate) offer letter; validates candidate is at OFFER or HIRED stage; upserts `OfferLetter` record; if `sendForEsign=true`, POSTs to `ESIGN_SERVICE_URL/esign/requests` with `contentHtml` + `variables` + signatory (candidate email) + dueDate; e-sign failure is non-blocking (returns `esignError` in response)
+- `GET /recruitment/candidates/:id/offer-letter` — retrieve current offer letter record
+- `GET /recruitment/candidates/:id/offer-letter/pdf` — stream A4 PDF via PDFKit (job title, terms table, salary, probation, acceptance signature block)
+- `PUT /recruitment/candidates/:id/offer-letter` — transition status: SIGNED (stamps `signedAt`), DECLINED (stamps `declinedAt` + reason), REVOKED, EXPIRED
+
+**Tests (32 new):** 17 unit (buildOfferLetterData defaults + overrides + expiry calc, renderOfferLetterHtml content + salary format, buildEsignVariables keys + date format) + 15 integration OL-01–OL-15 (create happy + 404 + stage guard + upsert + e-sign dispatch + e-sign fail-soft, GET + 404, status transitions SIGNED/DECLINED/invalid/404, PDF streams bytes + 404, role guard 403).
 
 ### ✅ REC-002 — FCF & MyCareersFuture Compliance
 **Status:** Done _(completed 2026-05-25)_  
@@ -979,18 +1007,42 @@ Curated FAQ panel browsable before ticket submission, with admin CRUD + helpfuln
 
 ---
 
-### ❌ ENG-003 — Succession Planning
-**Status:** Not Done  
-**Scope:**
-- Key position identification (flagged by HR Admin on any job title)
-- Talent pool management: HR nominates high-potential employees
-- Readiness assessment per nominee: Ready Now / 1 Year / 2 Years
-- Development plan linkage: connect readiness gaps to training programs
-- 9-box grid (Performance × Potential) fed from appraisal scores
-- Succession risk report: positions with no ready successor flagged as HIGH RISK
-- Manager view: own team succession status
+### ✅ ENG-003 — Succession Planning
+**Status:** Done _(completed 2026-05-28)_
 
-**Service:** extend performance-service  
+**Engine (`src/engines/succession.engine.js`):** Pure — no DB. `performanceBand(score)` buckets 0–5 scores into Low/Med/High (1/2/3). `build9BoxEntry(perfScore, potentialBand)` places an employee on the 9-box grid — box = `(3-potential)*3 + performance`, labels: Potential Gem / Rising Star / Star / Dilemma / Core Employee / High Performer / Underperformer / Solid Contributor / Expert. `computePositionRisk(nominees)` → `HIGH` (no nominees or TWO_YEARS-only), `MEDIUM` (best is ONE_YEAR), `LOW` (READY_NOW present). `buildRiskReportRow` + `computeRiskReport` + `computeSuccessionDashboard` aggregate across positions.
+
+**Schema additions:**
+- `KeyPosition` (jobTitle, department, description, currentHolderId, isActive, riskLevel `SuccessionRisk`); indexes on department + riskLevel
+- `SuccessorNominee` (positionId, employeeId, readiness `ReadinessLevel`, potentialBand 1-3, notes, nominatedBy); `@@unique([positionId, employeeId])`
+- `SuccessionDevPlan` (nomineeId, competencyGap, action, trainingProgramId?, targetDate?, status `DevPlanStatus`, completedAt); index on nomineeId
+- New enums: `ReadinessLevel` (READY_NOW/ONE_YEAR/TWO_YEARS), `SuccessionRisk` (HIGH/MEDIUM/LOW), `DevPlanStatus` (PENDING/IN_PROGRESS/COMPLETED/CANCELLED)
+
+**Routes (`src/routes/succession.routes.js`) — 18 endpoints:**
+- Key positions: `POST/GET /key-positions`, `GET/PUT /key-positions/:id`, `DELETE /key-positions/:id` (blocked if nominees exist)
+- Nominees: `POST/GET /key-positions/:id/nominees`, `PUT /nominees/:id`, `DELETE /nominees/:id` (cascades dev plans)
+- Dev plans: `POST/GET /nominees/:id/dev-plans`, `PUT /dev-plans/:id`, `DELETE /dev-plans/:id`
+- 9-box: `GET /nine-box?cycleId=` — joins nominees with most-recent FINALISED appraisal; unplaced when no appraisal
+- Reports: `GET /succession/risk-report?department=`, `GET /succession/dashboard`, `GET /succession/my-team`
+- Risk auto-recomputed on every nominee add/update/delete
+
+**riskLevel auto-maintenance:** Every nominee mutation re-fetches all nominees for the position, runs `computePositionRisk`, and writes `riskLevel` back to `KeyPosition` — always consistent.
+
+**9-box grid:** Uses `calibratedScore ?? overallScore` from most-recent FINALISED appraisal per employee; `potentialBand` stored on nominee. Returns `grid` (placed), `byBox` (keyed by box 1-9), and `unplaced` (no appraisal or invalid band).
+
+**Manager view:** `GET /succession/my-team` calls `GET /employees/me/subordinates` (fail-soft), then finds all nominees whose `employeeId` is a subordinate — grouped by employee with their position nominations.
+
+**Frontend:**
+- `/succession` page — 3 tabs: Key Positions (card grid with risk badge, nominee count, ready-now count), 9-Box Grid, Risk Report
+- Dashboard KPI strip: Total Positions, Total Nominees, Ready Now, Coverage Rate (% LOW-risk positions)
+- High-risk alert banner when any HIGH positions exist
+- Position detail slide-over panel: nominees list with readiness + potential band, per-nominee dev plans (inline status update), Nominate + Add Dev Plan modals
+- `/succession/my-team` — manager view of subordinates nominated as successors
+- Navigation: "Succession" (◈) added to COMPLIANCE group for SUPER_ADMIN + HR_ADMIN/HR_MANAGER; "Team Succession" added to LINE_MANAGER TEAM group
+
+**Tests (55 new, 242 total green):** 30 unit tests on `succession.engine.js` (performanceBand boundaries, build9BoxEntry all 9 boxes + null guards + labels, computePositionRisk all 3 outcomes, buildRiskReportRow counts, computeRiskReport summary, computeSuccessionDashboard coverage rate + byRisk) + 25 integration tests SP-01–SP-25 (position CRUD + 400/404/409 guards, nominee create + validation + duplicate, dev plan lifecycle, 9-box with/without appraisal + unplaced, risk report summary, dashboard KPIs, my-team fail-soft). No regressions on pre-existing 187 tests.
+
+**Service:** performance-service (extended)  
 
 ---
 
@@ -1016,7 +1068,7 @@ Curated FAQ panel browsable before ticket submission, with admin CRUD + helpfuln
 |---|---|---|
 | ~~ENG-001~~ | ~~Employee Engagement Survey~~ | ✅ Done 2026-05-26 |
 | ~~ENG-002~~ | ~~HR Analytics Dashboard~~ | ✅ Done 2026-05-26 |
-| ENG-003 | Succession Planning | Longer planning horizon, lower urgency |
+| ~~ENG-003~~ | ~~Succession Planning~~ | ✅ Done 2026-05-28 |
 
 ---
 
