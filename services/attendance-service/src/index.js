@@ -1884,7 +1884,21 @@ const OT_AUTH_MANAGER_ROLES = [ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.SUPER_ADM
 app.post('/attendance/ot-auth/requests', authenticate, async (req, res, next) => {
   try {
     const { employeeId, departmentId, isEmergency = false, requestedHours, plannedDate, reason, businessJustification, requestType = 'EMPLOYEE' } = req.body;
-    const targetEmployee = employeeId || req.user.sub;
+
+    // SECURITY (H-22): non-supervisor callers may not submit OT on behalf
+    // of another employee. Previously body.employeeId let any user poison a
+    // coworker's MOM 72h monthly OT cap. Supervisors / HR may still submit
+    // on behalf via the SUPERVISOR requestType — but only on behalf, never
+    // claiming a non-supervisor relationship.
+    const callerEmpId = req.user.employeeId || req.user.sub;
+    const isManager   = OT_AUTH_MANAGER_ROLES.includes(req.user.role);
+    if (employeeId && employeeId !== callerEmpId && !isManager) {
+      return res.status(403).json({ error: 'Only supervisors / HR may submit OT on behalf of another employee' });
+    }
+    if (requestType === 'SUPERVISOR' && !isManager) {
+      return res.status(403).json({ error: 'requestType=SUPERVISOR is restricted to supervisor / HR roles' });
+    }
+    const targetEmployee = (isManager && employeeId) ? employeeId : callerEmpId;
 
     if (!requestedHours || requestedHours <= 0)
       return res.status(400).json({ error: 'requestedHours must be a positive number' });

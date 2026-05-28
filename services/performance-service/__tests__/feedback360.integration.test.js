@@ -8,8 +8,8 @@ let mockEmpId = 'emp-admin';
 
 jest.mock('/app/shared/auth-middleware', () => ({
   authenticate: (req, _res, next) => {
-    req.user = { sub: 'admin-001', role: mockRole, email: 'admin@test.com' };
-    req.headers['x-employee-id'] = mockEmpId;
+    // H-17: routes now read req.user.employeeId, not the spoofable header.
+    req.user = { sub: 'admin-001', role: mockRole, email: 'admin@test.com', employeeId: mockEmpId };
     next();
   },
   authorize: (..._roles) => (_req, _res, next) => next(),

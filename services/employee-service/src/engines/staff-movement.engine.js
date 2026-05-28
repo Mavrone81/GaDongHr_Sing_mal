@@ -144,26 +144,47 @@ function buildMovementSummary(movements, now = new Date()) {
  * @param {Object} m — movement with employeeName, type, fromDepartment, toDepartment, etc.
  * @returns {string} HTML
  */
+// SECURITY (H-01): escape every user-controlled value before interpolating into
+// the transfer-letter HTML, which is later rendered to HR colleagues via
+// dangerouslySetInnerHTML on the movement-detail page.
+function escapeHtml(input) {
+  if (input === null || input === undefined) return '';
+  return String(input)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function suggestLetterText(m) {
   if (!m) return '';
   const eff = m.effectiveDate ? new Date(m.effectiveDate).toLocaleDateString('en-SG', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
   const todayStr = new Date().toLocaleDateString('en-SG', { day: 'numeric', month: 'long', year: 'numeric' });
-  const typeLabel = (m.type || '').replace(/_/g, ' ').toLowerCase();
+  const typeLabel = escapeHtml((m.type || '').replace(/_/g, ' ').toLowerCase());
+  const employeeName = escapeHtml(m.employeeName || 'Colleague');
+  const reason = escapeHtml((m.reason || '').trim());
+  const fromDept = escapeHtml(m.fromDepartment), toDept = escapeHtml(m.toDepartment);
+  const fromDesg = escapeHtml(m.fromDesignation), toDesg = escapeHtml(m.toDesignation);
+  const fromCC = escapeHtml(m.fromCostCentre || '—'), toCC = escapeHtml(m.toCostCentre || '—');
+  const fromLoc = escapeHtml(m.fromLocation || '—'), toLoc = escapeHtml(m.toLocation || '—');
+  const fromCo = escapeHtml(m.fromCompany || '—'),  toCo = escapeHtml(m.toCompany || '—');
+
   const changes = [];
-  if (m.fromDepartment !== m.toDepartment)         changes.push(`<li>Department: <strong>${m.fromDepartment}</strong> → <strong>${m.toDepartment}</strong></li>`);
-  if (m.fromDesignation !== m.toDesignation)       changes.push(`<li>Designation: <strong>${m.fromDesignation}</strong> → <strong>${m.toDesignation}</strong></li>`);
-  if ((m.fromCostCentre || '') !== (m.toCostCentre || ''))  changes.push(`<li>Cost centre: <strong>${m.fromCostCentre || '—'}</strong> → <strong>${m.toCostCentre || '—'}</strong></li>`);
-  if ((m.fromLocation   || '') !== (m.toLocation   || ''))  changes.push(`<li>Location: <strong>${m.fromLocation || '—'}</strong> → <strong>${m.toLocation || '—'}</strong></li>`);
-  if ((m.fromCompany    || '') !== (m.toCompany    || ''))  changes.push(`<li>Company: <strong>${m.fromCompany || '—'}</strong> → <strong>${m.toCompany || '—'}</strong></li>`);
+  if (m.fromDepartment   !== m.toDepartment)                 changes.push(`<li>Department: <strong>${fromDept}</strong> → <strong>${toDept}</strong></li>`);
+  if (m.fromDesignation  !== m.toDesignation)                changes.push(`<li>Designation: <strong>${fromDesg}</strong> → <strong>${toDesg}</strong></li>`);
+  if ((m.fromCostCentre || '') !== (m.toCostCentre || ''))   changes.push(`<li>Cost centre: <strong>${fromCC}</strong> → <strong>${toCC}</strong></li>`);
+  if ((m.fromLocation   || '') !== (m.toLocation   || ''))   changes.push(`<li>Location: <strong>${fromLoc}</strong> → <strong>${toLoc}</strong></li>`);
+  if ((m.fromCompany    || '') !== (m.toCompany    || ''))   changes.push(`<li>Company: <strong>${fromCo}</strong> → <strong>${toCo}</strong></li>`);
   return `
 <div class="transfer-letter">
   <p><strong>${todayStr}</strong></p>
-  <p>Dear ${m.employeeName || 'Colleague'},</p>
+  <p>Dear ${employeeName},</p>
   <h3>Internal ${typeLabel}</h3>
   <p>We are pleased to confirm your ${typeLabel}, effective <strong>${eff}</strong>:</p>
   <ul>${changes.join('') || '<li>(no field-level changes recorded)</li>'}</ul>
   ${m.hasSalaryRevision ? '<p>This movement is accompanied by a salary revision. Your updated payslip will reflect the change from the effective date.</p>' : ''}
-  <p>${(m.reason || '').trim()}</p>
+  <p>${reason}</p>
   <p>Please reach out to HR if you have any questions.</p>
   <p>Best regards,<br>Human Resources</p>
 </div>`.trim();
@@ -210,6 +231,7 @@ module.exports = {
   isEffectiveToday,
   buildMovementSummary,
   suggestLetterText,
+  escapeHtml,
   requiresAdditionalApproval,
   nextMovementNumber,
 };

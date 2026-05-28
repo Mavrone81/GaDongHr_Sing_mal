@@ -1004,22 +1004,30 @@ router.post('/apply', async (req, res, next) => {
     const { inviteToken, encrypted, iv, data: encData } = req.body;
     if (!inviteToken) return res.status(400).json({ error: 'inviteToken is required' });
 
-    // Step 1: Verify token (non-destructive) to get user info + rawToken for decryption
+    // Step 1: Verify token (non-destructive) to get user info.
     const verifyRes = await fetch(`${AUTH_SERVICE_URL}/users/invite/${encodeURIComponent(inviteToken)}`);
     if (!verifyRes.ok) {
       return res.status(400).json({ error: 'Invalid or expired invite link — please contact HR for a new invite.' });
     }
     const { id: userId, email } = await verifyRes.json();
 
-    // Step 2: Decode JWT locally to extract rawToken for key derivation
+    // Step 2 (H-10 / H-23): obtain the HKDF rawToken from auth-service via
+    // a signature-verifying internal endpoint, instead of locally decoding
+    // the JWT body (which previously accepted any forged token whose jti
+    // matched a stolen rawToken). Failure here → 400, no key derivation.
     let rawToken;
     try {
-      const [, payload] = inviteToken.split('.');
-      const decoded = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
-      rawToken = decoded.jti;
-      if (!rawToken) throw new Error('no jti');
+      const r = await fetch(`${AUTH_SERVICE_URL}/users/invite/derive-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-internal-service-key': INTERNAL_KEY },
+        body: JSON.stringify({ token: inviteToken }),
+      });
+      if (!r.ok) throw new Error('derive-key rejected');
+      const body = await r.json();
+      rawToken = body.rawToken;
+      if (!rawToken) throw new Error('no rawToken returned');
     } catch {
-      return res.status(400).json({ error: 'Malformed invite token' });
+      return res.status(400).json({ error: 'Invite token validation failed — please request a new invite.' });
     }
 
     // Step 3: Decrypt before consuming the token (so failures don't burn the token)

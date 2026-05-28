@@ -174,7 +174,7 @@ router.post('/cycles/:id/enroll', authenticate, authorize(ROLES.SUPER_ADMIN, ROL
 router.get('/cycles/:id/appraisals', authenticate, async (req, res, next) => {
   try {
     const role = req.user.role;
-    const employeeId = req.headers['x-employee-id'];
+    const employeeId = req.user.employeeId;
     const where = { cycleId: req.params.id };
     // Non-admins: only see their own appraisal
     if (!['SUPER_ADMIN', 'HR_ADMIN'].includes(role)) {
@@ -188,7 +188,7 @@ router.get('/cycles/:id/appraisals', authenticate, async (req, res, next) => {
 // ── GET /performance/appraisals/me ── employee's own appraisals ───────────────
 router.get('/appraisals/me', authenticate, async (req, res, next) => {
   try {
-    const employeeId = req.headers['x-employee-id'];
+    const employeeId = req.user.employeeId;
     if (!employeeId) return res.status(400).json({ error: 'No employee profile linked to this account' });
     const appraisals = await prisma.appraisal.findMany({
       where: { employeeId },
@@ -202,7 +202,7 @@ router.get('/appraisals/me', authenticate, async (req, res, next) => {
 // ── GET /performance/appraisals/team ── manager's team appraisals ─────────────
 router.get('/appraisals/team', authenticate, async (req, res, next) => {
   try {
-    const employeeId = req.headers['x-employee-id'];
+    const employeeId = req.user.employeeId;
     const { cycleId } = req.query;
     const where = { managerId: employeeId };
     if (cycleId) where.cycleId = cycleId;
@@ -225,7 +225,7 @@ router.get('/appraisals/:id', authenticate, async (req, res, next) => {
     if (!appraisal) return res.status(404).json({ error: 'Appraisal not found' });
     // Access: own appraisal, assigned manager, or admin
     const role = req.user.role;
-    const empId = req.headers['x-employee-id'];
+    const empId = req.user.employeeId;
     if (!['SUPER_ADMIN', 'HR_ADMIN'].includes(role) && appraisal.employeeId !== empId && appraisal.managerId !== empId) {
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -246,7 +246,7 @@ router.post('/appraisals/:id/self-submit', authenticate, async (req, res, next) 
     const appraisal = await prisma.appraisal.findUnique({ where: { id: req.params.id } });
     if (!appraisal) return res.status(404).json({ error: 'Appraisal not found' });
 
-    const empId = req.headers['x-employee-id'];
+    const empId = req.user.employeeId;
     const role = req.user.role;
     if (!['SUPER_ADMIN', 'HR_ADMIN'].includes(role) && appraisal.employeeId !== empId) {
       return res.status(403).json({ error: 'Access denied' });
@@ -279,7 +279,7 @@ router.post('/appraisals/:id/manager-submit', authenticate, async (req, res, nex
     const appraisal = await prisma.appraisal.findUnique({ where: { id: req.params.id } });
     if (!appraisal) return res.status(404).json({ error: 'Appraisal not found' });
 
-    const empId = req.headers['x-employee-id'];
+    const empId = req.user.employeeId;
     const role = req.user.role;
     if (!['SUPER_ADMIN', 'HR_ADMIN'].includes(role) && appraisal.managerId !== empId) {
       return res.status(403).json({ error: 'Only the assigned manager can submit a manager review' });
@@ -323,7 +323,7 @@ router.post('/appraisals/:id/finalise', authenticate, authorize(ROLES.SUPER_ADMI
 router.get('/goals', authenticate, async (req, res, next) => {
   try {
     const role = req.user.role;
-    const empId = req.headers['x-employee-id'];
+    const empId = req.user.employeeId;
     const { employeeId, cycleId, status } = req.query;
     const where = {};
     if (status) where.status = status;
@@ -343,7 +343,7 @@ router.post('/goals', authenticate, async (req, res, next) => {
   try {
     const { title, description, targetDate, category, cycleId } = req.body;
     if (!title) return res.status(400).json({ error: 'title is required' });
-    const empId = req.headers['x-employee-id'];
+    const empId = req.user.employeeId;
     const role = req.user.role;
     const targetEmployeeId = (req.body.employeeId && ['SUPER_ADMIN', 'HR_ADMIN'].includes(role))
       ? req.body.employeeId : empId;
@@ -364,7 +364,7 @@ router.put('/goals/:id', authenticate, async (req, res, next) => {
   try {
     const goal = await prisma.goal.findUnique({ where: { id: req.params.id } });
     if (!goal) return res.status(404).json({ error: 'Goal not found' });
-    const empId = req.headers['x-employee-id'];
+    const empId = req.user.employeeId;
     const role = req.user.role;
     if (!['SUPER_ADMIN', 'HR_ADMIN'].includes(role) && goal.employeeId !== empId) {
       return res.status(403).json({ error: 'Access denied' });
@@ -393,7 +393,7 @@ router.delete('/goals/:id', authenticate, async (req, res, next) => {
   try {
     const goal = await prisma.goal.findUnique({ where: { id: req.params.id } });
     if (!goal) return res.status(404).json({ error: 'Goal not found' });
-    const empId = req.headers['x-employee-id'];
+    const empId = req.user.employeeId;
     const role = req.user.role;
     if (!['SUPER_ADMIN', 'HR_ADMIN'].includes(role) && goal.employeeId !== empId) {
       return res.status(403).json({ error: 'Access denied' });
@@ -406,11 +406,11 @@ router.delete('/goals/:id', authenticate, async (req, res, next) => {
 // ── PIPs ──────────────────────────────────────────────────────────────────────
 
 // GET /performance/pips
-router.get('/pips', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.MANAGER), async (req, res, next) => {
+router.get('/pips', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.LINE_MANAGER), async (req, res, next) => {
   try {
     const { status, employeeId } = req.query;
     const role = req.user.role;
-    const empId = req.headers['x-employee-id'];
+    const empId = req.user.employeeId;
     const where = {};
     if (status) where.status = status;
     if (['SUPER_ADMIN', 'HR_ADMIN'].includes(role)) {
@@ -425,13 +425,13 @@ router.get('/pips', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, R
 });
 
 // POST /performance/pips
-router.post('/pips', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.MANAGER), async (req, res, next) => {
+router.post('/pips', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.LINE_MANAGER), async (req, res, next) => {
   try {
     const { employeeId, startDate, endDate, objectives } = req.body;
     if (!employeeId || !startDate || !endDate || !objectives) {
       return res.status(400).json({ error: 'employeeId, startDate, endDate, objectives are required' });
     }
-    const managerId = req.headers['x-employee-id'] || req.user.sub;
+    const managerId = req.user.employeeId || req.user.sub;
     const pip = await prisma.pipRecord.create({
       data: { id: uuidv4(), employeeId, managerId, startDate: new Date(startDate), endDate: new Date(endDate), objectives },
     });
@@ -449,7 +449,7 @@ router.get('/pips/:id', authenticate, async (req, res, next) => {
 });
 
 // PUT /performance/pips/:id
-router.put('/pips/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.MANAGER), async (req, res, next) => {
+router.put('/pips/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.LINE_MANAGER), async (req, res, next) => {
   try {
     const { progressNotes, status, endDate, objectives } = req.body;
     const pip = await prisma.pipRecord.update({

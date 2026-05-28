@@ -242,7 +242,7 @@ router.get('/logistics/requests/:id', authenticate, async (req, res, next) => {
 });
 
 // PUT /logistics/requests/:id/approve
-router.put('/logistics/requests/:id/approve', authenticate, authorize(...LOGISTICS_ROLES, ROLES.MANAGER), async (req, res, next) => {
+router.put('/logistics/requests/:id/approve', authenticate, authorize(...LOGISTICS_ROLES, ROLES.LINE_MANAGER), async (req, res, next) => {
   try {
     const row = await prisma.logisticsRequest.findUnique({ where: { id: req.params.id } });
     if (!row) return res.status(404).json({ error: 'Request not found' });
@@ -258,7 +258,7 @@ router.put('/logistics/requests/:id/approve', authenticate, authorize(...LOGISTI
 });
 
 // PUT /logistics/requests/:id/reject
-router.put('/logistics/requests/:id/reject', authenticate, authorize(...LOGISTICS_ROLES, ROLES.MANAGER), async (req, res, next) => {
+router.put('/logistics/requests/:id/reject', authenticate, authorize(...LOGISTICS_ROLES, ROLES.LINE_MANAGER), async (req, res, next) => {
   try {
     const { reason } = req.body;
     const row = await prisma.logisticsRequest.findUnique({ where: { id: req.params.id } });

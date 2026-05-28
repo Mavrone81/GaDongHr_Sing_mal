@@ -55,17 +55,16 @@ export default function LoginPage() {
   const [ssoPendingToken, setSsoPendingToken] = useState('');
 
   useEffect(() => {
-    // Check if we were redirected here from an SSO callback that needs MFA
+    // Check if we were redirected here from an SSO callback that needs MFA.
+    // H-19: the pending token now lives in an HttpOnly cookie, so we no longer
+    // read it from sessionStorage. We only check the SSO MFA routing flag.
     const params = new URLSearchParams(window.location.search);
     if (params.get('sso_mfa') === '1') {
-      const pendingToken = sessionStorage.getItem('sso_pending_token') || '';
       const method = (sessionStorage.getItem('sso_mfa_method') || 'TOTP') as MfaMethod;
-      if (pendingToken) {
-        setSsoMfaPending(true);
-        setSsoPendingToken(pendingToken);
-        setMfaMethod(method);
-        setStep('mfa-challenge');
-      }
+      setSsoMfaPending(true);
+      setSsoPendingToken(''); // pendingToken not needed client-side; cookie carries it
+      setMfaMethod(method);
+      setStep('mfa-challenge');
     }
   }, []);
 
@@ -154,16 +153,17 @@ export default function LoginPage() {
   const handleMfaChallenge = async (code: string) => {
     setError(''); setLoading(true);
     try {
-      // SSO MFA path — use the pending token issued by the SSO callback
-      if (ssoMfaPending && ssoPendingToken) {
+      // SSO MFA path — pending token is in an HttpOnly cookie set by the
+      // SSO callback. credentials:'include' attaches it to the verify call.
+      if (ssoMfaPending) {
         const res = await fetch(`${apiUrl()}/auth/sso/mfa-verify`, {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pendingToken: ssoPendingToken, mfaCode: code }),
+          body: JSON.stringify({ mfaCode: code }),
         });
         const data = await res.json();
         if (!res.ok) { setMfaCode(''); setError(data.error || 'Invalid MFA code'); return; }
-        sessionStorage.removeItem('sso_pending_token');
         sessionStorage.removeItem('sso_mfa_method');
         sessionStorage.removeItem('sso_mfa_setup');
         await login(data.accessToken, data.refreshToken);

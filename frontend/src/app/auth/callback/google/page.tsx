@@ -47,6 +47,7 @@ export default function GoogleCallbackPage() {
 
     fetch(`${apiUrl()}/auth/sso/google/callback`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, redirectUri }),
       signal: controller.signal,
@@ -59,7 +60,10 @@ export default function GoogleCallbackPage() {
       .then(async data => {
         navigating = true;
         if (data.ssoMfaPending) {
-          sessionStorage.setItem('sso_pending_token', data.pendingToken);
+          // H-19: pendingToken is in an HttpOnly cookie set by auth-service.
+          // We deliberately do NOT store it in sessionStorage; only stash
+          // non-secret routing flags (which MFA method, whether setup is
+          // required) so the /login MFA step knows what UI to render.
           sessionStorage.setItem('sso_mfa_method', data.mfaMethod || 'TOTP');
           sessionStorage.setItem('sso_mfa_setup', data.mfaSetupRequired ? '1' : '0');
           router.replace('/login?sso_mfa=1');

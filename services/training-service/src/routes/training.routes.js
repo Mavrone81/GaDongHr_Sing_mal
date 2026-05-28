@@ -41,12 +41,12 @@ router.get('/stats', authenticate, authorize(...ADMIN_ROLES), async (req, res, n
 router.get('/programs', authenticate, async (req, res, next) => {
   try {
     const { status, category, search, mandatory } = req.query;
-    const employeeId = req.headers['x-employee-id'];
+    const employeeId = req.user.employeeId;
     const role = req.headers['x-user-role'];
 
     const where = {};
     // non-admins only see published programs
-    if (!isPrivileged(role) && role !== ROLES.MANAGER) {
+    if (!isPrivileged(role) && role !== ROLES.LINE_MANAGER) {
       where.status = 'PUBLISHED';
     } else {
       if (status) where.status = status;
@@ -71,7 +71,7 @@ router.get('/programs', authenticate, async (req, res, next) => {
 // ── GET /training/programs/browse ── published programs employee hasn't enrolled ──
 router.get('/programs/browse', authenticate, async (req, res, next) => {
   try {
-    const employeeId = req.headers['x-employee-id'];
+    const employeeId = req.user.employeeId;
     const { category } = req.query;
     const where = { status: 'PUBLISHED' };
     if (category) where.category = category;
@@ -108,7 +108,7 @@ router.post('/programs', authenticate, authorize(...ADMIN_ROLES), async (req, re
   try {
     const { title, description, category, durationMins, passingScore, isMandatory } = req.body;
     if (!title) return res.status(400).json({ error: 'title is required' });
-    const createdBy = req.headers['x-employee-id'] || req.headers['x-user-id'] || 'system';
+    const createdBy = req.user.employeeId || req.user.sub || 'system';
     const program = await prisma.trainingProgram.create({
       data: {
         id: uuidv4(), title, description, category: category || 'TECHNICAL',
@@ -250,7 +250,7 @@ router.get('/enrollments', authenticate, authorize(...ADMIN_ROLES), async (req, 
 // ── GET /training/my-programs ── employee: own enrollments with material progress ──
 router.get('/my-programs', authenticate, async (req, res, next) => {
   try {
-    const employeeId = req.headers['x-employee-id'];
+    const employeeId = req.user.employeeId;
     if (!employeeId) return res.status(400).json({ error: 'No employee context' });
 
     const enrollments = await prisma.trainingEnrollment.findMany({
@@ -272,7 +272,7 @@ router.post('/enrollments/:id/materials/:materialId/complete', authenticate, asy
   try {
     const { id: enrollmentId, materialId } = req.params;
     const { quizAnswers } = req.body;
-    const employeeId = req.headers['x-employee-id'];
+    const employeeId = req.user.employeeId;
     const role = req.headers['x-user-role'];
 
     const enrollment = await prisma.trainingEnrollment.findUnique({
@@ -352,7 +352,7 @@ router.post('/programs/:id/enroll', authenticate, authorize(...ADMIN_ROLES), asy
     const program = await prisma.trainingProgram.findUnique({ where: { id: req.params.id } });
     if (!program) return res.status(404).json({ error: 'Program not found' });
 
-    const enrolledBy = req.headers['x-employee-id'] || req.headers['x-user-id'] || 'admin';
+    const enrolledBy = req.user.employeeId || req.user.sub || 'admin';
     const results = [];
     for (const eid of employeeIds) {
       try {
@@ -379,7 +379,7 @@ router.post('/programs/:id/enroll', authenticate, authorize(...ADMIN_ROLES), asy
 // ── POST /training/programs/:id/self-enroll ── employee self-enroll ───────────
 router.post('/programs/:id/self-enroll', authenticate, async (req, res, next) => {
   try {
-    const employeeId = req.headers['x-employee-id'];
+    const employeeId = req.user.employeeId;
     if (!employeeId) return res.status(400).json({ error: 'No employee context' });
 
     const program = await prisma.trainingProgram.findUnique({ where: { id: req.params.id } });
@@ -406,7 +406,7 @@ router.post('/programs/:id/self-enroll', authenticate, async (req, res, next) =>
 router.put('/enrollments/:id/progress', authenticate, async (req, res, next) => {
   try {
     const { progress, score } = req.body;
-    const employeeId = req.headers['x-employee-id'];
+    const employeeId = req.user.employeeId;
     const role = req.headers['x-user-role'];
 
     const enrollment = await prisma.trainingEnrollment.findUnique({ where: { id: req.params.id } });
@@ -434,7 +434,7 @@ router.put('/enrollments/:id/progress', authenticate, async (req, res, next) => 
 // ── DELETE /training/enrollments/:id ── drop enrollment ──────────────────────
 router.delete('/enrollments/:id', authenticate, async (req, res, next) => {
   try {
-    const employeeId = req.headers['x-employee-id'];
+    const employeeId = req.user.employeeId;
     const role = req.headers['x-user-role'];
 
     const enrollment = await prisma.trainingEnrollment.findUnique({ where: { id: req.params.id } });
@@ -507,7 +507,7 @@ router.post('/certifications', authenticate, authorize(...ADMIN_ROLES), async (r
         documentUrl, notes,
         renewalProgramId: renewalProgramId || null,
         competencyId: competencyId || null,
-        createdBy: req.user?.sub || req.headers['x-user-id'] || 'system',
+        createdBy: req.user?.sub || req.user.sub || 'system',
       },
     });
     res.status(201).json({ ...cert, status: computeCertStatus(cert) });

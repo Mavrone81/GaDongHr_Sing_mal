@@ -130,6 +130,16 @@ function jwtMiddleware(req, res, next) {
       cachedPublicKey = fs.readFileSync(keyPath, 'utf8');
     }
     const payload = jwt.verify(token, cachedPublicKey, { algorithms: ['RS256'], issuer: 'vorkhive' });
+    // SSO-pending tokens have no `role` claim; downstream services reject them
+    // via the shared auth-middleware. Block them here at the gateway too so
+    // we never forward an `x-user-role: undefined` header (which crashes
+    // express-http-proxy with "Invalid value 'undefined' for header").
+    if (payload?.sso_pending === true) {
+      return res.status(401).json({ error: 'SSO pending token is not accepted on protected endpoints' });
+    }
+    if (!payload.role) {
+      return res.status(401).json({ error: 'Token is missing role claim' });
+    }
     req.user = payload;
     req.headers['x-user-id'] = payload.sub;
     req.headers['x-user-role'] = payload.role;
