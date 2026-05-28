@@ -992,7 +992,7 @@ app.get('/reports/analytics/summary',
   }
 );
 
-app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: err.message || 'Internal server error' }); });
+app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: (process.env.NODE_ENV === 'production' && (err.status || 500) >= 500) ? 'Internal server error' : (err.message || 'Internal server error') }); });
 
 if (require.main === module) {
   const { PrismaClient } = require('@prisma/client');

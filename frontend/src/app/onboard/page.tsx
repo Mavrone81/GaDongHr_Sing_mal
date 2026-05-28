@@ -81,6 +81,17 @@ export default function OnboardPage() {
     setToken(t);
     if (!t) { setStatus('invalid'); return; }
 
+    // SECURITY (M-08): clean the token out of the visible URL immediately
+    // after capturing it. The token remains in component state for the
+    // verify/submit calls but is no longer copy-pasteable, no longer in
+    // the back/forward history, and no longer in any subsequent Referer
+    // header for outbound links rendered on this page.
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('token');
+      window.history.replaceState(null, '', url.pathname + (url.search || '') + url.hash);
+    } catch { /* best-effort only */ }
+
     // Validate the signed token server-side
     fetch(`${apiUrl()}/users/invite/${encodeURIComponent(t)}`)
       .then(res => {

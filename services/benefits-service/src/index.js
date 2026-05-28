@@ -1074,14 +1074,22 @@ app.post('/benefits/flexi-claims', authenticate, async (req, res, next) => {
     };
 
     if (autoApprove) {
-      // Atomic: create claim + update wallet.usedAmount
-      const [claim] = await prisma.$transaction([
-        prisma.flexiClaim.create({ data: claimData }),
-        prisma.flexiWallet.update({
-          where: { id: walletId },
-          data:  { usedAmount: r2(wallet.usedAmount + amt) },
-        }),
-      ]);
+      // SECURITY (M-05): TOCTOU race fix. Use an atomic conditional UPDATE
+      // that increments usedAmount only when (usedAmount + amt) <=
+      // creditedAmount. Concurrent auto-approves can't overspend: the
+      // updateMany returns count=0 if the conditional fails, and we abort.
+      const r = await prisma.$executeRaw`
+        UPDATE flexi_wallets
+        SET used_amount = used_amount + ${amt}
+        WHERE id = ${walletId}
+          AND used_amount + ${amt} <= credited_amount
+      `;
+      if (Number(r) === 0) {
+        return res.status(409).json({
+          error: 'Insufficient balance — wallet was updated by a concurrent claim. Please try again.',
+        });
+      }
+      const claim = await prisma.flexiClaim.create({ data: claimData });
       return res.status(201).json({ ...claim, autoApproved: true });
     }
 
@@ -1235,7 +1243,7 @@ app.get('/benefits/flexi-dashboard', authenticate, authorize(...HR_ROLES), async
 // ── Error handler ─────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+  res.status(err.status || 500).json({ error: (process.env.NODE_ENV === 'production' && (err.status || 500) >= 500) ? 'Internal server error' : (err.message || 'Internal server error') });
 });
 
 if (require.main === module) {

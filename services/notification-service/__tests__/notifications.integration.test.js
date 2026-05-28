@@ -44,6 +44,7 @@ jest.mock('/app/shared/auth-middleware', () => ({
 // Prisma mock
 const mockCreate     = jest.fn();
 const mockFindMany   = jest.fn();
+const mockFindUnique = jest.fn();
 const mockCount      = jest.fn();
 const mockUpdateMany = jest.fn();
 const mockUpdate     = jest.fn();
@@ -52,6 +53,7 @@ const mockDb = {
   notification: {
     create:     mockCreate,
     findMany:   mockFindMany,
+    findUnique: mockFindUnique,
     count:      mockCount,
     updateMany: mockUpdateMany,
     update:     mockUpdate,
@@ -306,17 +308,21 @@ test('NS-12 PUT /me/read-all marks unread as read for user + role', async () => 
 
 // ── NS-13 ─────────────────────────────────────────────────────────────────────
 test('NS-13 PUT /:id/read marks single notification as read', async () => {
+  // H-04: PUT /:id/read now uses updateMany scoped by userId, then findUnique
+  // for the response shape. HR_ADMIN bypasses the userId scope (admin allowlist).
   setUser({ sub: 'user-001', role: 'HR_ADMIN' });
+  mockUpdateMany.mockResolvedValueOnce({ count: 1 });
+  mockFindUnique.mockResolvedValueOnce({ id: 'notif-abc', isRead: true, readAt: new Date() });
 
   const res = await request(app)
     .put('/notifications/notif-abc/read')
     .set('Authorization', 'Bearer t');
 
   expect(res.status).toBe(200);
-  expect(mockUpdate).toHaveBeenCalledWith({
-    where: { id: 'notif-abc' },
-    data: expect.objectContaining({ isRead: true }),
-  });
+  expect(mockUpdateMany).toHaveBeenCalledWith(expect.objectContaining({
+    where: expect.objectContaining({ id: 'notif-abc' }),
+    data:  expect.objectContaining({ isRead: true }),
+  }));
 });
 
 // ── NS-14 ─────────────────────────────────────────────────────────────────────

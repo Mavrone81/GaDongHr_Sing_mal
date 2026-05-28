@@ -689,7 +689,7 @@ app.get('/loans/staff-loans/:id/agreement', authenticate, async (req, res, next)
 // ── Error handler ─────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+  res.status(err.status || 500).json({ error: (process.env.NODE_ENV === 'production' && (err.status || 500) >= 500) ? 'Internal server error' : (err.message || 'Internal server error') });
 });
 
 function round2(n) { return Math.round(Number(n || 0) * 100) / 100; }

@@ -900,6 +900,11 @@ router.get('/payslips/me', authenticate, async (req, res, next) => {
 });
 
 // ─── GET /payroll/payslips/me/:period ─ Employee's own payslip PDF ────────────
+// Kept separate from /:employeeId/:period for two reasons (M-19):
+//   1. URL never carries the employeeId, so it can't be brute-forced or
+//      accidentally logged with another user's id from a shared device.
+//   2. The handler always uses req.user.employeeId from the verified JWT,
+//      so there is no path where an attacker could supply an alternate id.
 router.get('/payslips/me/:period', authenticate, async (req, res, next) => {
   try {
     const employeeId = req.user.employeeId;

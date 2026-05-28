@@ -335,7 +335,7 @@ function MaterialsModal({ program, onClose }: { program: TrainingProgram; onClos
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-black text-slate-900">{m.title}</p>
                     <p className="text-[9px] font-black text-slate-400 uppercase">{m.type}{m.durationMins ? ` · ${fmtDuration(m.durationMins)}` : ''}</p>
-                    {m.url && <a href={m.url} target="_blank" rel="noreferrer" className="text-[9px] text-indigo-500 hover:underline truncate block">{m.url}</a>}
+                    {m.url && <a href={m.url} target="_blank" rel="noopener noreferrer" className="text-[9px] text-indigo-500 hover:underline truncate block">{m.url}</a>}
                     {m.type === 'QUIZ' && m.content && (() => {
                       try { const qs = JSON.parse(m.content); return <p className="text-[9px] text-slate-400 font-black">{Array.isArray(qs) ? qs.length : 0} question{qs.length !== 1 ? 's' : ''}</p>; } catch { return null; }
                     })()}
@@ -1253,7 +1253,7 @@ function CoursePlayer({
                 {activeMaterial.type === 'DOCUMENT' && (
                   <div className="flex flex-col gap-4">
                     {activeMaterial.url && (
-                      <a href={activeMaterial.url} target="_blank" rel="noreferrer"
+                      <a href={activeMaterial.url} target="_blank" rel="noopener noreferrer"
                         className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 self-start">
                         📎 Open Document →
                       </a>
@@ -1287,7 +1287,7 @@ function CoursePlayer({
                       <a
                         href={activeMaterial.url}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                         onClick={() => setLinkVisited(true)}
                         className="flex items-center justify-between p-5 bg-indigo-50 border border-indigo-200 rounded-2xl hover:bg-indigo-100 transition-all group"
                       >

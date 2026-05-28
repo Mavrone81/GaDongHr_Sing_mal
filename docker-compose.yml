@@ -5,14 +5,18 @@ services:
     container_name: hrms-postgres
     restart: unless-stopped
     environment:
+      # SECURITY (M-02): POSTGRES_PASSWORD is required from the env — no
+      # known-default fallback. Operators must set a real password.
       POSTGRES_USER: ${POSTGRES_USER:-hrms}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hrms_secret_2025}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD env var must be set}
       POSTGRES_DB: ${POSTGRES_ROOT_DB:-postgres}
     volumes:
       - postgres_data:/var/lib/postgresql/data
 #      - ./scripts/init-dbs.sql:/docker-entrypoint-initdb.d/init-dbs.sql
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # Bind to loopback only — postgres is reachable from other compose
+      # services via the docker network, never from the host's public IP.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hrms} -d postgres"]
       interval: 10s
@@ -72,18 +76,20 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4001
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${AUTH_DB:-hrms_auth}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/${AUTH_DB:-hrms_auth}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PRIVATE_KEY_PATH=/app/certs/private.pem
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
-      - JWT_ACCESS_EXPIRES=${JWT_ACCESS_EXPIRES:-8h}
+      # SECURITY (M-03): short access token TTL. The refresh-token flow handles
+      # silent renewal in the frontend so users do not need to re-login.
+      - JWT_ACCESS_EXPIRES=${JWT_ACCESS_EXPIRES:-15m}
       - JWT_REFRESH_EXPIRES=${JWT_REFRESH_EXPIRES:-7d}
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
       - INVITE_TOKEN_SECRET=${INVITE_TOKEN_SECRET}
       - ADMIN_EMAIL=${ADMIN_EMAIL}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - LOGIN_RATELIMIT_MAX=${LOGIN_RATELIMIT_MAX:-10}
-      - EMPLOYEE_DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${EMPLOYEE_DB:-hrms_employee}
+      - EMPLOYEE_DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/${EMPLOYEE_DB:-hrms_employee}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID:-}
       - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET:-}
@@ -132,7 +138,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4002
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${EMPLOYEE_DB:-hrms_employee}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/${EMPLOYEE_DB:-hrms_employee}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
@@ -168,7 +174,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4003
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${PAYROLL_DB:-hrms_payroll}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/${PAYROLL_DB:-hrms_payroll}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - EMPLOYEE_SERVICE_URL=http://employee-service:4002
@@ -211,7 +217,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4004
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${LEAVE_DB:-hrms_leave}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/${LEAVE_DB:-hrms_leave}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - NOTIFICATION_SERVICE_URL=http://notification-service:4009
@@ -241,7 +247,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4005
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${CLAIMS_DB:-hrms_claims}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/${CLAIMS_DB:-hrms_claims}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - NOTIFICATION_SERVICE_URL=http://notification-service:4009
@@ -269,7 +275,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4006
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${RECRUITMENT_DB:-hrms_recruitment}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/${RECRUITMENT_DB:-hrms_recruitment}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - EMPLOYEE_SERVICE_URL=http://employee-service:4002
@@ -297,7 +303,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4007
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${ATTENDANCE_DB:-hrms_attendance}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/${ATTENDANCE_DB:-hrms_attendance}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
@@ -327,7 +333,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4008
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${OFFBOARDING_DB:-hrms_offboarding}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/${OFFBOARDING_DB:-hrms_offboarding}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - PAYROLL_SERVICE_URL=http://payroll-service:4003
@@ -358,7 +364,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4009
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${NOTIFICATION_DB:-hrms_notification}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/${NOTIFICATION_DB:-hrms_notification}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
@@ -389,7 +395,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4010
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${REPORTING_DB:-hrms_reporting}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/${REPORTING_DB:-hrms_reporting}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - PAYROLL_SERVICE_URL=http://payroll-service:4003
@@ -421,7 +427,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4012
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/hrms_performance
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/hrms_performance
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - EMPLOYEE_SERVICE_URL=http://employee-service:4002
     volumes:
@@ -447,7 +453,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4013
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/hrms_training
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/hrms_training
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
     volumes:
       - shared_certs:/app/certs:ro
@@ -472,7 +478,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4011
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/hrms_asset
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/hrms_asset
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
     volumes:

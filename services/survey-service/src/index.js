@@ -382,7 +382,7 @@ app.post('/surveys/exit-trigger', authenticate, authorize(...HR_ROLES, ROLES.PAY
 // ── Error handler ────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+  res.status(err.status || 500).json({ error: (process.env.NODE_ENV === 'production' && (err.status || 500) >= 500) ? 'Internal server error' : (err.message || 'Internal server error') });
 });
 
 if (require.main === module) {

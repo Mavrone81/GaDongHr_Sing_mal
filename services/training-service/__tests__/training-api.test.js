@@ -1,11 +1,26 @@
 'use strict';
 
 jest.mock('/app/shared/auth-middleware', () => ({
-  authenticate: (req, res, next) => next(),
+  // H-17: training-service now reads employeeId / sub from the verified JWT
+  // (req.user) instead of x-employee-id / x-user-id headers. The test
+  // suite still uses .set('x-user-role', ...) and similar to drive role
+  // selection; mirror those header values into req.user so the existing
+  // suite keeps working without rewriting every test.
+  authenticate: (req, _res, next) => {
+    req.user = {
+      sub:        req.headers['x-user-id']     || 'test-user-1',
+      // Only set employeeId when the test explicitly provides x-employee-id —
+      // this preserves the "missing employee context" 400-error test cases.
+      employeeId: req.headers['x-employee-id'] || null,
+      role:       req.headers['x-user-role']   || 'EMPLOYEE',
+      name:       'Test',
+    };
+    next();
+  },
   authorize: (...roles) => (req, res, next) => next(),
   ROLES: {
     SUPER_ADMIN: 'SUPER_ADMIN', HR_ADMIN: 'HR_ADMIN', HR_MANAGER: 'HR_MANAGER',
-    MANAGER: 'MANAGER', EMPLOYEE: 'EMPLOYEE',
+    LINE_MANAGER: 'LINE_MANAGER', EMPLOYEE: 'EMPLOYEE',
   },
 }), { virtual: true });
 

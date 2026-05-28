@@ -14,7 +14,7 @@ app.use(helmet()); app.use(cors()); app.use(express.json({ limit: '50kb' })); ap
 app.get('/health', (req, res) => res.json({ service: 'support-service', status: 'ok', ts: new Date() }));
 app.use('/support', supportRoutes);
 app.use('/support', faqRoutes);
-app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: err.message || 'Internal server error' }); });
+app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: (process.env.NODE_ENV === 'production' && (err.status || 500) >= 500) ? 'Internal server error' : (err.message || 'Internal server error') }); });
 
 if (require.main === module) {
   app.listen(PORT, () => console.log(`[support-service] Running on port ${PORT}`));

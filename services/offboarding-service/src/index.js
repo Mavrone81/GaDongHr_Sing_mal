@@ -354,7 +354,14 @@ app.post('/offboarding/:id/compute-final-pay', authenticate, authorize(ROLES.SUP
       }
     } catch {}
 
-    const grossFinalPay = Math.round((salaryForDaysWorked + noticePay + leaveEncashment + outstandingClaims - excessLeaveDeduction) * 100) / 100;
+    // SECURITY (M-06): sum in integer cents to avoid IEEE-754 drift on long
+    // money chains. The previous Math.round((a + b + c - d) * 100) / 100
+    // pattern accumulated binary rounding errors across each addend.
+    const toCents = (v) => Math.round((Number(v) || 0) * 100);
+    const grossFinalPay = (
+      toCents(salaryForDaysWorked) + toCents(noticePay) + toCents(leaveEncashment) +
+      toCents(outstandingClaims) - toCents(excessLeaveDeduction)
+    ) / 100;
 
     const finalPayData = {
       basicSalary, workingDaysInMonth, daysWorked, salaryForDaysWorked,
@@ -448,7 +455,7 @@ function scheduleIr21Sweep() {
   console.log(`[offboarding-service] IR21 deadline sweep scheduled in ${Math.round(msUntil / 60000)} min`);
 }
 
-app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: err.message || 'Internal server error' }); });
+app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: (process.env.NODE_ENV === 'production' && (err.status || 500) >= 500) ? 'Internal server error' : (err.message || 'Internal server error') }); });
 
 if (require.main === module) {
   app.listen(PORT, () => {

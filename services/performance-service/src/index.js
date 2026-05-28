@@ -16,7 +16,7 @@ app.get('/health', (req, res) => res.json({ service: 'performance-service', stat
 app.use('/performance', performanceRoutes);
 app.use('/performance', feedback360Routes);
 app.use('/performance', successionRoutes);
-app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: err.message || 'Internal server error' }); });
+app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: (process.env.NODE_ENV === 'production' && (err.status || 500) >= 500) ? 'Internal server error' : (err.message || 'Internal server error') }); });
 
 if (require.main === module) app.listen(PORT, () => console.log(`[performance-service] Running on port ${PORT}`));
 module.exports = { app };

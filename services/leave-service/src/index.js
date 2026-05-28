@@ -16,7 +16,7 @@ app.use(helmet()); app.use(cors()); app.use(express.json({ limit: '10kb' })); ap
 app.get('/health', (req, res) => res.json({ service: 'leave-service', status: 'ok', ts: new Date() }));
 app.use('/leave', leaveRoutes);
 app.use('/leave', yearEndRoutes);
-app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: err.message || 'Internal server error' }); });
+app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: (process.env.NODE_ENV === 'production' && (err.status || 500) >= 500) ? 'Internal server error' : (err.message || 'Internal server error') }); });
 
 // Schedule the carry-forward expiry sweep at the next 00:05 SGT boundary,
 // then every 24 hours. Singapore time is UTC+8 year-round.

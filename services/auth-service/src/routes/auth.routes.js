@@ -149,7 +149,12 @@ const ACCESS_TOKEN_COOKIE  = 'vorkhive_token';
 const REFRESH_TOKEN_COOKIE = 'vorkhive_refresh';
 const COOKIE_PATH          = '/';
 const REFRESH_COOKIE_PATH  = '/api/auth';
-const ACCESS_TTL_SECONDS   = 8 * 60 * 60;            // 8 h — matches JWT_ACCESS_EXPIRES default
+// Cookie TTL is intentionally generous (the JWT itself enforces the real
+// expiry). The HttpOnly cookie just stores the bearer; if it's stale the
+// downstream check fails and the refresh flow runs. Keeping a longer cookie
+// TTL avoids race-y "missing cookie before refresh" UX while the underlying
+// JWT_ACCESS_EXPIRES (M-03) is now 15m by default.
+const ACCESS_TTL_SECONDS   = 60 * 60;                // 1 h cookie window
 const REFRESH_TTL_SECONDS  = 7 * 24 * 60 * 60;       // 7 d
 
 function cookieFlags(secure) {
@@ -943,20 +948,16 @@ router.post('/sso/microsoft/callback', async (req, res, next) => {
 
     if (!email) return res.status(401).json({ error: 'Microsoft account has no email address' });
 
-    // Find matching Vorkhive user — also try Gmail dot-stripped variant
-    let user = await prisma.user.findUnique({
+    // SECURITY (M-12): exact email match only. The previous "@gmail.com
+    // dot-stripped" fallback was a fuzzy lookup that broadened matchable
+    // accounts (an attacker who controlled `j.smith@gmail.com` could
+    // potentially log in as a Vorkhive account stored as `jsmith@gmail.com`).
+    // Now that H-09 verifies the Microsoft id_token signature and email_verified,
+    // the exact match is the only safe match.
+    const user = await prisma.user.findUnique({
       where: { email },
       include: { role: { include: { permissions: { include: { permission: true } } } } },
     });
-    if (!user && email.endsWith('@gmail.com')) {
-      const [local] = email.split('@');
-      const stripped = local.replace(/\./g, '') + '@gmail.com';
-      const withDots = await prisma.user.findMany({
-        where: { email: { contains: '@gmail.com' } },
-        include: { role: { include: { permissions: { include: { permission: true } } } } },
-      });
-      user = withDots.find(u => u.email.split('@')[0].replace(/\./g, '') === local.replace(/\./g, '')) || null;
-    }
 
     if (!user) return res.status(401).json({ error: 'No Vorkhive account found for this Microsoft account. Contact your administrator.' });
     if (!user.isActive) return res.status(403).json({ error: 'Account deactivated' });

@@ -247,7 +247,9 @@ describe('POST /recruitment/candidates/:id/approve — validation', () => {
       .set('authorization', 'Bearer test')
       .send({ startDate: '2026-06-01' });
     expect(res.status).toBe(502);
-    expect(res.body.details.error).toMatch(/Email/i);
+    // M-18: full upstream body is no longer echoed; only the upstream `error`
+    // field is surfaced (and only when it's a string).
+    expect(res.body.upstreamMessage).toMatch(/Email/i);
   });
 });
 

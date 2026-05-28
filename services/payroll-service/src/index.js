@@ -35,7 +35,7 @@ app.use('/components', componentRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+  res.status(err.status || 500).json({ error: (process.env.NODE_ENV === 'production' && (err.status || 500) >= 500) ? 'Internal server error' : (err.message || 'Internal server error') });
 });
 
 // PAY-007: daily IRAS / CPF submission deadline sweep at 00:25 SGT

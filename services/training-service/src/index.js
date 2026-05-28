@@ -17,7 +17,7 @@ app.get('/health', (req, res) => res.json({ service: 'training-service', status:
 app.use('/training', trainingRoutes);
 app.use('/training', competencyRoutes);
 app.use('/training', grantRoutes);
-app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: err.message || 'Internal server error' }); });
+app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: (process.env.NODE_ENV === 'production' && (err.status || 500) >= 500) ? 'Internal server error' : (err.message || 'Internal server error') }); });
 
 // Schedule cert-reminder sweep at next 00:10 SGT, then every 24h. 00:10 SGT
 // is 16:10 UTC the previous calendar day. Offset by 5 min from leave-service

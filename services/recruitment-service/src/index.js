@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 4006;
 app.use(helmet()); app.use(cors()); app.use(express.json({ limit: '10kb' })); app.use(morgan('combined'));
 app.get('/health', (req, res) => res.json({ service: 'recruitment-service', status: 'ok', ts: new Date() }));
 app.use('/recruitment', recruitmentRoutes);
-app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: err.message || 'Internal server error' }); });
+app.use((err, req, res, next) => { console.error(err); res.status(err.status || 500).json({ error: (process.env.NODE_ENV === 'production' && (err.status || 500) >= 500) ? 'Internal server error' : (err.message || 'Internal server error') }); });
 
 // REC-003: daily work-pass alert sweep at 00:20 SGT.
 function scheduleWorkPassSweep() {

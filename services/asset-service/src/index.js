@@ -22,7 +22,7 @@ app.use('/', alertsRoutes);                  // /assets/:id/maintenance, /licenc
 app.use('/assets', assetRoutes);             // /assets, /assets/:id, /assets/:id/assign
 app.use('/', logisticsRoutes);               // /inventory, /logistics/requests, /purchase-requests
 
-app.use((err, _req, res, _next) => { console.error(err); res.status(err.status || 500).json({ error: err.message || 'Internal server error' }); });
+app.use((err, _req, res, _next) => { console.error(err); res.status(err.status || 500).json({ error: (process.env.NODE_ENV === 'production' && (err.status || 500) >= 500) ? 'Internal server error' : (err.message || 'Internal server error') }); });
 
 // ─── Daily alert sweep at 00:15 SGT (16:15 UTC previous calendar day) ────────
 function msUntilNext00_15SGT() {
