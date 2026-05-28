@@ -10,13 +10,33 @@
 const crypto = require('crypto');
 
 /**
- * Replace {{key}} placeholders in templateHtml with values from variables map.
- * Unmatched placeholders are left as-is.
+ * HTML-escape a string so it is safe to interpolate into HTML text content
+ * or unquoted attribute contexts. The substituted values come from request
+ * bodies authored by HR users and are later rendered to the signatory's
+ * browser via dangerouslySetInnerHTML in the signing page — so any unescaped
+ * value is a stored XSS sink.
+ */
+function htmlEscape(input) {
+  if (input === null || input === undefined) return '';
+  return String(input)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Replace {{key}} placeholders in templateHtml with HTML-escaped values from
+ * variables map. Unmatched placeholders are left as-is.
+ *
+ * The templateHtml itself is HR-authored and is rendered raw — escape ONLY
+ * the substituted variable values, which are the user-controlled inputs.
  */
 function fillTemplate(templateHtml, variables) {
   return templateHtml.replace(/\{\{(\w+)\}\}/g, (match, key) => {
     return Object.prototype.hasOwnProperty.call(variables, key)
-      ? String(variables[key])
+      ? htmlEscape(variables[key])
       : match;
   });
 }
@@ -80,6 +100,7 @@ function buildSignatureStatement(signatoryName, documentTitle) {
 
 module.exports = {
   fillTemplate,
+  htmlEscape,
   computeDocumentHash,
   extractPlaceholders,
   validatePlaceholders,

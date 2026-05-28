@@ -227,17 +227,36 @@ function buildLoanDashboard(loans) {
  * @param {Object} loan
  * @returns {String} HTML
  */
+/**
+ * HTML-escape so user-controlled strings (employeeName, loanNumber, reason) can be
+ * safely interpolated into the generated HTML, which is later rendered to FINANCE/HR
+ * users via dangerouslySetInnerHTML on the loan-detail page. Without this any
+ * employee submitting a loan with an XSS payload in their name/reason would execute
+ * code in the approver's session.
+ */
+function escapeHtml(input) {
+  if (input === null || input === undefined) return '';
+  return String(input)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function generateLoanAgreement(loan) {
   if (!loan) return '';
-  const today = new Date().toLocaleDateString('en-SG', { day: 'numeric', month: 'long', year: 'numeric' });
-  const startStr = loan.startDate ? new Date(loan.startDate).toLocaleDateString('en-SG', { day: 'numeric', month: 'long', year: 'numeric' }) : '(to be set)';
+  const today    = new Date().toLocaleDateString('en-SG', { day: 'numeric', month: 'long', year: 'numeric' });
+  const startStr = loan.startDate       ? new Date(loan.startDate      ).toLocaleDateString('en-SG', { day: 'numeric', month: 'long', year: 'numeric' }) : '(to be set)';
   const endStr   = loan.expectedEndDate ? new Date(loan.expectedEndDate).toLocaleDateString('en-SG', { day: 'numeric', month: 'long', year: 'numeric' }) : '(to be computed)';
+  const employeeName = escapeHtml(loan.employeeName || '—');
+  const loanNumber   = escapeHtml(loan.loanNumber   || '—');
   return `
 <div class="loan-agreement">
   <h2>Staff Loan Agreement</h2>
   <p>Date: <strong>${today}</strong></p>
-  <p>Loan Reference: <strong>${loan.loanNumber || '—'}</strong></p>
-  <p>This agreement is made between the Company and <strong>${loan.employeeName || '—'}</strong> (the Borrower) under the following terms:</p>
+  <p>Loan Reference: <strong>${loanNumber}</strong></p>
+  <p>This agreement is made between the Company and <strong>${employeeName}</strong> (the Borrower) under the following terms:</p>
   <table style="width:100%; border-collapse:collapse; margin:1rem 0;">
     <tr><td style="padding:6px 10px;"><strong>Principal Amount</strong></td><td style="padding:6px 10px;">SGD ${Number(loan.principal || 0).toLocaleString()}</td></tr>
     <tr><td style="padding:6px 10px;"><strong>Interest Rate</strong></td><td style="padding:6px 10px;">${Number(loan.interestRate || 0)}% per annum (simple interest)</td></tr>
@@ -250,7 +269,7 @@ function generateLoanAgreement(loan) {
   <p>Repayments will be deducted monthly from the Borrower's payroll. Upon resignation or termination, any outstanding balance becomes immediately payable from the Borrower's final settlement.</p>
   <p>Early settlement is permitted at any time without penalty.</p>
   <p>By signing below, the Borrower agrees to the above terms.</p>
-  <p style="margin-top:2rem;">__________________________<br>Signature of Borrower (${loan.employeeName || '—'})</p>
+  <p style="margin-top:2rem;">__________________________<br>Signature of Borrower (${employeeName})</p>
 </div>`.trim();
 }
 
@@ -275,6 +294,7 @@ module.exports = {
   MAX_ADVANCE_MULTIPLIER,
   MAX_LOAN_TENURE_MONTHS,
   MAX_INTEREST_RATE,
+  escapeHtml,
   validateAdvanceAmount,
   validateLoanTerms,
   computeMonthlyInstalment,

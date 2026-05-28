@@ -463,10 +463,16 @@ router.get('/candidates/:id', authenticate, async (req, res, next) => {
 
 router.put('/candidates/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.RECRUITER), async (req, res, next) => {
   try {
-    const { notes, phone, currentEmployer, currentTitle, noticePeriod, expectedSalary, isOfferMade, isHired } = req.body;
+    // `isHired` and `isOfferMade` are workflow state, not editable attributes.
+    // They are mutated only by the hire-approval pipeline at
+    // POST /candidates/:id/approve, which enforces the FCF 14-day MyCareersFuture
+    // gate, creates the Employee record, provisions leave entitlements, IT/payroll
+    // onboarding tasks and policy acknowledgements. Allowing them here would let
+    // a RECRUITER bypass the entire MOM compliance path with a single PUT.
+    const { notes, phone, currentEmployer, currentTitle, noticePeriod, expectedSalary } = req.body;
     const candidate = await prisma.candidate.update({
       where: { id: req.params.id },
-      data: { notes, phone, currentEmployer, currentTitle, noticePeriod, expectedSalary, isOfferMade, isHired },
+      data: { notes, phone, currentEmployer, currentTitle, noticePeriod, expectedSalary },
     });
     res.json(candidate);
   } catch (err) { next(err); }
@@ -1261,6 +1267,258 @@ router.post('/onboarding/alert-sweep',
       const daysAhead = Math.max(1, parseInt(req.body.daysAhead ?? 3, 10) || 3);
       const result = await runOnboardingAlertSweep(daysAhead, req.headers.authorization || '');
       res.json(result);
+    } catch (err) { next(err); }
+  }
+);
+
+// ─── REC-001 Offer Letter PDF + E-Sign ────────────────────────────────────────
+
+const {
+  buildOfferLetterData,
+  renderOfferLetterHtml,
+  buildEsignVariables,
+} = require('../engines/offer-letter.engine');
+
+const PDFDocument  = require('pdfkit');
+const ESIGN_URL    = process.env.ESIGN_SERVICE_URL || 'http://esign-service:4015';
+const COMPANY_NAME = process.env.COMPANY_NAME      || 'The Company';
+
+// POST /recruitment/candidates/:id/offer-letter — generate + optionally dispatch e-sign
+router.post('/candidates/:id/offer-letter',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN),
+  async (req, res, next) => {
+    try {
+      const candidate = await prisma.candidate.findUnique({
+        where: { id: req.params.id },
+        include: { job: true },
+      });
+      if (!candidate) return res.status(404).json({ error: 'Candidate not found' });
+
+      // Only candidates at OFFER stage or beyond can receive an offer letter
+      const ELIGIBLE = ['OFFER', 'HIRED'];
+      if (!ELIGIBLE.includes(candidate.stage)) {
+        return res.status(400).json({ error: `Candidate must be at OFFER or HIRED stage (currently ${candidate.stage})` });
+      }
+
+      const { startDate, offeredSalary, probationMonths, reportingManager, additionalTerms, expiryDays, sendForEsign = true } = req.body;
+
+      const data = buildOfferLetterData(candidate, candidate.job, {
+        startDate, offeredSalary, probationMonths, reportingManager, additionalTerms, expiryDays,
+      });
+
+      // Upsert OfferLetter record
+      const existing = await prisma.offerLetter.findUnique({ where: { candidateId: candidate.id } });
+
+      let letter;
+      if (existing) {
+        letter = await prisma.offerLetter.update({
+          where: { candidateId: candidate.id },
+          data: {
+            jobTitle:          data.jobTitle,
+            department:        data.department,
+            startDate:         data.startDate,
+            offeredSalary:     data.offeredSalary,
+            probationMonths:   data.probationMonths,
+            reportingManager:  data.reportingManager,
+            additionalTerms:   data.additionalTerms,
+            expiresAt:         data.expiresAt,
+            status:            'DRAFT',
+            esignRequestId:    null,
+            signedAt:          null,
+            declinedAt:        null,
+          },
+        });
+      } else {
+        letter = await prisma.offerLetter.create({
+          data: {
+            id:               require('crypto').randomUUID(),
+            candidateId:      candidate.id,
+            jobTitle:         data.jobTitle,
+            department:       data.department,
+            startDate:        data.startDate,
+            offeredSalary:    data.offeredSalary,
+            probationMonths:  data.probationMonths,
+            reportingManager: data.reportingManager,
+            additionalTerms:  data.additionalTerms,
+            expiresAt:        data.expiresAt,
+            status:           'DRAFT',
+            generatedBy:      req.user.sub,
+          },
+        });
+      }
+
+      // Optionally dispatch to ESV-003 e-sign service
+      let esignRequestId = null;
+      let esignError     = null;
+      if (sendForEsign) {
+        try {
+          const html      = renderOfferLetterHtml(data, COMPANY_NAME);
+          const variables = buildEsignVariables(data, COMPANY_NAME);
+          const esignRes  = await fetch(`${ESIGN_URL}/esign/requests`, {
+            method:  'POST',
+            headers: { Authorization: req.headers.authorization, 'Content-Type': 'application/json' },
+            body:    JSON.stringify({
+              documentType:  'OFFER_LETTER',
+              title:         `Offer Letter — ${data.candidateName} — ${data.jobTitle}`,
+              contentHtml:   html,
+              variables,
+              signatories:   [{ signatoryId: candidate.id, signatoryEmail: candidate.email, name: data.candidateName }],
+              dueDate:       data.expiresAt.toISOString(),
+            }),
+          });
+          if (esignRes.ok) {
+            const esignData = await esignRes.json();
+            esignRequestId = esignData.requestId || esignData.id || null;
+            await prisma.offerLetter.update({
+              where: { candidateId: candidate.id },
+              data: { esignRequestId, status: 'SENT' },
+            });
+            letter = { ...letter, esignRequestId, status: 'SENT' };
+          } else {
+            esignError = `E-sign dispatch failed (${esignRes.status})`;
+          }
+        } catch (e) {
+          esignError = e.message;
+        }
+      }
+
+      res.status(201).json({ offerLetter: letter, esignDispatched: sendForEsign && !esignError, esignError });
+    } catch (err) { next(err); }
+  }
+);
+
+// GET /recruitment/candidates/:id/offer-letter — retrieve current offer letter
+router.get('/candidates/:id/offer-letter',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN),
+  async (req, res, next) => {
+    try {
+      const letter = await prisma.offerLetter.findUnique({ where: { candidateId: req.params.id } });
+      if (!letter) return res.status(404).json({ error: 'No offer letter found for this candidate' });
+      res.json(letter);
+    } catch (err) { next(err); }
+  }
+);
+
+// GET /recruitment/candidates/:id/offer-letter/pdf — stream PDF
+router.get('/candidates/:id/offer-letter/pdf',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN),
+  async (req, res, next) => {
+    try {
+      const letter = await prisma.offerLetter.findUnique({ where: { candidateId: req.params.id } });
+      if (!letter) return res.status(404).json({ error: 'No offer letter found for this candidate' });
+
+      const candidate = await prisma.candidate.findUnique({
+        where: { id: req.params.id },
+        include: { job: true },
+      });
+      const data = {
+        candidateName:   `${candidate.firstName} ${candidate.lastName}`,
+        candidateEmail:  candidate.email,
+        jobTitle:        letter.jobTitle,
+        department:      letter.department,
+        reportingManager: letter.reportingManager,
+        startDate:       letter.startDate,
+        offeredSalary:   letter.offeredSalary,
+        probationMonths: letter.probationMonths,
+        additionalTerms: letter.additionalTerms,
+        expiresAt:       letter.expiresAt,
+        issuedDate:      letter.createdAt,
+      };
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="offer-letter-${candidate.firstName}-${candidate.lastName}.pdf"`);
+
+      const doc = new PDFDocument({ size: 'A4', margin: 60 });
+      doc.pipe(res);
+
+      const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-SG', { day: 'numeric', month: 'long', year: 'numeric' }) : 'TBD';
+      const fmtSalary = (s) => s != null ? `SGD ${Number(s).toLocaleString('en-SG', { minimumFractionDigits: 2 })} per month` : 'As discussed';
+
+      // Header
+      doc.fontSize(10).fillColor('#555').text(fmtDate(data.issuedDate), { align: 'right' });
+      doc.moveDown(0.5);
+      doc.fontSize(10).fillColor('#1a1a1a').text(`Dear ${data.candidateName},`);
+      doc.moveDown(0.5);
+      doc.fontSize(18).fillColor('#1a1a1a').text('Letter of Offer', { underline: false });
+      doc.fontSize(12).fillColor('#333').text(data.jobTitle);
+      doc.moveDown(0.5);
+      doc.moveTo(60, doc.y).lineTo(535, doc.y).strokeColor('#ddd').stroke();
+      doc.moveDown(0.5);
+
+      // Terms table
+      const rows = [
+        ['Position',         data.jobTitle],
+        ['Department',       data.department || '—'],
+        ['Reporting To',     data.reportingManager || '—'],
+        ['Start Date',       fmtDate(data.startDate)],
+        ['Basic Salary',     fmtSalary(data.offeredSalary)],
+        ['Probation Period', `${data.probationMonths} month${data.probationMonths !== 1 ? 's' : ''}`],
+      ];
+      for (const [label, value] of rows) {
+        doc.fontSize(10).fillColor('#444').text(label, 60, doc.y, { width: 180, continued: false });
+        doc.fontSize(10).fillColor('#1a1a1a').text(value, 250, doc.y - doc.currentLineHeight(), { width: 285 });
+        doc.moveDown(0.3);
+      }
+
+      if (data.additionalTerms) {
+        doc.moveDown(0.5);
+        doc.fontSize(10).fillColor('#444').text('Additional Terms:', { underline: true });
+        doc.moveDown(0.2);
+        doc.fontSize(10).fillColor('#1a1a1a').text(data.additionalTerms);
+      }
+
+      doc.moveDown(0.5);
+      doc.moveTo(60, doc.y).lineTo(535, doc.y).strokeColor('#ddd').stroke();
+      doc.moveDown(0.5);
+      doc.fontSize(10).fillColor('#1a1a1a').text(`This offer is valid until ${fmtDate(data.expiresAt)}. Please sign and return this letter to indicate your acceptance.`);
+      doc.moveDown(1);
+      doc.text('Yours sincerely,');
+      doc.moveDown(2);
+      doc.text('______________________________');
+      doc.text(`Human Resources · ${COMPANY_NAME}`);
+      doc.moveDown(1.5);
+      doc.moveTo(60, doc.y).lineTo(535, doc.y).strokeColor('#ddd').stroke();
+      doc.moveDown(0.5);
+      doc.fontSize(10).fillColor('#333').text('Acceptance');
+      doc.moveDown(0.3);
+      doc.fontSize(10).fillColor('#1a1a1a').text(`I, ${data.candidateName}, accept the above offer of employment.`);
+      doc.moveDown(1);
+      doc.text('Signature: ______________________________        Date: ______________________________');
+      doc.moveDown(1.5);
+      doc.fontSize(8).fillColor('#aaa').text(`Issued: ${fmtDate(data.issuedDate)}  ·  Offer expires: ${fmtDate(data.expiresAt)}`);
+
+      doc.end();
+    } catch (err) { next(err); }
+  }
+);
+
+// PUT /recruitment/candidates/:id/offer-letter — update status (SIGNED / DECLINED / REVOKED)
+router.put('/candidates/:id/offer-letter',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN),
+  async (req, res, next) => {
+    try {
+      const { status, declinedReason } = req.body;
+      const VALID = ['SIGNED', 'DECLINED', 'REVOKED', 'EXPIRED'];
+      if (!VALID.includes(status)) {
+        return res.status(400).json({ error: `status must be one of ${VALID.join(', ')}` });
+      }
+
+      const existing = await prisma.offerLetter.findUnique({ where: { candidateId: req.params.id } });
+      if (!existing) return res.status(404).json({ error: 'No offer letter found for this candidate' });
+
+      const updated = await prisma.offerLetter.update({
+        where: { candidateId: req.params.id },
+        data: {
+          status,
+          ...(status === 'SIGNED'   ? { signedAt: new Date() }   : {}),
+          ...(status === 'DECLINED' ? { declinedAt: new Date(), declinedReason: declinedReason ?? null } : {}),
+        },
+      });
+      res.json(updated);
     } catch (err) { next(err); }
   }
 );

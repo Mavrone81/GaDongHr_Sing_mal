@@ -4,6 +4,7 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
+const cookieParser = require('cookie-parser');
 
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
@@ -21,6 +22,7 @@ app.set('trust proxy', 1);
 // Security headers
 app.use(helmet());
 app.use(cors());
+app.use(cookieParser());
 app.use(express.json({ limit: '10kb' }));
 app.use(morgan('combined'));
 

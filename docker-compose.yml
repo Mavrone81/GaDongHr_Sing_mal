@@ -49,6 +49,7 @@ services:
       - ASSET_SERVICE_URL=http://asset-service:4011
       - PERFORMANCE_SERVICE_URL=http://performance-service:4012
       - TRAINING_SERVICE_URL=http://training-service:4013
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8081,http://localhost:3000}
     volumes:
       - shared_certs:/app/certs:ro
     depends_on:
@@ -77,7 +78,11 @@ services:
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - JWT_ACCESS_EXPIRES=${JWT_ACCESS_EXPIRES:-8h}
       - JWT_REFRESH_EXPIRES=${JWT_REFRESH_EXPIRES:-7d}
-      - INTERNAL_SERVICE_KEY=***REMOVED***
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
+      - INVITE_TOKEN_SECRET=${INVITE_TOKEN_SECRET}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - LOGIN_RATELIMIT_MAX=${LOGIN_RATELIMIT_MAX:-10}
       - EMPLOYEE_DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${EMPLOYEE_DB:-hrms_employee}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID:-}
@@ -130,7 +135,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${EMPLOYEE_DB:-hrms_employee}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
-      - INTERNAL_SERVICE_KEY=***REMOVED***
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
       - AUTH_SERVICE_URL=http://auth-service:4001
       - FACE_SERVICE_URL=http://face-service:5010
     volumes:
@@ -170,7 +175,7 @@ services:
       - LEAVE_SERVICE_URL=http://leave-service:4004
       - ATTENDANCE_SERVICE_URL=http://attendance-service:4007
       - NOTIFICATION_SERVICE_URL=http://notification-service:4009
-      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-***REMOVED***}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
       - DISABLE_MAKER_CHECKER=${DISABLE_MAKER_CHECKER:-true}
       - COMPANY_NAME=${COMPANY_NAME:-VORKHIVE PTE LTD}
       - COMPANY_UEN=${COMPANY_UEN:-202512345A}
@@ -210,7 +215,7 @@ services:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - NOTIFICATION_SERVICE_URL=http://notification-service:4009
-      - INTERNAL_SERVICE_KEY=***REMOVED***
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
       - EMPLOYEE_SERVICE_URL=http://employee-service:4002
     volumes:
       - shared_certs:/app/certs:ro
@@ -295,7 +300,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD:-hrms_secret_2025}@postgres:5432/${ATTENDANCE_DB:-hrms_attendance}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
-      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-***REMOVED***}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
       - EMPLOYEE_SERVICE_URL=http://employee-service:4002
       - LEAVE_SERVICE_URL=http://leave-service:4004
       - NOTIFICATION_SERVICE_URL=http://notification-service:4009
@@ -392,7 +397,7 @@ services:
       - LEAVE_SERVICE_URL=http://leave-service:4004
       - ATTENDANCE_SERVICE_URL=http://attendance-service:4007
       - TRAINING_SERVICE_URL=http://training-service:4013
-      - INTERNAL_SERVICE_KEY=***REMOVED***
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
     volumes:
       - shared_certs:/app/certs:ro
     depends_on:

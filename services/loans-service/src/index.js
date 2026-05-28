@@ -17,6 +17,25 @@ const {
 
 const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:4009';
 const EMPLOYEE_SERVICE_URL     = process.env.EMPLOYEE_SERVICE_URL     || 'http://employee-service:4002';
+const INTERNAL_SERVICE_KEY     = process.env.INTERNAL_SERVICE_KEY;
+
+// Fetch the authoritative monthlySalary from employee-service. Never trust
+// a client-supplied monthlySalary in the request body — it lets the requester
+// inflate their declared income and bypass the 1× advance / 30% instalment cap.
+async function fetchAuthoritativeMonthlySalary(employeeId) {
+  if (!INTERNAL_SERVICE_KEY) {
+    throw new Error('INTERNAL_SERVICE_KEY is required to fetch salary');
+  }
+  const res = await fetch(`${EMPLOYEE_SERVICE_URL}/employees/${employeeId}/internal/monthly-salary`, {
+    headers: { 'x-internal-service-key': INTERNAL_SERVICE_KEY },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw Object.assign(new Error(`Salary lookup failed: ${res.status} ${body}`), { status: res.status });
+  }
+  const data = await res.json();
+  return { monthlySalary: Number(data.monthlySalary || 0), isActive: data.isActive };
+}
 
 const prisma = new PrismaClient();
 const app    = express();
@@ -59,18 +78,14 @@ async function generateLoanNumber() {
 // POST /loans/advances — employee requests advance
 app.post('/loans/advances', authenticate, async (req, res, next) => {
   try {
-    const { amount, reason, monthlySalary } = req.body;
+    const { amount, reason } = req.body;
     if (amount === undefined || isNaN(parseFloat(amount)))
       return res.status(400).json({ error: 'amount is required' });
     if (!reason || !reason.trim())
       return res.status(400).json({ error: 'reason is required' });
-    if (monthlySalary === undefined || isNaN(parseFloat(monthlySalary)))
-      return res.status(400).json({ error: 'monthlySalary is required' });
 
-    const v = validateAdvanceAmount(parseFloat(amount), parseFloat(monthlySalary));
-    if (!v.valid) return res.status(400).json({ error: v.reason, maxAllowed: v.maxAllowed });
-
-    // Check existing pending/approved advance not yet deducted
+    // Resolve target employee BEFORE the salary lookup so we fetch the canonical
+    // salary for the right employee, not the requester.
     const myId = req.user.employeeId || req.user.sub;
     const targetEmpId = isApprover(req.user.role) && req.body.employeeId ? req.body.employeeId : myId;
     const targetEmpName = req.body.employeeName || req.user.name || 'Unknown';
@@ -78,6 +93,26 @@ app.post('/loans/advances', authenticate, async (req, res, next) => {
     if (!isApprover(req.user.role) && targetEmpId !== myId) {
       return res.status(403).json({ error: 'Forbidden' });
     }
+
+    // SECURITY (C-17): never trust monthlySalary from the body — fetch the
+    // authoritative figure from employee-service. Any body.monthlySalary is
+    // ignored and reported back in the response for transparency.
+    let salaryLookup;
+    try {
+      salaryLookup = await fetchAuthoritativeMonthlySalary(targetEmpId);
+    } catch (e) {
+      return res.status(e.status === 404 ? 404 : 502).json({ error: e.message });
+    }
+    if (!salaryLookup.isActive) {
+      return res.status(400).json({ error: 'Employee is not active — cannot request advance' });
+    }
+    const monthlySalary = salaryLookup.monthlySalary;
+    if (!monthlySalary || monthlySalary <= 0) {
+      return res.status(400).json({ error: 'Employee has no recorded basic salary' });
+    }
+
+    const v = validateAdvanceAmount(parseFloat(amount), monthlySalary);
+    if (!v.valid) return res.status(400).json({ error: v.reason, maxAllowed: v.maxAllowed });
 
     const existingActive = await prisma.salaryAdvance.findFirst({
       where: { employeeId: targetEmpId, status: { in: ['PENDING','APPROVED'] } },
@@ -93,7 +128,7 @@ app.post('/loans/advances', authenticate, async (req, res, next) => {
         advanceNumber,
         employeeId:    targetEmpId,
         employeeName:  targetEmpName,
-        monthlySalary: parseFloat(monthlySalary),
+        monthlySalary,                            // server-side authoritative
         amount:        parseFloat(amount),
         reason:        reason.trim(),
         requestedBy:   req.user.sub,
@@ -270,22 +305,14 @@ app.get('/loans/termination-deductions/:employeeId', authenticate, authorize(...
 // POST /loans/staff-loans — employee requests loan
 app.post('/loans/staff-loans', authenticate, async (req, res, next) => {
   try {
-    const {
-      principal, interestRate, tenureMonths, reason, monthlySalary,
-    } = req.body;
+    const { principal, interestRate, tenureMonths, reason } = req.body;
     if (principal === undefined || tenureMonths === undefined)
       return res.status(400).json({ error: 'principal and tenureMonths are required' });
     if (!reason || !reason.trim()) return res.status(400).json({ error: 'reason is required' });
-    if (monthlySalary === undefined || isNaN(parseFloat(monthlySalary)))
-      return res.status(400).json({ error: 'monthlySalary is required' });
 
     const principalF = parseFloat(principal);
     const rateF      = parseFloat(interestRate || 0);
     const tenureI    = parseInt(tenureMonths);
-    const salF       = parseFloat(monthlySalary);
-
-    const v = validateLoanTerms({ principal: principalF, interestRate: rateF, tenureMonths: tenureI, monthlySalary: salF });
-    if (!v.valid) return res.status(400).json({ error: v.reasons.join('; ') });
 
     const myId = req.user.employeeId || req.user.sub;
     const targetEmpId   = isApprover(req.user.role) && req.body.employeeId ? req.body.employeeId : myId;
@@ -294,6 +321,24 @@ app.post('/loans/staff-loans', authenticate, async (req, res, next) => {
     if (!isApprover(req.user.role) && targetEmpId !== myId) {
       return res.status(403).json({ error: 'Forbidden' });
     }
+
+    // SECURITY (C-17): salary must come from employee-service, not the body.
+    let salaryLookup;
+    try {
+      salaryLookup = await fetchAuthoritativeMonthlySalary(targetEmpId);
+    } catch (e) {
+      return res.status(e.status === 404 ? 404 : 502).json({ error: e.message });
+    }
+    if (!salaryLookup.isActive) {
+      return res.status(400).json({ error: 'Employee is not active — cannot request loan' });
+    }
+    const salF = salaryLookup.monthlySalary;
+    if (!salF || salF <= 0) {
+      return res.status(400).json({ error: 'Employee has no recorded basic salary' });
+    }
+
+    const v = validateLoanTerms({ principal: principalF, interestRate: rateF, tenureMonths: tenureI, monthlySalary: salF });
+    if (!v.valid) return res.status(400).json({ error: v.reasons.join('; ') });
 
     // Prevent multiple active/pending loans
     const existingActive = await prisma.staffLoan.findFirst({

@@ -1,4 +1,7 @@
 'use strict';
+// Required by C-07 fix: payroll service fail-closes if INTERNAL_SERVICE_KEY
+// is missing. Set a test value before any module loads.
+process.env.INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY || 'test-internal-key-2025';
 /**
  * Integration tests for payroll API endpoints.
  *

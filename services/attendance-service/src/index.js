@@ -52,7 +52,10 @@ const LEAVE_SERVICE_URL        = process.env.LEAVE_SERVICE_URL        || 'http:/
 
 // Read at request time, not module-load time — keeps tests able to set the
 // key via process.env before each request without re-requiring the module.
-const internalKey = () => process.env.INTERNAL_SERVICE_KEY || 'dev-internal-key';
+// Returns null if the env var is missing; callers must reject the comparison
+// rather than defaulting to a known literal (the prior 'dev-internal-key'
+// fallback was a full inter-service auth bypass when env drifted).
+const internalKey = () => process.env.INTERNAL_SERVICE_KEY || null;
 
 const prisma = new PrismaClient();
 const app = express();

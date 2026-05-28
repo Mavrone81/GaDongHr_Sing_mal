@@ -50,6 +50,7 @@ jest.mock('../src/utils/jwt.utils', () => ({
 
 // ── App ───────────────────────────────────────────────────────────────────────
 process.env.INTERNAL_SERVICE_KEY = 'test-internal-key-2025';
+process.env.INVITE_TOKEN_SECRET  = 'a'.repeat(64); // test-only invite-token secret (>=32 chars)
 
 const request = require('supertest');
 const app = require('../src/index');

@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { storeTokens, clearTokens, getAccessToken, getRefreshToken } from '@/lib/api';
+import { clearTokens } from '@/lib/api';
 
 interface User {
   id: string;
@@ -19,7 +19,7 @@ interface AuthContextType {
   hasPermission: (permission: string) => boolean;
   hasRole: (role: string) => boolean;
   login: (token: string, refreshToken?: string | null) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -33,16 +33,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || `http://${hostname}:4000/api`;
 
   const applyUserData = (userData: any) => {
-    const userEmail = (userData.email || '').toLowerCase().trim();
-    const isSystemAdmin =
-      userEmail === 'admin@vorkhive.sg' ||
-      userEmail === 'admin@hrms.com' ||
-      userEmail === 'admin@urbanwerkz.com';
-
-    let normalizedRole = (userData.role || 'EMPLOYEE').toUpperCase().trim();
-    if (isSystemAdmin || normalizedRole === 'SUPER_ADMIN') {
-      normalizedRole = 'SUPER_ADMIN';
-    }
+    // Role is taken verbatim from the server. The prior email-based override
+    // (admin@vorkhive.sg / admin@hrms.com → SUPER_ADMIN) was a backdoor and
+    // has been removed.
+    const normalizedRole = (userData.role || 'EMPLOYEE').toUpperCase().trim();
 
     setUser({
       id: userData.id,
@@ -54,9 +48,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const fetchUserWithToken = async (token: string): Promise<boolean> => {
+  // Post C-12 the auth cookies are HttpOnly and credentials:'include' is
+  // what attaches them. We no longer read or pass a Bearer token from JS.
+  const fetchCurrentUser = async (): Promise<boolean> => {
     const response = await fetch(`${apiBaseUrl}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
     });
     if (response.ok) {
       applyUserData(await response.json());
@@ -68,10 +64,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const bootstrap = async () => {
       try {
-        const token = getAccessToken();
-        if (!token) return;
-        const ok = await fetchUserWithToken(token);
-        if (!ok) logout();
+        // Just probe /auth/me with credentials — the HttpOnly cookie will
+        // come along if a valid session exists. If not, the user is logged out.
+        await fetchCurrentUser();
       } catch (error) {
         console.error('[AUTH] bootstrap failed:', error);
       } finally {
@@ -82,10 +77,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     bootstrap();
   }, []);
 
-  const login = async (token: string, refreshToken?: string | null): Promise<void> => {
-    storeTokens(token, refreshToken);
+  // The two token args are accepted for backwards source-compat only —
+  // they are not used (the server already set HttpOnly cookies on /auth/login).
+  const login = async (_token?: string, _refreshToken?: string | null): Promise<void> => {
     try {
-      const ok = await fetchUserWithToken(token);
+      const ok = await fetchCurrentUser();
       if (!ok) throw new Error('Identity fetch failed');
     } finally {
       setLoading(false);
@@ -101,8 +97,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return user?.role === role;
   };
 
-  const logout = () => {
-    clearTokens();
+  const logout = async () => {
+    // Invalidate server-side refresh token and clear HttpOnly cookies.
+    try {
+      await fetch(`${apiBaseUrl}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch { /* best-effort */ }
+    clearTokens(); // also clears any stale JS-readable cookies (transition cleanup)
     setUser(null);
     router.push('/login');
   };

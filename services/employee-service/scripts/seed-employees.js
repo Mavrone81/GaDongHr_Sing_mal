@@ -2,9 +2,16 @@
 
 const { PrismaClient } = require('@prisma/client');
 const { v4: uuidv4 } = require('uuid');
-const { encrypt } = require('/app/shared/crypto');
 
-process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'cc285661d9e79f6eeb248e359218d6e38fb9279147e2468f3a39e801cf907c0a';
+// Fail-closed: never default ENCRYPTION_KEY to a committed literal. The prior
+// 32-byte fallback was published in the repo, so any data encrypted under
+// that key was effectively plaintext to anyone with repo access.
+if (!process.env.ENCRYPTION_KEY) {
+  console.error('FATAL: ENCRYPTION_KEY env var is required to seed employees.');
+  process.exit(1);
+}
+
+const { encrypt } = require('/app/shared/crypto');
 
 const prisma = new PrismaClient();
 

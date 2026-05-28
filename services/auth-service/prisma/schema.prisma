@@ -25,6 +25,10 @@ model User {
   lastLoginAt   DateTime?
   inviteToken   String?   @unique
   inviteExpiry  DateTime?
+  // True when the account was provisioned with a temporary password and the
+  // user must rotate it on first login. Set by seed/sync scripts that mint
+  // initial credentials.
+  mustChangePassword Boolean @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

@@ -16,10 +16,10 @@ export default function DashboardPage() {
 
     // Only cache the SUPER_ADMIN flag for true system admins —
     // scoped roles (ADMIN, HR_ADMIN, etc.) must not be promoted.
+    // Role comes from the server; no email-based override.
     if (user) {
-      const email = (user.email || '').toLowerCase().trim();
       const role = (user.role || '').toUpperCase().trim();
-      if (role === 'SUPER_ADMIN' || email === 'admin@vorkhive.sg' || email === 'admin@hrms.com') {
+      if (role === 'SUPER_ADMIN') {
         localStorage.setItem('vorkhive_admin_confirmed', '1');
         setCachedAdmin(true);
       }
@@ -37,15 +37,12 @@ export default function DashboardPage() {
     );
   }
 
-  // BULLETPROOF ADMIN CHECK: Live API + localStorage cache
-  const normalizedEmail = (user?.email || '').toLowerCase().trim();
+  // Admin dashboard branch — based on server-verified role only.
   const isAdmin =
     user?.role === 'SUPER_ADMIN' ||
     user?.role === 'ADMIN' ||
     user?.role === 'HR_ADMIN' ||
     user?.role === 'HR_MANAGER' ||
-    normalizedEmail === 'admin@vorkhive.sg' ||
-    normalizedEmail === 'admin@hrms.com' ||
     cachedAdmin;
 
   // Toggle between Executive Intelligence and Employee Workspace

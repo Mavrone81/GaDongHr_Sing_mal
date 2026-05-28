@@ -1,4 +1,5 @@
 'use strict';
+process.env.INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY || 'test-internal-key-2025';
 /**
  * TAT-005 regression: payroll /runs/:id/compute consumes the attendance
  * period summary from attendance-service and materializes OT_PAY,
