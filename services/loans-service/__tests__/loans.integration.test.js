@@ -88,7 +88,18 @@ jest.mock('@prisma/client', () => ({
 }));
 
 jest.mock('dotenv', () => ({ config: () => {} }));
-global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+
+// Default salary-lookup mock: every call returns SGD 5000 monthly. Specific
+// tests override this if they want to test salary edge cases. This replaces
+// the body.monthlySalary path that existed before C-17 — loans-service now
+// fetches the canonical salary from employee-service.
+process.env.INTERNAL_SERVICE_KEY = 'test-internal-key-2025';
+global.fetch = jest.fn().mockImplementation(async (url) => {
+  if (typeof url === 'string' && url.includes('/internal/monthly-salary')) {
+    return { ok: true, json: async () => ({ monthlySalary: 5000, isActive: true, salaryBasis: 'MONTHLY' }) };
+  }
+  return { ok: true, json: async () => ({}) };
+});
 
 const request = require('supertest');
 const app     = require('../src/index');

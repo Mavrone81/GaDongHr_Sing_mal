@@ -351,7 +351,10 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
     // the auto-fed codes (OT_PAY, ABSENT_DEDUCT, PH_WORK_PAY) we skip the
     // auto-add for that employee/code — manual entries are authoritative.
     const ATTENDANCE_SERVICE_URL = process.env.ATTENDANCE_SERVICE_URL || 'http://attendance-service:4007';
-    const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY || 'dev-internal-key';
+    // Fail-closed: never accept a literal default for the internal service key —
+    // a 'dev-internal-key' fallback in any environment is a full auth bypass.
+    const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY;
+    if (!INTERNAL_KEY) throw new Error('INTERNAL_SERVICE_KEY env var is required');
     let attendanceSummary = {};
     let attendancePeriodStatus = 'OPEN';
     let attendanceFetchFailed = false;
@@ -1919,7 +1922,10 @@ router.get('/ir8a-file/:year', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.
 // without requiring HR to enter the daily rate manually. Internal key auth.
 router.get('/internal/daily-rate/:employeeId/:period', async (req, res, next) => {
   try {
-    const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY || 'dev-internal-key';
+    // Fail-closed: never accept a literal default for the internal service key —
+    // a 'dev-internal-key' fallback in any environment is a full auth bypass.
+    const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY;
+    if (!INTERNAL_KEY) throw new Error('INTERNAL_SERVICE_KEY env var is required');
     const key = req.headers['x-internal-service-key'];
     if (!key || key !== INTERNAL_KEY) return res.status(403).json({ error: 'Forbidden' });
     const { employeeId, period } = req.params;
@@ -1961,7 +1967,10 @@ router.get('/internal/daily-rate/:employeeId/:period', async (req, res, next) =>
 // form auto-population. Authenticated by x-internal-service-key header only.
 router.get('/internal/ir21-ytd/:employeeId/:year', async (req, res, next) => {
   try {
-    const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY || 'dev-internal-key';
+    // Fail-closed: never accept a literal default for the internal service key —
+    // a 'dev-internal-key' fallback in any environment is a full auth bypass.
+    const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY;
+    if (!INTERNAL_KEY) throw new Error('INTERNAL_SERVICE_KEY env var is required');
     const key = req.headers['x-internal-service-key'];
     if (!key || key !== INTERNAL_KEY) return res.status(403).json({ error: 'Forbidden' });
 

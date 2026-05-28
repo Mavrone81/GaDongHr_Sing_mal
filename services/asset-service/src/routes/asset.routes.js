@@ -139,8 +139,16 @@ router.post('/:id/return', authenticate, authorize(...ADMIN_ROLES), async (req, 
 });
 
 // ── GET /assets/employee/:employeeId ─────────────────────────────────────────
+// Caller may view their own assigned assets, or any admin role may view anyone's.
+// Previously this endpoint had no ownership check, exposing exec laptop S/Ns to
+// every authenticated user.
 router.get('/employee/:employeeId', authenticate, async (req, res, next) => {
   try {
+    const isOwner = req.user.employeeId && req.user.employeeId === req.params.employeeId;
+    const isAdmin = ADMIN_ROLES.includes(req.user.role);
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Forbidden — you may only view your own assigned assets' });
+    }
     const assignments = await prisma.assetAssignment.findMany({
       where: { employeeId: req.params.employeeId, isActive: true },
       include: { asset: true },
@@ -151,7 +159,8 @@ router.get('/employee/:employeeId', authenticate, async (req, res, next) => {
 });
 
 // ── GET /assets/:id/history ───────────────────────────────────────────────────
-router.get('/:id/history', authenticate, async (req, res, next) => {
+// Asset history exposes prior assignees — admin/IT only.
+router.get('/:id/history', authenticate, authorize(...ADMIN_ROLES), async (req, res, next) => {
   try {
     const history = await prisma.assetAssignment.findMany({
       where: { assetId: req.params.id },

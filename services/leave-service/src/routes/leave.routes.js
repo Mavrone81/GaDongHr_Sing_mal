@@ -15,6 +15,14 @@ const EMPLOYEE_URL = process.env.EMPLOYEE_SERVICE_URL || 'http://employee-servic
 const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY || '';
 
 const ADMIN_ROLES = new Set([ROLES.SUPER_ADMIN, ROLES.HR_ADMIN]);
+// Roles allowed to view leave applications across all employees (e.g. via ?employeeId=)
+// or to receive the unfiltered list. Includes payroll officers who need full visibility
+// for payroll integration, and HR managers for team-wide oversight.
+const LEAVE_VIEW_ROLES = new Set([
+  ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.PAYROLL_OFFICER,
+]);
+// Roles allowed to submit a leave application on behalf of another employee.
+const LEAVE_SUBMIT_FOR_OTHERS = new Set([ROLES.SUPER_ADMIN, ROLES.HR_ADMIN]);
 
 // ── File-upload setup for leave attachments ───────────────────────────────────
 const UPLOADS_DIR = path.join('/app/uploads/leave');
@@ -339,9 +347,14 @@ router.get('/applications', authenticate, async (req, res, next) => {
   try {
     const { employeeId, status, page = 1, limit = 20, startDateFrom, startDateTo, endDateFrom } = req.query;
     const where = {};
-    // Employees see only their own; managers see their team
-    if (req.user.role === 'employee') where.employeeId = req.user.employeeId;
-    else if (employeeId) where.employeeId = employeeId;
+    // Default-deny: only privileged roles see the unfiltered list or filter
+    // by an arbitrary employeeId. Everyone else is force-scoped to their own employeeId.
+    const isPrivileged = LEAVE_VIEW_ROLES.has(req.user.role);
+    if (!isPrivileged) {
+      where.employeeId = req.user.employeeId;
+    } else if (employeeId) {
+      where.employeeId = employeeId;
+    }
     if (status) where.status = status.toUpperCase();
     if (startDateFrom || startDateTo) {
       where.startDate = {};
@@ -372,14 +385,27 @@ router.get('/applications', authenticate, async (req, res, next) => {
 router.post('/applications', authenticate, upload.single('attachment'), async (req, res, next) => {
   try {
     const { leaveTypeId, startDate, endDate, reason, isHalfDay, halfDaySlot } = req.body;
-    const employeeId = req.body.employeeId || req.user.employeeId;
+    // Only HR admins may submit a leave application on behalf of another employee.
+    // Otherwise force the application to the authenticated user's employeeId.
+    const canSubmitForOthers = LEAVE_SUBMIT_FOR_OTHERS.has(req.user.role);
+    const employeeId = (canSubmitForOthers && req.body.employeeId) ? req.body.employeeId : req.user.employeeId;
     if (!leaveTypeId || !startDate || !endDate) return res.status(400).json({ error: 'leaveTypeId, startDate, endDate required' });
 
     const start = new Date(startDate);
     const end = new Date(endDate);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return res.status(400).json({ error: 'startDate and endDate must be valid dates' });
+    }
     const msPerDay = 24 * 60 * 60 * 1000;
     let totalDays = Math.round((end - start) / msPerDay) + 1;
     if (isHalfDay) totalDays = 0.5;
+    // Reject zero or negative totalDays. Previously endDate < startDate produced
+    // negative totalDays which (a) skipped the `available < totalDays` balance check
+    // and (b) on approval *reduced* usedDays via increment(-N), letting employees
+    // inflate their leave balance arbitrarily.
+    if (totalDays <= 0) {
+      return res.status(400).json({ error: 'endDate must be on or after startDate' });
+    }
 
     // Fetch leave type to determine if balance check applies
     const leaveType = await prisma.leaveType.findUnique({ where: { id: leaveTypeId } });

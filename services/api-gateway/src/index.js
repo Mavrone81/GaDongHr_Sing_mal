@@ -6,6 +6,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
@@ -36,14 +37,45 @@ const SERVICES = {
   survey:       process.env.SURVEY_SERVICE_URL       || 'http://survey-service:4019',
 };
 
-const corsOptions = { 
-  origin: '*', 
+// Explicit origin allowlist (CORS_ORIGINS is a comma-separated list of URLs).
+// Previously this was `origin: '*'` and announced trust-headers (x-user-id /
+// x-user-role / x-employee-id) in `allowedHeaders` — which let any browser
+// page craft a request setting those identity headers. The gateway sets them
+// server-side from the verified JWT (see jwtMiddleware), so they must never
+// be acceptable from a client.
+const corsAllowlist = (process.env.CORS_ORIGINS ||
+  'http://localhost:8081,http://localhost:3000')
+  .split(',').map(s => s.trim()).filter(Boolean);
+
+const corsOptions = {
+  origin(origin, cb) {
+    // No Origin header (same-origin / curl / server-to-server) is allowed.
+    if (!origin) return cb(null, true);
+    if (corsAllowlist.includes(origin)) return cb(null, true);
+    return cb(new Error(`CORS: origin ${origin} not in allowlist`));
+  },
+  credentials: true,
   methods: ['GET','POST','PUT','DELETE','PATCH','OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-user-role', 'x-employee-id']
+  // Only the standard request headers. Identity headers (x-user-id, x-user-role,
+  // x-employee-id) are NEVER accepted from the client — they are stamped by the
+  // gateway after JWT verification.
+  allowedHeaders: ['Content-Type', 'Authorization'],
 };
+
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
+app.use(cookieParser());
+
+// Defence in depth: strip any client-supplied identity headers BEFORE they
+// can be read by downstream services. jwtMiddleware overwrites them with the
+// JWT-derived values; this protects the brief window before that runs.
+app.use((req, _res, next) => {
+  delete req.headers['x-user-id'];
+  delete req.headers['x-user-role'];
+  delete req.headers['x-employee-id'];
+  next();
+});
 app.use(morgan('combined'));
 
 // Global rate limit: 200 req/min per IP
@@ -80,9 +112,16 @@ function jwtMiddleware(req, res, next) {
   const isPublic = PUBLIC_ROUTES.some(r => r.method === req.method && r.path.test(req.path));
   if (isPublic) return next();
 
+  // Accept the JWT from either the Authorization header (legacy / non-browser
+  // clients) or the HttpOnly vorkhive_token cookie (browser clients post C-12).
   const authHeader = req.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Missing Authorization header' });
+  const cookieToken = req.cookies?.vorkhive_token;
+  let token = null;
+  if (authHeader && authHeader.startsWith('Bearer ')) token = authHeader.slice(7);
+  else if (cookieToken) token = cookieToken;
+
+  if (!token) {
+    return res.status(401).json({ error: 'Missing Authorization header or auth cookie' });
   }
 
   try {
@@ -90,12 +129,15 @@ function jwtMiddleware(req, res, next) {
       const keyPath = process.env.JWT_PUBLIC_KEY_PATH || path.join(__dirname, '../../../certs/public.pem');
       cachedPublicKey = fs.readFileSync(keyPath, 'utf8');
     }
-    const token = authHeader.slice(7);
     const payload = jwt.verify(token, cachedPublicKey, { algorithms: ['RS256'], issuer: 'vorkhive' });
     req.user = payload;
     req.headers['x-user-id'] = payload.sub;
     req.headers['x-user-role'] = payload.role;
     req.headers['x-employee-id'] = payload.employeeId || '';
+    // Always forward the JWT as an Authorization header downstream, even when
+    // the gateway received it as a cookie. Downstream services authenticate
+    // only via the Authorization header (the existing pattern).
+    if (!authHeader && cookieToken) req.headers['authorization'] = `Bearer ${cookieToken}`;
     next();
   } catch (err) {
     console.error('[GATEWAY AUTH ERROR]', err.name, err.message);

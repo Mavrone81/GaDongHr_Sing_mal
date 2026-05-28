@@ -30,7 +30,10 @@ async function getOrgMfaRequired() {
 }
 
 async function sendEmailOtp(user) {
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  // Use a CSPRNG for MFA OTP. Non-cryptographic PRNGs (xorshift128+ family
+  // typically used in JS engines) are predictable and were a real MFA-bypass
+  // risk — never use them for security tokens.
+  const code = String(crypto.randomInt(100000, 1000000));
   const codeHash = await bcrypt.hash(code, 10);
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
   await prisma.$executeRaw`
@@ -82,14 +85,61 @@ async function verifyEmailOtp(userId, code) {
   } catch { return false; }
 }
 
-// Rate limit login: Disabled for development debugging
+// Login rate limit: 10 attempts per IP per 15 min. Account-level lockout
+// (5 failures per user) is enforced separately in the login handler.
+// Previously this was deliberately set to 10000 ("effectively disabled") —
+// a credential-stuffing wide-open hole that was paired with predictable MFA OTP.
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10000, // Effectively disabled
+  max: Number.parseInt(process.env.LOGIN_RATELIMIT_MAX || '10', 10),
   message: { error: 'Too many login attempts, please try again after 15 minutes' },
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// ── Auth-token cookie helpers (C-12) ─────────────────────────────────────────
+// JWTs are emitted as HttpOnly/Secure/SameSite=Strict cookies so they can't be
+// read by JavaScript (closing the XSS-to-account-takeover chain). Tokens are
+// also kept in the JSON body for now so non-browser consumers (E2E specs,
+// programmatic clients) keep working — that JSON payload should be removed
+// once all browser callers are migrated.
+const ACCESS_TOKEN_COOKIE  = 'vorkhive_token';
+const REFRESH_TOKEN_COOKIE = 'vorkhive_refresh';
+const COOKIE_PATH          = '/';
+const REFRESH_COOKIE_PATH  = '/api/auth';
+const ACCESS_TTL_SECONDS   = 8 * 60 * 60;            // 8 h — matches JWT_ACCESS_EXPIRES default
+const REFRESH_TTL_SECONDS  = 7 * 24 * 60 * 60;       // 7 d
+
+function cookieFlags(secure) {
+  return {
+    httpOnly: true,
+    secure,
+    sameSite: 'strict',
+    path: COOKIE_PATH,
+  };
+}
+
+function setAuthCookies(res, { accessToken, refreshToken }) {
+  const secure = process.env.NODE_ENV === 'production';
+  if (accessToken) {
+    res.cookie(ACCESS_TOKEN_COOKIE, accessToken, {
+      ...cookieFlags(secure),
+      maxAge: ACCESS_TTL_SECONDS * 1000,
+    });
+  }
+  if (refreshToken) {
+    res.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
+      ...cookieFlags(secure),
+      path: REFRESH_COOKIE_PATH,
+      maxAge: REFRESH_TTL_SECONDS * 1000,
+    });
+  }
+}
+
+function clearAuthCookies(res) {
+  res.clearCookie(ACCESS_TOKEN_COOKIE,  { path: COOKIE_PATH });
+  res.clearCookie(REFRESH_TOKEN_COOKIE, { path: REFRESH_COOKIE_PATH });
+}
 
 async function logAudit(prismaClient, { userId, action, resource, resourceId, req, success = true, before, after }) {
   await prismaClient.auditLog.create({
@@ -230,10 +280,17 @@ router.post('/login', loginLimiter, async (req, res, next) => {
 
     await logAudit(prisma, { userId: user.id, action: 'LOGIN_SUCCESS', resource: 'auth', req });
 
+    // Emit tokens as HttpOnly cookies (primary) AND in the JSON body
+    // (transitional — for non-browser callers and E2E specs).
+    setAuthCookies(res, { accessToken, refreshToken: refreshTokenStr });
+
     res.json({
       accessToken,
       refreshToken: refreshTokenStr,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role?.name, employeeId: user.employeeId, permissions },
+      // Surface the mustChangePassword flag so the frontend can route the user
+      // to a forced password-rotation screen before any real navigation.
+      mustChangePassword: user.mustChangePassword === true,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role?.name, employeeId: user.employeeId, permissions, mustChangePassword: user.mustChangePassword === true },
     });
   } catch (err) { next(err); }
 });
@@ -241,7 +298,8 @@ router.post('/login', loginLimiter, async (req, res, next) => {
 // POST /auth/refresh
 router.post('/refresh', async (req, res, next) => {
   try {
-    const { refreshToken } = req.body;
+    // Accept refresh token from HttpOnly cookie OR body (transitional).
+    const refreshToken = req.cookies?.[REFRESH_TOKEN_COOKIE] || req.body?.refreshToken;
     if (!refreshToken) return res.status(400).json({ error: 'Refresh token required' });
 
     let payload;
@@ -277,6 +335,7 @@ router.post('/refresh', async (req, res, next) => {
       data: { id: uuidv4(), token: newRefreshToken, userId: user.id, expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
     });
 
+    setAuthCookies(res, { accessToken: newAccessToken, refreshToken: newRefreshToken });
     res.json({ accessToken: newAccessToken, refreshToken: newRefreshToken });
   } catch (err) { next(err); }
 });
@@ -284,10 +343,11 @@ router.post('/refresh', async (req, res, next) => {
 // POST /auth/logout
 router.post('/logout', authenticate, async (req, res, next) => {
   try {
-    const { refreshToken } = req.body;
+    const refreshToken = req.cookies?.[REFRESH_TOKEN_COOKIE] || req.body?.refreshToken;
     if (refreshToken) {
       await prisma.refreshToken.updateMany({ where: { token: refreshToken }, data: { isRevoked: true } });
     }
+    clearAuthCookies(res);
     await logAudit(prisma, { userId: req.user.sub, action: 'LOGOUT', resource: 'auth', req });
     res.json({ message: 'Logged out successfully' });
   } catch (err) { next(err); }
@@ -302,21 +362,18 @@ router.get('/me', authenticate, async (req, res, next) => {
     });
     if (!user) return res.status(404).json({ error: 'User not found' });
     const permissions = user.role?.permissions.map(p => p.permission.code) || [];
-    
-    // MISSION CRITICAL OVERRIDE: Ensure primary admin accounts always have the target role name
-    let roleName = user.role?.name || 'employee';
-    if (user.email === 'admin@vorkhive.sg' || user.email === 'admin@hrms.com') {
-      roleName = 'SUPER_ADMIN';
-    }
+    // Role comes only from the DB. No email-based overrides — the prior backdoor
+    // that forced certain emails to SUPER_ADMIN was a privilege-escalation hazard.
+    const roleName = user.role?.name || 'EMPLOYEE';
 
-    res.json({ 
+    res.json({
       id: user.id,
       name: user.name,
       email: user.email,
-      role: roleName, 
+      role: roleName,
       employeeId: user.employeeId,
       isActive: user.isActive,
-      permissions 
+      permissions
     });
   } catch (err) { next(err); }
 });

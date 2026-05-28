@@ -8,7 +8,14 @@ const { v4: uuidv4 } = require('uuid');
 const prisma = require('../utils/prisma');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
 
-const INVITE_SECRET = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
+// Invite JWTs are signed with a dedicated secret. Previously this reused
+// ENCRYPTION_KEY (the AES-256-GCM data-encryption key), which meant a leak of
+// either secret compromised both — and the random fallback silently
+// invalidated all outstanding invites on container restart / replica scale-out.
+const INVITE_SECRET = process.env.INVITE_TOKEN_SECRET;
+if (!INVITE_SECRET || INVITE_SECRET.length < 32) {
+  throw new Error('INVITE_TOKEN_SECRET env var is required (>=32 chars).');
+}
 
 function signInviteJwt(userId, rawToken) {
   return jwt.sign(

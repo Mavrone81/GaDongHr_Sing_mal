@@ -77,11 +77,12 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
     group: 'COMPLIANCE',
     color: 'text-amber-400',
     items: [
-      { name: 'Reports',    path: '/reports',           icon: '▤' },
-      { name: 'Analytics',  path: '/reports/analytics', icon: '◧' },
-      { name: 'Documents',  path: '/documents',         icon: '◭' },
-      { name: 'HR Cases',   path: '/hr-cases',          icon: '⚖' },
-      { name: 'Surveys',    path: '/surveys',           icon: '◊' },
+      { name: 'Reports',     path: '/reports',           icon: '▤' },
+      { name: 'Analytics',   path: '/reports/analytics', icon: '◧' },
+      { name: 'Documents',   path: '/documents',         icon: '◭' },
+      { name: 'HR Cases',    path: '/hr-cases',          icon: '⚖' },
+      { name: 'Surveys',     path: '/surveys',           icon: '◊' },
+      { name: 'Succession',  path: '/succession',        icon: '◈' },
     ]
   },
   {
@@ -141,11 +142,12 @@ const HR_ADMIN_NAV: NavGroup[] = [
     { name: 'Loans',    path: '/loans',    icon: '$' },
   ]},
   { group: 'COMPLIANCE', color: 'text-amber-400',   items: [
-    { name: 'Reports',   path: '/reports',           icon: '▤' },
-    { name: 'Analytics', path: '/reports/analytics', icon: '◧' },
-    { name: 'Documents', path: '/documents',         icon: '◭' },
-    { name: 'HR Cases',  path: '/hr-cases',          icon: '⚖' },
-    { name: 'Surveys',   path: '/surveys',           icon: '◊' },
+    { name: 'Reports',    path: '/reports',           icon: '▤' },
+    { name: 'Analytics',  path: '/reports/analytics', icon: '◧' },
+    { name: 'Documents',  path: '/documents',         icon: '◭' },
+    { name: 'HR Cases',   path: '/hr-cases',          icon: '⚖' },
+    { name: 'Surveys',    path: '/surveys',           icon: '◊' },
+    { name: 'Succession', path: '/succession',        icon: '◈' },
   ]},
   { group: 'ADMIN',      color: 'text-violet-400',  items: [{ name: 'User Management', path: '/settings/users', icon: '◪' }] },
   { group: 'SUPPORT',   color: 'text-slate-400',   items: [{ name: 'Support Inbox', path: '/support/admin', icon: '◇' }] },
@@ -261,11 +263,12 @@ const FINANCE_ADMIN_NAV: NavGroup[] = [
 const LINE_MANAGER_NAV: NavGroup[] = [
   { group: 'COMMAND',     color: 'text-indigo-400', items: [{ name: 'Dashboard', path: '/', icon: '⬡' }, { name: 'Notifications', path: '/notifications', icon: '◍' }] },
   { group: 'TEAM',        color: 'text-blue-400',   items: [
-    { name: 'Team Leave',      path: '/leave/registry',      icon: '◌' },
-    { name: 'Team Claims',     path: '/claims/registry',     icon: '◫' },
-    { name: 'Team Attendance', path: '/attendance/registry', icon: '◉' },
-    { name: 'Shift Scheduler', path: '/attendance/schedule', icon: '▦' },
-    { name: 'Assets',          path: '/assets',              icon: '◧' },
+    { name: 'Team Leave',       path: '/leave/registry',      icon: '◌' },
+    { name: 'Team Claims',      path: '/claims/registry',     icon: '◫' },
+    { name: 'Team Attendance',  path: '/attendance/registry', icon: '◉' },
+    { name: 'Shift Scheduler',  path: '/attendance/schedule', icon: '▦' },
+    { name: 'Assets',           path: '/assets',              icon: '◧' },
+    { name: 'Team Succession',  path: '/succession/my-team',  icon: '◈' },
   ]},
   { group: 'EMPLOYEE',    color: 'text-sky-400',    items: [
     { name: 'My Attendance', path: '/attendance',          icon: '◉' },
@@ -364,10 +367,9 @@ const ROLE_LABELS: Record<string, { label: string; color: string; dot: string }>
   EMPLOYEE:         { label: 'Employee',         color: 'text-slate-400',  dot: 'bg-slate-600'  },
 };
 
-function getNavGroups(role: string, email: string, cached: boolean) {
+function getNavGroups(role: string, _email: string, cached: boolean) {
   const r = role.toUpperCase();
-  const e = email.toLowerCase();
-  if (r === 'SUPER_ADMIN' || e === 'admin@vorkhive.sg' || e === 'admin@hrms.com' || cached) return SUPER_ADMIN_NAV;
+  if (r === 'SUPER_ADMIN' || cached) return SUPER_ADMIN_NAV;
   if (r === 'HR_ADMIN')         return HR_ADMIN_NAV;
   if (r === 'HR_MANAGER')       return HR_ADMIN_NAV;
   if (r === 'PAYROLL_OFFICER')  return PAYROLL_OFFICER_NAV;
@@ -393,23 +395,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (!user) return;
-    const email = (user.email || '').toLowerCase().trim();
     const role = (user.role || '').toUpperCase().trim();
-    // Only system-level super-admins get the SUPER_ADMIN nav cache.
-    // ADMIN is its own scoped role (per RBAC v3.0) and must not be auto-promoted.
-    const isSuperAdmin =
-      role === 'SUPER_ADMIN' ||
-      email === 'admin@vorkhive.sg' || email === 'admin@hrms.com';
-    if (isSuperAdmin) {
+    // Cache the SUPER_ADMIN flag from the server-verified role only.
+    // Previously this branched on a hardcoded email list — that was a
+    // privilege-escalation backdoor and has been removed.
+    if (role === 'SUPER_ADMIN') {
       localStorage.setItem('vorkhive_admin_confirmed', '1');
       localStorage.setItem('vorkhive_user_role', 'SUPER_ADMIN');
       setCachedAdmin(true);
     }
   }, [user]);
 
-  const liveEmail = (user?.email || '').toLowerCase().trim();
   const liveRole  = (user?.role  || '').toUpperCase().trim();
-  const isSuperAdmin = liveRole === 'SUPER_ADMIN' || liveEmail === 'admin@vorkhive.sg' || liveEmail === 'admin@hrms.com' || cachedAdmin;
+  const isSuperAdmin = liveRole === 'SUPER_ADMIN' || cachedAdmin;
 
   // Redirect unauthenticated users to login
   useEffect(() => {
@@ -437,7 +435,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const effectiveRole = liveRole || cachedRole;
   const roleInfo = ROLE_LABELS[effectiveRole] || ROLE_LABELS['EMPLOYEE'];
 
-  const navGroups = getNavGroups(effectiveRole, liveEmail, cachedAdmin);
+  const navGroups = getNavGroups(effectiveRole, '', cachedAdmin);
 
   // Page title from path
   const getPageTitle = () => {

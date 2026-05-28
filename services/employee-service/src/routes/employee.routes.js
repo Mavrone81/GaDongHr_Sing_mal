@@ -1214,6 +1214,33 @@ const checkInternalOrAuth = (req, res, next) => {
   return authenticate(req, res, next);
 };
 
+// ── GET /employees/:id/internal/monthly-salary ─ for loans-service ────────────
+// Returns the decrypted basicSalary for a single employee. Gated strictly on
+// the internal service key — never accept a JWT here, since the caller is
+// always a backend service (loans-service computes affordability against
+// the canonical, server-side salary instead of trusting body input).
+function checkInternalOnly(req, res, next) {
+  const key = req.headers['x-internal-service-key'];
+  if (!key || !INTERNAL_KEY || key !== INTERNAL_KEY) {
+    return res.status(403).json({ error: 'Internal service key required' });
+  }
+  next();
+}
+router.get('/:id/internal/monthly-salary', checkInternalOnly, async (req, res, next) => {
+  try {
+    const emp = await prisma.employee.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, isActive: true, basicSalaryEncrypted: true, salaryBasis: true },
+    });
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    let monthlySalary = 0;
+    try {
+      if (emp.basicSalaryEncrypted) monthlySalary = parseFloat(decrypt(emp.basicSalaryEncrypted)) || 0;
+    } catch { monthlySalary = 0; }
+    res.json({ employeeId: emp.id, monthlySalary, salaryBasis: emp.salaryBasis || 'MONTHLY', isActive: emp.isActive });
+  } catch (err) { next(err); }
+});
+
 router.get('/:id/supervisor-check', checkInternalOrAuth, async (req, res, next) => {
   try {
     const { checkerEmployeeId } = req.query;

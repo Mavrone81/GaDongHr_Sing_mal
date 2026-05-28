@@ -30,9 +30,16 @@ router.get('/categories', authenticate, async (req, res, next) => {
 // GET /claims
 router.get('/', authenticate, async (req, res, next) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
+    const { status, employeeId: queryEmployeeId, page = 1, limit = 20 } = req.query;
     const where = {};
-    if (req.user.role === 'employee') where.employeeId = req.user.employeeId;
+    // Default-deny: only privileged roles see the unfiltered claims list.
+    // Everyone else is force-scoped to their own employeeId.
+    const isPrivileged = FINANCE_VIEW_ROLES.includes(req.user.role);
+    if (!isPrivileged) {
+      where.employeeId = req.user.employeeId;
+    } else if (queryEmployeeId) {
+      where.employeeId = queryEmployeeId;
+    }
     if (status) where.status = status.toUpperCase();
 
     const [claims, total] = await Promise.all([
@@ -47,7 +54,10 @@ router.get('/', authenticate, async (req, res, next) => {
 router.post('/', authenticate, async (req, res, next) => {
   try {
     const { categoryId, title, description, claimDate, totalAmount, gstAmount, items, notes, costCentre, vendorName, vendorGstNumber } = req.body;
-    const employeeId = req.body.employeeId || req.user.employeeId;
+    // Only HR/Finance admins may submit a claim on behalf of another employee.
+    // Otherwise force the claim to the authenticated user's employeeId.
+    const isPrivileged = FINANCE_ADMIN_ROLES.includes(req.user.role);
+    const employeeId = (isPrivileged && req.body.employeeId) ? req.body.employeeId : req.user.employeeId;
 
     if (!employeeId) return res.status(400).json({ error: 'No employee profile linked to your account. Contact HR to link your employee record before submitting claims.' });
     if (!categoryId || !title || !claimDate || !totalAmount) return res.status(400).json({ error: 'categoryId, title, claimDate, totalAmount required' });
@@ -125,17 +135,48 @@ router.patch('/:id', authenticate, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// PUT /claims/:id/approve  (Finance Admin)
+// PUT /claims/:id/approve  (Finance Admin or valid delegatee)
 router.put('/:id/approve', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.FINANCE_ADMIN), async (req, res, next) => {
   try {
-    const { payrollPeriod } = req.body;
+    const { payrollPeriod, delegationId } = req.body;
     const claim = await prisma.claim.findUnique({ where: { id: req.params.id } });
     if (!claim) return res.status(404).json({ error: 'Claim not found' });
     if (!['SUBMITTED'].includes(claim.status)) return res.status(400).json({ error: 'Only SUBMITTED claims can be approved' });
 
+    let approvedById      = req.user.sub;
+    let approvedByDelegateeId = null;
+    let resolvedDelegationId  = null;
+
+    if (delegationId) {
+      const now = new Date();
+      const delegation = await prisma.approverDelegation.findUnique({ where: { id: delegationId } });
+      if (!delegation || !delegation.isActive) {
+        return res.status(400).json({ error: 'Delegation not found or inactive' });
+      }
+      if (delegation.delegateeId !== (req.user.employeeId || req.user.sub)) {
+        return res.status(403).json({ error: 'You are not the delegatee for this delegation' });
+      }
+      if (now < delegation.startDate || now > delegation.endDate) {
+        return res.status(400).json({ error: 'Delegation is outside its active period' });
+      }
+      if (delegation.categoryIds.length > 0 && !delegation.categoryIds.includes(claim.categoryId)) {
+        return res.status(400).json({ error: 'Delegation does not cover this claim category' });
+      }
+      approvedById          = delegation.delegatorId;
+      approvedByDelegateeId = req.user.employeeId || req.user.sub;
+      resolvedDelegationId  = delegation.id;
+    }
+
     const updated = await prisma.claim.update({
       where: { id: claim.id },
-      data: { status: 'APPROVED', approvedById: req.user.sub, approvedAt: new Date(), payrollPeriod },
+      data: {
+        status: 'APPROVED',
+        approvedById,
+        approvedAt: new Date(),
+        payrollPeriod,
+        approvedByDelegateeId,
+        delegationId: resolvedDelegationId,
+      },
     });
     res.json(updated);
   } catch (err) { next(err); }
@@ -370,6 +411,134 @@ router.get('/dashboard/category-budget', authenticate, authorize(...FINANCE_VIEW
     summary.totalRemaining = round2(summary.totalBudget - summary.totalSpend);
     res.json({ period, summary, rows });
   } catch (err) { next(err); }
+});
+
+// ─── CLM-002 Approver Delegation ─────────────────────────────────────────────
+
+// POST /claims/delegations — create delegation
+router.post('/delegations', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.FINANCE_ADMIN), async (req, res, next) => {
+  try {
+    const { delegatorId, delegateeId, startDate, endDate, categoryIds = [], reason } = req.body;
+    if (!delegatorId || !delegateeId || !startDate || !endDate) {
+      return res.status(400).json({ error: 'delegatorId, delegateeId, startDate, endDate are required' });
+    }
+    if (delegatorId === delegateeId) {
+      return res.status(400).json({ error: 'delegatorId and delegateeId must be different' });
+    }
+    const start = new Date(startDate);
+    const end   = new Date(endDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({ error: 'Invalid startDate or endDate' });
+    }
+    if (end <= start) {
+      return res.status(400).json({ error: 'endDate must be after startDate' });
+    }
+
+    const delegation = await prisma.approverDelegation.create({
+      data: {
+        id: require('crypto').randomUUID(),
+        delegatorId,
+        delegateeId,
+        startDate: start,
+        endDate: end,
+        categoryIds: Array.isArray(categoryIds) ? categoryIds : [],
+        reason: reason ?? null,
+        isActive: true,
+        createdBy: req.user.sub,
+      },
+    });
+    res.status(201).json(delegation);
+  } catch (err) { next(err); }
+});
+
+// GET /claims/delegations — list delegations (filterable)
+router.get('/delegations', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.FINANCE_ADMIN), async (req, res, next) => {
+  try {
+    const { delegatorId, delegateeId, active } = req.query;
+    const where = {};
+    if (delegatorId) where.delegatorId = delegatorId;
+    if (delegateeId) where.delegateeId = delegateeId;
+    if (active === 'true') {
+      const now = new Date();
+      where.isActive  = true;
+      where.startDate = { lte: now };
+      where.endDate   = { gte: now };
+    } else if (active === 'false') {
+      where.isActive = false;
+    }
+
+    const delegations = await prisma.approverDelegation.findMany({
+      where,
+      orderBy: { startDate: 'desc' },
+    });
+    res.json(delegations);
+  } catch (err) { next(err); }
+});
+
+// GET /claims/delegations/active — active delegations for the requesting user (as delegatee)
+router.get('/delegations/active', authenticate, async (req, res, next) => {
+  try {
+    const delegateeId = req.user.employeeId || req.user.sub;
+    const now = new Date();
+    const delegations = await prisma.approverDelegation.findMany({
+      where: {
+        delegateeId,
+        isActive:  true,
+        startDate: { lte: now },
+        endDate:   { gte: now },
+      },
+      orderBy: { startDate: 'asc' },
+    });
+    res.json({ delegateeId, activeDelegations: delegations });
+  } catch (err) { next(err); }
+});
+
+// GET /claims/delegations/:id — single delegation
+router.get('/delegations/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.FINANCE_ADMIN), async (req, res, next) => {
+  try {
+    const delegation = await prisma.approverDelegation.findUnique({ where: { id: req.params.id } });
+    if (!delegation) return res.status(404).json({ error: 'Delegation not found' });
+    res.json(delegation);
+  } catch (err) { next(err); }
+});
+
+// PUT /claims/delegations/:id — update (including deactivate)
+router.put('/delegations/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.FINANCE_ADMIN), async (req, res, next) => {
+  try {
+    const { startDate, endDate, categoryIds, reason, isActive } = req.body;
+
+    if (startDate !== undefined && endDate !== undefined) {
+      if (new Date(endDate) <= new Date(startDate)) {
+        return res.status(400).json({ error: 'endDate must be after startDate' });
+      }
+    }
+
+    const updated = await prisma.approverDelegation.update({
+      where: { id: req.params.id },
+      data: {
+        ...(startDate    !== undefined ? { startDate: new Date(startDate) } : {}),
+        ...(endDate      !== undefined ? { endDate: new Date(endDate) }     : {}),
+        ...(categoryIds  !== undefined ? { categoryIds }                    : {}),
+        ...(reason       !== undefined ? { reason }                         : {}),
+        ...(isActive     !== undefined ? { isActive }                       : {}),
+      },
+    });
+    res.json(updated);
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Delegation not found' });
+    next(err);
+  }
+});
+
+// DELETE /claims/delegations/:id
+router.delete('/delegations/:id', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.FINANCE_ADMIN), async (req, res, next) => {
+  try {
+    await prisma.approverDelegation.delete({ where: { id: req.params.id } });
+    res.status(204).send();
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Delegation not found' });
+    next(err);
+  }
 });
 
 function round2(n) {
