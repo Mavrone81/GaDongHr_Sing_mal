@@ -251,7 +251,15 @@ async function seedEmployees() {
   await authDb.connect();
 
   try {
-    const passwordHash = await bcrypt.hash('***REMOVED***', 12);
+    // Dev seed only. Set SEED_EMPLOYEE_PASSWORD (or fall back to a dev literal
+     // only outside production). Same password for every seeded employee is
+     // acceptable in dev fixtures; production loads come via the invite flow.
+    const isProd = process.env.NODE_ENV === 'production';
+    const defaultPass = process.env.SEED_EMPLOYEE_PASSWORD ?? (isProd ? null : '***REMOVED***');
+    if (!defaultPass) {
+      throw new Error('SEED_EMPLOYEE_PASSWORD is required when NODE_ENV=production');
+    }
+    const passwordHash = await bcrypt.hash(defaultPass, 12);
 
     // Build reporting manager index (managers seeded first)
     const managerIds = {};
@@ -348,7 +356,7 @@ async function seedEmployees() {
     }
 
     console.log(`\n✅ ${EMPLOYEES.length} employees seeded successfully`);
-    console.log('   Default login password: ***REMOVED***\n');
+    console.log('   Default login password: $SEED_EMPLOYEE_PASSWORD (dev fallback if unset)\n');
 
   } finally {
     await empDb.end();

@@ -1,6 +1,18 @@
 'use strict';
 
 const axios = require('axios');
+const crypto = require('crypto');
+
+// Per-employee random password — leftover VAPT C-06 finding remediation. The
+// previous hardcoded literal meant every auto-provisioned employee account
+// had the same password, so one user's credentials unlocked any other. The
+// random password is intentionally never logged or persisted; users land on
+// the system through the invite/SSO flow rather than the password itself.
+function generateRandomPassword() {
+  // 32 bytes → 64 hex chars; far beyond any reasonable brute-force budget and
+  // satisfies the 12-char minimum the auth service may enforce in future.
+  return crypto.randomBytes(32).toString('hex');
+}
 
 async function createAuthUser(employee) {
   const authUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:4001';
@@ -17,7 +29,7 @@ async function createAuthUser(employee) {
     const response = await axios.post(`${authUrl}/users`, {
       email: employee.workEmail,
       name: employee.fullName,
-      password: '***REMOVED***',
+      password: generateRandomPassword(),
       role: 'EMPLOYEE',
       employeeId: employee.id,
     }, { headers });

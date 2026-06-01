@@ -27,8 +27,15 @@ async function seedAuth() {
   const db = client('hrms_auth');
   await db.connect();
   try {
-    const hash = await bcrypt.hash('Password@123!', 12);
-    const adminHash = await bcrypt.hash('***REMOVED***', 12);
+    // Dev seed only — production callers MUST set SEED_*_PASSWORD env vars.
+    const isProd = process.env.NODE_ENV === 'production';
+    const defaultUserPass = process.env.SEED_USER_PASSWORD ?? (isProd ? null : 'Password@123!');
+    const defaultAdminPass = process.env.SEED_ADMIN_PASSWORD ?? (isProd ? null : '***REMOVED***');
+    if (!defaultUserPass || !defaultAdminPass) {
+      throw new Error('SEED_USER_PASSWORD and SEED_ADMIN_PASSWORD are required when NODE_ENV=production');
+    }
+    const hash = await bcrypt.hash(defaultUserPass, 12);
+    const adminHash = await bcrypt.hash(defaultAdminPass, 12);
 
     const usersToSeed = [
       { email: 'admin@vorkhive.sg', hash: adminHash, name: 'System Admin', role: 'SUPER_ADMIN' },
@@ -332,7 +339,7 @@ async function main() {
   await seedPayroll();
   await seedLeave();
   await seedClaims();
-  console.log('\n✅ All done! Login: admin@vorkhive.sg / ***REMOVED***\n');
+  console.log('\n✅ All done! Login as admin@vorkhive.sg with SEED_ADMIN_PASSWORD (or the dev fallback).\n');
 }
 
 main().catch(err => {
