@@ -112,6 +112,29 @@ model ReportRun {
   @@map("report_runs")
 }
 
+// ── ENG-002: HR Analytics Dashboard budget store ──────────────────────────────
+// HR-set budgets per period for headcount / recruitment / revenue dashboards.
+// Was an in-memory map until 2026-05-29 — restarts dropped every value.
+enum BudgetCategory {
+  HEADCOUNT
+  RECRUITMENT
+  REVENUE
+}
+
+model AnalyticsBudget {
+  id        String         @id @default(uuid())
+  category  BudgetCategory
+  period    String         // YYYY or YYYY-MM
+  value     Float
+  setBy     String?        // userId
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([category, period])
+  @@index([category])
+  @@map("analytics_budgets")
+}
+
 // ── RPT-002: Statutory submission history ─────────────────────────────────────
 model StatutorySubmission {
   id              String           @id @default(uuid())

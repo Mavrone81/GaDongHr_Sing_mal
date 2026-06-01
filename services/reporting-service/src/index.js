@@ -743,26 +743,56 @@ app.use('/reports', builderRoutes);
 
 const ANALYTICS_ROLES = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER];
 
-// In-memory budget store (TODO: move to dedicated table later)
-const _budgetStore = { headcount: {}, recruitment: {}, revenue: {} };
+// Analytics budget store — backed by the AnalyticsBudget table. The legacy
+// shape returned to callers (`{ headcount: { YYYY-MM: n }, recruitment: ..., revenue: ... }`)
+// is preserved so existing dashboard reads keep working.
+const BUDGET_CATEGORIES = ['headcount', 'recruitment', 'revenue'];
+async function loadBudgetStore() {
+  const rows = await getPrisma().analyticsBudget.findMany();
+  const store = { headcount: {}, recruitment: {}, revenue: {} };
+  for (const row of rows) {
+    const key = row.category.toLowerCase();
+    if (store[key]) store[key][row.period] = row.value;
+  }
+  return store;
+}
+async function getBudgetValue(category, period) {
+  const row = await getPrisma().analyticsBudget.findUnique({
+    where: { category_period: { category: category.toUpperCase(), period } },
+  });
+  return row ? row.value : null;
+}
 
 // POST /reports/analytics/budget — HR sets headcount/recruitment/revenue budgets per period
 app.post('/reports/analytics/budget',
   authenticate, authorize(...ANALYTICS_ROLES, ROLES.FINANCE_ADMIN),
-  (req, res) => {
-    const { category, period, value } = req.body || {};
-    if (!['headcount','recruitment','revenue'].includes(category))
-      return res.status(400).json({ error: 'category must be headcount|recruitment|revenue' });
-    if (!period) return res.status(400).json({ error: 'period (YYYY or YYYY-MM) is required' });
-    _budgetStore[category][period] = parseFloat(value);
-    res.json({ category, period, value: _budgetStore[category][period] });
+  async (req, res, next) => {
+    try {
+      const { category, period, value } = req.body || {};
+      if (!BUDGET_CATEGORIES.includes(category))
+        return res.status(400).json({ error: 'category must be headcount|recruitment|revenue' });
+      if (!period) return res.status(400).json({ error: 'period (YYYY or YYYY-MM) is required' });
+      const parsed = parseFloat(value);
+      if (!Number.isFinite(parsed))
+        return res.status(400).json({ error: 'value must be a number' });
+      const row = await getPrisma().analyticsBudget.upsert({
+        where: { category_period: { category: category.toUpperCase(), period } },
+        update: { value: parsed, setBy: req.user?.sub || null },
+        create: { category: category.toUpperCase(), period, value: parsed, setBy: req.user?.sub || null },
+      });
+      res.json({ category, period, value: row.value });
+    } catch (err) { next(err); }
   }
 );
 
 // GET /reports/analytics/budget — read current budgets
-app.get('/reports/analytics/budget', authenticate, authorize(...ANALYTICS_ROLES, ROLES.FINANCE_ADMIN), (req, res) => {
-  res.json(_budgetStore);
-});
+app.get('/reports/analytics/budget',
+  authenticate, authorize(...ANALYTICS_ROLES, ROLES.FINANCE_ADMIN),
+  async (_req, res, next) => {
+    try { res.json(await loadBudgetStore()); }
+    catch (err) { next(err); }
+  }
+);
 
 // GET /reports/analytics/headcount?period=YYYY-MM
 app.get('/reports/analytics/headcount', authenticate, authorize(...ANALYTICS_ROLES), async (req, res, next) => {
@@ -772,7 +802,10 @@ app.get('/reports/analytics/headcount', authenticate, authorize(...ANALYTICS_ROL
     const employees = empRes.data.employees || [];
     const active = employees.filter(e => e.isActive);
     const byDept = active.reduce((acc, e) => { acc[e.department] = (acc[e.department] || 0) + 1; return acc; }, {});
-    const budget = _budgetStore.headcount[period] || _budgetStore.headcount[period.slice(0, 4)] || null;
+    // Prefer the period-specific budget, fall back to the year-level budget.
+    const budget = (await getBudgetValue('headcount', period))
+                ?? (await getBudgetValue('headcount', period.slice(0, 4)))
+                ?? null;
     const variance = budget !== null ? active.length - budget : null;
     res.json({
       period,
@@ -832,7 +865,7 @@ app.get('/reports/analytics/cost-per-hire', authenticate, authorize(...ANALYTICS
     // Hires within the period (start year matches)
     const startYear = period.slice(0, 4);
     const hires = employees.filter(e => e.startDate && String(new Date(e.startDate).getFullYear()) === startYear);
-    const recruitmentBudget = _budgetStore.recruitment[period] || 0;
+    const recruitmentBudget = (await getBudgetValue('recruitment', period)) || 0;
     const cph = hires.length > 0 ? recruitmentBudget / hires.length : 0;
     res.json({
       period,
@@ -936,7 +969,7 @@ app.get('/reports/analytics/payroll-revenue-ratio',
           for (const run of runs) totalPayrollCost += Number(run.totalGross || run.netPayout || 0);
         } catch (_) {/* swallow */}
       }
-      const revenue = _budgetStore.revenue[year] || 0;
+      const revenue = (await getBudgetValue('revenue', year)) || 0;
       const ratio = revenue > 0 ? Math.round((totalPayrollCost / revenue) * 10000) / 100 : 0;
       res.json({
         period: year,
