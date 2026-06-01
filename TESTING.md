@@ -129,21 +129,25 @@ A PR that changes business logic without a corresponding test should be sent bac
 
 ## 7. T3 (Nightly) — Roadmap
 
-Not yet automated; add as time permits. Each adds one or two test files:
-- **AUTH-03** Account lockout after N failed attempts
-- **AUTH-04** Refresh token rotation
-- **AUTH-07/08** MFA enroll + login challenge
-- **AUTH-09/10** SSO callback (Google + Microsoft) — needs mock providers
-- **LV-15** Leave working-days calculation matches backend `totalDays` (known divergence today)
-- **LV-17/18** Attachment size + MIME validation
-- **EMP-13** Concurrent edit conflict detection
-- ~~**CLM-01..07** Claims module happy paths + RBAC~~ — **covered** by `claims.spec.ts`
-- **ATT-01..10** Attendance + roster end-to-end
-- ~~**PAY-01..13** Payroll cycle, CPF/GIRO/IR8A generation, maker-checker~~ — **covered** by `payroll.spec.ts` (CPF Act, SDL bounds, lifecycle, e-Submit file). IR8A generation + GIRO file formats still uncovered.
-- **REC-01..07** Recruitment + ATS pipeline
-- **X-04** Rate limiter (200 req/min) triggers 429
-- **X-06** Audit log entries appear for every mutation
-- **X-09** Internal-service auth audit (the `x-internal-service-key` pattern that's silently broken in several places)
+All shipped 2026-05-29 across 9 new spec files (53 tests, 1 informational skip
+when `GATEWAY_RATELIMIT_MAX_TEST_OVERRIDE > 1000`). Full suite runs in ~60s
+against a docker compose stack with `GATEWAY_RATELIMIT_MAX=5000` (relaxed for
+the suite; production stays at 200).
+
+- ~~**AUTH-03** Account lockout after N failed attempts~~ — `auth-extended.spec.ts`: 5 failed bcrypt comparisons set `lockedUntil` for 15 min; the 6th attempt returns 423 even with the correct password. Uses per-test spoofed `X-Forwarded-For` so the per-IP login rate-limit (10/15min) doesn't bleed across tests.
+- ~~**AUTH-04** Refresh token rotation~~ — `auth-extended.spec.ts`: rotated token works once and old token replay → 401. Uses fresh `APIRequestContext` per call because the route prefers the `vorkhive_refresh` cookie over body (the cookie set by the first refresh would otherwise shadow the rt1 replay attempt).
+- ~~**AUTH-07/08** MFA enroll + login challenge~~ — `auth-extended.spec.ts`: full TOTP secret generation → `/mfa/verify` → login challenge round-trip. TOTPs are minted inside the auth container via `docker exec -i hrms-auth node` so the e2e package doesn't need to depend on `otplib`.
+- ~~**AUTH-09/10** SSO callback (Google + Microsoft)~~ — `auth-sso.spec.ts`: pins the public `/sso/<provider>/config` shape, missing-field 400s, and the unconfigured/bogus-code → 401/503 branch on both `/sso/google/callback` and `/sso/microsoft/callback`. Happy path is not mocked (heavy OIDC machinery for a nightly test).
+- ~~**LV-15** Leave working-days vs backend `totalDays`~~ — `leave-extended.spec.ts`: pins the backend's calendar-day contract (7 days for Mon-Sun) so any future move to working-days requires reconciling with the frontend display module. Also asserts the half-day override and the inverted-range 400.
+- ~~**LV-17/18** Attachment size + MIME validation~~ — `leave-extended.spec.ts`: 11 MB upload is rejected/not-persisted; `.exe` is silently dropped by the multer fileFilter; `.pdf` and `.png` round-trip via the download endpoint.
+- ~~**EMP-13** Concurrent edit conflict detection~~ — `employee-concurrency.spec.ts`: documents today's last-write-wins on `PUT /employees/:id` (no optimistic lock). Uses an existing employee + a benign `costCentre` field to side-step a pre-existing race in `nextEmployeeCode()` that makes fresh creates flaky.
+- ~~**CLM-01..07** Claims module happy paths + RBAC~~ — **covered** by `claims.spec.ts`.
+- ~~**ATT-01..10** Attendance + roster end-to-end~~ — `attendance.spec.ts`: clock-in idempotency, clock-out 400 without prior clock-in, hoursWorked round-trip, admin records + EMPLOYEE 403, OT summary surfaces the 72h MOM cap, location CRUD round-trip (with `postalCode`), unified shifts list.
+- ~~**REC-01..07** Recruitment + ATS pipeline~~ — `recruitment.spec.ts`: job DRAFT → MCF compliance → candidate APPLIED → SCREENING → INTERVIEW_1 → OFFER → HIRED stage walk, FCF-status NOT_POSTED→IN_PERIOD, 14-day window blocks in-window shortlisting, EMPLOYEE 403 on `/candidates`.
+- ~~**PAY-01..13** Payroll cycle, CPF e-Submit~~ — **covered** by `payroll.spec.ts`. IR8A + GIRO file formats are now covered separately in `payroll-iras-giro.spec.ts`: IR8A header `IR8A|<year>|<UEN>` + 8-field pipe-delimited detail; GIRO UOB 615-char fixed-width (CRLF stripped), DBS 114-char fixed-width, SCB generic-CSV with `X-Bank-Format-Status` header, unsupported-bank 400, non-FINALISED run 400.
+- ~~**X-04** Rate limiter triggers 429~~ — `gateway-rate-limit.spec.ts`: isolated to its own file because the burst exhausts the per-IP budget. Tunable via `GATEWAY_RATELIMIT_MAX` env on the gateway; the spec reads `GATEWAY_RATELIMIT_MAX_TEST_OVERRIDE` and skips when set > 1000 to avoid bursting > 6000 requests in CI.
+- ~~**X-06** Audit log entries appear for every mutation~~ — `cross-cutting.spec.ts`: `LOGIN_FAILED` lands an `auditLog` row in auth-service; `PUT /employees/:id` lands an `UPDATE` row in employee-service with `actorRole=SUPER_ADMIN` and `actorEmail` matching the JWT.
+- ~~**X-09** Internal-service-key audit~~ — `cross-cutting.spec.ts`: probes `payroll-service:/payroll/internal/daily-rate/:emp/:period` from inside the docker network (via `docker exec hrms-leave wget`); missing key → 403, wrong key → 403, correct key → 200/404 (past the auth check). One representative of the wider `x-internal-service-key` family.
 
 ---
 
