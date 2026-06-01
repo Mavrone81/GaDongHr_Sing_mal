@@ -497,8 +497,15 @@ export default function EmployeeDirectoryPage() {
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 relative z-10 w-full xl:w-auto">
-          <div className="relative w-full sm:w-64 lg:w-80">
+        {/*
+          Tablet-safe toolbar: search sits on its own full-width row, and the
+          three action buttons live in a wrapping row where each can grow to
+          fill / wrap to a new line. This guarantees the rightmost button
+          (Provision Identity) is never pushed off-screen and clipped by the
+          header's overflow-hidden on narrow/tablet widths.
+        */}
+        <div className="flex flex-col gap-3 sm:gap-4 relative z-10 w-full xl:w-auto">
+          <div className="relative w-full xl:w-80">
             <input
               type="text"
               placeholder="Filter by Name, ID, or Role..."
@@ -511,34 +518,36 @@ export default function EmployeeDirectoryPage() {
             </div>
           </div>
 
-          <button
-            onClick={() => { setUploadResult(null); setCsvRows([]); setCsvFile(''); setBulkOpen(true); }}
-            className="px-4 sm:px-6 lg:px-8 py-3 sm:py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10 active:scale-95 flex items-center gap-2 justify-center"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-            </svg>
-            Bulk Upload
-          </button>
+          <div className="flex flex-wrap gap-3 sm:gap-4">
+            <button
+              onClick={() => { setUploadResult(null); setCsvRows([]); setCsvFile(''); setBulkOpen(true); }}
+              className="flex-1 min-w-[140px] xl:flex-none px-4 sm:px-6 lg:px-8 py-3 sm:py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10 active:scale-95 flex items-center gap-2 justify-center"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
+              Bulk Upload
+            </button>
 
-          <button
-            onClick={() => { loadApplications(); setApplicationsOpen(true); }}
-            className="px-4 sm:px-6 lg:px-8 py-3 sm:py-4 bg-amber-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-amber-600 shadow-xl shadow-amber-500/20 transition-all active:scale-95 flex items-center gap-2 justify-center relative"
-          >
-            Pending Profiles
-            {(applications.length + pendingInvites.length) > 0 && (
-              <span className="ml-1 bg-white text-amber-600 rounded-full text-[9px] font-black w-5 h-5 flex items-center justify-center">
-                {applications.length + pendingInvites.length}
-              </span>
-            )}
-          </button>
+            <button
+              onClick={() => { loadApplications(); setApplicationsOpen(true); }}
+              className="flex-1 min-w-[140px] xl:flex-none px-4 sm:px-6 lg:px-8 py-3 sm:py-4 bg-amber-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-amber-600 shadow-xl shadow-amber-500/20 transition-all active:scale-95 flex items-center gap-2 justify-center relative"
+            >
+              Pending Profiles
+              {(applications.length + pendingInvites.length) > 0 && (
+                <span className="ml-1 bg-white text-amber-600 rounded-full text-[9px] font-black w-5 h-5 flex items-center justify-center">
+                  {applications.length + pendingInvites.length}
+                </span>
+              )}
+            </button>
 
-          <button
-            onClick={() => { setProvisionResult(null); setInviteSent(false); openProvision(); }}
-            className="px-4 sm:px-6 lg:px-8 py-3 sm:py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-indigo-700 shadow-xl shadow-indigo-500/30 transition-all active:scale-95 flex items-center gap-3 justify-center"
-          >
-            <span>+</span> Provision Identity
-          </button>
+            <button
+              onClick={() => { setProvisionResult(null); setInviteSent(false); openProvision(); }}
+              className="flex-1 min-w-[140px] xl:flex-none px-4 sm:px-6 lg:px-8 py-3 sm:py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-indigo-700 shadow-xl shadow-indigo-500/30 transition-all active:scale-95 flex items-center gap-3 justify-center"
+            >
+              <span>+</span> Provision Identity
+            </button>
+          </div>
         </div>
       </div>
 
