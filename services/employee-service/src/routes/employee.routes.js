@@ -142,11 +142,43 @@ function diffEmployee(before, after) {
   return Object.keys(changes).length > 0 ? changes : null;
 }
 
+// Find the next EMP-XXXX code by looking for the highest numeric suffix
+// among existing codes. Skips rows whose code can't be parsed (e.g. a prior
+// `EMP-0NaN` row from a buggy earlier insert would otherwise poison the
+// sequence and force every subsequent create to collide on the unique index).
 async function nextEmployeeCode() {
-  const last = await prisma.employee.findFirst({ orderBy: { createdAt: 'desc' }, select: { employeeCode: true } });
-  if (!last) return 'EMP-0001';
-  const num = parseInt(last.employeeCode.replace('EMP-', '')) + 1;
-  return `EMP-${String(num).padStart(4, '0')}`;
+  const rows = await prisma.$queryRaw`
+    SELECT "employeeCode"
+    FROM employees
+    WHERE "employeeCode" ~ '^EMP-[0-9]+$'
+  `;
+  let maxNum = 0;
+  for (const row of rows) {
+    const n = parseInt(row.employeeCode.slice(4), 10);
+    if (Number.isFinite(n) && n > maxNum) maxNum = n;
+  }
+  return `EMP-${String(maxNum + 1).padStart(4, '0')}`;
+}
+
+// Concurrent POST /employees can race on the unique employeeCode index
+// (compute → insert is not a single transaction). Retry on P2002 a few
+// times so the second concurrent writer simply picks a fresh number
+// rather than crashing the request.
+async function createEmployeeWithCodeRetry(buildData, attempts = 5) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    const employeeCode = await nextEmployeeCode();
+    try {
+      return await prisma.employee.create({ data: buildData(employeeCode) });
+    } catch (err) {
+      if (err?.code === 'P2002' && err?.meta?.target?.includes('employeeCode')) {
+        lastErr = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
 }
 
 const checkInternal = (req, res, next) => {
@@ -457,18 +489,23 @@ router.post('/', authenticate, authorize('employee:manage', ROLES.SUPER_ADMIN, R
     if (data.bankAccount) { fieldsToEncrypt.bankAccountEncrypted = data.bankAccount; delete data.bankAccount; }
 
     const encrypted = encryptFields(fieldsToEncrypt, Object.keys(fieldsToEncrypt));
-    const employeeCode = await nextEmployeeCode();
 
-    const emp = await prisma.employee.create({
-      data: {
-        id: uuidv4(),
-        employeeCode,
-        ...data,
-        ...encrypted,
-        dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
-        startDate:   data.startDate ? new Date(data.startDate) : new Date(),
-      },
-    });
+    // Strip server-managed fields so a malicious payload can't override
+    // employeeCode / id / userId / timestamps via the ...data spread.
+    delete data.id;
+    delete data.employeeCode;
+    delete data.createdAt;
+    delete data.updatedAt;
+    delete data.userId;
+
+    const emp = await createEmployeeWithCodeRetry((employeeCode) => ({
+      id: uuidv4(),
+      employeeCode,
+      ...data,
+      ...encrypted,
+      dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
+      startDate:   data.startDate ? new Date(data.startDate) : new Date(),
+    }));
 
     await writeAudit({
       entityId:   emp.id,
@@ -510,7 +547,6 @@ router.post('/bulk-import', authenticate, authorize('employee:manage', ROLES.SUP
         if (data.basicSalary) { fieldsToEncrypt.basicSalaryEncrypted = String(data.basicSalary); delete data.basicSalary; }
         if (data.bankAccount) { fieldsToEncrypt.bankAccountEncrypted = data.bankAccount; delete data.bankAccount; }
         const encrypted = encryptFields(fieldsToEncrypt, Object.keys(fieldsToEncrypt));
-        const employeeCode = await nextEmployeeCode();
         // SECURITY (M-13): explicitly strip server-managed fields from the
         // spread so a malicious payload cannot override id / employeeCode /
         // createdAt / updatedAt / userId via the ...data spread.
@@ -519,9 +555,10 @@ router.post('/bulk-import', authenticate, authorize('employee:manage', ROLES.SUP
         delete data.createdAt;
         delete data.updatedAt;
         delete data.userId;
-        const emp = await prisma.employee.create({
-          data: { id: uuidv4(), employeeCode, ...data, ...encrypted, dateOfBirth: new Date(data.dateOfBirth), startDate: new Date(data.startDate) },
-        });
+        const emp = await createEmployeeWithCodeRetry((employeeCode) => ({
+          id: uuidv4(), employeeCode, ...data, ...encrypted,
+          dateOfBirth: new Date(data.dateOfBirth), startDate: new Date(data.startDate),
+        }));
         await writeAudit({ entityId: emp.id, entityCode: emp.employeeCode, entityName: emp.fullName, action: 'BULK_IMPORT', actor: req.user, changedFields: null, req });
         const { createAuthUser } = require('../utils/auth-client');
         createAuthUser(emp);

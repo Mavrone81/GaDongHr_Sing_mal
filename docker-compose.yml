@@ -54,6 +54,7 @@ services:
       - PERFORMANCE_SERVICE_URL=http://performance-service:4012
       - TRAINING_SERVICE_URL=http://training-service:4013
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8081,http://localhost:3000}
+      - GATEWAY_RATELIMIT_MAX=${GATEWAY_RATELIMIT_MAX:-200}
     volumes:
       - shared_certs:/app/certs:ro
     depends_on:

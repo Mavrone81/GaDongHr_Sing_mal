@@ -78,9 +78,11 @@ app.use((req, _res, next) => {
 });
 app.use(morgan('combined'));
 
-// Global rate limit: 200 req/min per IP
+// Global rate limit: 200 req/min per IP. Tunable via GATEWAY_RATELIMIT_MAX
+// so the nightly E2E suite (which exceeds 200/min by design) can relax it.
 const globalLimiter = rateLimit({
-  windowMs: 60 * 1000, max: 200,
+  windowMs: 60 * 1000,
+  max: Number.parseInt(process.env.GATEWAY_RATELIMIT_MAX || '200', 10),
   message: { error: 'Too many requests, please slow down' },
 });
 app.use(globalLimiter);
