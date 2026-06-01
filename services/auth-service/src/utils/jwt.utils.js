@@ -29,19 +29,29 @@ async function generateKeysIfNeeded() {
 
 function signAccessToken(payload) {
   const privateKey = fs.readFileSync(PRIVATE_KEY_PATH, 'utf8');
-  return jwt.sign(payload, privateKey, { 
-    algorithm: 'RS256', 
+  // jwtid forces a unique `jti` per call so back-to-back signings (e.g.
+  // login + immediate refresh inside the same second) produce different
+  // tokens. Lets clients distinguish issued tokens and supports per-token
+  // revocation if/when introduced.
+  return jwt.sign(payload, privateKey, {
+    algorithm: 'RS256',
     expiresIn: process.env.JWT_ACCESS_EXPIRES || '15m',
-    issuer: 'vorkhive'
+    issuer: 'vorkhive',
+    jwtid: crypto.randomUUID(),
   });
 }
 
 function signRefreshToken(payload) {
   const privateKey = fs.readFileSync(PRIVATE_KEY_PATH, 'utf8');
+  // jwtid forces a unique `jti` claim per call. Without it, two refreshes
+  // for the same user inside the same second sign byte-identical JWTs
+  // (payload = {sub}, iat at second precision) and collide on the
+  // refresh_tokens.token unique index.
   return jwt.sign(payload, privateKey, {
     algorithm: 'RS256',
     expiresIn: process.env.JWT_REFRESH_EXPIRES || '7d',
-    issuer: 'vorkhive'
+    issuer: 'vorkhive',
+    jwtid: crypto.randomUUID(),
   });
 }
 
