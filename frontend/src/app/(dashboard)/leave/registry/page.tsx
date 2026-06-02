@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, apiFetchRaw } from '@/lib/api';
 
 const ALLOWED_ROLES = ['SUPER_ADMIN', 'HR_ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER'];
 
@@ -330,9 +330,7 @@ function AdminLeaveView() {
         // For image attachments, fetch with auth header and create an object URL
         if (d.attachment && d.attachment.mimeType.startsWith('image/')) {
           try {
-            const token = document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
-            const base = process.env.NEXT_PUBLIC_API_URL || `${window.location.protocol}//${window.location.hostname}:4000/api`;
-            const res = await fetch(`${base}${d.attachment.downloadUrl}`, { headers: { Authorization: `Bearer ${token}` } });
+            const res = await apiFetchRaw(d.attachment.downloadUrl);
             if (res.ok) {
               const blob = await res.blob();
               setAttachmentObjectUrl(URL.createObjectURL(blob));
@@ -344,13 +342,12 @@ function AdminLeaveView() {
       .finally(() => setLoadingDetail(false));
   }, [detailId]);
 
-  // Authenticated download (cannot use plain <a> because we need a Bearer token)
+  // Authenticated download (cannot use plain <a> — the HttpOnly auth cookie is
+  // attached by apiFetchRaw via credentials:'include').
   const downloadAttachment = async () => {
     if (!detail?.attachment) return;
     try {
-      const token = document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
-      const base = process.env.NEXT_PUBLIC_API_URL || `${window.location.protocol}//${window.location.hostname}:4000/api`;
-      const res = await fetch(`${base}${detail.attachment.downloadUrl}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await apiFetchRaw(detail.attachment.downloadUrl);
       if (!res.ok) throw new Error('Download failed');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
