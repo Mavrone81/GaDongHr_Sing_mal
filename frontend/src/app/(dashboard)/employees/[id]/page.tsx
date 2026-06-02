@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, apiFetchRaw } from '@/lib/api';
 import { CountrySelect } from '@/components/employee/CountrySelect';
 import { DatePicker } from '@/components/employee/DatePicker';
 import { PostalLookup } from '@/components/employee/PostalLookup';
@@ -233,21 +233,19 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
   const [allEmployees, setAllEmployees] = useState<any[]>([]);
   const [savingSupervisors, setSavingSupervisors] = useState(false);
 
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
-
   const fetchEmployee = useCallback(async () => {
     try {
-      const token = document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
-      const headers = { 'Authorization': `Bearer ${token}` };
-      let res = await fetch(`${apiBaseUrl}/employees/${params.id}`, { headers });
-      if (!res.ok) res = await fetch(`${apiBaseUrl}/employees/code/${params.id}`, { headers });
-      if (res.ok) setEmployee(await res.json());
+      // Try by UUID first, fall back to employee-code lookup (404 → not a UUID).
+      let data;
+      try { data = await apiFetch(`/employees/${params.id}`); }
+      catch { data = await apiFetch(`/employees/code/${params.id}`); }
+      setEmployee(data);
     } catch (err) {
       console.error('Failed to fetch employee:', err);
     } finally {
       setLoading(false);
     }
-  }, [params.id, apiBaseUrl]);
+  }, [params.id]);
 
   useEffect(() => { fetchEmployee(); }, [fetchEmployee]);
 
@@ -339,26 +337,15 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
     setSaving(true);
     setSaveError('');
     try {
-      const token = document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
-      const res = await fetch(`${apiBaseUrl}/employees/${employee.id}`, {
+      const updated = await apiFetch(`/employees/${employee.id}`, {
         method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(editData),
       });
-      if (res.ok) {
-        const updated = await res.json();
-        setEmployee(updated);
-        setIsEditing(false);
-        setEditData({});
-      } else {
-        const body = await res.json().catch(() => ({}));
-        setSaveError(body.message || `Save failed (${res.status})`);
-      }
-    } catch {
-      setSaveError('Network error — changes not saved.');
+      setEmployee(updated);
+      setIsEditing(false);
+      setEditData({});
+    } catch (e: any) {
+      setSaveError(e.message || 'Network error — changes not saved.');
     } finally {
       setSaving(false);
     }
@@ -1071,18 +1058,14 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                               if (!uploadFile) return;
                               setUploading(true); setUploadError('');
                               try {
-                                const { getAccessToken } = await import('@/lib/api');
-                                const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
                                 const form = new FormData();
                                 form.append('file', uploadFile);
                                 form.append('docType', uploadDocType);
                                 if (uploadExpiry) form.append('expiryDate', uploadExpiry);
-                                const res = await fetch(`${apiBase}/documents/employee/${params.id}`, {
+                                await apiFetch(`/documents/employee/${params.id}`, {
                                   method: 'POST',
-                                  headers: { Authorization: `Bearer ${getAccessToken()}` },
                                   body: form,
                                 });
-                                if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Upload failed'); }
                                 setUploadOpen(false); setUploadFile(null); setUploadExpiry(''); setUploadDocType('OTHER');
                                 loadDocuments();
                               } catch (e: any) { setUploadError(e.message); }
@@ -1130,7 +1113,6 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                             const isImg = doc.mimeType?.startsWith('image/');
                             const isPdf = doc.mimeType === 'application/pdf';
                             const extColor = isPdf ? 'bg-red-50 text-red-500' : isImg ? 'bg-blue-50 text-blue-500' : 'bg-slate-50 text-slate-500';
-                            const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
                             return (
                               <tr key={doc.id} className="hover:bg-slate-50/50 transition-all">
                                 <td className="px-6 py-4">
@@ -1158,11 +1140,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                                   <button
                                     onClick={async () => {
                                       try {
-                                        const { getAccessToken: tok } = await import('@/lib/api');
-                                        const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
-                                        const res = await fetch(`${apiBase}/documents/${doc.id}/download`, {
-                                          headers: { Authorization: `Bearer ${tok()}` },
-                                        });
+                                        const res = await apiFetchRaw(`/documents/${doc.id}/download`);
                                         if (!res.ok) throw new Error();
                                         const blob = await res.blob();
                                         const url = URL.createObjectURL(blob);

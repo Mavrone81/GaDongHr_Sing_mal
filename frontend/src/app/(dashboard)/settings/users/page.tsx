@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { apiFetch } from '@/lib/api';
 
 interface User {
   id: string;
@@ -48,9 +49,9 @@ function pwStrength(pw: string): { score: number; label: string; color: string }
 
 // ─── Adjust Clearances Panel ──────────────────────────────────────────────────
 function AdjustPanel({
-  user, roles, onClose, onRefresh, apiBase,
+  user, roles, onClose, onRefresh,
 }: {
-  user: User; roles: Role[]; onClose: () => void; onRefresh: () => void; apiBase: string;
+  user: User; roles: Role[]; onClose: () => void; onRefresh: () => void;
 }) {
   const [tab, setTab] = useState<PanelTab>('role');
 
@@ -72,32 +73,26 @@ function AdjustPanel({
   const [mfaMsg, setMfaMsg]         = useState('');
   const [mfaConfirm, setMfaConfirm] = useState(false);
 
-  const token = () => document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
-
   const handleRoleSave = async () => {
     setRoleLoading(true); setRoleMsg('');
     try {
-      const res = await fetch(`${apiBase}/users/${user.id}`, {
+      await apiFetch(`/users/${user.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
         body: JSON.stringify({ role: updateRole }),
       });
-      setRoleMsg(res.ok ? '✓ Role updated successfully.' : '✗ Update failed.');
-      if (res.ok) onRefresh();
-    } catch { setRoleMsg('✗ Network error.'); }
+      setRoleMsg('✓ Role updated successfully.');
+      onRefresh();
+    } catch (e) { setRoleMsg(`✗ ${(e as Error).message || 'Update failed.'}`); }
     setRoleLoading(false);
   };
 
   const handleToggleActive = async () => {
     setRoleLoading(true); setRoleMsg('');
     try {
-      const res = await fetch(`${apiBase}/users/${user.id}/toggle-active`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token()}` },
-      });
-      setRoleMsg(res.ok ? `✓ Account ${user.isActive ? 'locked' : 'unlocked'}.` : '✗ Failed.');
-      if (res.ok) onRefresh();
-    } catch { setRoleMsg('✗ Network error.'); }
+      await apiFetch(`/users/${user.id}/toggle-active`, { method: 'PATCH' });
+      setRoleMsg(`✓ Account ${user.isActive ? 'locked' : 'unlocked'}.`);
+      onRefresh();
+    } catch (e) { setRoleMsg(`✗ ${(e as Error).message || 'Failed.'}`); }
     setRoleLoading(false);
   };
 
@@ -107,32 +102,23 @@ function AdjustPanel({
     if (pw !== pwConfirm) { setPwError('Passwords do not match.'); return; }
     setPwLoading(true);
     try {
-      const res = await fetch(`${apiBase}/users/${user.id}/reset-password`, {
+      await apiFetch(`/users/${user.id}/reset-password`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
         body: JSON.stringify({ newPassword: pw }),
       });
-      if (res.ok) {
-        setPwMsg('✓ Password reset. All active sessions invalidated.');
-        setPw(''); setPwConfirm('');
-      } else {
-        const d = await res.json().catch(() => ({}));
-        setPwError(d.error || '✗ Reset failed.');
-      }
-    } catch { setPwError('✗ Network error.'); }
+      setPwMsg('✓ Password reset. All active sessions invalidated.');
+      setPw(''); setPwConfirm('');
+    } catch (e) { setPwError((e as Error).message || '✗ Reset failed.'); }
     setPwLoading(false);
   };
 
   const handleMfaReset = async () => {
     setMfaLoading(true); setMfaMsg('');
     try {
-      const res = await fetch(`${apiBase}/users/${user.id}/reset-mfa`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token()}` },
-      });
-      setMfaMsg(res.ok ? '✓ MFA cleared. User must re-enrol on next login.' : '✗ Reset failed.');
-      if (res.ok) { setMfaConfirm(false); onRefresh(); }
-    } catch { setMfaMsg('✗ Network error.'); }
+      await apiFetch(`/users/${user.id}/reset-mfa`, { method: 'POST' });
+      setMfaMsg('✓ MFA cleared. User must re-enrol on next login.');
+      setMfaConfirm(false); onRefresh();
+    } catch (e) { setMfaMsg(`✗ ${(e as Error).message || 'Reset failed.'}`); }
     setMfaLoading(false);
   };
 
@@ -455,20 +441,17 @@ export default function UserManagementPage() {
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError]     = useState('');
 
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
-  const token   = () => document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
-
   const fetchData = useCallback(async () => {
     try {
-      const [uRes, rRes] = await Promise.all([
-        fetch(`${apiBase}/users`, { headers: { Authorization: `Bearer ${token()}` } }),
-        fetch(`${apiBase}/roles`, { headers: { Authorization: `Bearer ${token()}` } }),
+      const [uRes, rRes] = await Promise.allSettled([
+        apiFetch('/users'),
+        apiFetch('/roles'),
       ]);
-      if (uRes.ok) { const d = await uRes.json(); setUsers(d.users ?? []); }
-      if (rRes.ok) setRoles(await rRes.json());
+      if (uRes.status === 'fulfilled') setUsers(uRes.value.users ?? []);
+      if (rRes.status === 'fulfilled') setRoles(rRes.value ?? []);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
-  }, [apiBase]);
+  }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -476,20 +459,14 @@ export default function UserManagementPage() {
     if (!newUser.name || !newUser.email || !newUser.password) return;
     setCreateLoading(true); setCreateError('');
     try {
-      const res = await fetch(`${apiBase}/users`, {
+      await apiFetch('/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
         body: JSON.stringify(newUser),
       });
-      if (res.ok) {
-        fetchData();
-        setIsCreateOpen(false);
-        setNewUser({ name: '', email: '', password: '', role: 'EMPLOYEE' });
-      } else {
-        const d = await res.json().catch(() => ({}));
-        setCreateError(d.error || 'Creation failed.');
-      }
-    } catch { setCreateError('Network error.'); }
+      fetchData();
+      setIsCreateOpen(false);
+      setNewUser({ name: '', email: '', password: '', role: 'EMPLOYEE' });
+    } catch (e) { setCreateError((e as Error).message || 'Creation failed.'); }
     setCreateLoading(false);
   };
 
@@ -652,7 +629,6 @@ export default function UserManagementPage() {
           roles={roles}
           onClose={() => setSelectedUser(null)}
           onRefresh={() => { fetchData(); setSelectedUser(null); }}
-          apiBase={apiBase}
         />
       )}
 

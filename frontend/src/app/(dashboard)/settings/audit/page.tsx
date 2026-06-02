@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { apiFetch } from '@/lib/api';
 
 // ── Employee audit log shape ──────────────────────────────────────────────────
 interface EmpAuditLog {
@@ -258,10 +259,6 @@ export default function AuditPage() {
   const [search, setSearch]     = useState('');
   const [logSort, setLogSort]   = useState<{ col: 'timestamp' | 'action' | 'actor' | 'ip'; dir: 'asc' | 'desc' }>({ col: 'timestamp', dir: 'desc' });
 
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
-
-  function getToken() { return document.cookie.split('vorkhive_token=')[1]?.split(';')[0] ?? ''; }
-
   const fetchEmpLogs = useCallback(async () => {
     setLoading(true);
     try {
@@ -272,11 +269,11 @@ export default function AuditPage() {
         ...(fromDate && { from: fromDate }),
         ...(toDate   && { to: toDate + 'T23:59:59' }),
       });
-      const res = await fetch(`${apiBase}/employees/audit-logs?${params}`, { headers: { Authorization: `Bearer ${getToken()}` } });
-      if (res.ok) { const d = await res.json(); setEmpLogs(d.logs ?? []); setEmpTotal(d.total ?? 0); }
+      const d = await apiFetch(`/employees/audit-logs?${params}`);
+      setEmpLogs(d.logs ?? []); setEmpTotal(d.total ?? 0);
     } catch (e) { console.error('emp audit fetch', e); }
     finally { setLoading(false); }
-  }, [empPage, search, action, fromDate, toDate, apiBase]);
+  }, [empPage, search, action, fromDate, toDate]);
 
   const fetchPrLogs = useCallback(async () => {
     setLoading(true);
@@ -287,11 +284,11 @@ export default function AuditPage() {
         ...(fromDate && { from: fromDate }),
         ...(toDate   && { to: toDate + 'T23:59:59' }),
       });
-      const res = await fetch(`${apiBase}/payroll/audit-logs?${params}`, { headers: { Authorization: `Bearer ${getToken()}` } });
-      if (res.ok) { const d = await res.json(); setPrLogs(d.logs ?? []); setPrTotal(d.total ?? 0); }
+      const d = await apiFetch(`/payroll/audit-logs?${params}`);
+      setPrLogs(d.logs ?? []); setPrTotal(d.total ?? 0);
     } catch (e) { console.error('payroll audit fetch', e); }
     finally { setLoading(false); }
-  }, [prPage, action, fromDate, toDate, apiBase]);
+  }, [prPage, action, fromDate, toDate]);
 
   useEffect(() => {
     if (source === 'employee') fetchEmpLogs();
