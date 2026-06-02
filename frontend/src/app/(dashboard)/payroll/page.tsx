@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { apiFetch, getAccessToken } from '@/lib/api';
+import { apiFetch, apiFetchRaw } from '@/lib/api';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -16,10 +16,6 @@ function fmtPeriod(period: string) {
   return d.toLocaleString('en-SG', { month: 'long', year: 'numeric' });
 }
 
-function resolveApiBase() {
-  const h = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-  return process.env.NEXT_PUBLIC_API_URL ?? `http://${h}:4000/api`;
-}
 
 function fmtRunStatus(s: string): string {
   const map: Record<string, string> = {
@@ -148,9 +144,7 @@ export function EmployeePayslipsView() {
   const downloadPdf = async (period: string, label?: string) => {
     setDownloading(period);
     try {
-      const res = await fetch(`${resolveApiBase()}/payroll/payslips/me/${period}`, {
-        headers: { Authorization: `Bearer ${getAccessToken()}` },
-      });
+      const res = await apiFetchRaw(`/payroll/payslips/me/${period}`);
       if (!res.ok) throw new Error('Download failed');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -676,9 +670,7 @@ function AdminPayrollDashboard() {
   const downloadPayslipPdf = async (employeeId: string, period: string, name: string) => {
     setDlProgress(`Downloading ${name}…`);
     try {
-      const res = await fetch(`${resolveApiBase()}/payroll/payslips/${employeeId}/${period}`, {
-        headers: { Authorization: `Bearer ${getAccessToken()}` },
-      });
+      const res = await apiFetchRaw(`/payroll/payslips/${employeeId}/${period}`);
       if (!res.ok) throw new Error('PDF not available');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -704,9 +696,7 @@ function AdminPayrollDashboard() {
   const downloadCpfFile = async (runId: string, period: string, onSuccess?: () => void) => {
     try {
       setCpfDownloading(true);
-      const res = await fetch(`${resolveApiBase()}/payroll/cpf-file/${runId}`, {
-        headers: { Authorization: `Bearer ${getAccessToken()}` },
-      });
+      const res = await apiFetchRaw(`/payroll/cpf-file/${runId}`);
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
         throw new Error((e as { error?: string }).error ?? `HTTP ${res.status}`);
@@ -736,9 +726,7 @@ function AdminPayrollDashboard() {
     setGiroDownloading(true);
     try {
       const params = new URLSearchParams({ bank: giroBank, ...Object.fromEntries(Object.entries(giroFields).filter(([, v]) => v)) });
-      const res = await fetch(`${resolveApiBase()}/payroll/bank-giro/${giroRunId}?${params}`, {
-        headers: { Authorization: `Bearer ${getAccessToken()}` },
-      });
+      const res = await apiFetchRaw(`/payroll/bank-giro/${giroRunId}?${params}`);
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`); }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { apiFetch, getAccessToken } from '@/lib/api';
+import { apiFetch, apiFetchRaw } from '@/lib/api';
 
 // ── CSV utility ───────────────────────────────────────────────────────────────
 function downloadCsv(filename: string, headers: string[], rows: (string | number | null | undefined)[][]) {
@@ -140,9 +140,7 @@ async function runCpfReportDirect() {
   const runs = data.runs ?? [];
   if (runs.length === 0) throw new Error('No finalised payroll runs found');
   const runId = runs[0].id;
-  const token = document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
-  const res = await fetch(`${apiBase}/payroll/cpf-file/${runId}`, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await apiFetchRaw(`/payroll/cpf-file/${runId}`);
   if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'CPF file generation failed'); }
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
@@ -151,9 +149,7 @@ async function runCpfReportDirect() {
 }
 
 async function runBankGiroForRun(runId: string, period: string) {
-  const token = document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
-  const res = await fetch(`${apiBase}/payroll/bank-giro/${runId}?bank=uob`, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await apiFetchRaw(`/payroll/bank-giro/${runId}?bank=uob`);
   if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Bank GIRO generation failed'); }
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
@@ -162,9 +158,7 @@ async function runBankGiroForRun(runId: string, period: string) {
 }
 
 async function runCpfForRun(runId: string, period: string) {
-  const token = document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
-  const res = await fetch(`${apiBase}/payroll/cpf-file/${runId}`, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await apiFetchRaw(`/payroll/cpf-file/${runId}`);
   if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'CPF file failed'); }
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
@@ -333,9 +327,7 @@ function Ir8aModal({ onClose, onToast }: { onClose: () => void; onToast: (m: str
   };
 
   const downloadFlatFile = async () => {
-    const token = document.cookie.split('vorkhive_token=')[1]?.split(';')[0];
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
-    const res = await fetch(`${apiBase}/reports/ir8a-file/${year}`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await apiFetchRaw(`/reports/ir8a-file/${year}`);
     if (!res.ok) { const e = await res.json().catch(() => ({})); onToast((e as any).error || 'Flat file generation failed', 'err'); return; }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -1433,11 +1425,7 @@ function SavedReportsSection({ onToast }: { onToast: (msg: string, type: 'ok' | 
   async function exportFormat(t: SavedTemplate, fmt: 'csv' | 'xlsx' | 'pdf') {
     setBusy(`${fmt}-${t.id}`);
     try {
-      const token = getAccessToken();
-      const base = process.env.NEXT_PUBLIC_API_URL ?? `http://${window.location.hostname}:4000/api`;
-      const res = await fetch(`${base}/reports/templates/${t.id}/export.${fmt}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const res = await apiFetchRaw(`/reports/templates/${t.id}/export.${fmt}`);
       if (!res.ok) throw new Error(`Export failed (${res.status})`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);

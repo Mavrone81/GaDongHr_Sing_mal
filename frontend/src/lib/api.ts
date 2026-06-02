@@ -78,7 +78,12 @@ async function rawFetch(path: string, opts: RequestInit | undefined): Promise<Re
   });
 }
 
-export async function apiFetch(path: string, opts?: RequestInit): Promise<any> {
+// Like apiFetch but returns the raw Response instead of parsed JSON. Use for
+// binary/blob downloads (CPF/GIRO/IR8A files, document/attachment downloads)
+// where the caller needs res.blob(). Sends the HttpOnly auth cookie via
+// credentials:'include' and retries once after a cookie refresh on 401 — the
+// caller is responsible for checking res.ok and reading the body.
+export async function apiFetchRaw(path: string, opts?: RequestInit): Promise<Response> {
   let res = await rawFetch(path, opts);
 
   // Attempt cookie-based refresh on 401, then retry once.
@@ -92,6 +97,12 @@ export async function apiFetch(path: string, opts?: RequestInit): Promise<any> {
       throw new Error('Session expired. Please log in again.');
     }
   }
+
+  return res;
+}
+
+export async function apiFetch(path: string, opts?: RequestInit): Promise<any> {
+  const res = await apiFetchRaw(path, opts);
 
   if (!res.ok) {
     const d = await res.json().catch(() => ({}));

@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { apiFetch, getAccessToken } from '@/lib/api';
+import { apiFetch } from '@/lib/api';
 
 type SortKey = 'fullName' | 'employeeCode' | 'department' | 'employmentType' | 'isActive';
 type SortDir = 'asc' | 'desc';
@@ -115,7 +115,6 @@ export default function EmployeeDirectoryPage() {
   const [hrFillSubmitting, setHrFillSubmitting] = useState(false);
   const [hrFillError, setHrFillError] = useState('');
 
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
   const handleSort = (key: SortKey) => {
     if (key === sortKey) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -182,13 +181,12 @@ export default function EmployeeDirectoryPage() {
     if (!csvRows.length) return;
     setUploading(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/employees/bulk-import`, {
+      // 207 Multi-Status (partial success) is in the 2xx range, so apiFetch
+      // returns its body normally; only true 4xx/5xx failures throw.
+      const data = await apiFetch(`/employees/bulk-import`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAccessToken()}` },
         body: JSON.stringify(csvRows),
       });
-      const data = await res.json();
-      if (!res.ok && res.status !== 207) throw new Error(data.error ?? `HTTP ${res.status}`);
       setUploadResult(data);
       if (data.created > 0) fetchEmployees();
     } catch (e: any) {
@@ -243,23 +241,22 @@ export default function EmployeeDirectoryPage() {
     setProvisionResult(null);
     try {
       // Step 1: Create login account
-      const res = await fetch(`${apiBaseUrl}/users`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAccessToken()}` },
-        body: JSON.stringify({ email: provisionEmail, password: provisionPassword, name: provisionName, role: provisionRole }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setProvisionResult({ ok: false, message: data.error || 'Creation failed.' });
+      let data;
+      try {
+        data = await apiFetch(`/users`, {
+          method: 'POST',
+          body: JSON.stringify({ email: provisionEmail, password: provisionPassword, name: provisionName, role: provisionRole }),
+        });
+      } catch (e: any) {
+        setProvisionResult({ ok: false, message: e.message || 'Creation failed.' });
         return;
       }
 
       // Step 2: If a template was selected, create a pre-filled application
       // so the employee appears in Pending HR Verification immediately.
       if (templateEmpId && templatePreview) {
-        await fetch(`${apiBaseUrl}/employees/applications/prefill`, {
+        await apiFetch(`/employees/applications/prefill`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAccessToken()}` },
           body: JSON.stringify({
             userId: data.id,
             email: provisionEmail,
@@ -298,30 +295,26 @@ export default function EmployeeDirectoryPage() {
     setHrFillSubmitting(true);
     setHrFillError('');
     try {
-      const res = await fetch(`${apiBaseUrl}/employees/applications/prefill`, {
+      await apiFetch(`/employees/applications/prefill`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAccessToken()}` },
         body: JSON.stringify({ userId: hrFillUser.id, email: hrFillUser.email, ...hrFillData }),
       });
-      const data = await res.json();
-      if (!res.ok) { setHrFillError(data.error || 'Submission failed.'); return; }
       setHrFillUser(null);
       setHrFillData({});
       await loadApplications();
-    } catch { setHrFillError('Network error. Please try again.'); }
+    } catch (e: any) { setHrFillError(e.message || 'Network error. Please try again.'); }
     finally { setHrFillSubmitting(false); }
   };
 
   const loadApplications = async () => {
     setAppLoading(true);
     try {
-      const token = getAccessToken();
-      const [appRes, inviteRes] = await Promise.all([
-        fetch(`${apiBaseUrl}/employees/applications`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${apiBaseUrl}/users/pending-invites`, { headers: { Authorization: `Bearer ${token}` } }),
+      const [appRes, inviteRes] = await Promise.allSettled([
+        apiFetch(`/employees/applications`),
+        apiFetch(`/users/pending-invites`),
       ]);
-      const apps = appRes.ok ? await appRes.json() : [];
-      const invites = inviteRes.ok ? await inviteRes.json() : [];
+      const apps = appRes.status === 'fulfilled' ? appRes.value : [];
+      const invites = inviteRes.status === 'fulfilled' ? inviteRes.value : [];
       setApplications(apps);
       // Filter out users who already submitted an application
       const submittedUserIds = new Set((apps as { userId: string }[]).map(a => a.userId));
