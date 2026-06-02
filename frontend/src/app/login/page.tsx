@@ -314,7 +314,7 @@ export default function LoginPage() {
           </div>
         </div>
         <div className="relative z-10 text-[10px] text-slate-600 font-black tracking-[0.3em] uppercase">
-          © 2026 RMA Group SG • RM-HRMS-001 • v1.1.0-STABLE
+          © 2026 Urben Werkz Group SG • UW-HRMS-001 • v1.1.0-STABLE
         </div>
       </div>
 
@@ -364,7 +364,7 @@ export default function LoginPage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between ml-1">
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Password</label>
-                    <a href="#" className="text-[10px] font-black text-indigo-600 hover:text-indigo-700 tracking-widest">Reset</a>
+                    <a href="/auth/forgot-password" className="text-[10px] font-black text-indigo-600 hover:text-indigo-700 tracking-widest">Reset</a>
                   </div>
                   <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
                     placeholder="••••••••"
