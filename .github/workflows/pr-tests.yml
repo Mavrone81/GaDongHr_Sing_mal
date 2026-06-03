@@ -95,16 +95,6 @@ jobs:
             sleep 5
           done
           docker exec hrms-auth node scripts/seed-rbac.js
-
-          # Domain fixtures the specs assume exist (employees, leave types,
-          # claims categories, payroll components/CPF/SDL). Without these the
-          # payroll/claims/leave/supervisor specs fail on empty tables (500s and
-          # "need ≥N employees" guards). The scripts connect straight to the
-          # published postgres port (POSTGRES_PORT) — no service API needed.
-          echo "Seeding domain data (payroll/leave/claims + employees)..."
-          node scripts/seed.js
-          node scripts/seed-employees.js
-
           cd e2e && npm install --no-audit --no-fund && npm run seed-test-users
 
       - name: Install Playwright browsers
