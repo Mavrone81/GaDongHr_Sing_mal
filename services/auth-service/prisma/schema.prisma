@@ -25,6 +25,12 @@ model User {
   lastLoginAt   DateTime?
   inviteToken   String?   @unique
   inviteExpiry  DateTime?
+  // Self-service password reset (forgot-password flow). We store the SHA-256
+  // hash of the random token — never the raw token — so a DB leak can't be
+  // replayed to reset an account. The raw token travels only in the emailed
+  // link. resetTokenExpiry bounds the window (1h); both are cleared on use.
+  resetTokenHash   String?   @unique
+  resetTokenExpiry DateTime?
   // True when the account was provisioned with a temporary password and the
   // user must rotate it on first login. Set by seed/sync scripts that mint
   // initial credentials.

@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { pwStrength } from '@/lib/passwordReset';
 
 interface User {
   id: string;
@@ -35,17 +36,8 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 // ─── Password strength ────────────────────────────────────────────────────────
-function pwStrength(pw: string): { score: number; label: string; color: string } {
-  let s = 0;
-  if (pw.length >= 8)  s++;
-  if (pw.length >= 12) s++;
-  if (/[A-Z]/.test(pw)) s++;
-  if (/[0-9]/.test(pw)) s++;
-  if (/[^A-Za-z0-9]/.test(pw)) s++;
-  const labels = ['', 'Weak', 'Fair', 'Good', 'Strong', 'Very Strong'];
-  const colors = ['', 'bg-red-500', 'bg-amber-500', 'bg-yellow-400', 'bg-emerald-500', 'bg-emerald-600'];
-  return { score: s, label: labels[s] || '', color: colors[s] || '' };
-}
+// pwStrength now lives in @/lib/passwordReset so the self-service reset page
+// shares the identical meter.
 
 // ─── Adjust Clearances Panel ──────────────────────────────────────────────────
 function AdjustPanel({
