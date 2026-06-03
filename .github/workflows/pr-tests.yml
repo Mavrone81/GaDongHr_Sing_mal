@@ -41,6 +41,17 @@ jobs:
       NEXT_PUBLIC_API_URL: http://localhost:4000/api
       SMTP_USER: ${{ secrets.SMTP_USER || '' }}
       SMTP_PASS: ${{ secrets.SMTP_PASS || '' }}
+      # The RBAC matrix fires hundreds of requests/min from one IP, which trips
+      # the gateway's default 200/min limiter and 429s unrelated specs. Raise it
+      # for the suite; the dedicated rate-limit spec (X-04) skips itself when the
+      # _TEST_OVERRIDE is set high, so it stays meaningful without bursting >1k req.
+      GATEWAY_RATELIMIT_MAX: '100000'
+      GATEWAY_RATELIMIT_MAX_TEST_OVERRIDE: '100000'
+      # Reset/login limiters likewise throttle the auth specs.
+      RESET_RATELIMIT_MAX: '100000'
+      # Host port the postgres container is published on (compose maps 5444:5432).
+      # The domain seed scripts connect to localhost:<this> directly.
+      POSTGRES_PORT: '5444'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -84,6 +95,16 @@ jobs:
             sleep 5
           done
           docker exec hrms-auth node scripts/seed-rbac.js
+
+          # Domain fixtures the specs assume exist (employees, leave types,
+          # claims categories, payroll components/CPF/SDL). Without these the
+          # payroll/claims/leave/supervisor specs fail on empty tables (500s and
+          # "need ≥N employees" guards). The scripts connect straight to the
+          # published postgres port (POSTGRES_PORT) — no service API needed.
+          echo "Seeding domain data (payroll/leave/claims + employees)..."
+          node scripts/seed.js
+          node scripts/seed-employees.js
+
           cd e2e && npm install --no-audit --no-fund && npm run seed-test-users
 
       - name: Install Playwright browsers
