@@ -414,6 +414,113 @@ router.post('/refresh', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Password-reset rate limit: 5 requests per IP per 15 min, shared by the
+// request (/forgot-password) and consume (/reset-password) steps. Stops an
+// attacker from spraying reset requests or brute-forcing reset tokens.
+const resetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number.parseInt(process.env.RESET_RATELIMIT_MAX || '5', 10),
+  message: { error: 'Too many password-reset attempts, please try again after 15 minutes' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+function hashResetToken(rawToken) {
+  return crypto.createHash('sha256').update(rawToken).digest('hex');
+}
+
+// POST /auth/forgot-password — self-service reset request (public).
+// Always returns 200 with the same body so the endpoint can't be used to
+// enumerate which emails are registered. When the email maps to an active
+// account we mint a random token, store only its hash, and email a link.
+router.post('/forgot-password', resetLimiter, async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email || typeof email !== 'string') return res.status(400).json({ error: 'Email is required' });
+
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (user && user.isActive) {
+      const rawToken = crypto.randomBytes(32).toString('hex');
+      const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { resetTokenHash: hashResetToken(rawToken), resetTokenExpiry: expiry },
+      });
+
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8081';
+      const resetUrl = `${frontendUrl}/auth/reset-password?token=${rawToken}`;
+      const notifUrl = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:4009';
+      try {
+        await fetch(`${notifUrl}/notifications/email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-internal-service-key': process.env.INTERNAL_SERVICE_KEY || '' },
+          body: JSON.stringify({
+            to: user.email,
+            subject: 'Reset your Vorkhive password',
+            html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto">
+              <div style="background:#4f46e5;padding:32px;border-radius:16px 16px 0 0;text-align:center">
+                <h1 style="color:white;margin:0;font-size:20px;font-weight:900;letter-spacing:-0.5px">Reset Your Password</h1>
+                <p style="color:#c7d2fe;font-size:11px;margin:8px 0 0;text-transform:uppercase;letter-spacing:2px">Password Reset Request</p>
+              </div>
+              <div style="background:white;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;padding:32px">
+                <p style="color:#1e293b;font-size:14px">Hi ${user.name},</p>
+                <p style="color:#475569;font-size:13px;line-height:1.6">We received a request to reset your password. Click the button below to choose a new one. This link expires in 1 hour.</p>
+                <div style="text-align:center;margin:28px 0">
+                  <a href="${resetUrl}" style="background:#4f46e5;color:white;text-decoration:none;padding:14px 32px;border-radius:10px;font-size:12px;font-weight:900;letter-spacing:1px;text-transform:uppercase">Reset Password</a>
+                </div>
+                <p style="color:#94a3b8;font-size:11px;margin-top:24px">If you didn't request this, ignore this email — your password is unchanged and your account is safe.</p>
+              </div>
+            </div>`,
+            text: `Reset your Vorkhive password: ${resetUrl} (expires in 1 hour). If you didn't request this, ignore this email.`,
+          }),
+        });
+      } catch (emailErr) {
+        console.error('[auth] password-reset email send failed:', emailErr.message);
+      }
+
+      await logAudit(prisma, { userId: user.id, action: 'PASSWORD_RESET_REQUESTED', resource: 'auth', req });
+    }
+
+    // Identical response whether or not the email exists.
+    return res.json({ message: 'If that email is registered, a password-reset link has been sent.' });
+  } catch (err) { next(err); }
+});
+
+// POST /auth/reset-password — consume a reset token and set a new password (public).
+// Validates the hashed token + expiry, rotates the password, then revokes every
+// active session so a stolen pre-reset session can't survive the reset.
+router.post('/reset-password', resetLimiter, async (req, res, next) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password are required' });
+    if (typeof newPassword !== 'string' || newPassword.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { resetTokenHash: hashResetToken(token) } });
+    if (!user || !user.resetTokenExpiry || user.resetTokenExpiry < new Date()) {
+      return res.status(400).json({ error: 'Invalid or expired reset link' });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        resetTokenHash: null,
+        resetTokenExpiry: null,
+        failedLogins: 0,
+        lockedUntil: null,
+        mustChangePassword: false,
+      },
+    });
+    await prisma.refreshToken.updateMany({ where: { userId: user.id }, data: { isRevoked: true } });
+    await logAudit(prisma, { userId: user.id, action: 'PASSWORD_RESET', resource: 'auth', req });
+
+    return res.json({ message: 'Password reset successful. Please log in with your new password.' });
+  } catch (err) { next(err); }
+});
+
 // POST /auth/logout
 router.post('/logout', authenticate, async (req, res, next) => {
   try {
