@@ -341,15 +341,28 @@ async function seedClaims() {
 async function main() {
   console.log('\n🌱 Vorkhive Seed Script');
   console.log(`   Connecting to postgres at ${HOST}:${PORT}\n`);
-  await seedAuth();
-  await seedPayroll();
-  await seedLeave();
-  await seedClaims();
-  console.log('\n✅ All done! Login as admin@vorkhive.sg with SEED_ADMIN_PASSWORD (or the dev fallback).\n');
+  // Each phase is independent: a failure in one (e.g. seedAuth, whose users
+  // INSERT predates the move to a relational roleId) must not abort the
+  // reference-data seeds (payroll/leave/claims) that the e2e suite depends on.
+  // SEED_SKIP_AUTH=1 skips the auth accounts entirely — in CI those come from
+  // e2e/scripts/seed-test-users.js, so seed.js only needs to plant reference data.
+  const phases = [
+    ['auth',    seedAuth,    process.env.SEED_SKIP_AUTH === '1'],
+    ['payroll', seedPayroll, false],
+    ['leave',   seedLeave,   false],
+    ['claims',  seedClaims,  false],
+  ];
+  let failed = 0;
+  for (const [name, fn, skip] of phases) {
+    if (skip) { console.log(`⏭️  Skipping ${name} seed (SEED_SKIP_AUTH)`); continue; }
+    try { await fn(); }
+    catch (err) { failed++; console.error(`⚠️  ${name} seed failed: ${err.message}`); }
+  }
+  console.log(`\n${failed ? '⚠️' : '✅'} Seed complete (${phases.length - failed} ok, ${failed} failed).\n`);
 }
 
 main().catch(err => {
-  console.error('\n❌ Seed failed:', err.message);
+  console.error('\n❌ Seed driver crashed:', err.message);
   console.error('   Make sure docker-compose is running (docker-compose up -d)');
   process.exit(1);
 });

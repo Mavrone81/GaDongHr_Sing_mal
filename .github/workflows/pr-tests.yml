@@ -96,6 +96,16 @@ jobs:
           done
           docker exec hrms-auth node scripts/seed-rbac.js
           cd e2e && npm install --no-audit --no-fund && npm run seed-test-users
+          cd ..
+
+          # Reference data (payroll CPF/SDL/components, leave types, claims
+          # categories) + employees that the payroll/claims/leave/supervisor
+          # specs need. seed.js is now per-phase resilient and skips auth (those
+          # users come from seed-test-users). Non-fatal so the rest of the suite
+          # still runs even if a seed phase has trouble — failures show as warnings.
+          echo "Seeding domain reference data + employees..."
+          SEED_SKIP_AUTH=1 node scripts/seed.js || echo "::warning::scripts/seed.js had a failing phase"
+          node scripts/seed-employees.js || echo "::warning::scripts/seed-employees.js failed"
 
       - name: Install Playwright browsers
         run: cd e2e && npx playwright install --with-deps chromium
