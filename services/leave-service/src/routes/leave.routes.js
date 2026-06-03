@@ -211,7 +211,7 @@ async function getSupervisorCheck(employeeId, checkerEmployeeId) {
 }
 
 // ── GET /leave/types ──────────────────────────────────────────────────────────
-router.get('/types', authenticate, async (req, res, next) => {
+router.get('/types', authenticate, authorize('leave:view'), async (req, res, next) => {
   try {
     const all = req.query.all === 'true';
     const types = await prisma.leaveType.findMany({ where: all ? {} : { isActive: true }, orderBy: { name: 'asc' } });

@@ -37,7 +37,7 @@ router.get('/summary', authenticate, async (req, res, next) => {
 });
 
 // ── GET /performance/cycles ─ List cycles ─────────────────────────────────────
-router.get('/cycles', authenticate, async (req, res, next) => {
+router.get('/cycles', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER), async (req, res, next) => {
   try {
     const { status, type } = req.query;
     const where = {};
