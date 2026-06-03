@@ -12,7 +12,11 @@ services:
       POSTGRES_DB: ${POSTGRES_ROOT_DB:-postgres}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-#      - ./scripts/init-dbs.sql:/docker-entrypoint-initdb.d/init-dbs.sql
+      # Creates the per-service databases (hrms_auth, hrms_employee, …) on first
+      # init. Runs only when the data dir is empty, so existing dev/prod volumes
+      # are untouched; required for a fresh boot (e.g. CI) where prisma db push
+      # would otherwise fail — the database must exist before tables are pushed.
+      - ./scripts/init-dbs.sql:/docker-entrypoint-initdb.d/init-dbs.sql
     ports:
       # Bind to loopback only — postgres is reachable from other compose
       # services via the docker network, never from the host's public IP.
