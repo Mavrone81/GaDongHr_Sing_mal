@@ -34,7 +34,9 @@ jobs:
       ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }}
       INTERNAL_SERVICE_KEY: ${{ secrets.INTERNAL_SERVICE_KEY || 'ci-internal-service-key-2026' }}
       INVITE_TOKEN_SECRET: ${{ secrets.INVITE_TOKEN_SECRET || 'ci_invite_token_secret_0123456789abcdef0123456789abcdef0123456789' }}
-      ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL || 'admin@vorkhive.sg' }}
+      # e2e/scripts/seed-test-users.js + the security specs expect the seeded
+      # SUPER_ADMIN to be admin@hrms.com, so seed:admin must create that email.
+      ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL || 'admin@hrms.com' }}
       ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD || 'CiAdmin#2026!' }}
       NEXT_PUBLIC_API_URL: http://localhost:4000/api
       SMTP_USER: ${{ secrets.SMTP_USER || '' }}
