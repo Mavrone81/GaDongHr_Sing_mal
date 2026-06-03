@@ -40,6 +40,19 @@ let smtpConfig = {
   pass: process.env.SMTP_PASS || '',
   from: process.env.SMTP_FROM || 'enquires@vorkhive.com',
 };
+// Reject SMTP hosts that can't be a real relay. A loopback/empty host (the
+// in-container localhost) silently breaks ALL outbound mail — including login
+// OTPs and password resets — until the next restart, with no error shown to
+// the admin who saved it. This guard turns that footgun into a clear 400.
+function smtpHostError(host) {
+  if (host === undefined) return null; // not being changed
+  if (typeof host !== 'string' || !host.trim()) return 'SMTP host is required';
+  const h = host.trim().toLowerCase();
+  if (['localhost', '127.0.0.1', '0.0.0.0', '::1', '::'].includes(h)) {
+    return 'SMTP host must be a reachable mail server, not localhost/loopback';
+  }
+  return null;
+}
 function buildTransporter() {
   return nodemailer.createTransport({
     host: smtpConfig.host, port: smtpConfig.port,
@@ -375,6 +388,8 @@ app.get('/notifications/smtp-config', authenticate, authorize(ROLES.SUPER_ADMIN,
 });
 app.put('/notifications/smtp-config', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.IT_ADMIN), async (req, res) => {
   const { host, port, user, pass, from } = req.body;
+  const hostErr = smtpHostError(host);
+  if (hostErr) return res.status(400).json({ error: hostErr });
   const before = { host: smtpConfig.host, port: smtpConfig.port, user: smtpConfig.user, from: smtpConfig.from };
   if (host !== undefined) smtpConfig.host = host;
   if (port !== undefined) smtpConfig.port = parseInt(port) || 587;

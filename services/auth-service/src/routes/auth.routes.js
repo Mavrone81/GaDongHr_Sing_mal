@@ -87,7 +87,7 @@ async function sendEmailOtp(user) {
   // by default.
   const notifUrl = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:4009';
   try {
-    await fetch(`${notifUrl}/notifications/email`, {
+    const otpRes = await fetch(`${notifUrl}/notifications/email`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-internal-service-key': process.env.INTERNAL_SERVICE_KEY || '' },
       body: JSON.stringify({
@@ -104,6 +104,9 @@ async function sendEmailOtp(user) {
         text: `Your Vorkhive login code: ${code} (expires in 10 minutes)`,
       }),
     });
+    if (!otpRes.ok) {
+      console.error(`[auth] email OTP send failed: notification-service responded ${otpRes.status}`);
+    }
   } catch (e) {
     console.error('[auth] email OTP send failed:', e.message);
   }
@@ -451,7 +454,7 @@ router.post('/forgot-password', resetLimiter, async (req, res, next) => {
       const resetUrl = `${frontendUrl}/auth/reset-password?token=${rawToken}`;
       const notifUrl = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:4009';
       try {
-        await fetch(`${notifUrl}/notifications/email`, {
+        const emailRes = await fetch(`${notifUrl}/notifications/email`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-internal-service-key': process.env.INTERNAL_SERVICE_KEY || '' },
           body: JSON.stringify({
@@ -474,6 +477,13 @@ router.post('/forgot-password', resetLimiter, async (req, res, next) => {
             text: `Reset your Vorkhive password: ${resetUrl} (expires in 1 hour). If you didn't request this, ignore this email.`,
           }),
         });
+        // fetch() only rejects on network failure, not on a non-2xx response.
+        // Without this check a 401 (bad INTERNAL_SERVICE_KEY) or 5xx (SMTP
+        // rejected) is silently swallowed and we still tell the user "link
+        // sent" — exactly the failure that hid a broken reset flow in prod.
+        if (!emailRes.ok) {
+          console.error(`[auth] password-reset email send failed: notification-service responded ${emailRes.status}`);
+        }
       } catch (emailErr) {
         console.error('[auth] password-reset email send failed:', emailErr.message);
       }

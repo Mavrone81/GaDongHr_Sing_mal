@@ -132,6 +132,22 @@ describe('POST /auth/forgot-password', () => {
     expect(res.status).toBe(200);
     expect(mockUpdate).toHaveBeenCalled(); // token still persisted
   });
+
+  test('logs a failure when notification-service responds non-2xx (regression: silent swallow)', async () => {
+    // fetch() resolves (no network error) but the response is a 401 — the case
+    // that hid a broken reset flow in prod, where a bad INTERNAL_SERVICE_KEY
+    // returned "link sent" while nothing was actually emailed.
+    mockFindUnique.mockResolvedValue(makeUser());
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) });
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const res = await request(app).post('/auth/forgot-password').send({ email: 'alice@company.com' });
+
+    expect(res.status).toBe(200);            // still non-blocking / no enumeration
+    expect(mockUpdate).toHaveBeenCalled();   // token still persisted
+    expect(errSpy).toHaveBeenCalledWith(expect.stringMatching(/email send failed.*401/i));
+    errSpy.mockRestore();
+  });
 });
 
 // ── POST /auth/reset-password ──────────────────────────────────────────────────
