@@ -371,6 +371,7 @@ services:
       - PORT=4009
       - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/${NOTIFICATION_DB:-hrms_notification}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
       - SMTP_PORT=${SMTP_PORT:-587}

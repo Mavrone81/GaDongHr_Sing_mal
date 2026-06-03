@@ -422,3 +422,39 @@ test('NS-20 GET /notifications/me returns empty array when no records', async ()
   expect(res.status).toBe(200);
   expect(res.body).toEqual([]);
 });
+
+// ── NS-21..23  PUT /notifications/smtp-config host validation ───────────────────
+// Regression: a UI save of host=127.0.0.1 silently broke ALL outbound mail
+// (login OTPs + password resets) until the next restart, with no error shown.
+describe('PUT /notifications/smtp-config — host validation', () => {
+  test('NS-21 rejects a loopback host with 400 and does not change config', async () => {
+    setUser({ role: 'IT_ADMIN' });
+    for (const host of ['127.0.0.1', 'localhost', '0.0.0.0', '::1']) {
+      const res = await request(app)
+        .put('/notifications/smtp-config')
+        .set('Authorization', 'Bearer t')
+        .send({ host });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/loopback|reachable mail server/i);
+    }
+  });
+
+  test('NS-22 rejects an empty host with 400', async () => {
+    setUser({ role: 'IT_ADMIN' });
+    const res = await request(app)
+      .put('/notifications/smtp-config')
+      .set('Authorization', 'Bearer t')
+      .send({ host: '   ' });
+    expect(res.status).toBe(400);
+  });
+
+  test('NS-23 accepts a real SMTP host', async () => {
+    setUser({ role: 'IT_ADMIN' });
+    const res = await request(app)
+      .put('/notifications/smtp-config')
+      .set('Authorization', 'Bearer t')
+      .send({ host: 'smtp.titan.email', port: 587 });
+    expect(res.status).toBe(200);
+    expect(res.body.host).toBe('smtp.titan.email');
+  });
+});
