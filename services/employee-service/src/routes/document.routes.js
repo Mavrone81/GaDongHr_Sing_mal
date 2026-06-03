@@ -9,8 +9,23 @@ const { authenticate, authorize, authorizeSelfOrRole, ROLES } = require('/app/sh
 
 const prisma = new PrismaClient();
 
-const UPLOAD_DIR = '/app/uploads';
-require('fs').mkdirSync(UPLOAD_DIR, { recursive: true });
+// Defaults to the container's /app/uploads but is overridable via UPLOADS_DIR.
+// If the base isn't writable (e.g. CI runners can't mkdir under /app), fall back
+// to the OS temp dir so importing this module never crashes the process.
+const fs = require('fs');
+const os = require('os');
+function resolveUploadDir() {
+  const dir = process.env.UPLOADS_DIR || '/app/uploads';
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  } catch {
+    const fallback = path.join(os.tmpdir(), 'hrms-uploads');
+    fs.mkdirSync(fallback, { recursive: true });
+    return fallback;
+  }
+}
+const UPLOAD_DIR = resolveUploadDir();
 
 // SECURITY (H-02 / H-03): file uploads are hardened against two attack classes.
 //   H-03: filename is uuid + extension only. Embedding `originalname` (which

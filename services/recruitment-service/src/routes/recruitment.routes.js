@@ -19,8 +19,22 @@ async function fireAndForget(fn) {
   try { await fn(); } catch { /* best-effort — never block the approval */ }
 }
 
-const UPLOADS_DIR = path.join('/app/uploads/resumes');
-fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+// Base dir defaults to the container's /app/uploads but is overridable via
+// UPLOADS_DIR. If the base isn't writable (e.g. CI runners can't mkdir under
+// /app), fall back to the OS temp dir so importing this module never crashes.
+const os = require('os');
+function resolveUploadsDir(subdir) {
+  const dir = path.join(process.env.UPLOADS_DIR || '/app/uploads', subdir);
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  } catch {
+    const fallback = path.join(os.tmpdir(), 'hrms-uploads', subdir);
+    fs.mkdirSync(fallback, { recursive: true });
+    return fallback;
+  }
+}
+const UPLOADS_DIR = resolveUploadsDir('resumes');
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
