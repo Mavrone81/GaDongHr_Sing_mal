@@ -49,7 +49,10 @@ export const ENDPOINTS: EndpointSpec[] = [
 
   // ── Leave ──
   { id: 'list-leave-types',     method: 'GET',    path: '/api/leave/types',           requirePerm: 'leave:view' },
-  { id: 'list-leave-apps',      method: 'GET',    path: '/api/leave/applications?limit=5', requirePerm: 'leave:view' },
+  // Self-scoping endpoint: any authenticated user may list leave applications;
+  // non-privileged callers are force-scoped to their own employeeId by the route
+  // (default-deny on data, not on the call). So it's unguarded at the matrix level.
+  { id: 'list-leave-apps',      method: 'GET',    path: '/api/leave/applications?limit=5' },
   { id: 'create-leave-type',    method: 'POST',   path: '/api/leave/types',
     requireRole: ['SUPER_ADMIN', 'HR_ADMIN'],
     body: () => ({ code: `T${Date.now()}`, name: 'Test Type', annualEntitlement: 1 }),
@@ -63,7 +66,9 @@ export const ENDPOINTS: EndpointSpec[] = [
   { id: 'list-payroll-runs',    method: 'GET',    path: '/api/payroll/runs',          requireRole: ['SUPER_ADMIN', 'HR_ADMIN', 'PAYROLL_OFFICER'] },
 
   // ── Claims ──
-  { id: 'list-claims',          method: 'GET',    path: '/api/claims',                requirePerm: 'claims:view' },
+  // Self-scoping like list-leave-apps: non-privileged callers see only their own
+  // claims (route force-scopes by employeeId), so any authenticated user may call it.
+  { id: 'list-claims',          method: 'GET',    path: '/api/claims' },
 
   // ── Attendance ──
   { id: 'admin-attendance',     method: 'GET',    path: '/api/attendance/admin/records?date=2026-05-21',
