@@ -535,9 +535,42 @@ services:
         reservations:
           memory: 128m
 
+  # Daily logical backup of every database in the postgres instance.
+  # pg_dumpall (postgres:16-alpine — matches the server major version) captures
+  # all DBs + roles/globals into one gzip file under the db_backups volume.
+  # Schedule: 0 19 * * * UTC = 03:00 SGT (Asia/Singapore, fixed UTC+8, no DST).
+  db-backup:
+    image: postgres:16-alpine
+    container_name: hrms-db-backup
+    init: true            # run tini as PID 1 to reap orphaned/zombie child processes
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - PGHOST=postgres
+      - PGPORT=5432
+      - PGUSER=${POSTGRES_USER:-hrms}
+      - PGPASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD env var must be set}
+      - PGDATABASE=${POSTGRES_ROOT_DB:-postgres}
+      - BACKUP_CRON=${BACKUP_CRON:-0 19 * * *}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./backup/entrypoint.sh:/usr/local/bin/db-backup-entrypoint.sh:ro
+      - ./backup/backup.sh:/usr/local/bin/backup.sh:ro
+      - db_backups:/backups
+    entrypoint: ["/usr/local/bin/db-backup-entrypoint.sh"]
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 32m
+
 volumes:
   shared_certs:
   postgres_data:
+  db_backups:
   employee_uploads:
   payroll_files:
   claims_uploads:
