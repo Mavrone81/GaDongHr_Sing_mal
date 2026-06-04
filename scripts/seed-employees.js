@@ -46,9 +46,11 @@ function encrypt(plaintext) {
 
 const DEPARTMENTS = ['Engineering', 'Human Resources', 'Finance', 'Operations', 'Sales', 'Marketing', 'Legal'];
 
-// roleId from hrms_auth.roles
-const EMPLOYEE_ROLE_ID = '2d98123b-12b2-4a2e-a602-365ce3ca925e';
-const MANAGER_ROLE_ID  = 'aeeb1220-f6ff-47ff-bbc5-bb0adb14d498';
+// roleId from hrms_auth.roles — resolved at runtime by role NAME. Hardcoded
+// UUIDs broke on any fresh DB (e.g. CI) where seed-rbac mints new role IDs,
+// causing a users_roleId_fkey violation that aborted the whole seed.
+let EMPLOYEE_ROLE_ID = null;
+let MANAGER_ROLE_ID  = null;
 
 const EMPLOYEES = [
   // ── Engineering ──
@@ -249,6 +251,12 @@ async function seedEmployees() {
   const authDb = dbClient('hrms_auth');
   await empDb.connect();
   await authDb.connect();
+
+  // Resolve role IDs by name from the live roles table (seeded by seed-rbac).
+  const roleRows = await authDb.query(`SELECT id, name FROM roles WHERE name IN ('EMPLOYEE','LINE_MANAGER')`);
+  EMPLOYEE_ROLE_ID = roleRows.rows.find(r => r.name === 'EMPLOYEE')?.id;
+  MANAGER_ROLE_ID  = roleRows.rows.find(r => r.name === 'LINE_MANAGER')?.id || EMPLOYEE_ROLE_ID;
+  if (!EMPLOYEE_ROLE_ID) throw new Error('EMPLOYEE role not found in hrms_auth.roles — run seed-rbac first');
 
   try {
     // Dev seed only. Set SEED_EMPLOYEE_PASSWORD (or fall back to a dev literal

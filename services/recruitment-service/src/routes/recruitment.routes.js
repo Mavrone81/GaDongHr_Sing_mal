@@ -54,7 +54,7 @@ const upload = multer({
 });
 
 // ── Jobs ──────────────────────────────────────────────────────────────────────
-router.get('/jobs', authenticate, async (req, res, next) => {
+router.get('/jobs', authenticate, authorize('recruitment:view'), async (req, res, next) => {
   try {
     const { status, page = 1, limit = 20 } = req.query;
     const where = status ? { status: status.toUpperCase() } : {};

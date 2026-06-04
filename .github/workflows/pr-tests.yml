@@ -41,6 +41,17 @@ jobs:
       NEXT_PUBLIC_API_URL: http://localhost:4000/api
       SMTP_USER: ${{ secrets.SMTP_USER || '' }}
       SMTP_PASS: ${{ secrets.SMTP_PASS || '' }}
+      # The RBAC matrix fires hundreds of requests/min from one IP, which trips
+      # the gateway's default 200/min limiter and 429s unrelated specs. Raise it
+      # for the suite; the dedicated rate-limit spec (X-04) skips itself when the
+      # _TEST_OVERRIDE is set high, so it stays meaningful without bursting >1k req.
+      GATEWAY_RATELIMIT_MAX: '100000'
+      GATEWAY_RATELIMIT_MAX_TEST_OVERRIDE: '100000'
+      # Reset/login limiters likewise throttle the auth specs.
+      RESET_RATELIMIT_MAX: '100000'
+      # Host port the postgres container is published on (compose maps 5444:5432).
+      # The domain seed scripts connect to localhost:<this> directly.
+      POSTGRES_PORT: '5444'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -85,6 +96,16 @@ jobs:
           done
           docker exec hrms-auth node scripts/seed-rbac.js
           cd e2e && npm install --no-audit --no-fund && npm run seed-test-users
+          cd ..
+
+          # Reference data (payroll CPF/SDL/components, leave types, claims
+          # categories) + employees that the payroll/claims/leave/supervisor
+          # specs need. seed.js is now per-phase resilient and skips auth (those
+          # users come from seed-test-users). Non-fatal so the rest of the suite
+          # still runs even if a seed phase has trouble — failures show as warnings.
+          echo "Seeding domain reference data + employees..."
+          SEED_SKIP_AUTH=1 node scripts/seed.js || echo "::warning::scripts/seed.js had a failing phase"
+          node scripts/seed-employees.js || echo "::warning::scripts/seed-employees.js failed"
 
       - name: Install Playwright browsers
         run: cd e2e && npx playwright install --with-deps chromium

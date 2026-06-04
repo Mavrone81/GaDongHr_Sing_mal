@@ -3,6 +3,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: hrms-postgres
+    init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     environment:
       # SECURITY (M-02): POSTGRES_PASSWORD is required from the env — no
@@ -38,6 +39,7 @@ services:
       context: .
       dockerfile: services/api-gateway/Dockerfile
     container_name: hrms-gateway
+    init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
       - "${API_GATEWAY_PORT:-4000}:4000"
@@ -75,6 +77,7 @@ services:
       context: .
       dockerfile: services/auth-service/Dockerfile
     container_name: hrms-auth
+    init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
       - "${AUTH_SERVICE_PORT:-4001}:4001"
@@ -122,6 +125,7 @@ services:
       context: .
       dockerfile: services/face-service/Dockerfile
     container_name: hrms-face
+    init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     expose:
       - "5010"
@@ -137,6 +141,7 @@ services:
       context: .
       dockerfile: services/employee-service/Dockerfile
     container_name: hrms-employee
+    init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
       - "${EMPLOYEE_SERVICE_PORT:-4002}:4002"
@@ -173,6 +178,7 @@ services:
       context: .
       dockerfile: services/payroll-service/Dockerfile
     container_name: hrms-payroll
+    init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
       - "${PAYROLL_SERVICE_PORT:-4003}:4003"
@@ -216,6 +222,7 @@ services:
       context: .
       dockerfile: services/leave-service/Dockerfile
     container_name: hrms-leave
+    init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
       - "${LEAVE_SERVICE_PORT:-4004}:4004"
@@ -246,6 +253,7 @@ services:
       context: .
       dockerfile: services/claims-service/Dockerfile
     container_name: hrms-claims
+    init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
       - "${CLAIMS_SERVICE_PORT:-4005}:4005"
@@ -274,6 +282,7 @@ services:
       context: .
       dockerfile: services/recruitment-service/Dockerfile
     container_name: hrms-recruitment
+    init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
       - "${RECRUITMENT_SERVICE_PORT:-4006}:4006"
@@ -302,6 +311,7 @@ services:
       context: .
       dockerfile: services/attendance-service/Dockerfile
     container_name: hrms-attendance
+    init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
       - "${ATTENDANCE_SERVICE_PORT:-4007}:4007"
@@ -332,6 +342,7 @@ services:
       context: .
       dockerfile: services/offboarding-service/Dockerfile
     container_name: hrms-offboarding
+    init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
       - "${OFFBOARDING_SERVICE_PORT:-4008}:4008"
@@ -363,6 +374,7 @@ services:
       context: .
       dockerfile: services/notification-service/Dockerfile
     container_name: hrms-notification
+    init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
       - "${NOTIFICATION_SERVICE_PORT:-4009}:4009"
@@ -371,6 +383,7 @@ services:
       - PORT=4009
       - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/${NOTIFICATION_DB:-hrms_notification}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
       - SMTP_PORT=${SMTP_PORT:-587}
@@ -394,6 +407,7 @@ services:
       context: .
       dockerfile: services/reporting-service/Dockerfile
     container_name: hrms-reporting
+    init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
       - "${REPORTING_SERVICE_PORT:-4010}:4010"
@@ -426,6 +440,7 @@ services:
       context: .
       dockerfile: services/performance-service/Dockerfile
     container_name: hrms-performance
+    init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
       - "${PERFORMANCE_SERVICE_PORT:-4012}:4012"
@@ -452,6 +467,7 @@ services:
       context: .
       dockerfile: services/training-service/Dockerfile
     container_name: hrms-training
+    init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
       - "${TRAINING_SERVICE_PORT:-4013}:4013"
@@ -477,6 +493,7 @@ services:
       context: .
       dockerfile: services/asset-service/Dockerfile
     container_name: hrms-asset
+    init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
       - "${ASSET_SERVICE_PORT:-4011}:4011"
@@ -504,6 +521,7 @@ services:
       args:
         - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
     container_name: hrms-frontend
+    init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
@@ -517,9 +535,49 @@ services:
         reservations:
           memory: 128m
 
+  # Daily logical backup of every database in the postgres instance.
+  # pg_dumpall (postgres:16-alpine — matches the server major version) captures
+  # all DBs + roles/globals into one gzip file under the db_backups volume.
+  # Schedule: 0 19 * * * UTC = 03:00 SGT (Asia/Singapore, fixed UTC+8, no DST).
+  db-backup:
+    build:
+      context: ./backup
+      dockerfile: Dockerfile
+    container_name: hrms-db-backup
+    init: true            # run tini as PID 1 to reap orphaned/zombie child processes
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - PGHOST=postgres
+      - PGPORT=5432
+      - PGUSER=${POSTGRES_USER:-hrms}
+      - PGPASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD env var must be set}
+      - PGDATABASE=${POSTGRES_ROOT_DB:-postgres}
+      - BACKUP_CRON=${BACKUP_CRON:-0 19 * * *}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-14}
+      # Off-box copy to S3-compatible storage. Leave S3_BUCKET empty to disable.
+      # S3_ENDPOINT empty = real AWS S3; set it for R2 / B2 / Spaces / MinIO.
+      - S3_BUCKET=${S3_BUCKET:-}
+      - S3_PREFIX=${S3_PREFIX:-hrms-db-backups}
+      - S3_ENDPOINT=${S3_ENDPOINT:-}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-auto}
+    volumes:
+      - db_backups:/backups
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 32m
+
 volumes:
   shared_certs:
   postgres_data:
+  db_backups:
   employee_uploads:
   payroll_files:
   claims_uploads:

@@ -168,6 +168,30 @@ const proxyOpts = {
     opts.headers['x-gateway'] = 'vorkhive-gateway';
     return opts;
   },
+  // Downstream services each run a permissive `cors()` that emits
+  // `Access-Control-Allow-Origin: *`. Proxied back to the browser, that wildcard
+  // overrides the gateway's per-origin header and — combined with
+  // `Access-Control-Allow-Credentials: true` — is rejected by browsers for any
+  // credentialed request (the spec forbids `*` with credentials). That silently
+  // broke cookie-based /auth/me from the SPA. express-http-proxy rebuilds the
+  // client response headers from the downstream set, so the gateway's own
+  // cors() header doesn't survive the proxy — we must re-assert it here. The
+  // gateway is the sole CORS authority: drop the downstream CORS headers and
+  // set the correct per-origin, credentialed ones for allowlisted origins.
+  userResHeaderDecorator(headers, userReq) {
+    delete headers['access-control-allow-origin'];
+    delete headers['access-control-allow-credentials'];
+    delete headers['access-control-allow-methods'];
+    delete headers['access-control-allow-headers'];
+    delete headers['access-control-expose-headers'];
+    const origin = userReq.headers.origin;
+    if (origin && corsAllowlist.includes(origin)) {
+      headers['access-control-allow-origin'] = origin;
+      headers['access-control-allow-credentials'] = 'true';
+      headers['vary'] = headers['vary'] ? `${headers['vary']}, Origin` : 'Origin';
+    }
+    return headers;
+  },
 };
 
 app.use('/api/auth',         proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/auth', '/auth') }));
