@@ -300,6 +300,20 @@ function proRatedSalary(monthly: number, workedDays: number, totalDays: number):
   return Math.round(monthly * (workedDays / totalDays) * 100) / 100;
 }
 
+/**
+ * CPF Board whole-dollar rounding for ordinary wages, matching the engine
+ * (shared/payroll-utils computeCpf): total = round(ow × totalRate); employee =
+ * floor(ow × employeeRate); employer = total − employee. Defaults are the 2026
+ * SC/PR (≤55) rates 20% / 37%. Deriving the expectation this way avoids the two
+ * bugs the old assertions had: floating-point noise from `ow * 0.17` and the
+ * naive `ow * 0.20` that ignored the floor.
+ */
+function cpfOw(ow: number, employeeRate = 0.20, totalRate = 0.37): { employee: number; employer: number } {
+  const employee = Math.floor(ow * employeeRate);
+  const employer = Math.round(ow * totalRate) - employee;
+  return { employee, employer };
+}
+
 async function cancelRun(admin: APIRequestContext, runId: string) {
   // Idempotent: cancel deletes payslips, line items, and the run itself.
   // Ignore failures so tests don't fail in cleanup.
@@ -942,8 +956,9 @@ test('[EA-SECT-20] mid-month STARTER — salary pro-rated by (worked / total) wo
     expect(slip.basicSalary, `${ctx} [EA-SECT-20] pro-rated basic = ${monthly} × ${workedWd}/${totalWd}`).toBeCloseTo(expectedSalary, 2);
     expect(slip.grossPay, `${ctx} [EA-SECT-20] gross also pro-rated by working days`).toBeCloseTo(expectedSalary, 2);
     expect(slip.basicSalary, `${ctx} [EA-SECT-20] sanity: pro-rated < full monthly`).toBeLessThan(monthly);
-    // CPF Board: CPF base = pro-rated OW (the pro-ration applies before CPF)
-    expect(slip.employeeCpf, `${ctx} [CPF-RATES-2026] CPF on pro-rated OW @ 20%`).toBeCloseTo(expectedSalary * 0.20, 0);
+    // CPF Board: CPF base = pro-rated OW (the pro-ration applies before CPF);
+    // employee share is floored to the whole dollar.
+    expect(slip.employeeCpf, `${ctx} [CPF-RATES-2026] CPF on pro-rated OW @ 20%`).toBe(cpfOw(slip.basicSalary).employee);
   } finally {
     await cancelRun(admin, run.id);
   }
@@ -1133,8 +1148,8 @@ test('[EA-SECT-38] OT paycode is wages — flows into OW base, gross, and CPF', 
     expect(slip.basicSalary, '[EA-SECT-38] effective OW = basic + OT paycode').toBeCloseTo(expectedOw, 2);
     expect(slip.grossPay,    '[CPF-WAGES-DEF] gross includes OT (it is wages)').toBeCloseTo(expectedOw, 2);
     // CPF Board: OT pay is OW, subject to CPF; combined OW here is under SGD 8,000 (Jan 2026) ceiling
-    expect(slip.employeeCpf, '[CPF-RATES-2026] employee CPF 20% × (basic + OT)').toBeCloseTo(Math.round(expectedOw * 0.20), 0);
-    expect(slip.employerCpf, '[CPF-RATES-2026] employer CPF 17% × (basic + OT)').toBeCloseTo(Math.round(expectedOw * 0.17), 0);
+    expect(slip.employeeCpf, '[CPF-RATES-2026] employee CPF 20% × (basic + OT)').toBe(cpfOw(slip.basicSalary).employee);
+    expect(slip.employerCpf, '[CPF-RATES-2026] employer CPF 17% × (basic + OT)').toBe(cpfOw(slip.basicSalary).employer);
   } finally {
     await cancelRun(admin, run.id);
   }
@@ -1216,9 +1231,9 @@ test('[CPF-WAGES-DEF] OIL cash-out is wages → subject to CPF as OW (compliance
     const expectedOw = basic + oilAmt;
     expect(slip.basicSalary, '[CPF-WAGES-DEF] effective OW includes OIL cash payment').toBe(expectedOw);
     expect(slip.grossPay, '[CPF-WAGES-DEF] gross includes OIL (cash remuneration)').toBe(expectedOw);
-    expect(slip.employeeCpf, '[CPF-RATES-2026] employee CPF 20% × (basic + OIL)').toBe(expectedOw * 0.20);
-    expect(slip.employerCpf, '[CPF-RATES-2026] employer CPF 17% × (basic + OIL)').toBe(expectedOw * 0.17);
-    expect(slip.netPay, '[CPF-WAGES-DEF] net = gross − employee CPF on full OW').toBeCloseTo(expectedOw - expectedOw * 0.20, 2);
+    expect(slip.employeeCpf, '[CPF-RATES-2026] employee CPF 20% × (basic + OIL)').toBe(cpfOw(slip.basicSalary).employee);
+    expect(slip.employerCpf, '[CPF-RATES-2026] employer CPF 17% × (basic + OIL)').toBe(cpfOw(slip.basicSalary).employer);
+    expect(slip.netPay, '[CPF-WAGES-DEF] net = gross − employee CPF on full OW').toBeCloseTo(expectedOw - cpfOw(slip.basicSalary).employee, 2);
   } finally {
     await cancelRun(admin, run.id);
   }
@@ -1254,9 +1269,9 @@ test('[CPF-WAGES-DEF] DEDUCTION (staff loan) reduces net only — gross + CPF ba
 
     expect(slip.basicSalary, '[CPF-WAGES-DEF] OW unchanged by deduction').toBe(basic);
     expect(slip.grossPay, '[IRAS-EMP-INCOME] gross unchanged — deduction is not an income reduction').toBe(basic);
-    expect(slip.employeeCpf, '[CPF-WAGES-DEF] CPF on full OW — loan doesn\'t reduce base').toBe(basic * 0.20);
-    expect(slip.employerCpf, '[CPF-RATES-2026] employer CPF on full OW').toBe(basic * 0.17);
-    expect(slip.netPay, 'net = gross − employee CPF − loan repayment').toBeCloseTo(basic - basic * 0.20 - loanAmt, 2);
+    expect(slip.employeeCpf, '[CPF-WAGES-DEF] CPF on full OW — loan doesn\'t reduce base').toBe(cpfOw(slip.basicSalary).employee);
+    expect(slip.employerCpf, '[CPF-RATES-2026] employer CPF on full OW').toBe(cpfOw(slip.basicSalary).employer);
+    expect(slip.netPay, 'net = gross − employee CPF − loan repayment').toBeCloseTo(basic - cpfOw(slip.basicSalary).employee - loanAmt, 2);
   } finally {
     await cancelRun(admin, run.id);
   }
@@ -1323,9 +1338,9 @@ test('[IRAS-EMP-INCOME] REIMBURSEMENT (medical) is not income — net pay only, 
 
     expect(slip.basicSalary, '[CPF-WAGES-DEF] OW unchanged by reimbursement (not wages)').toBe(basic);
     expect(slip.grossPay, '[IRAS-EMP-INCOME] gross unchanged — reimbursement is not taxable income').toBe(basic);
-    expect(slip.employeeCpf, '[CPF-WAGES-DEF] CPF unaffected by reimbursement').toBe(basic * 0.20);
-    expect(slip.employerCpf, '[CPF-RATES-2026] employer CPF unaffected by reimbursement').toBe(basic * 0.17);
-    expect(slip.netPay, 'net = gross − CPF + reimbursement (employee made whole)').toBeCloseTo(basic - basic * 0.20 + reimbAmt, 2);
+    expect(slip.employeeCpf, '[CPF-WAGES-DEF] CPF unaffected by reimbursement').toBe(cpfOw(slip.basicSalary).employee);
+    expect(slip.employerCpf, '[CPF-RATES-2026] employer CPF unaffected by reimbursement').toBe(cpfOw(slip.basicSalary).employer);
+    expect(slip.netPay, 'net = gross − CPF + reimbursement (employee made whole)').toBeCloseTo(basic - cpfOw(slip.basicSalary).employee + reimbAmt, 2);
   } finally {
     await cancelRun(admin, run.id);
   }
