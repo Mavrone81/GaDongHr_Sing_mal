@@ -12,10 +12,25 @@
  *
  * Called once at service startup. Safe to re-run — uses DO blocks that detect
  * pre-existing constraints and skip.
+ *
+ * The constraint is only enforced when maker-checker is enabled. It must agree
+ * with the application-level guard in payroll.routes.js, which skips the rule
+ * when DISABLE_MAKER_CHECKER=true (single-admin deployments). If the two layers
+ * disagree, a self-approving admin passes the app check only to be rejected by
+ * the DB on UPDATE — so when the rule is disabled we make sure the constraint
+ * is absent, and when it is enabled we (idempotently) create it.
  */
 
 async function ensurePayrollConstraints(prisma) {
+  const makerCheckerEnabled = process.env.DISABLE_MAKER_CHECKER !== 'true';
   try {
+    if (!makerCheckerEnabled) {
+      await prisma.$executeRawUnsafe(
+        `ALTER TABLE payroll_runs DROP CONSTRAINT IF EXISTS payroll_runs_maker_checker_diff;`
+      );
+      console.log('[payroll-service] Maker-checker disabled (DISABLE_MAKER_CHECKER=true); DB CHECK constraint payroll_runs_maker_checker_diff not enforced.');
+      return;
+    }
     await prisma.$executeRawUnsafe(`
       DO $$
       BEGIN
