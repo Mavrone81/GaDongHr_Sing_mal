@@ -365,6 +365,12 @@ router.get('/applications', authenticate, async (req, res, next) => {
     // by an arbitrary employeeId. Everyone else is force-scoped to their own employeeId.
     const isPrivileged = LEAVE_VIEW_ROLES.has(req.user.role);
     if (!isPrivileged) {
+      // Non-privileged callers only see their own applications. No linked
+      // employee record → none; return empty rather than passing a null
+      // employeeId to Prisma (rejected on the non-nullable column → 500).
+      if (!req.user.employeeId) {
+        return res.json({ applications: [], total: 0, page: Number(page), pages: 0 });
+      }
       where.employeeId = req.user.employeeId;
     } else if (employeeId) {
       where.employeeId = employeeId;
