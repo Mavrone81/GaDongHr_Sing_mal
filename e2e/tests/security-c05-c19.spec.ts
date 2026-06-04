@@ -64,6 +64,24 @@ test('C11 E2E: CORS preflight returns explicit allowlist, no identity headers, n
   expect(allowedHeaders).not.toContain('x-employee-id');
 });
 
+test('C11 E2E: proxied GET echoes the request origin, never "*" with credentials', async () => {
+  // Regression guard: downstream services run a bare cors() that emits
+  // Access-Control-Allow-Origin: *, which express-http-proxy forwarded — and
+  // "*" + Allow-Credentials: true is rejected by browsers, silently breaking
+  // cookie-based /auth/me for the SPA (the OPTIONS preflight looked fine because
+  // the gateway answers it directly; only the proxied GET carried the wildcard).
+  const token = signJwt(TEST_USERS.SUPER_ADMIN, 'SUPER_ADMIN');
+  const ctx = await request.newContext({
+    baseURL: API_BASE,
+    extraHTTPHeaders: { Origin: 'http://localhost:3000', Cookie: `vorkhive_token=${token}` },
+  });
+  const res = await ctx.get('/api/auth/me');
+  expect(res.ok(), 'auth/me reachable').toBe(true);
+  const acao = res.headers()['access-control-allow-origin'];
+  expect(acao, 'credentialed response must echo the origin, not "*"').toBe('http://localhost:3000');
+  expect(res.headers()['access-control-allow-credentials']).toBe('true');
+});
+
 test('C11 E2E: client-supplied x-user-role header is stripped at the gateway', async () => {
   // Forge a token claiming EMPLOYEE role, but pretend to be SUPER_ADMIN via a header.
   // The gateway must overwrite the header from the verified JWT.
