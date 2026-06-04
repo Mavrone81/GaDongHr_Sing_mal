@@ -36,6 +36,12 @@ router.get('/', authenticate, async (req, res, next) => {
     // Everyone else is force-scoped to their own employeeId.
     const isPrivileged = FINANCE_VIEW_ROLES.includes(req.user.role);
     if (!isPrivileged) {
+      // Non-privileged callers only see their own claims. A user with no linked
+      // employee record has none — return empty rather than letting a null
+      // employeeId reach Prisma (which rejects null on the non-nullable column → 500).
+      if (!req.user.employeeId) {
+        return res.json({ claims: [], total: 0, page: Number(page), pages: 0 });
+      }
       where.employeeId = req.user.employeeId;
     } else if (queryEmployeeId) {
       where.employeeId = queryEmployeeId;

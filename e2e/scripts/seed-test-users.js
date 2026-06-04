@@ -12,6 +12,8 @@
  */
 
 const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 const axios = require('axios');
 
 const API_BASE = process.env.E2E_API_URL || 'http://localhost:4000/api';
@@ -85,9 +87,30 @@ async function findOrCreateUser(token, email, role) {
     }
   }
 
-  console.log('\nUpdate e2e/lib/testUsers.ts with these IDs:');
-  for (const role of ROLES) {
-    const r = results[role];
-    if (r) console.log(`  ${role}: { id: '${r.id}', email: '${r.email}', employeeId: null },`);
+  // SUPER_ADMIN is the bootstrap admin (admin@hrms.com), created by the auth
+  // container's seed with a random id — resolve it so SUPER_ADMIN-scoped specs
+  // that hit /auth/me (which looks the user up by id) also match a real row.
+  const adminEmail = (process.env.ADMIN_EMAIL || 'admin@hrms.com').toLowerCase();
+  try {
+    const list = await axios.get(`${API_BASE}/users?limit=200`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const admin = (list.data.users || list.data || []).find(u => (u.email || '').toLowerCase() === adminEmail);
+    if (admin) results.SUPER_ADMIN = { id: admin.id, email: admin.email };
+  } catch (err) {
+    console.error(`  ✗ could not resolve SUPER_ADMIN (${adminEmail}) -- ${err.message}`);
   }
+
+  // Write the freshly-seeded ids to a runtime file that lib/testUsers.ts loads,
+  // so forged-JWT specs reference users that actually exist. Without this the
+  // hardcoded ids drift from each fresh DB and every /auth/me lookup 404s,
+  // breaking the smoke/login/role specs.
+  const runtime = {};
+  for (const role of [...ROLES, 'SUPER_ADMIN']) {
+    const r = results[role];
+    if (r) runtime[role] = { id: r.id, email: r.email, employeeId: r.employeeId ?? null };
+  }
+  const outPath = path.join(__dirname, '..', 'lib', 'testUsers.runtime.json');
+  fs.writeFileSync(outPath, JSON.stringify(runtime, null, 2) + '\n');
+  console.log(`\nWrote ${Object.keys(runtime).length} ids -> ${outPath}`);
 })().catch(e => { console.error('FATAL', e.message); process.exit(1); });

@@ -10,7 +10,7 @@ const prisma = new PrismaClient();
 const ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.IT_ADMIN];
 
 // ── GET /assets ───────────────────────────────────────────────────────────────
-router.get('/', authenticate, async (req, res, next) => {
+router.get('/', authenticate, authorize('asset:view'), async (req, res, next) => {
   try {
     const { category, status, page = 1, limit = 100 } = req.query;
     const where = {};

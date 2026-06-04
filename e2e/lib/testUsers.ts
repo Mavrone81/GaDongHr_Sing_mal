@@ -9,12 +9,30 @@
  * To populate missing rows, run: `npm run seed-test-users` (from e2e/).
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { Role } from './roles';
 
 export interface TestUserRecord {
   id: string;
   email: string;
   employeeId: string | null;
+}
+
+/**
+ * `scripts/seed-test-users.js` writes the freshly-seeded ids here on every CI
+ * run. The hardcoded ids below are only a local-dev fallback — each fresh DB
+ * assigns new ids, so without this overlay the forged-JWT specs reference
+ * users that don't exist and every /auth/me lookup 404s.
+ */
+function loadRuntimeOverrides(): Partial<Record<Role, TestUserRecord>> {
+  try {
+    const p = path.join(__dirname, 'testUsers.runtime.json');
+    if (!fs.existsSync(p)) return {};
+    return JSON.parse(fs.readFileSync(p, 'utf8'));
+  } catch {
+    return {};
+  }
 }
 
 /**
@@ -38,6 +56,15 @@ export const TEST_USERS: Record<Role, TestUserRecord> = {
   TRAINING_MANAGER: { id: 'fee4f7a8-9a9d-4f37-8c58-afcdf7bd7ca4', email: 'test-training-manager@example.com', employeeId: null },
   EMPLOYEE:         { id: '85d6d2ea-cac4-43da-bcff-bb7dfe6737e9', email: 'test-employee@example.com',         employeeId: null },
 };
+
+// Overlay the freshly-seeded ids (if scripts/seed-test-users.js wrote them).
+const RUNTIME_OVERRIDES = loadRuntimeOverrides();
+for (const role of Object.keys(RUNTIME_OVERRIDES) as Role[]) {
+  const o = RUNTIME_OVERRIDES[role];
+  if (o?.id && TEST_USERS[role]) {
+    TEST_USERS[role] = { ...TEST_USERS[role], id: o.id, employeeId: o.employeeId ?? TEST_USERS[role].employeeId };
+  }
+}
 
 /** Password used by the seed script and the real-login spec. */
 export const TEST_PASSWORD = 'TestE2E@2026!';

@@ -244,7 +244,7 @@ app.get('/overtime/:employeeId/:period', authenticate, authorize(ROLES.SUPER_ADM
 // ── Shifts ────────────────────────────────────────────────────────────────────
 const ROSTER_ROLES = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.LINE_MANAGER, 'roster:manage'];
 
-app.get('/attendance/shifts', authenticate, async (req, res, next) => {
+app.get('/attendance/shifts', authenticate, authorize('roster:view'), async (req, res, next) => {
   try {
     const [templates, workingShifts] = await Promise.all([
       prisma.shiftTemplate.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } }),
@@ -444,7 +444,7 @@ app.delete('/attendance/roster/employee/:empId', authenticate, authorize(...ROST
 });
 
 // ── Work Locations (org-wide) ─────────────────────────────────────────────────
-app.get('/attendance/locations', authenticate, async (req, res, next) => {
+app.get('/attendance/locations', authenticate, authorize('attendance:manage'), async (req, res, next) => {
   try {
     const locs = await prisma.workLocation.findMany({
       where: req.query.activeOnly === 'true' ? { isActive: true } : {},
