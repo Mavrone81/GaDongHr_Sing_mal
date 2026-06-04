@@ -540,7 +540,9 @@ services:
   # all DBs + roles/globals into one gzip file under the db_backups volume.
   # Schedule: 0 19 * * * UTC = 03:00 SGT (Asia/Singapore, fixed UTC+8, no DST).
   db-backup:
-    image: postgres:16-alpine
+    build:
+      context: ./backup
+      dockerfile: Dockerfile
     container_name: hrms-db-backup
     init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
@@ -555,11 +557,16 @@ services:
       - PGDATABASE=${POSTGRES_ROOT_DB:-postgres}
       - BACKUP_CRON=${BACKUP_CRON:-0 19 * * *}
       - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-14}
+      # Off-box copy to S3-compatible storage. Leave S3_BUCKET empty to disable.
+      # S3_ENDPOINT empty = real AWS S3; set it for R2 / B2 / Spaces / MinIO.
+      - S3_BUCKET=${S3_BUCKET:-}
+      - S3_PREFIX=${S3_PREFIX:-hrms-db-backups}
+      - S3_ENDPOINT=${S3_ENDPOINT:-}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-auto}
     volumes:
-      - ./backup/entrypoint.sh:/usr/local/bin/db-backup-entrypoint.sh:ro
-      - ./backup/backup.sh:/usr/local/bin/backup.sh:ro
       - db_backups:/backups
-    entrypoint: ["/usr/local/bin/db-backup-entrypoint.sh"]
     deploy:
       resources:
         limits:
