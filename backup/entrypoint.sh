@@ -17,6 +17,12 @@ export PGPASSWORD='${PGPASSWORD:-}'
 export PGDATABASE='${PGDATABASE:-postgres}'
 export BACKUP_DIR='${BACKUP_DIR:-/backups}'
 export BACKUP_RETENTION_DAYS='${BACKUP_RETENTION_DAYS:-14}'
+export S3_BUCKET='${S3_BUCKET:-}'
+export S3_PREFIX='${S3_PREFIX:-hrms-db-backups}'
+export S3_ENDPOINT='${S3_ENDPOINT:-}'
+export AWS_ACCESS_KEY_ID='${AWS_ACCESS_KEY_ID:-}'
+export AWS_SECRET_ACCESS_KEY='${AWS_SECRET_ACCESS_KEY:-}'
+export AWS_DEFAULT_REGION='${AWS_DEFAULT_REGION:-auto}'
 EOF
 chmod 600 /etc/db-backup.env
 
@@ -26,6 +32,11 @@ echo "${BACKUP_CRON} /usr/local/bin/backup.sh >> /backups/backup.log 2>&1" > /et
 
 echo "[db-backup] scheduled '${BACKUP_CRON}' (container TZ=UTC; 0 19 * * * = 03:00 SGT)"
 echo "[db-backup] backups -> /backups, log -> /backups/backup.log"
+if [ -n "${S3_BUCKET:-}" ]; then
+  echo "[db-backup] off-box upload ENABLED -> s3://${S3_BUCKET}/${S3_PREFIX:-hrms-db-backups}/ (endpoint: ${S3_ENDPOINT:-AWS})"
+else
+  echo "[db-backup] off-box upload DISABLED (S3_BUCKET unset) — local backups only"
+fi
 echo "[db-backup] manual run: docker exec hrms-db-backup /usr/local/bin/backup.sh"
 
 # -f foreground, -l 8 log level to container stdout.
