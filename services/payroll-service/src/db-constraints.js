@@ -6,7 +6,7 @@
  * path nor a direct DB write can violate them:
  *
  *   payroll_runs_maker_checker_diff
- *     CHECK (approved_by IS NULL OR approved_by != initiated_by)
+ *     CHECK ("approvedBy" IS NULL OR "approvedBy" != "initiatedBy")
  *     Enforces the maker-checker rule: the user who approves a payroll run
  *     must be a different user from the one who initiated it.
  *
@@ -25,7 +25,7 @@ async function ensurePayrollConstraints(prisma) {
         ) THEN
           ALTER TABLE payroll_runs
             ADD CONSTRAINT payroll_runs_maker_checker_diff
-            CHECK (approved_by IS NULL OR approved_by <> initiated_by);
+            CHECK ("approvedBy" IS NULL OR "approvedBy" <> "initiatedBy");
         END IF;
       END$$;
     `);
