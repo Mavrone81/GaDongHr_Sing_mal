@@ -6,6 +6,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 
 const assistantRoutes = require('./routes/assistant.routes');
+const { info } = require('./llm');
 
 const app = express();
 const PORT = process.env.PORT || 4020;
@@ -18,8 +19,7 @@ app.use(morgan('combined'));
 app.get('/health', (req, res) => res.json({
   service: 'assistant-service',
   status: 'ok',
-  configured: !!process.env.ANTHROPIC_API_KEY,
-  model: process.env.ASSISTANT_MODEL || 'claude-haiku-4-5',
+  ...info(),
   ts: new Date(),
 }));
 
