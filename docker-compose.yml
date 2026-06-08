@@ -531,8 +531,11 @@ services:
       - PORT=4020
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - GATEWAY_URL=http://api-gateway:4000
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - ASSISTANT_MODEL=${ASSISTANT_MODEL:-claude-haiku-4-5}
+      # Provider-agnostic: set GROQ_API_KEY (free) OR ANTHROPIC_API_KEY. Auto-detected.
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ASSISTANT_PROVIDER=${ASSISTANT_PROVIDER:-}
+      - ASSISTANT_MODEL=${ASSISTANT_MODEL:-}
     volumes:
       - shared_certs:/app/certs:ro
     deploy:

@@ -1,19 +1,13 @@
 'use strict';
 
 const express = require('express');
-const Anthropic = require('@anthropic-ai/sdk');
 const { authenticate } = require('/app/shared/auth-middleware');
 const { TOOL_SCHEMAS, runTool } = require('../tools');
+const { runChat, isConfigured } = require('../llm');
 
 const router = express.Router();
 
-const MODEL = process.env.ASSISTANT_MODEL || 'claude-haiku-4-5';
-const MAX_TOOL_ROUNDS = 6;          // safety cap on the agentic loop per turn
-const MAX_HISTORY = 20;             // cap conversation turns sent to the model
-
-const anthropic = process.env.ANTHROPIC_API_KEY
-  ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  : null;
+const MAX_HISTORY = 20; // cap conversation turns sent to the model
 
 function systemPrompt(user) {
   const name = user.name || 'the user';
@@ -24,8 +18,8 @@ function systemPrompt(user) {
     `You are talking to ${name} (role: ${role}, employeeId: ${empId}).`,
     ``,
     `WHAT YOU CAN DO`,
-    `- Answer questions about HR data — leave, claims, payslips, attendance, profile,`,
-    `  appraisals, training, team/approvers — by calling the provided tools.`,
+    `- Answer questions about HR data — leave, claims, payslips, profile, appraisals,`,
+    `  training, team/approvers — by calling the provided tools.`,
     `- Help the user apply for leave or submit a claim (write actions).`,
     ``,
     `HARD RULES`,
@@ -46,8 +40,8 @@ function systemPrompt(user) {
 // POST /assistant/chat  { messages: [{role:'user'|'assistant', content:string}] }
 router.post('/chat', authenticate, async (req, res, next) => {
   try {
-    if (!anthropic) {
-      return res.status(503).json({ error: 'The assistant is not configured yet. An administrator needs to set ANTHROPIC_API_KEY.' });
+    if (!isConfigured()) {
+      return res.status(503).json({ error: 'The assistant is not configured yet. An administrator needs to set an AI provider key (GROQ_API_KEY or ANTHROPIC_API_KEY).' });
     }
     const authHeader = req.headers['authorization'];
     const incoming = Array.isArray(req.body?.messages) ? req.body.messages : null;
@@ -55,7 +49,6 @@ router.post('/chat', authenticate, async (req, res, next) => {
       return res.status(400).json({ error: 'messages array is required' });
     }
 
-    // Sanitise + cap the history. Only text content from user/assistant.
     const messages = incoming
       .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
       .slice(-MAX_HISTORY)
@@ -64,47 +57,17 @@ router.post('/chat', authenticate, async (req, res, next) => {
       return res.status(400).json({ error: 'The last message must be from the user.' });
     }
 
-    const system = systemPrompt(req.user);
-    let reply = '';
+    const reply = await runChat({
+      system: systemPrompt(req.user),
+      messages,
+      tools: TOOL_SCHEMAS,
+      exec: (name, input) => runTool(name, input, authHeader, req.user),
+    });
 
-    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-      const response = await anthropic.messages.create({
-        model: MODEL,
-        max_tokens: 1024,
-        system,
-        tools: TOOL_SCHEMAS,
-        messages,
-      });
-
-      // Collect any text the model produced this round.
-      const textOut = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
-      if (textOut) reply = textOut;
-
-      if (response.stop_reason !== 'tool_use') break;
-
-      // Execute every requested tool with the caller's own token (RBAC scoped).
-      const toolUses = response.content.filter((b) => b.type === 'tool_use');
-      messages.push({ role: 'assistant', content: response.content });
-
-      const toolResults = [];
-      for (const tu of toolUses) {
-        const result = await runTool(tu.name, tu.input, authHeader, req.user);
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: tu.id,
-          content: JSON.stringify(result),
-          is_error: result && result.ok === false,
-        });
-      }
-      messages.push({ role: 'user', content: toolResults });
-    }
-
-    if (!reply) reply = "Sorry, I couldn't complete that. Please try rephrasing.";
-    return res.json({ reply });
+    return res.json({ reply: reply || "Sorry, I couldn't complete that. Please try rephrasing." });
   } catch (err) {
-    // Don't leak provider internals to the client.
-    console.error('[assistant] chat error:', err?.message || err);
-    if (err?.status === 401) return res.status(502).json({ error: 'The assistant could not authenticate to its AI provider. Check ANTHROPIC_API_KEY.' });
+    console.error('[assistant] chat error:', err?.status || '', err?.message || err, err?.detail || '');
+    if (err?.status === 401) return res.status(502).json({ error: 'The assistant could not authenticate to its AI provider. Check the provider API key.' });
     return res.status(502).json({ error: 'The assistant had a problem answering. Please try again.' });
   }
 });
