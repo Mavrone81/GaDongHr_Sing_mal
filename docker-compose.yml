@@ -515,6 +515,33 @@ services:
         reservations:
           memory: 64m
 
+  # AI chat assistant. No database — it only calls existing services through the
+  # gateway, forwarding the caller's JWT so platform RBAC scopes every read/write.
+  assistant-service:
+    build:
+      context: .
+      dockerfile: services/assistant-service/Dockerfile
+    container_name: hrms-assistant
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${ASSISTANT_SERVICE_PORT:-4020}:4020"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4020
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+      - GATEWAY_URL=http://api-gateway:4000
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ASSISTANT_MODEL=${ASSISTANT_MODEL:-claude-haiku-4-5}
+    volumes:
+      - shared_certs:/app/certs:ro
+    deploy:
+      resources:
+        limits:
+          memory: 192m
+        reservations:
+          memory: 64m
+
   frontend:
     build:
       context: ./frontend

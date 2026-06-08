@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import NotificationBell from '@/components/NotificationBell';
+import FloatingAssistant from '@/components/FloatingAssistant';
 
 // ─── RBAC Navigation Matrix — Section 2, Vorkhive_RBAC_Workflow_Reference.pdf ──
 // SA = Superadmin (full, unrestricted access to ALL modules)
@@ -650,6 +651,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </main>
       </div>
+      <FloatingAssistant />
     </div>
   );
 }
