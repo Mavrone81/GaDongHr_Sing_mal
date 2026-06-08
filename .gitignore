@@ -52,3 +52,8 @@ Thumbs.db
 
 # Prisma generated
 **/node_modules/.prisma/
+
+# Local test/scratch artifacts
+test-results/
+scripts/t4/
+Screenshot *.png
