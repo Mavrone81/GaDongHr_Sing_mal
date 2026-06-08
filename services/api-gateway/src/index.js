@@ -35,6 +35,7 @@ const SERVICES = {
   hrCase:       process.env.HR_CASE_SERVICE_URL      || 'http://hr-case-service:4017',
   loans:        process.env.LOANS_SERVICE_URL        || 'http://loans-service:4018',
   survey:       process.env.SURVEY_SERVICE_URL       || 'http://survey-service:4019',
+  assistant:    process.env.ASSISTANT_SERVICE_URL    || 'http://assistant-service:4020',
 };
 
 // Explicit origin allowlist (CORS_ORIGINS is a comma-separated list of URLs).
@@ -222,6 +223,7 @@ app.use('/api/benefits',     proxy(SERVICES.benefits,     { ...proxyOpts, proxyR
 app.use('/api/hr-cases',     proxy(SERVICES.hrCase,       { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/hr-cases', '/hr-cases') }));
 app.use('/api/loans',        proxy(SERVICES.loans,        { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/loans', '/loans') }));
 app.use('/api/surveys',      proxy(SERVICES.survey,       { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/surveys', '/surveys') }));
+app.use('/api/assistant',    proxy(SERVICES.assistant,    { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/assistant', '/assistant') }));
 
 app.use((err, req, res, next) => { console.error(err.message); res.status(502).json({ error: 'Gateway error', message: err.message }); });
 
