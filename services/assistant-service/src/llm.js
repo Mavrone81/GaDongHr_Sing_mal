@@ -104,6 +104,14 @@ async function runOpenAI({ system, messages, tools, exec }) {
       msgs.push({ role: 'tool', tool_call_id: c.id, content: JSON.stringify(result) });
     }
   }
+  if (!reply) {
+    // Small local models sometimes keep emitting tool calls without ever writing
+    // a final answer. Force one textual completion from the gathered context.
+    try {
+      const data = await postChat({ model: MODEL, max_tokens: MAX_TOKENS, temperature: 0.2, messages: msgs });
+      reply = data.choices?.[0]?.message?.content || '';
+    } catch { /* leave empty -> caller shows a fallback */ }
+  }
   return reply;
 }
 
