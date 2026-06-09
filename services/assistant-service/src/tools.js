@@ -51,6 +51,55 @@ async function apiCall(method, path, authHeader, body) {
 // else the caller's own employee record.
 const self = (input, user) => (input && input.employeeId) || user.employeeId;
 
+// --- Forgiving input helpers (so a small model + a human can be casual) ------
+const pad = (n) => String(n).padStart(2, '0');
+
+// Normalise almost any common date the user might type into YYYY-MM-DD.
+// Handles "2026-06-10", "10 Jun 2026", "Jun 10 2026", "10/06/2026" (D/M/Y),
+// "10-06-2026", "today"/"tomorrow".
+function normDate(input) {
+  if (!input) return null;
+  let s = String(input).trim();
+  const low = s.toLowerCase();
+  const today = new Date();
+  if (low === 'today') return today.toISOString().slice(0, 10);
+  if (low === 'tomorrow') return new Date(today.getTime() + 864e5).toISOString().slice(0, 10);
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);            // ISO-ish
+  if (m) return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);    // D/M/Y (SG default)
+  if (m) return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
+  const d = new Date(s);                                       // "10 Jun 2026" etc.
+  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  return null;
+}
+
+// Resolve a leave-type name/code (e.g. "Annual Leave", "annual", "AL") to its id.
+async function resolveLeaveTypeId(query, authHeader) {
+  if (!query) return null;
+  const q = String(query).toLowerCase().trim().replace(/\bleave\b/g, '').trim();
+  const r = await apiCall('GET', '/leave/types', authHeader);
+  const types = r.ok ? (Array.isArray(r.data) ? r.data : r.data?.types || []) : [];
+  const norm = (s) => String(s || '').toLowerCase().replace(/\bleave\b/g, '').trim();
+  return (
+    types.find((t) => norm(t.code) === q || norm(t.name) === q) ||
+    types.find((t) => norm(t.name).includes(q) || (q && norm(t.code) === q)) ||
+    types.find((t) => norm(t.name).startsWith(q))
+  )?.id || null;
+}
+
+// Resolve a claim-category name to its id.
+async function resolveClaimCategoryId(query, authHeader) {
+  if (!query) return null;
+  const q = String(query).toLowerCase().trim();
+  const r = await apiCall('GET', '/claims/categories', authHeader);
+  const cats = r.ok ? (Array.isArray(r.data) ? r.data : r.data?.categories || []) : [];
+  const norm = (s) => String(s || '').toLowerCase().trim();
+  return (
+    cats.find((c) => norm(c.name) === q || norm(c.code) === q) ||
+    cats.find((c) => norm(c.name).includes(q))
+  )?.id || null;
+}
+
 /**
  * The tool registry. Each entry has the Anthropic tool schema plus a handler.
  * Adding a new capability = add one row here.
@@ -145,47 +194,50 @@ const TOOLS = [
   // ---------- ACTIONS (writes) — confirm with the user before calling ----------
   {
     name: 'apply_leave',
-    description: "Submit a leave application FOR THE CURRENT USER. Only call this AFTER the user has confirmed the exact leave type, dates and (optionally) reason. Get leaveTypeId from get_leave_types first. Dates are YYYY-MM-DD.",
+    description: "Submit a leave application FOR THE CURRENT USER, AFTER they've confirmed. Just pass the leave type by NAME (e.g. 'Annual Leave' or 'AL') and the dates in ANY common format (e.g. '10 Jun 2026', '2026-06-10', 'tomorrow') — the system resolves the type id and normalises the dates for you. Do NOT demand a specific date format from the user.",
     input_schema: {
       type: 'object',
       properties: {
-        leaveTypeId: { type: 'string', description: 'Leave type id (from get_leave_types)' },
-        startDate: { type: 'string', description: 'Start date YYYY-MM-DD' },
-        endDate: { type: 'string', description: 'End date YYYY-MM-DD (same as start for one day)' },
+        leaveType: { type: 'string', description: "Leave type by name or code, e.g. 'Annual Leave', 'annual', 'AL', 'Sick Leave'" },
+        startDate: { type: 'string', description: "Start date, any common format e.g. '10 Jun 2026', '2026-06-10', '10/06/2026', 'today'" },
+        endDate: { type: 'string', description: "End date (same as start for a single day), any common format" },
         reason: { type: 'string', description: 'Optional reason' },
         isHalfDay: { type: 'boolean', description: 'Optional: true for a half-day' },
+        leaveTypeId: { type: 'string', description: 'Optional: exact id if already known (overrides leaveType)' },
       },
-      required: ['leaveTypeId', 'startDate', 'endDate'],
+      required: ['leaveType', 'startDate', 'endDate'],
     },
-    handler: (input, auth) => apiCall('POST', '/leave/applications', auth, {
-      leaveTypeId: input.leaveTypeId,
-      startDate: input.startDate,
-      endDate: input.endDate,
-      reason: input.reason,
-      isHalfDay: !!input.isHalfDay,
-    }),
+    handler: async (input, auth) => {
+      const leaveTypeId = input.leaveTypeId || await resolveLeaveTypeId(input.leaveType, auth);
+      if (!leaveTypeId) return { ok: false, error: `I couldn't match "${input.leaveType || ''}" to a leave type. Use get_leave_types and ask the user to pick one.` };
+      const startDate = normDate(input.startDate);
+      const endDate = normDate(input.endDate);
+      if (!startDate || !endDate) return { ok: false, error: `I couldn't read the dates (start="${input.startDate}", end="${input.endDate}"). Ask the user to restate them.` };
+      return apiCall('POST', '/leave/applications', auth, { leaveTypeId, startDate, endDate, reason: input.reason, isHalfDay: !!input.isHalfDay });
+    },
   },
   {
     name: 'submit_claim',
-    description: "Submit an expense/medical claim FOR THE CURRENT USER. Only call this AFTER the user has confirmed the category, title, date and amount. Get categoryId from get_claim_categories first. claimDate is YYYY-MM-DD; totalAmount is a number in SGD.",
+    description: "Submit an expense/medical claim FOR THE CURRENT USER, AFTER they've confirmed. Pass the category by NAME (e.g. 'Medical', 'Transport') and the date in any common format — the system resolves the category id and normalises the date. totalAmount is a number in SGD.",
     input_schema: {
       type: 'object',
       properties: {
-        categoryId: { type: 'string', description: 'Claim category id (from get_claim_categories)' },
+        category: { type: 'string', description: "Claim category by name, e.g. 'Medical', 'Transport', 'Meals'" },
         title: { type: 'string', description: 'Short title for the claim' },
-        claimDate: { type: 'string', description: 'Date of expense YYYY-MM-DD' },
+        claimDate: { type: 'string', description: "Date of expense, any common format e.g. '10 Jun 2026'" },
         totalAmount: { type: 'number', description: 'Total amount in SGD (positive number)' },
         description: { type: 'string', description: 'Optional description' },
+        categoryId: { type: 'string', description: 'Optional: exact id if already known (overrides category)' },
       },
-      required: ['categoryId', 'title', 'claimDate', 'totalAmount'],
+      required: ['category', 'title', 'claimDate', 'totalAmount'],
     },
-    handler: (input, auth) => apiCall('POST', '/claims', auth, {
-      categoryId: input.categoryId,
-      title: input.title,
-      claimDate: input.claimDate,
-      totalAmount: input.totalAmount,
-      description: input.description,
-    }),
+    handler: async (input, auth) => {
+      const categoryId = input.categoryId || await resolveClaimCategoryId(input.category, auth);
+      if (!categoryId) return { ok: false, error: `I couldn't match "${input.category || ''}" to a claim category. Use get_claim_categories and ask the user to pick one.` };
+      const claimDate = normDate(input.claimDate);
+      if (!claimDate) return { ok: false, error: `I couldn't read the claim date ("${input.claimDate}"). Ask the user to restate it.` };
+      return apiCall('POST', '/claims', auth, { categoryId, title: input.title, claimDate, totalAmount: input.totalAmount, description: input.description });
+    },
   },
 ];
 
