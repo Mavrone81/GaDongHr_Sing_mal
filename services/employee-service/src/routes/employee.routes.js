@@ -77,6 +77,15 @@ function normaliseEnums(data) {
   return data;
 }
 
+// PDPA-sensitive personal fields (not encrypted at rest, but must not be exposed
+// to colleagues via the staff directory). Hidden from anyone who is neither the
+// person themselves nor authorised for sensitive data.
+const PDPA_FIELDS = [
+  'dateOfBirth', 'gender', 'race', 'religion', 'maritalStatus', 'nationality',
+  'citizenshipStatus', 'nricType', 'personalEmail', 'personalPhone',
+  'passType', 'passNumber', 'passExpiryDate', 'passIssuedDate', 'workPassSector',
+];
+
 function sanitizeEmployee(emp, user) {
   if (!emp) return emp;
   const permissions = user?.permissions || [];
@@ -84,6 +93,7 @@ function sanitizeEmployee(emp, user) {
   const canViewSensitive =
     permissions.includes('employee:sensitive') ||
     ['super_admin', 'hr_admin', 'hr_manager', 'payroll_officer'].includes(role);
+  const isSelf = !!user?.employeeId && user.employeeId === emp.id;
 
   const out = { ...emp };
   ENCRYPTED_FIELDS.forEach(f => {
@@ -95,6 +105,11 @@ function sanitizeEmployee(emp, user) {
       }
     }
   });
+  // PDPA: hide sensitive personal data from colleagues — only the person
+  // themselves or sensitive-authorised roles (HR/admin/payroll) may see it.
+  if (!canViewSensitive && !isSelf) {
+    PDPA_FIELDS.forEach(f => { if (out[f] != null) out[f] = null; });
+  }
   return out;
 }
 
@@ -261,7 +276,7 @@ router.get('/', checkInternal, (req, res, next) => {
       }),
       prisma.employee.count({ where }),
     ]);
-    res.json({ employees, total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
+    res.json({ employees: employees.map(e => sanitizeEmployee(e, req.user)), total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
   } catch (err) { next(err); }
 });
 
