@@ -54,8 +54,8 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
       { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
       { name: 'My Leave',      path: '/leave',               icon: '◌' },
       { name: 'My Claims',     path: '/claims',              icon: '◫' },
-      { name: 'My Training',   path: '/training',            icon: '◑' },
-      { name: 'My Appraisal',  path: '/performance',         icon: '▣' },
+      { name: 'My Training',   path: '/training?view=me',            icon: '◑' },
+      { name: 'My Appraisal',  path: '/performance?view=me',         icon: '▣' },
       { name: 'My Payslips',   path: '/payroll/me',          icon: '◆' },
       { name: 'My Documents',  path: '/documents',           icon: '◭' },
       { name: 'My Benefits',   path: '/benefits',            icon: '⊕' },
@@ -128,8 +128,8 @@ const HR_ADMIN_NAV: NavGroup[] = [
     { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
     { name: 'My Leave',      path: '/leave',               icon: '◌' },
     { name: 'My Claims',     path: '/claims',              icon: '◫' },
-    { name: 'My Training',   path: '/training',            icon: '◑' },
-    { name: 'My Appraisal',  path: '/performance',         icon: '▣' },
+    { name: 'My Training',   path: '/training?view=me',            icon: '◑' },
+    { name: 'My Appraisal',  path: '/performance?view=me',         icon: '▣' },
     { name: 'My Payslips',   path: '/payroll/me',          icon: '◆' },
     { name: 'My Documents',  path: '/documents',           icon: '◭' },
     { name: 'My Benefits',   path: '/benefits',            icon: '⊕' },
@@ -168,8 +168,8 @@ const PAYROLL_OFFICER_NAV: NavGroup[] = [
     { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
     { name: 'My Leave',      path: '/leave',               icon: '◌' },
     { name: 'My Claims',     path: '/claims',              icon: '◫' },
-    { name: 'My Training',   path: '/training',            icon: '◑' },
-    { name: 'My Appraisal',  path: '/performance',         icon: '▣' },
+    { name: 'My Training',   path: '/training?view=me',            icon: '◑' },
+    { name: 'My Appraisal',  path: '/performance?view=me',         icon: '▣' },
     { name: 'My Payslips',   path: '/payroll/me',          icon: '◆' },
     { name: 'My Documents',  path: '/documents',           icon: '◭' },
     { name: 'My Benefits',   path: '/benefits',            icon: '⊕' },
@@ -202,7 +202,7 @@ const ADMIN_NAV: NavGroup[] = [
     { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
     { name: 'My Leave',      path: '/leave',               icon: '◌' },
     { name: 'My Claims',     path: '/claims',              icon: '◫' },
-    { name: 'My Training',   path: '/training',            icon: '◑' },
+    { name: 'My Training',   path: '/training?view=me',            icon: '◑' },
     { name: 'My Documents',  path: '/documents',           icon: '◭' },
     { name: 'My Benefits',   path: '/benefits',            icon: '⊕' },
     { name: 'My Cases',      path: '/hr-cases',            icon: '⚖' },
@@ -276,8 +276,8 @@ const LINE_MANAGER_NAV: NavGroup[] = [
     { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
     { name: 'My Leave',      path: '/leave',               icon: '◌' },
     { name: 'My Claims',     path: '/claims',              icon: '◫' },
-    { name: 'My Training',   path: '/training',            icon: '◑' },
-    { name: 'My Appraisal',  path: '/performance',         icon: '▣' },
+    { name: 'My Training',   path: '/training?view=me',            icon: '◑' },
+    { name: 'My Appraisal',  path: '/performance?view=me',         icon: '▣' },
     { name: 'My Payslips',   path: '/payroll/me',          icon: '◆' },
     { name: 'My Documents',  path: '/documents',           icon: '◭' },
     { name: 'My Benefits',   path: '/benefits',            icon: '⊕' },
@@ -298,7 +298,7 @@ const RECRUITER_NAV: NavGroup[] = [
     { name: 'My Attendance', path: '/attendance',          icon: '◉' },
     { name: 'My Leave',      path: '/leave',               icon: '◌' },
     { name: 'My Claims',     path: '/claims',              icon: '◫' },
-    { name: 'My Training',   path: '/training',            icon: '◑' },
+    { name: 'My Training',   path: '/training?view=me',            icon: '◑' },
     { name: 'My Payslips',   path: '/payroll/me',          icon: '◆' },
     { name: 'My Documents',  path: '/documents',           icon: '◭' },
     { name: 'My Benefits',   path: '/benefits',            icon: '⊕' },
@@ -319,7 +319,7 @@ const TRAINING_MANAGER_NAV: NavGroup[] = [
   { group: 'EMPLOYEE', color: 'text-sky-400',      items: [
     { name: 'My Attendance', path: '/attendance', icon: '◉' },
     { name: 'My Leave',      path: '/leave',      icon: '◌' },
-    { name: 'My Training',   path: '/training',   icon: '◑' },
+    { name: 'My Training',   path: '/training?view=me',   icon: '◑' },
     { name: 'My Payslips',   path: '/payroll/me', icon: '◆' },
     { name: 'My Documents',  path: '/documents',  icon: '◭' },
     { name: 'My Benefits',   path: '/benefits',   icon: '⊕' },
@@ -337,8 +337,8 @@ const EMPLOYEE_NAV: NavGroup[] = [
     { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
     { name: 'My Leave',      path: '/leave',               icon: '◌' },
     { name: 'My Claims',     path: '/claims',              icon: '◫' },
-    { name: 'My Training',   path: '/training',            icon: '◑' },
-    { name: 'My Appraisal',  path: '/performance',         icon: '▣' },
+    { name: 'My Training',   path: '/training?view=me',            icon: '◑' },
+    { name: 'My Appraisal',  path: '/performance?view=me',         icon: '▣' },
     { name: 'My Documents',  path: '/documents',           icon: '◭' },
     { name: 'My Benefits',   path: '/benefits',            icon: '⊕' },
     { name: 'My Cases',      path: '/hr-cases',            icon: '⚖' },
@@ -385,6 +385,10 @@ function getNavGroups(role: string, _email: string, cached: boolean) {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  // Track the ?view=me flag so the dual /training & /performance nav items
+  // (admin "Training"/"Performance" vs "My Training"/"My Appraisal") highlight correctly.
+  const [isMyView, setIsMyView] = useState(false);
+  useEffect(() => { setIsMyView(typeof window !== 'undefined' && window.location.search.includes('view=me')); }, [pathname]);
   const router = useRouter();
   const { user, loading, logout } = useAuth();
 
@@ -536,8 +540,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               {/* Items */}
               <div className="space-y-0.5">
                 {group.items.map((item) => {
-                  const isActive = pathname === item.path ||
-                    (item.path !== '/' && pathname.startsWith(item.path));
+                  const itemBase = item.path.split('?')[0];
+                  const itemMy = item.path.includes('view=me');
+                  const dual = itemBase === '/training' || itemBase === '/performance';
+                  const baseMatch = pathname === itemBase || (itemBase !== '/' && pathname.startsWith(itemBase));
+                  const isActive = baseMatch && (!dual || itemMy === isMyView);
                   return (
                     <Link
                       key={item.path}

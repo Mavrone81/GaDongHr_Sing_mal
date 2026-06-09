@@ -1917,6 +1917,12 @@ export default function TrainingPage() {
 
   useEffect(() => { loadStats(); }, [loadStats]);
 
+  // "My Training" nav links to /training?view=me — land admins on their own
+  // training tab; the admin "Training" nav (no param) keeps the Programs view.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('view') === 'me') setAdminTab('My Training');
+  }, []);
+
   if (authLoading) {
     return <div className="h-40 bg-white rounded-[2rem] border border-slate-100 animate-pulse max-w-[1400px] mx-auto" />;
   }

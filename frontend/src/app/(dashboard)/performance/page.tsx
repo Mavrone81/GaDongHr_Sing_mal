@@ -127,6 +127,10 @@ export default function PerformancePage() {
 
   const [adminTab, setAdminTab]       = useState<AdminTab>('overview');
   const [employeeTab, setEmployeeTab] = useState<EmployeeTab>('myappraisal');
+  // "My Appraisal" nav links to /performance?view=me — show admins/managers their
+  // OWN appraisal; the admin "Performance" nav (no param) keeps the mgmt view.
+  const [forceMy, setForceMy] = useState(false);
+  useEffect(() => { setForceMy(new URLSearchParams(window.location.search).get('view') === 'me'); }, []);
 
   function notify(msg: string) { setToast(msg); }
 
@@ -134,8 +138,8 @@ export default function PerformancePage() {
     return <div className="h-40 bg-white rounded-[2rem] border border-slate-100 animate-pulse max-w-[1400px] mx-auto" />;
   }
 
-  // ── Employee-only view ─────────────────────────────────────────────────────
-  if (isEmployee) {
+  // ── Personal "My Appraisal" view (employees always; admins via ?view=me) ────
+  if (isEmployee || forceMy) {
     return (
       <div className="flex flex-col gap-8 max-w-[900px] mx-auto pb-20 animate-in fade-in duration-700">
         {/* Header */}
