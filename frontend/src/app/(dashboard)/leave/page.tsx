@@ -710,6 +710,13 @@ const HR_ROLES = new Set(['SUPER_ADMIN', 'HR_ADMIN', 'HR_MANAGER']);
 export default function LeavePage() {
   const { user } = useAuth();
   const role = (user?.role ?? '').toUpperCase();
-  if (HR_ROLES.has(role)) return <HRLeaveAnalytics />;
-  return <EmployeeLeaveView />;
+  // "My Leave" always shows the user's own balances, applications & history —
+  // admins are employees too. HR/admin roles additionally get the sick-leave
+  // analytics appended below (the management view also lives under /leave/registry).
+  return (
+    <div className="flex flex-col gap-10">
+      <EmployeeLeaveView />
+      {HR_ROLES.has(role) && <HRLeaveAnalytics />}
+    </div>
+  );
 }
