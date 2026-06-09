@@ -25,20 +25,28 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* Suppress browser extension errors (e.g. MetaMask) before Next.js error overlay registers */}
+        {/* Suppress browser-extension errors (MetaMask, wallet/content-script messaging, etc.)
+            before Next.js error overlay registers. These come from the user's extensions,
+            not the app. */}
         <script dangerouslySetInnerHTML={{ __html: `
 (function(){
+  var EXT = ['MetaMask','chrome-extension','moz-extension','No Listener','tabs:outgoing',
+    'Extension context invalidated','Could not establish connection',
+    'Receiving end does not exist','message channel closed','message port closed'];
+  function isExt(msg, src){
+    if (src && (src.indexOf('chrome-extension://') === 0 || src.indexOf('moz-extension://') === 0)) return true;
+    if (typeof msg !== 'string') return false;
+    for (var i=0;i<EXT.length;i++){ if (msg.indexOf(EXT[i]) !== -1) return true; }
+    return false;
+  }
   var _oe = window.onerror;
   window.onerror = function(msg, src, line, col, err) {
-    if (src && (src.indexOf('chrome-extension://') === 0 || src.indexOf('moz-extension://') === 0)) return true;
-    if (typeof msg === 'string' && msg.indexOf('MetaMask') !== -1) return true;
+    if (isExt(typeof msg === 'string' ? msg : '', src)) return true;
     return _oe ? _oe.apply(this, arguments) : false;
   };
   window.addEventListener('unhandledrejection', function(e) {
     var msg = (e.reason && (e.reason.message || String(e.reason))) || '';
-    if (msg.indexOf('MetaMask') !== -1 || msg.indexOf('chrome-extension') !== -1) {
-      e.stopImmediatePropagation(); e.preventDefault();
-    }
+    if (isExt(msg)) { e.stopImmediatePropagation(); e.preventDefault(); }
   }, true);
 })();
         `}} />
