@@ -531,11 +531,17 @@ services:
       - PORT=4020
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
       - GATEWAY_URL=http://api-gateway:4000
-      # Provider-agnostic: set GROQ_API_KEY (free) OR ANTHROPIC_API_KEY. Auto-detected.
+      # Provider-agnostic: GROQ_API_KEY, ANTHROPIC_API_KEY, OR an OpenAI-compatible
+      # endpoint (OPENAI_BASE_URL + OPENAI_API_KEY) e.g. a local Ollama. Auto-detected.
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
       - ASSISTANT_PROVIDER=${ASSISTANT_PROVIDER:-}
       - ASSISTANT_MODEL=${ASSISTANT_MODEL:-}
+    # Lets the container reach a model server running on the Docker host (Ollama).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - shared_certs:/app/certs:ro
     deploy:
