@@ -184,13 +184,6 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
   const [saveError, setSaveError] = useState('');
   const [showSensitive, setShowSensitive] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('general');
-  const [checklist, setChecklist] = useState([
-    { id: 1, label: 'Employment Contract Signed', completed: true },
-    { id: 2, label: 'Bank Details Provided', completed: true },
-    { id: 3, label: 'NRIC / Work Pass Copy', completed: false },
-    { id: 4, label: 'Equipment Handover', completed: false },
-    { id: 5, label: 'Statutory Declaration', completed: false },
-  ]);
 
   // Employee assets
   const [empAssets, setEmpAssets] = useState<any[]>([]);
@@ -366,24 +359,13 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
 
   const emp = isEditing ? { ...employee, ...editData } : employee;
   const initials = emp.fullName.split(' ').map(n => n[0]).join('').toUpperCase();
-  const completionRate = Math.round((checklist.filter(c => c.completed).length / checklist.length) * 100);
   const tenureMs = Date.now() - new Date(emp.startDate).getTime();
   const tenureYrs = (tenureMs / (1000 * 60 * 60 * 24 * 365.25)).toFixed(1);
-
-  const alTotal = emp.annualLeaveEntitlement ?? 14;
-  const alUsed = alTotal - (emp.annualLeaveBalance ?? alTotal);
-  const slTotal = emp.sickLeaveEntitlement ?? 14;
-  const slUsed = slTotal - (emp.sickLeaveBalance ?? slTotal);
-  const clTotal = emp.childcareLeaveEntitlement ?? 6;
 
   const TABS: { key: Tab; label: string }[] = [
     { key: 'general', label: 'General Profile' },
     { key: 'contracts', label: 'Contracts & Entitlements' },
     { key: 'supervisors', label: 'Supervisors' },
-    { key: 'salary', label: 'Salary History' },
-    { key: 'assets', label: 'Assets' },
-    { key: 'statutory', label: 'Statutory & Compliance' },
-    { key: 'documents', label: 'Document Archive' },
   ];
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -418,13 +400,6 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
           </h2>
         </div>
         <div className="flex gap-3 items-center">
-          <div className="hidden sm:flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-            <span className="eyebrow-tight">Profile Health:</span>
-            <div className="w-24 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-              <div className="h-full bg-indigo-600 transition-all" style={{ width: `${completionRate}%` }} />
-            </div>
-            <span className="text-[10px] font-black text-indigo-600">{completionRate}%</span>
-          </div>
           {hasPermission('employee:manage') && (
             !isEditing ? (
               <button onClick={startEditing} className="px-5 py-2 rounded-lg border border-slate-200 text-[10px] font-black text-slate-600 hover:bg-slate-50 shadow-sm transition-all uppercase tracking-widest">
@@ -1613,53 +1588,6 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
 
         {/* ── Right: Sidebar ─────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-6">
-
-          {/* Onboarding checklist */}
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 relative overflow-hidden">
-            <div className="absolute top-0 right-0 text-indigo-600 font-black text-[9px] uppercase tracking-widest px-2 py-1 border-b border-l border-indigo-100 bg-indigo-600/5 rounded-bl-xl">Lifecycle</div>
-            <h3 className="mb-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100 pb-3">Onboarding Compliance</h3>
-            <div className="flex flex-col gap-1.5">
-              {checklist.map(item => (
-                <button
-                  key={item.id}
-                  disabled={!hasPermission('employee:manage')}
-                  onClick={hasPermission('employee:manage') ? () => setChecklist(checklist.map(c => c.id === item.id ? { ...c, completed: !c.completed } : c)) : undefined}
-                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${item.completed ? 'bg-indigo-50/50 border-indigo-100' : 'border-slate-100'} ${hasPermission('employee:manage') ? 'hover:border-indigo-300' : 'cursor-default'}`}
-                >
-                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${item.completed ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-500/20' : 'bg-white border-slate-200'}`}>
-                    {item.completed && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>}
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className={`text-[10px] font-black uppercase tracking-tight truncate ${item.completed ? 'text-slate-900' : 'text-slate-400'}`}>{item.label}</span>
-                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{item.completed ? 'Verified' : 'Pending'}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          {/* Leave snapshot */}
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <h3 className="mb-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100 pb-3">Leave Snapshot</h3>
-            <div className="flex flex-col gap-3">
-              {[
-                { label: 'Annual Leave', bal: alTotal - alUsed, total: alTotal },
-                { label: 'Sick Leave', bal: slTotal - slUsed, total: slTotal },
-                { label: 'Childcare', bal: clTotal, total: clTotal },
-              ].map(item => (
-                <div key={item.label} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">{item.label}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-black text-slate-900">{item.bal}</span>
-                    <span className="text-[9px] font-bold text-slate-400">/ {item.total} days</span>
-                  </div>
-                </div>
-              ))}
-              <button onClick={() => setActiveTab('contracts')} className="w-full mt-1 py-2 text-[9px] font-black text-indigo-600 border border-indigo-100 bg-indigo-50 rounded-xl hover:bg-indigo-100 uppercase tracking-widest transition-all">
-                View All Entitlements →
-              </button>
-            </div>
-          </section>
 
           {/* Financial nexus */}
           <section className="bg-slate-900 rounded-2xl border border-slate-800 shadow-xl p-6">
