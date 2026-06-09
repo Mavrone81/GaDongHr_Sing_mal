@@ -102,6 +102,10 @@ function Field({
   span?: '2' | '3';
 }) {
   const spanCls = span === '2' ? 'md:col-span-2' : span === '3' ? 'col-span-full' : '';
+  const isEmpty = value == null || value === '' || value === '—' || value === '****';
+  // When viewing (not editing), don't render fields with no value — e.g. data the
+  // viewer isn't allowed to see (PDPA-masked) or that simply wasn't provided.
+  if (!editing && isEmpty) return null;
   return (
     <div className={`flex flex-col gap-1.5 ${spanCls}`}>
       <label className="label-form">{label}</label>
@@ -1618,8 +1622,9 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
               {checklist.map(item => (
                 <button
                   key={item.id}
-                  onClick={() => setChecklist(checklist.map(c => c.id === item.id ? { ...c, completed: !c.completed } : c))}
-                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${item.completed ? 'bg-indigo-50/50 border-indigo-100' : 'border-slate-100 hover:border-indigo-300'}`}
+                  disabled={!hasPermission('employee:manage')}
+                  onClick={hasPermission('employee:manage') ? () => setChecklist(checklist.map(c => c.id === item.id ? { ...c, completed: !c.completed } : c)) : undefined}
+                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${item.completed ? 'bg-indigo-50/50 border-indigo-100' : 'border-slate-100'} ${hasPermission('employee:manage') ? 'hover:border-indigo-300' : 'cursor-default'}`}
                 >
                   <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${item.completed ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-500/20' : 'bg-white border-slate-200'}`}>
                     {item.completed && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>}
