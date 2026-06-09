@@ -44,6 +44,39 @@ function info() {
   return { provider: PROVIDER, model: PROVIDER ? MODEL : null, configured: !!PROVIDER };
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// POST /chat/completions with retry on 429 (free tiers have tight tokens/min
+// limits). Respects Retry-After / "try again in Xs" hints, capped.
+async function postChat(body) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${OPENAI_KEY}` },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) return res.json();
+
+    const text = await res.text().catch(() => '');
+    if (res.status === 429 && attempt < 3) {
+      let waitMs = parseFloat(res.headers.get('retry-after')) * 1000;
+      if (!waitMs || Number.isNaN(waitMs)) {
+        const m = text.match(/try again in ([\d.]+)\s*s/i);
+        waitMs = m ? parseFloat(m[1]) * 1000 : 4000;
+      }
+      await sleep(Math.min(Math.max(waitMs, 1000) + 400, 20000));
+      continue;
+    }
+    const err = new Error(`LLM provider error (${res.status})`);
+    err.status = res.status;
+    err.detail = text.slice(0, 500);
+    throw err;
+  }
+  const err = new Error('LLM provider rate-limited (429) after retries');
+  err.status = 429;
+  throw err;
+}
+
 // ── OpenAI-compatible (Groq etc.) ──────────────────────────────────────────
 async function runOpenAI({ system, messages, tools, exec }) {
   const oaiTools = tools.map((t) => ({
@@ -54,19 +87,7 @@ async function runOpenAI({ system, messages, tools, exec }) {
 
   let reply = '';
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const res = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${OPENAI_KEY}` },
-      body: JSON.stringify({ model: MODEL, max_tokens: MAX_TOKENS, temperature: 0.2, messages: msgs, tools: oaiTools, tool_choice: 'auto' }),
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      const err = new Error(`LLM provider error (${res.status})`);
-      err.status = res.status;
-      err.detail = body.slice(0, 500);
-      throw err;
-    }
-    const data = await res.json();
+    const data = await postChat({ model: MODEL, max_tokens: MAX_TOKENS, temperature: 0.2, messages: msgs, tools: oaiTools, tool_choice: 'auto' });
     const msg = data.choices?.[0]?.message;
     if (!msg) break;
     if (msg.content) reply = msg.content;
