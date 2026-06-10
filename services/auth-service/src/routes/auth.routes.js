@@ -963,8 +963,9 @@ router.post('/sso/google/callback', async (req, res, next) => {
 
     if (!email_verified) return res.status(401).json({ error: 'Google email not verified' });
 
-    // Find the matching user in Vorkhive
-    const user = await prisma.user.findUnique({
+    // Find the matching user in Vorkhive. Email is unique PER TENANT now, so this
+    // must be findFirst (runs unscoped here — no tenant context pre-auth).
+    const user = await prisma.user.findFirst({
       where: { email: email.toLowerCase() },
       include: { role: { include: { permissions: { include: { permission: true } } } } },
     });
@@ -1097,7 +1098,7 @@ router.post('/sso/microsoft/callback', async (req, res, next) => {
     // potentially log in as a Vorkhive account stored as `jsmith@gmail.com`).
     // Now that H-09 verifies the Microsoft id_token signature and email_verified,
     // the exact match is the only safe match.
-    const user = await prisma.user.findUnique({
+    const user = await prisma.user.findFirst({
       where: { email },
       include: { role: { include: { permissions: { include: { permission: true } } } } },
     });
