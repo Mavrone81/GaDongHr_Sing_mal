@@ -14,7 +14,7 @@ const {
 
 const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:4009';
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 const HR_ROLES     = [ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.SUPER_ADMIN];
 const HR_MGR_ROLES = [ROLES.HR_MANAGER, ROLES.SUPER_ADMIN];

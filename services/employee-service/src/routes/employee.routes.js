@@ -22,7 +22,7 @@ function decryptFormPayload(iv, data, rawToken) {
   return JSON.parse(Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8'));
 }
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 const ENCRYPTED_FIELDS = ['nricEncrypted', 'homeAddressEncrypted', 'basicSalaryEncrypted', 'bankAccountEncrypted'];
 

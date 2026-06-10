@@ -1,0 +1,7 @@
+{
+  "name": "@hrms/tenant-context",
+  "version": "1.0.0",
+  "description": "Shared multi-tenancy context (AsyncLocalStorage) + Prisma auto-scoping extension",
+  "main": "index.js",
+  "license": "UNLICENSED"
+}

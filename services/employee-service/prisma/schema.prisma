@@ -16,6 +16,7 @@ enum ApprovalFlowType {
 
 model EmployeeSupervisor {
   id                    String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId            String
   supervisorEmployeeId  String
   order                 Int      @default(0)
@@ -27,11 +28,13 @@ model EmployeeSupervisor {
   @@unique([employeeId, supervisorEmployeeId])
   @@index([employeeId])
   @@index([supervisorEmployeeId])
+  @@index([tenantId])
   @@map("employee_supervisors")
 }
 
 model Employee {
   id                  String    @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeCode        String    @unique // e.g. EMP-0001
   fullName            String
   preferredName       String?
@@ -101,11 +104,13 @@ model Employee {
 
   @@index([department])
   @@index([isActive])
+  @@index([tenantId])
   @@map("employees")
 }
 
 model SalaryHistory {
   id                String    @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId        String
   effectiveDate     DateTime
   basicSalaryEnc    String    // encrypted — legacy alias for previousSalaryEnc
@@ -126,11 +131,13 @@ model SalaryHistory {
 
   @@index([employeeId])
   @@index([status])
+  @@index([tenantId])
   @@map("salary_history")
 }
 
 model Document {
   id          String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId  String
   docType     String   // NRIC_COPY | EMPLOYMENT_PASS | CONTRACT | CERT | OTHER
   fileName    String
@@ -143,11 +150,13 @@ model Document {
 
   employee Employee @relation(fields: [employeeId], references: [id])
 
+  @@index([tenantId])
   @@map("documents")
 }
 
 model EmergencyContact {
   id           String  @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId   String
   name         String
   relationship String
@@ -156,11 +165,13 @@ model EmergencyContact {
 
   employee Employee @relation(fields: [employeeId], references: [id])
 
+  @@index([tenantId])
   @@map("emergency_contacts")
 }
 
 model AuditLog {
   id            String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   entityType    String   // 'Employee'
   entityId      String   // employee UUID
   entityCode    String?  // EMP-0001 for quick display
@@ -176,6 +187,7 @@ model AuditLog {
   @@index([entityId])
   @@index([createdAt])
   @@index([action])
+  @@index([tenantId])
   @@map("audit_logs")
 }
 
@@ -225,6 +237,7 @@ enum PassType {
 
 model EmployeeApplication {
   id              String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   userId          String   @unique
   email           String
   fullName        String
@@ -249,6 +262,7 @@ model EmployeeApplication {
   updatedAt       DateTime @updatedAt
 
   @@index([status])
+  @@index([tenantId])
   @@map("employee_applications")
 }
 
@@ -264,6 +278,7 @@ enum AppStatus {
 
 model StaffMovement {
   id                  String          @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   movementNumber      String          @unique  // e.g. MOV-2026-00001
   employeeId          String
   employeeName        String
@@ -322,6 +337,7 @@ model StaffMovement {
   @@index([employeeId, effectiveDate])
   @@index([status])
   @@index([effectiveDate])
+  @@index([tenantId])
   @@map("staff_movements")
 }
 

@@ -9,6 +9,12 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
 
+// Multi-tenancy: bind the request's tenantId (from the verified token) into the
+// AsyncLocalStorage context so the Prisma auto-scoping extension isolates every
+// query. Optional require — services without the shared module are unaffected.
+let tenantCtx = null;
+try { tenantCtx = require('../tenant-context'); } catch { /* tenant-context not present */ }
+
 let _publicKey = null;
 
 function getPublicKey() {
@@ -42,6 +48,8 @@ function authenticate(req, res, next) {
       return res.status(401).json({ error: 'SSO pending token is not accepted on protected endpoints' });
     }
     req.user = payload;
+    // Old tokens (pre-multitenancy) have no tenantId → fall back to Default.
+    if (tenantCtx) tenantCtx.setTenant(payload.tenantId || tenantCtx.DEFAULT_TENANT_ID);
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
