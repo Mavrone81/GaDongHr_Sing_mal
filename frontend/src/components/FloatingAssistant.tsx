@@ -89,9 +89,14 @@ export default function FloatingAssistant() {
                 <p className="text-[11px] text-indigo-100">HR Assistant</p>
               </div>
             </div>
-            <button onClick={() => setOpen(false)} aria-label="Close" className="rounded p-1 hover:bg-white/15 focus:outline-none">
-              <CloseIcon className="h-5 w-5" />
-            </button>
+            <div className="flex items-center gap-0.5">
+              <button onClick={() => setOpen(false)} aria-label="Minimize" title="Minimize" className="rounded p-1 hover:bg-white/15 focus:outline-none">
+                <MinimizeIcon className="h-5 w-5" />
+              </button>
+              <button onClick={() => { setMessages([GREETING]); setOpen(false); }} aria-label="Close and clear chat" title="Close & clear" className="rounded p-1 hover:bg-white/15 focus:outline-none">
+                <CloseIcon className="h-5 w-5" />
+              </button>
+            </div>
           </div>
 
           {/* Messages */}
@@ -164,6 +169,14 @@ function SendIcon({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <line x1="22" y1="2" x2="11" y2="13" />
       <polygon points="22 2 15 22 11 13 2 9 22 2" />
+    </svg>
+  );
+}
+
+function MinimizeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="6" y1="18" x2="18" y2="18" />
     </svg>
   );
 }
