@@ -167,14 +167,22 @@ router.post('/tenants/:id/cancel',  requirePlatform, requireRole('SUPER_ADMIN'),
 
 router.post('/tenants/:id/extend-trial', requirePlatform, requireRole('SUPER_ADMIN', 'BILLING'), async (req, res, next) => {
   try {
-    const days = Math.max(1, Math.min(365, Number(req.body?.days) || 14));
     const before = await authdb.query(`SELECT "trialEndsAt" FROM tenants WHERE id = $1`, [req.params.id]);
     if (!before.rows[0]) return res.status(404).json({ error: 'Tenant not found' });
-    const base = new Date(Math.max(Date.now(), new Date(before.rows[0].trialEndsAt).getTime()));
-    const newEnd = new Date(base.getTime() + days * 86400000);
+    let newEnd;
+    if (req.body?.date) {
+      // Absolute end-date from the operator's calendar (interpreted end-of-day UTC).
+      const d = new Date(`${String(req.body.date).slice(0, 10)}T23:59:59Z`);
+      if (Number.isNaN(d.getTime())) return res.status(400).json({ error: 'Invalid date' });
+      newEnd = d;
+    } else {
+      const days = Math.max(1, Math.min(365, Number(req.body?.days) || 14));
+      const base = new Date(Math.max(Date.now(), new Date(before.rows[0].trialEndsAt).getTime()));
+      newEnd = new Date(base.getTime() + days * 86400000);
+    }
     await authdb.query(`UPDATE tenants SET "trialEndsAt" = $1, status = 'TRIALING', "updatedAt" = now() WHERE id = $2`, [newEnd, req.params.id]);
     await authdb.query(`UPDATE subscriptions SET "trialEndsAt" = $1, status = 'trialing', "updatedAt" = now() WHERE "tenantId" = $2`, [newEnd, req.params.id]);
-    await audit(req, 'trial.extend', req.params.id, { trialEndsAt: before.rows[0].trialEndsAt }, { trialEndsAt: newEnd, days });
+    await audit(req, 'trial.extend', req.params.id, { trialEndsAt: before.rows[0].trialEndsAt }, { trialEndsAt: newEnd });
     res.json({ ok: true, trialEndsAt: newEnd });
   } catch (err) { next(err); }
 });
