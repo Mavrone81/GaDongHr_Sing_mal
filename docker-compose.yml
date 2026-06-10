@@ -626,6 +626,7 @@ services:
       - PORT=4016
       - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/${ADMIN_DB:-hrms_admin}
       - AUTH_DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/${AUTH_DB:-hrms_auth}
+      - AUTH_SERVICE_URL=http://auth-service:4001
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - JWT_PRIVATE_KEY_PATH=/app/certs/private.pem
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
@@ -634,9 +635,10 @@ services:
       - PLATFORM_ADMIN_PASSWORD=${PLATFORM_ADMIN_PASSWORD:-}
       - PLATFORM_JWT_EXPIRES=${PLATFORM_JWT_EXPIRES:-8h}
     volumes:
+      # No source bind-mount here, so no anonymous node_modules volume — that
+      # would shadow the image's node_modules and hide newly-added deps (qrcode)
+      # after a rebuild, crash-looping the service.
       - shared_certs:/app/certs:ro
-      - /app/services/admin-service/node_modules
-      - /app/shared/crypto/node_modules
     depends_on:
       postgres:
         condition: service_healthy
