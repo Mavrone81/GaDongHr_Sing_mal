@@ -14,6 +14,7 @@ datasource db {
 // Master catalog of insurance plans HR offers.
 model InsurancePlan {
   id                String         @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   code              String         @unique  // e.g. 'GHS-PLATINUM', 'GTL-STD'
   name              String
   type              PlanType
@@ -42,6 +43,7 @@ model InsurancePlan {
 
   @@index([type, isActive])
   @@index([effectiveFrom])
+  @@index([tenantId])
 }
 
 enum PlanType {
@@ -56,6 +58,7 @@ enum PlanType {
 // Employee enrollment to a plan.
 model EmployeeEnrollment {
   id                String           @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId        String
   employeeName      String
   employeeGrade     String?
@@ -81,6 +84,7 @@ model EmployeeEnrollment {
   @@index([employeeId, status])
   @@index([planId, status])
   @@index([status])
+  @@index([tenantId])
 }
 
 enum EnrollmentStatus {
@@ -98,6 +102,7 @@ enum EnrollSource {
 // Employee dependents (spouse, children, etc.)
 model Dependent {
   id              String           @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId      String
   fullName        String
   relationship    Relationship
@@ -110,6 +115,7 @@ model Dependent {
   updatedAt       DateTime         @updatedAt
 
   @@index([employeeId, isActive])
+  @@index([tenantId])
 }
 
 enum Relationship {
@@ -122,6 +128,7 @@ enum Relationship {
 // Insurance claim submission.
 model InsuranceClaim {
   id                String           @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   claimNumber       String           @unique  // e.g. CLM-2026-00001
   enrollment        EmployeeEnrollment @relation(fields: [enrollmentId], references: [id])
   enrollmentId     String
@@ -151,6 +158,7 @@ model InsuranceClaim {
   @@index([employeeId, status])
   @@index([planId, status])
   @@index([status, submittedAt])
+  @@index([tenantId])
 }
 
 enum ClaimStatus {
@@ -165,6 +173,7 @@ enum ClaimStatus {
 // Annual open-enrollment window. Multiple plans can be elected during a window.
 model OpenEnrollmentPeriod {
   id              String           @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   name            String           // e.g. "2026 Open Enrollment"
   year            Int
   startDate       DateTime
@@ -180,6 +189,7 @@ model OpenEnrollmentPeriod {
 
   @@unique([year, name])
   @@index([status, startDate])
+  @@index([tenantId])
 }
 
 enum PeriodStatus {
@@ -193,6 +203,7 @@ enum PeriodStatus {
 // Per-grade wallet funding configuration.
 model FlexiWalletConfig {
   id                   String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   grade                String   @unique
   annualAmount         Float
   autoApproveThreshold Float    @default(50)  // claims ≤ this are auto-approved
@@ -201,11 +212,14 @@ model FlexiWalletConfig {
   updatedBy            String?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+
+  @@index([tenantId])
 }
 
 // Eligible spend categories (gym, dental, optical, etc.)
 model FlexiCategory {
   id              String       @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   code            String       @unique
   name            String
   description     String?
@@ -218,11 +232,13 @@ model FlexiCategory {
   claims          FlexiClaim[]
 
   @@index([isActive])
+  @@index([tenantId])
 }
 
 // Employee annual flexi-benefits balance.
 model FlexiWallet {
   id              String       @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId      String
   employeeName    String
   employeeGrade   String?
@@ -242,6 +258,7 @@ model FlexiWallet {
   @@unique([employeeId, year])
   @@index([year, status])
   @@index([employeeId, status])
+  @@index([tenantId])
 }
 
 enum WalletStatus {
@@ -252,6 +269,7 @@ enum WalletStatus {
 // Claim against a flexi wallet.
 model FlexiClaim {
   id             String           @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   claimNumber    String           @unique   // FLX-YYYY-NNNNN
   wallet         FlexiWallet      @relation(fields: [walletId], references: [id])
   walletId       String
@@ -279,6 +297,7 @@ model FlexiClaim {
   @@index([employeeId, status])
   @@index([walletId, status])
   @@index([status, submittedAt])
+  @@index([tenantId])
 }
 
 enum FlexiClaimStatus {

@@ -57,11 +57,13 @@ const LEAVE_SERVICE_URL        = process.env.LEAVE_SERVICE_URL        || 'http:/
 // fallback was a full inter-service auth bypass when env drifted).
 const internalKey = () => process.env.INTERNAL_SERVICE_KEY || null;
 
-const prisma = new PrismaClient();
+const prisma = require('./utils/prisma');
 const app = express();
 const PORT = process.env.PORT || 4007;
 
 app.use(helmet()); app.use(cors()); app.use(express.json({ limit: '10kb' })); app.use(morgan('combined'));
+const { tenantContextMiddleware } = require('/app/shared/tenant-context');
+app.use(tenantContextMiddleware);
 app.get('/health', (req, res) => res.json({ service: 'attendance-service', status: 'ok', ts: new Date() }));
 
 // ── Audit helper ──────────────────────────────────────────────────────────────

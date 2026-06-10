@@ -19,6 +19,8 @@ const TRAINING_URL     = process.env.TRAINING_SERVICE_URL   || 'http://training-
 const INTERNAL_KEY     = process.env.INTERNAL_SERVICE_KEY   || '';
 
 app.use(helmet()); app.use(cors()); app.use(express.json({ limit: '100kb' })); app.use(morgan('combined'));
+const { tenantContextMiddleware } = require('/app/shared/tenant-context');
+app.use(tenantContextMiddleware);
 app.get('/health', (req, res) => res.json({ service: 'reporting-service', status: 'ok', ts: new Date() }));
 
 function authHeaders(req) { return { Authorization: req.headers['authorization'] }; }
@@ -163,7 +165,7 @@ let _prismaRpt;
 function getPrisma() {
   if (!_prismaRpt) {
     const { PrismaClient } = require('@prisma/client');
-    _prismaRpt = new PrismaClient();
+    _prismaRpt = require('./utils/prisma');
   }
   return _prismaRpt;
 }
@@ -1030,7 +1032,7 @@ app.use((err, req, res, next) => { console.error(err); res.status(err.status || 
 if (require.main === module) {
   const { PrismaClient } = require('@prisma/client');
   const { seedTemplates } = require('./seeds/seed-templates');
-  const _prismaForSeed = new PrismaClient();
+  const _prismaForSeed = require('./utils/prisma');
 
   app.listen(PORT, async () => {
     console.log(`[reporting-service] Running on port ${PORT}`);

@@ -14,6 +14,7 @@ datasource db {
 // ── Salary Advance (single-month deduction) ───────────────────────────────────
 model SalaryAdvance {
   id                String          @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   advanceNumber     String          @unique  // ADV-2026-00001
   employeeId        String
   employeeName      String
@@ -42,6 +43,7 @@ model SalaryAdvance {
 
   @@index([employeeId, status])
   @@index([status, deductionMonth])
+  @@index([tenantId])
 }
 
 enum AdvanceStatus {
@@ -55,6 +57,7 @@ enum AdvanceStatus {
 // ── Staff Loan (multi-month repayment) ────────────────────────────────────────
 model StaffLoan {
   id                String          @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   loanNumber        String          @unique  // LN-2026-00001
   employeeId        String
   employeeName      String
@@ -94,6 +97,7 @@ model StaffLoan {
 
   @@index([employeeId, status])
   @@index([status])
+  @@index([tenantId])
 }
 
 enum LoanStatus {
@@ -109,6 +113,7 @@ enum LoanStatus {
 // ── Loan Repayment (single monthly payment / payoff entry) ────────────────────
 model LoanRepayment {
   id              String          @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   loan            StaffLoan       @relation(fields: [loanId], references: [id], onDelete: Cascade)
   loanId          String
   paymentNumber   Int             // 1, 2, 3, ... order in the schedule
@@ -127,6 +132,7 @@ model LoanRepayment {
   @@unique([loanId, paymentNumber])
   @@index([loanId, status])
   @@index([scheduledDate, status])
+  @@index([tenantId])
 }
 
 enum RepaymentType {

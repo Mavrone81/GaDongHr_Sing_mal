@@ -34,7 +34,7 @@ const {
   formatSsgApExport,
 } = require('../engines/grant.engine');
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 const ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER];
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 

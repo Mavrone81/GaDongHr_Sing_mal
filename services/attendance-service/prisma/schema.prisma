@@ -11,6 +11,7 @@ datasource db {
 
 model AttendanceRecord {
   id             String    @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId     String
   date           DateTime
   clockIn        DateTime?
@@ -60,6 +61,7 @@ model AttendanceRecord {
   @@index([employeeId])
   @@index([earlyStatus])
   @@index([lateStatus])
+  @@index([tenantId])
   @@map("attendance_records")
 }
 
@@ -73,6 +75,7 @@ enum DeltaStatus {
 
 model WorkLocation {
   id             String    @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   name           String
   postalCode     String
   address        String
@@ -85,11 +88,13 @@ model WorkLocation {
 
   employeeLocations EmployeeWorkLocation[]
 
+  @@index([tenantId])
   @@map("work_locations")
 }
 
 model EmployeeWorkLocation {
   id             String       @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId     String
   workLocationId String
   workLocation   WorkLocation @relation(fields: [workLocationId], references: [id], onDelete: Cascade)
@@ -98,11 +103,13 @@ model EmployeeWorkLocation {
 
   @@unique([employeeId, workLocationId])
   @@index([employeeId])
+  @@index([tenantId])
   @@map("employee_work_locations")
 }
 
 model ShiftTemplate {
   id                String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   name              String
   startTime         String   // HH:mm
   endTime           String   // HH:mm
@@ -117,11 +124,13 @@ model ShiftTemplate {
   createdAt         DateTime @default(now())
 
   rosterEntries RosterEntry[]
+  @@index([tenantId])
   @@map("shift_templates")
 }
 
 model Schedule {
   id              String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId      String
   shiftTemplateId String
   startDate       DateTime
@@ -129,11 +138,13 @@ model Schedule {
   createdAt       DateTime @default(now())
 
   @@index([employeeId])
+  @@index([tenantId])
   @@map("schedules")
 }
 
 model RosterEntry {
   id              String    @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId      String
   shiftTemplateId String?
   workingShiftId  String?
@@ -153,11 +164,13 @@ model RosterEntry {
 
   @@unique([employeeId, date])
   @@index([date])
+  @@index([tenantId])
   @@map("roster_entries")
 }
 
 model ShiftProject {
   id            String        @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   name          String
   description   String?
   isActive      Boolean       @default(true)
@@ -168,11 +181,13 @@ model ShiftProject {
   shiftPatterns ShiftPattern[]
   members       ProjectMember[]
 
+  @@index([tenantId])
   @@map("shift_projects")
 }
 
 model WorkingShift {
   id                String    @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   projectId         String
   name              String
   workMon           Boolean   @default(false)
@@ -201,11 +216,13 @@ model WorkingShift {
   projectMembers ProjectMember[]
 
   @@index([projectId])
+  @@index([tenantId])
   @@map("working_shifts")
 }
 
 model ShiftPattern {
   id            String    @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   projectId     String
   name          String
   patternType   String    @default("CUSTOM")
@@ -226,11 +243,13 @@ model ShiftPattern {
   rosterEntries  RosterEntry[]
 
   @@index([projectId])
+  @@index([tenantId])
   @@map("shift_patterns")
 }
 
 model ProjectMember {
   id             String        @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   projectId      String
   employeeId     String
   workingShiftId String?
@@ -244,11 +263,13 @@ model ProjectMember {
 
   @@unique([projectId, employeeId])
   @@index([projectId])
+  @@index([tenantId])
   @@map("project_members")
 }
 
 model ShiftAssignment {
   id             String        @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId     String
   workingShiftId String?
   shiftPatternId String?
@@ -260,11 +281,13 @@ model ShiftAssignment {
   shiftPattern   ShiftPattern? @relation(fields: [shiftPatternId], references: [id], onDelete: Cascade)
 
   @@index([employeeId])
+  @@index([tenantId])
   @@map("shift_assignments")
 }
 
 model AuditLog {
   id            String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   entityType    String
   entityId      String?
   entityName    String?
@@ -278,6 +301,7 @@ model AuditLog {
 
   @@index([entityType])
   @@index([createdAt])
+  @@index([tenantId])
   @@map("attendance_audit_logs")
 }
 
@@ -295,6 +319,7 @@ enum AttStatus {
 // Lifecycle: OPEN → LOCKED → APPROVED_FOR_PAYROLL. Unlocking goes back to OPEN.
 model AttendancePeriod {
   id          String         @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   period      String         @unique          // "YYYY-MM"
   status      PeriodStatus   @default(OPEN)
   lockedBy    String?
@@ -306,6 +331,7 @@ model AttendancePeriod {
   updatedAt   DateTime       @updatedAt
 
   @@index([status])
+  @@index([tenantId])
   @@map("attendance_periods")
 }
 
@@ -321,6 +347,7 @@ enum PeriodStatus {
 // PENDING → ACKNOWLEDGED / EXPLAINED / DISMISSED.
 model AttendanceAnomaly {
   id            String           @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId    String
   date          DateTime         @db.Date
   type          AnomalyType
@@ -351,6 +378,7 @@ model AttendanceAnomaly {
   @@index([type])
   @@index([employeeId])
   @@index([date])
+  @@index([tenantId])
   @@map("attendance_anomalies")
 }
 
@@ -381,6 +409,7 @@ enum AnomalyStatus {
 // these via the sweep route and falls back to defaults when no row exists.
 model AnomalyThreshold {
   id                          Int       @id @default(1)
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   lateThresholdMin            Int       @default(15)
   earlyDepartThresholdMin     Int       @default(15)
   dailyOtThresholdHours       Float     @default(4)
@@ -390,6 +419,7 @@ model AnomalyThreshold {
   updatedAt                   DateTime  @updatedAt
   createdAt                   DateTime  @default(now())
 
+  @@index([tenantId])
   @@map("anomaly_thresholds")
 }
 
@@ -399,6 +429,7 @@ model AnomalyThreshold {
 
 model FwaRequest {
   id              String    @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId      String
   type            FwaType
   status          FwaStatus @default(PENDING)
@@ -417,6 +448,7 @@ model FwaRequest {
   @@index([employeeId])
   @@index([status])
   @@index([reviewDeadline])
+  @@index([tenantId])
   @@map("fwa_requests")
 }
 
@@ -445,6 +477,7 @@ enum FwaStatus {
 
 model OtAuthorization {
   id                    String        @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId            String
   departmentId          String?
   requestedById         String        // who submitted (employee or supervisor)
@@ -467,6 +500,7 @@ model OtAuthorization {
   @@index([status])
   @@index([plannedDate])
   @@index([departmentId])
+  @@index([tenantId])
   @@map("ot_authorizations")
 }
 
@@ -487,6 +521,7 @@ enum OtRequestType {
 // on each approval; usedHours tracks actuals fed from attendance records.
 model OtBudget {
   id           String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   departmentId String
   period       String   // YYYY-MM
   budgetHours  Float
@@ -497,6 +532,7 @@ model OtBudget {
 
   @@unique([departmentId, period])
   @@index([period])
+  @@index([tenantId])
   @@map("ot_budgets")
 }
 
@@ -507,6 +543,7 @@ model OtBudget {
 
 model WicaIncident {
   id                String        @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId        String
   reportedById      String        // employee or supervisor who submitted the report
   incidentDate      DateTime      @db.Date
@@ -531,6 +568,7 @@ model WicaIncident {
   @@index([status])
   @@index([category])
   @@index([momReportDeadline])
+  @@index([tenantId])
   @@map("wica_incidents")
 }
 
@@ -551,6 +589,7 @@ enum WicaStatus {
 
 model WicaClaim {
   id                      String      @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   incidentId              String
   employeeId              String
   medicalExpenses         Float?
@@ -576,6 +615,7 @@ model WicaClaim {
   @@index([incidentId])
   @@index([status])
   @@index([employeeId])
+  @@index([tenantId])
   @@map("wica_claims")
 }
 
@@ -591,6 +631,7 @@ enum ClaimStatus {
 // Return-to-work record — tracks employee's gradual return after injury
 model WicaRtwRecord {
   id          String    @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   incidentId  String
   employeeId  String
   rtwDate     DateTime  @db.Date
@@ -605,6 +646,7 @@ model WicaRtwRecord {
 
   @@index([incidentId])
   @@index([employeeId])
+  @@index([tenantId])
   @@map("wica_rtw_records")
 }
 

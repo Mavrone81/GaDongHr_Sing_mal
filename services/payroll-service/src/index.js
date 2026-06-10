@@ -25,6 +25,9 @@ app.use(cors());
 app.use(express.json({ limit: '10kb' }));
 app.use(morgan('combined'));
 
+const { tenantContextMiddleware } = require('/app/shared/tenant-context');
+app.use(tenantContextMiddleware);
+
 app.get('/health', (req, res) => res.json({ service: 'payroll-service', status: 'ok', ts: new Date() }));
 app.use('/payroll', payrollRoutes);
 app.use('/payroll', bikRoutes);
@@ -97,9 +100,9 @@ if (require.main === module) {
     console.log(`[payroll-service] Running on port ${PORT}`);
     // PAY-001: ensure DB-level CHECK constraints (idempotent).
     try {
-      const { PrismaClient } = require('@prisma/client');
+      const prisma = require('./utils/prisma');
       const { ensurePayrollConstraints } = require('./db-constraints');
-      await ensurePayrollConstraints(new PrismaClient());
+      await ensurePayrollConstraints(prisma);
     } catch (err) {
       console.error('[payroll-service] db-constraints init failed:', err.message);
     }

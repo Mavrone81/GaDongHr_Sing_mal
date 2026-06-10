@@ -32,6 +32,7 @@ enum TicketCategory {
 
 model Ticket {
   id          String         @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId  String
   category    TicketCategory @default(GENERAL)
   subject     String
@@ -44,11 +45,13 @@ model Ticket {
 
   @@index([employeeId])
   @@index([status])
+  @@index([tenantId])
   @@map("tickets")
 }
 
 model TicketMessage {
   id          String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   ticketId    String
   authorId    String
   authorRole  String
@@ -59,6 +62,7 @@ model TicketMessage {
   ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([ticketId])
+  @@index([tenantId])
   @@map("ticket_messages")
 }
 
@@ -68,6 +72,7 @@ model TicketMessage {
 
 model FaqEntry {
   id              String         @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   question        String
   answer          String         // markdown allowed
   category        TicketCategory @default(GENERAL)
@@ -83,5 +88,6 @@ model FaqEntry {
 
   @@index([category, isPublished])
   @@index([displayOrder])
+  @@index([tenantId])
   @@map("faq_entries")
 }

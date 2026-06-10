@@ -7,7 +7,7 @@ const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
 const { isLowStock, computeReorderQty, applyStockTransaction, shouldAutoCreatePr } = require('../engines/inventory.engine');
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 const ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.IT_ADMIN];
 const LOGISTICS_ROLES = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.IT_ADMIN, ROLES.HR_MANAGER];
 

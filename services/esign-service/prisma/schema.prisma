@@ -15,6 +15,7 @@ datasource db {
 // Document templates. HR creates once; requests are generated per signatory.
 model ESignDocument {
   id            String       @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   code          String       @unique  // e.g. 'EMPLOYMENT_CONTRACT', 'HANDBOOK_2026'
   title         String
   description   String?
@@ -32,6 +33,7 @@ model ESignDocument {
   requests ESignRequest[]
 
   @@index([documentType])
+  @@index([tenantId])
   @@map("esign_documents")
 }
 
@@ -44,6 +46,7 @@ enum ESignDocType {
 // One request per (document version, signatory). Holds the personalised copy.
 model ESignRequest {
   id                 String      @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   documentId         String
   documentVersion    String      // snapshot of doc version at dispatch time
   documentHash       String      // SHA-256 of templateHtml at dispatch time
@@ -73,6 +76,7 @@ model ESignRequest {
   @@index([signatoryId])
   @@index([status])
   @@index([dueDate])
+  @@index([tenantId])
   @@map("esign_requests")
 }
 
@@ -87,6 +91,7 @@ enum ESignStatus {
 // Immutable audit trail — one row per action on a request.
 model ESignAuditLog {
   id        String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   requestId String
   action    String   // CREATED | VIEWED | SIGNED | DECLINED | EXPIRED | REVOKED | REMINDER_SENT
   actorId   String?
@@ -98,5 +103,6 @@ model ESignAuditLog {
 
   @@index([requestId])
   @@index([timestamp])
+  @@index([tenantId])
   @@map("esign_audit_logs")
 }

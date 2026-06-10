@@ -31,7 +31,7 @@ const { toCsv } = require('../engines/csv');
 const { toPdf } = require('../engines/pdf');
 const { firstRunAt, FREQUENCIES } = require('../engines/schedule');
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 const REPORT_ROLES = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.FINANCE_ADMIN, ROLES.PAYROLL_OFFICER];
 
 function userIdOf(req) {

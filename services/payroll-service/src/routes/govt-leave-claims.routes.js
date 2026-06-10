@@ -13,7 +13,7 @@ const {
 } = require('../engines/govt-leave-claims.engine');
 
 const router = express.Router();
-const prisma  = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 const LEAVE_SERVICE_URL = process.env.LEAVE_SERVICE_URL || 'http://leave-service:4004';
 

@@ -21,7 +21,7 @@ const {
   buildTransitionPatch,
 } = require('../engines/iras-submission.engine');
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 const ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER];
 const VIEW_ROLES  = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER];

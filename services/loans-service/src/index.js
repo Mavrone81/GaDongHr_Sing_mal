@@ -37,7 +37,7 @@ async function fetchAuthoritativeMonthlySalary(employeeId) {
   return { monthlySalary: Number(data.monthlySalary || 0), isActive: data.isActive };
 }
 
-const prisma = new PrismaClient();
+const prisma = require('./utils/prisma');
 const app    = express();
 const PORT   = process.env.PORT || 4018;
 
@@ -45,6 +45,9 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan('combined'));
+
+const { tenantContextMiddleware } = require('/app/shared/tenant-context');
+app.use(tenantContextMiddleware);
 
 app.get('/health', (req, res) => res.json({ service: 'loans-service', status: 'ok', ts: new Date() }));
 

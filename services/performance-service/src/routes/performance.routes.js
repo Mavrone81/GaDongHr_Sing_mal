@@ -6,7 +6,7 @@ const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
 const { DEFAULT_BANDS, validateBands, computeDistribution, hasDeviation, groupByDepartment } = require('../engines/bellcurve.engine');
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 const EMPLOYEE_URL_BC = process.env.EMPLOYEE_SERVICE_URL || 'http://employee-service:4002';
 
 const PHASE_ORDER = ['GOAL_SETTING', 'SELF_ASSESSMENT', 'MANAGER_REVIEW', 'CALIBRATION', 'COMPLETED'];

@@ -33,6 +33,7 @@
     ],
     "moduleNameMapper": {
       "/app/shared/auth-middleware": "<rootDir>/__mocks__/auth-middleware.js",
+      "/app/shared/tenant-context": "<rootDir>/../../shared/tenant-context/index.js",
       "/app/shared/(.*)": "<rootDir>/__mocks__/generic.js"
     }
   }

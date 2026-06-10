@@ -11,7 +11,7 @@ const {
   build9BoxEntry,
 } = require('../engines/succession.engine');
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 const EMPLOYEE_URL = process.env.EMPLOYEE_SERVICE_URL || 'http://employee-service:4002';
 
 const HR_ROLES = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.HR_MANAGER];

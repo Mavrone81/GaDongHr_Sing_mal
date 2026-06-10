@@ -21,7 +21,7 @@ const {
 const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:4009';
 const EMPLOYEE_SERVICE_URL     = process.env.EMPLOYEE_SERVICE_URL     || 'http://employee-service:4002';
 
-const prisma = new PrismaClient();
+const prisma = require('./utils/prisma');
 const app    = express();
 const PORT   = process.env.PORT || 4016;
 
@@ -29,6 +29,9 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan('combined'));
+
+const { tenantContextMiddleware } = require('/app/shared/tenant-context');
+app.use(tenantContextMiddleware);
 
 app.get('/health', (req, res) => res.json({ service: 'benefits-service', status: 'ok', ts: new Date() }));
 
