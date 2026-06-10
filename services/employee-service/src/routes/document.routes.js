@@ -61,8 +61,17 @@ const EXT_TO_MIME = {
   '.webp': 'image/webp',
 };
 
+const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+  // Tenant-prefixed object keys: each tenant's files live under uploads/<tenantId>/
+  // (defense-in-depth; downloads are already gated by the tenant-scoped Document
+  // row). req.user is set by `authenticate`, which runs before multer.
+  destination: (req, _file, cb) => {
+    const tid = req.user?.tenantId || DEFAULT_TENANT_ID;
+    const dir = path.join(UPLOAD_DIR, tid);
+    try { fs.mkdirSync(dir, { recursive: true }); } catch { /* best effort */ }
+    cb(null, dir);
+  },
   filename:    (_req, file, cb) => cb(null, `${uuidv4()}${path.extname(file.originalname).toLowerCase()}`),
 });
 const upload = multer({
