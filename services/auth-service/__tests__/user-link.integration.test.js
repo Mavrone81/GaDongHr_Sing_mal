@@ -32,7 +32,9 @@ const mockRefreshUpdate = jest.fn().mockResolvedValue({});
 
 jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({
-    user: { findUnique: mockFindUnique, findFirst: mockFindFirst, findMany: mockFindMany, update: mockUpdate, create: mockCreate, count: mockCount },
+    // user lookup-by-email is now findFirst (email is unique per tenant) — route
+    // it to the same mock the tests configure.
+    user: { findUnique: mockFindUnique, findFirst: mockFindUnique, findMany: mockFindMany, update: mockUpdate, create: mockCreate, count: mockCount },
     role: { findFirst: mockFindFirst },
     refreshToken: { updateMany: mockRefreshUpdate },
     $queryRaw: mockQueryRaw,

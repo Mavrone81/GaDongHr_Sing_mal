@@ -188,11 +188,12 @@ async function main() {
     },
   ];
 
+  const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
   for (const r of roles) {
     const role = await prisma.role.upsert({
-      where: { name: r.name },
+      where: { tenantId_name: { tenantId: DEFAULT_TENANT_ID, name: r.name } },
       update: { description: r.description, isSystem: r.isSystem },
-      create: { name: r.name, description: r.description, isSystem: r.isSystem },
+      create: { tenantId: DEFAULT_TENANT_ID, name: r.name, description: r.description, isSystem: r.isSystem },
     });
 
     // Rebuild permission links cleanly
@@ -207,7 +208,7 @@ async function main() {
   }
 
   // ── 3. Ensure admin accounts have SUPER_ADMIN ─────────────────────────────
-  const superAdminRole = await prisma.role.findUnique({ where: { name: 'SUPER_ADMIN' } });
+  const superAdminRole = await prisma.role.findFirst({ where: { tenantId: DEFAULT_TENANT_ID, name: 'SUPER_ADMIN' } });
   if (superAdminRole) {
     await prisma.user.updateMany({ where: { roleId: null }, data: { roleId: superAdminRole.id } });
   }

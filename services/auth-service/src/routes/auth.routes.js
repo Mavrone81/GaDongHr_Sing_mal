@@ -49,6 +49,7 @@ async function verifyOidcIdToken({ idToken, jwksUrl, issuers, audience }) {
 }
 
 const prisma = require('../utils/prisma');
+const { runUnscoped, DEFAULT_TENANT_ID } = require('../utils/tenantContext');
 const { signAccessToken, signRefreshToken, verifyToken } = require('../utils/jwt.utils');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
 const { encrypt, decrypt } = require('/app/shared/crypto');
@@ -232,10 +233,33 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     const { email, password, mfaCode } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
 
-    const user = await prisma.user.findUnique({ 
+    // Multi-tenant: email is unique PER tenant, so resolve the tenant from the
+    // credentials. Look up candidates across ALL tenants (unscoped — no tenant
+    // context exists pre-login), then pick the one whose password matches.
+    const candidates = await runUnscoped(() => prisma.user.findMany({
       where: { email: email.toLowerCase() },
-      include: { role: { include: { permissions: { include: { permission: true } } } } }
-    });
+      include: { role: { include: { permissions: { include: { permission: true } } } } },
+    }));
+
+    let user;
+    if (candidates.length <= 1) {
+      user = candidates[0] || null;
+    } else {
+      const matches = [];
+      for (const c of candidates) {
+        if (await bcrypt.compare(password, c.passwordHash)) matches.push(c);
+      }
+      if (matches.length > 1) {
+        // Same email+password in multiple companies — need the company to
+        // disambiguate. (Tenant-picker; only reachable once real tenants exist.)
+        return res.status(409).json({
+          error: 'multiple_tenants',
+          message: 'This email is registered with more than one company. Please sign in from your company workspace.',
+          tenants: matches.map((m) => ({ tenantId: m.tenantId })),
+        });
+      }
+      user = matches[0] || candidates[0]; // candidates[0] keeps the lockout target on wrong password
+    }
 
     // Account lockout check
     if (user?.lockedUntil && user.lockedUntil > new Date()) {
@@ -273,7 +297,7 @@ router.post('/login', loginLimiter, async (req, res, next) => {
         // (user will be enrolled before they can access the app)
         const permissions = user.role?.permissions.map(p => p.permission.code) || [];
         const tokenPayload = {
-          sub: user.id, email: user.email, role: (user.role?.name || 'EMPLOYEE').toUpperCase(),
+          sub: user.id, tenantId: user.tenantId, email: user.email, role: (user.role?.name || 'EMPLOYEE').toUpperCase(),
           permissions, employeeId: user.employeeId, name: user.name,
         };
         const accessToken = signAccessToken(tokenPayload);
@@ -331,6 +355,7 @@ router.post('/login', loginLimiter, async (req, res, next) => {
 
     const tokenPayload = {
       sub: user.id,
+      tenantId: user.tenantId,
       email: user.email,
       role: (user.role?.name || 'EMPLOYEE').toUpperCase(),
       permissions,
@@ -399,6 +424,7 @@ router.post('/refresh', async (req, res, next) => {
     const permissions = user.role?.permissions.map(p => p.permission.code) || [];
     const tokenPayload = {
       sub: user.id,
+      tenantId: user.tenantId,
       email: user.email,
       role: (user.role?.name || 'EMPLOYEE').toUpperCase(),
       permissions,
@@ -441,7 +467,7 @@ router.post('/forgot-password', resetLimiter, async (req, res, next) => {
     const { email } = req.body;
     if (!email || typeof email !== 'string') return res.status(400).json({ error: 'Email is required' });
 
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const user = await prisma.user.findFirst({ where: { email: email.toLowerCase() } });
     if (user && user.isActive) {
       const rawToken = crypto.randomBytes(32).toString('hex');
       const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
@@ -630,7 +656,7 @@ router.post('/otp/resend', async (req, res, next) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'email and password required' });
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const user = await prisma.user.findFirst({ where: { email: email.toLowerCase() } });
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -869,7 +895,7 @@ router.post('/sso/mfa-verify', async (req, res, next) => {
     // Issue full JWT
     const permissions = user.role?.permissions.map(p => p.permission.code) || [];
     const tokenPayload = {
-      sub: user.id, email: user.email, role: (user.role?.name || 'EMPLOYEE').toUpperCase(),
+      sub: user.id, tenantId: user.tenantId, email: user.email, role: (user.role?.name || 'EMPLOYEE').toUpperCase(),
       permissions, employeeId: user.employeeId, name: user.name,
     };
     const accessToken = signAccessToken(tokenPayload);
@@ -962,7 +988,7 @@ router.post('/sso/google/callback', async (req, res, next) => {
     // Issue Vorkhive JWT
     const permissions = user.role?.permissions.map(p => p.permission.code) || [];
     const tokenPayload = {
-      sub: user.id, email: user.email, role: (user.role?.name || 'EMPLOYEE').toUpperCase(),
+      sub: user.id, tenantId: user.tenantId, email: user.email, role: (user.role?.name || 'EMPLOYEE').toUpperCase(),
       permissions, employeeId: user.employeeId, name: user.name,
     };
     const accessToken = signAccessToken(tokenPayload);
@@ -1095,7 +1121,7 @@ router.post('/sso/microsoft/callback', async (req, res, next) => {
     // Issue Vorkhive JWT
     const permissions = user.role?.permissions.map(p => p.permission.code) || [];
     const tokenPayload = {
-      sub: user.id, email: user.email, role: (user.role?.name || 'EMPLOYEE').toUpperCase(),
+      sub: user.id, tenantId: user.tenantId, email: user.email, role: (user.role?.name || 'EMPLOYEE').toUpperCase(),
       permissions, employeeId: user.employeeId, name: user.name,
     };
     const accessToken = signAccessToken(tokenPayload);

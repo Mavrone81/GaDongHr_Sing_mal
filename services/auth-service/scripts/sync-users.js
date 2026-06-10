@@ -68,7 +68,7 @@ async function main() {
   const inviteRecords = [];
 
   for (const emp of employees) {
-    const existing = await authPrisma.user.findUnique({ where: { email: emp.workEmail.toLowerCase() } });
+    const existing = await authPrisma.user.findFirst({ where: { email: emp.workEmail.toLowerCase() } });
     if (existing) {
       skippedCount++;
       continue;

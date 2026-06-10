@@ -37,13 +37,14 @@ async function main() {
     process.exit(1);
   }
 
-  const superAdminRole = await prisma.role.findUnique({ where: { name: 'SUPER_ADMIN' } });
+  const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+  const superAdminRole = await prisma.role.findFirst({ where: { tenantId: DEFAULT_TENANT_ID, name: 'SUPER_ADMIN' } });
   if (!superAdminRole) {
     console.error('[seed-initial-admin] FATAL: SUPER_ADMIN role not found. Run seed-rbac.js first.');
     process.exit(1);
   }
 
-  const existing = await prisma.user.findUnique({ where: { email: adminEmail } });
+  const existing = await prisma.user.findFirst({ where: { tenantId: DEFAULT_TENANT_ID, email: adminEmail } });
   if (existing) {
     console.log(`[seed-initial-admin] ${adminEmail} already exists — leaving password untouched, pinning to SUPER_ADMIN.`);
     await prisma.user.update({
