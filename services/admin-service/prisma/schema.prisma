@@ -1,0 +1,68 @@
+// Platform control-plane schema (admin-service). Its own DB: hrms_admin.
+// Platform admins are NOT tenant Users and have NO tenantId — this realm is
+// deliberately kept out of the tenant data path.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model PlatformAdmin {
+  id           String       @id @default(uuid())
+  email        String       @unique
+  passwordHash String
+  name         String
+  role         PlatformRole @default(SUPPORT)
+  mfaEnabled   Boolean      @default(false)
+  mfaSecret    String? // TOTP secret (AES-GCM encrypted)
+  isActive     Boolean      @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime     @default(now())
+
+  @@map("platform_admins")
+}
+
+enum PlatformRole {
+  SUPER_ADMIN // all
+  BILLING // payments + plans
+  SUPPORT // read + impersonate
+}
+
+model Module {
+  code        String  @id // "payroll", "leave", "claims", ...
+  name        String
+  description String?
+  isCore      Boolean @default(false) // core modules can't be disabled
+
+  @@map("modules")
+}
+
+model TenantModule {
+  tenantId   String
+  moduleCode String
+  enabled    Boolean  @default(true)
+  enabledAt  DateTime @default(now())
+
+  @@id([tenantId, moduleCode])
+  @@index([tenantId])
+  @@map("tenant_modules")
+}
+
+model PlatformAuditLog {
+  id        String   @id @default(uuid())
+  adminId   String
+  action    String // "tenant.suspend", "module.toggle", "trial.extend", "impersonate", ...
+  tenantId  String?
+  before    Json?
+  after     Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([adminId])
+  @@index([tenantId])
+  @@map("platform_audit_logs")
+}
