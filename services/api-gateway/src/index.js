@@ -75,8 +75,15 @@ const corsOptions = {
 };
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
+
+// /api/pricing is public marketing data (no credentials) — readable from ANY
+// origin so the marketing site (vorkhive.com) can render live pricing. Every
+// other route uses the strict per-origin allowlist.
+const publicCors = cors({ origin: '*', methods: ['GET', 'OPTIONS'] });
+const strictCors = cors(corsOptions);
+const pickCors = (req, res, next) => (req.path === '/api/pricing' ? publicCors : strictCors)(req, res, next);
+app.use(pickCors);
+app.options('*', pickCors);
 app.use(cookieParser());
 
 // Defence in depth: strip any client-supplied identity headers BEFORE they
@@ -258,6 +265,11 @@ const proxyOpts = {
     delete headers['access-control-allow-methods'];
     delete headers['access-control-allow-headers'];
     delete headers['access-control-expose-headers'];
+    // Public pricing: world-readable (no credentials) for the marketing site.
+    if ((userReq.originalUrl || '').startsWith('/api/pricing')) {
+      headers['access-control-allow-origin'] = '*';
+      return headers;
+    }
     const origin = userReq.headers.origin;
     if (origin && corsAllowlist.includes(origin)) {
       headers['access-control-allow-origin'] = origin;
