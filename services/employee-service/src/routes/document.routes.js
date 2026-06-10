@@ -7,7 +7,7 @@ const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, authorizeSelfOrRole, ROLES } = require('/app/shared/auth-middleware');
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 // Defaults to the container's /app/uploads but is overridable via UPLOADS_DIR.
 // If the base isn't writable (e.g. CI runners can't mkdir under /app), fall back

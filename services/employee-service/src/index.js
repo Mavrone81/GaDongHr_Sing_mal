@@ -23,6 +23,12 @@ app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 app.use(morgan('combined'));
 
+// Multi-tenancy: install the request tenant context before routes. The shared
+// auth middleware fills in tenantId from the verified JWT; the Prisma extension
+// then isolates every query by tenant.
+const { tenantContextMiddleware } = require('/app/shared/tenant-context');
+app.use(tenantContextMiddleware);
+
 app.get('/health', (req, res) => res.json({ service: 'employee-service', status: 'ok', ts: new Date() }));
 app.use('/employees', employeeRoutes);
 app.use('/documents', documentRoutes);
