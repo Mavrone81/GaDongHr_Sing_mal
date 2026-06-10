@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import NotificationBell from '@/components/NotificationBell';
 import FloatingAssistant from '@/components/FloatingAssistant';
+import TrialBanner from '@/components/TrialBanner';
 
 // ─── RBAC Navigation Matrix — Section 2, Vorkhive_RBAC_Workflow_Reference.pdf ──
 // SA = Superadmin (full, unrestricted access to ALL modules)
@@ -652,8 +653,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-8 custom-scrollbar bg-slate-50">
-          <div className="max-w-[1500px] mx-auto">
+        <main className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50">
+          <TrialBanner />
+          <div className="max-w-[1500px] mx-auto p-3 sm:p-4 lg:p-8">
             {children}
           </div>
         </main>

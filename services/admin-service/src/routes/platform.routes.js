@@ -214,7 +214,21 @@ router.get('/entitlements/:tenantId', async (req, res, next) => {
     if (req.headers['x-internal-key'] !== process.env.INTERNAL_SERVICE_KEY) return res.status(401).json({ error: 'unauthorized' });
     const rows = await prisma.tenantModule.findMany({ where: { tenantId: req.params.tenantId } });
     const disabled = rows.filter(r => !r.enabled).map(r => r.moduleCode);
-    res.json({ tenantId: req.params.tenantId, disabled });
+
+    // Billing gate: is this tenant past its trial / suspended with no active paid sub?
+    let billingBlocked = false;
+    const t = await authdb.query(
+      `SELECT t.status, t."trialEndsAt", s.status AS sub_status, s."currentPeriodEnd"
+       FROM tenants t LEFT JOIN subscriptions s ON s."tenantId" = t.id WHERE t.id = $1`, [req.params.tenantId]);
+    const row = t.rows[0];
+    if (row) {
+      const now = Date.now();
+      const activePaid = row.sub_status === 'active' && (!row.currentPeriodEnd || new Date(row.currentPeriodEnd).getTime() > now);
+      if (['SUSPENDED', 'CANCELED'].includes(row.status)) billingBlocked = true;
+      else if (row.status === 'TRIALING' && row.trialEndsAt && new Date(row.trialEndsAt).getTime() < now && !activePaid) billingBlocked = true;
+      else if (row.status === 'PAST_DUE' && !activePaid) billingBlocked = true;
+    }
+    res.json({ tenantId: req.params.tenantId, disabled, billingBlocked });
   } catch (err) { next(err); }
 });
 

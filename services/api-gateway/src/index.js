@@ -106,6 +106,7 @@ app.get('/health', (req, res) => res.json({ service: 'api-gateway', status: 'ok'
 const PUBLIC_ROUTES = [
   { method: 'POST', path: /^\/api\/auth\/login$/ },
   { method: 'POST', path: /^\/api\/tenants\/register$/ },
+  { method: 'POST', path: /^\/api\/billing\/webhook$/ },
   { method: 'POST', path: /^\/api\/platform\/login$/ },
   { method: 'POST', path: /^\/api\/platform\/mfa\/(setup|enable)$/ },
   { method: 'POST', path: /^\/api\/auth\/refresh$/ },
@@ -137,18 +138,20 @@ function moduleForPath(p) {
 // take down every tenant's app.
 const _entCache = new Map();
 const ENT_TTL = Number(process.env.ENTITLEMENT_TTL_MS || 30000);
-async function getDisabledModules(tenantId) {
+async function getEntitlements(tenantId) {
   const c = _entCache.get(tenantId);
-  if (c && (Date.now() - c.at) < ENT_TTL) return c.disabled;
+  if (c && (Date.now() - c.at) < ENT_TTL) return c.ent;
+  const fallback = { disabled: [], billingBlocked: false };
   try {
     const r = await fetch(`${SERVICES.admin}/platform/entitlements/${tenantId}`, {
       headers: { 'x-internal-key': process.env.INTERNAL_SERVICE_KEY || '' },
     });
-    const disabled = r.ok ? ((await r.json()).disabled || []) : [];
-    _entCache.set(tenantId, { at: Date.now(), disabled });
-    return disabled;
+    const ent = r.ok ? await r.json() : fallback;
+    const norm = { disabled: ent.disabled || [], billingBlocked: !!ent.billingBlocked };
+    _entCache.set(tenantId, { at: Date.now(), ent: norm });
+    return norm;
   } catch {
-    return [];
+    return fallback;
   }
 }
 
@@ -210,8 +213,14 @@ async function jwtMiddleware(req, res, next) {
     if (!isPlatformPath && payload.tenantId) {
       const moduleCode = moduleForPath(req.path);
       if (moduleCode) {
-        const disabled = await getDisabledModules(payload.tenantId);
-        if (disabled.includes(moduleCode)) {
+        const ent = await getEntitlements(payload.tenantId);
+        // Trial/billing gate: once the trial has lapsed with no active paid sub,
+        // block the HR modules (but never /api/auth, /api/tenants, /api/platform,
+        // which carry login, billing status, and upgrade) and route to billing.
+        if (ent.billingBlocked) {
+          return res.status(402).json({ error: 'trial_expired', message: 'Your free trial has ended. Please upgrade to continue.' });
+        }
+        if (ent.disabled.includes(moduleCode)) {
           return res.status(403).json({ error: 'module_disabled', module: moduleCode });
         }
       }
@@ -263,6 +272,7 @@ app.use('/api/users',        proxy(SERVICES.auth,         { ...proxyOpts, proxyR
 app.use('/api/roles',        proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/roles', '/roles') }));
 app.use('/api/tenants',      proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/tenants', '/tenants') }));
 app.use('/api/platform',     proxy(SERVICES.admin,        { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/platform', '/platform') }));
+app.use('/api/billing',      proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/billing', '/billing') }));
 app.use('/api/employees',    proxy(SERVICES.employee,     { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/employees', '/employees') }));
 app.use('/api/documents',    proxy(SERVICES.employee,     { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/documents', '/documents') }));
 app.use('/api/movements',    proxy(SERVICES.employee,     { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/movements', '/movements') }));
