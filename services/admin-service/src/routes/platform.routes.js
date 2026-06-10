@@ -233,6 +233,31 @@ router.get('/modules', requirePlatform, async (_req, res, next) => {
   try { res.json({ modules: await prisma.module.findMany({ orderBy: { code: 'asc' } }) }); } catch (err) { next(err); }
 });
 
+// ── Pricing plans (single source of truth for /settings/billing) ─────────────
+const DEFAULT_PRICING = [
+  { id: 'starter', name: 'Starter', price: 'S$5', unit: '/ user / mo', tagline: 'For small teams putting HR on autopilot.', features: ['Up to 5 users', 'Leave & staff directory', 'Claims & attendance', 'Community support'], popular: false, contact: false, active: true },
+  { id: 'growth', name: 'Growth', price: 'S$9', unit: '/ user / mo', tagline: 'For growing teams that need payroll & compliance.', features: ['Unlimited users', 'Full payroll with CPF', 'Digital payslips & IRAS export', 'Training & appraisals', 'Priority support'], popular: true, contact: false, active: true },
+  { id: 'enterprise', name: 'Enterprise', price: 'S$15', unit: '/ user / mo', tagline: 'Advanced security and control for larger organizations.', features: ['Everything in Growth', 'Single Sign-On (SSO)', 'Dedicated success manager', 'Full API access'], popular: false, contact: true, active: true },
+];
+async function getPricing() {
+  const row = await prisma.platformConfig.findUnique({ where: { key: 'pricing' } });
+  return (row && Array.isArray(row.value)) ? row.value : DEFAULT_PRICING;
+}
+
+router.get('/pricing', requirePlatform, async (_req, res, next) => {
+  try { res.json({ plans: await getPricing() }); } catch (err) { next(err); }
+});
+router.put('/pricing', requirePlatform, requireRole('SUPER_ADMIN', 'BILLING'), async (req, res, next) => {
+  try {
+    const plans = req.body && req.body.plans;
+    if (!Array.isArray(plans) || !plans.length) return res.status(400).json({ error: 'plans must be a non-empty array' });
+    const before = await getPricing();
+    await prisma.platformConfig.upsert({ where: { key: 'pricing' }, update: { value: plans }, create: { key: 'pricing', value: plans } });
+    await audit(req, 'pricing.update', null, { plans: before }, { plans });
+    res.json({ plans });
+  } catch (err) { next(err); }
+});
+
 // ── Audit log ────────────────────────────────────────────────────────────────
 router.get('/audit', requirePlatform, async (req, res, next) => {
   try {
@@ -331,4 +356,5 @@ router.get('/entitlements/:tenantId', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.getPricing = getPricing;
 module.exports = router;
