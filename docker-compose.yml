@@ -42,7 +42,7 @@ services:
     init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
-      - "${API_GATEWAY_PORT:-4000}:4000"
+      - "127.0.0.1:${API_GATEWAY_PORT:-4000}:4000"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
@@ -59,6 +59,8 @@ services:
       - ASSET_SERVICE_URL=http://asset-service:4011
       - PERFORMANCE_SERVICE_URL=http://performance-service:4012
       - TRAINING_SERVICE_URL=http://training-service:4013
+      - ADMIN_SERVICE_URL=http://admin-service:4016
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8081,http://localhost:3000}
       - GATEWAY_RATELIMIT_MAX=${GATEWAY_RATELIMIT_MAX:-200}
     volumes:
@@ -80,7 +82,7 @@ services:
     init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
-      - "${AUTH_SERVICE_PORT:-4001}:4001"
+      - "127.0.0.1:${AUTH_SERVICE_PORT:-4001}:4001"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4001
@@ -144,7 +146,7 @@ services:
     init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
-      - "${EMPLOYEE_SERVICE_PORT:-4002}:4002"
+      - "127.0.0.1:${EMPLOYEE_SERVICE_PORT:-4002}:4002"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4002
@@ -181,7 +183,7 @@ services:
     init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
-      - "${PAYROLL_SERVICE_PORT:-4003}:4003"
+      - "127.0.0.1:${PAYROLL_SERVICE_PORT:-4003}:4003"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4003
@@ -225,7 +227,7 @@ services:
     init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
-      - "${LEAVE_SERVICE_PORT:-4004}:4004"
+      - "127.0.0.1:${LEAVE_SERVICE_PORT:-4004}:4004"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4004
@@ -256,7 +258,7 @@ services:
     init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
-      - "${CLAIMS_SERVICE_PORT:-4005}:4005"
+      - "127.0.0.1:${CLAIMS_SERVICE_PORT:-4005}:4005"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4005
@@ -285,7 +287,7 @@ services:
     init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
-      - "${RECRUITMENT_SERVICE_PORT:-4006}:4006"
+      - "127.0.0.1:${RECRUITMENT_SERVICE_PORT:-4006}:4006"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4006
@@ -314,7 +316,7 @@ services:
     init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
-      - "${ATTENDANCE_SERVICE_PORT:-4007}:4007"
+      - "127.0.0.1:${ATTENDANCE_SERVICE_PORT:-4007}:4007"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4007
@@ -345,7 +347,7 @@ services:
     init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
-      - "${OFFBOARDING_SERVICE_PORT:-4008}:4008"
+      - "127.0.0.1:${OFFBOARDING_SERVICE_PORT:-4008}:4008"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4008
@@ -377,7 +379,7 @@ services:
     init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
-      - "${NOTIFICATION_SERVICE_PORT:-4009}:4009"
+      - "127.0.0.1:${NOTIFICATION_SERVICE_PORT:-4009}:4009"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4009
@@ -410,7 +412,7 @@ services:
     init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
-      - "${REPORTING_SERVICE_PORT:-4010}:4010"
+      - "127.0.0.1:${REPORTING_SERVICE_PORT:-4010}:4010"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4010
@@ -443,7 +445,7 @@ services:
     init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
-      - "${PERFORMANCE_SERVICE_PORT:-4012}:4012"
+      - "127.0.0.1:${PERFORMANCE_SERVICE_PORT:-4012}:4012"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4012
@@ -470,7 +472,7 @@ services:
     init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
-      - "${TRAINING_SERVICE_PORT:-4013}:4013"
+      - "127.0.0.1:${TRAINING_SERVICE_PORT:-4013}:4013"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4013
@@ -496,7 +498,7 @@ services:
     init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
-      - "${ASSET_SERVICE_PORT:-4011}:4011"
+      - "127.0.0.1:${ASSET_SERVICE_PORT:-4011}:4011"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4011
@@ -525,7 +527,7 @@ services:
     init: true
     restart: unless-stopped
     ports:
-      - "${ASSISTANT_SERVICE_PORT:-4020}:4020"
+      - "127.0.0.1:${ASSISTANT_SERVICE_PORT:-4020}:4020"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4020
@@ -560,7 +562,7 @@ services:
     init: true            # run tini as PID 1 to reap orphaned/zombie child processes
     restart: unless-stopped
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
@@ -609,6 +611,41 @@ services:
           memory: 128m
         reservations:
           memory: 32m
+
+  admin-service:
+    build:
+      context: .
+      dockerfile: services/admin-service/Dockerfile
+    container_name: hrms-admin
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${ADMIN_SERVICE_PORT:-4016}:4016"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4016
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/${ADMIN_DB:-hrms_admin}
+      - AUTH_DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/${AUTH_DB:-hrms_auth}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_PRIVATE_KEY_PATH=/app/certs/private.pem
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
+      - PLATFORM_ADMIN_EMAIL=${PLATFORM_ADMIN_EMAIL:-}
+      - PLATFORM_ADMIN_PASSWORD=${PLATFORM_ADMIN_PASSWORD:-}
+      - PLATFORM_JWT_EXPIRES=${PLATFORM_JWT_EXPIRES:-8h}
+    volumes:
+      - shared_certs:/app/certs:ro
+      - /app/services/admin-service/node_modules
+      - /app/shared/crypto/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 192m
+        reservations:
+          memory: 64m
 
 volumes:
   shared_certs:

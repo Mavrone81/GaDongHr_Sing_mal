@@ -36,6 +36,17 @@ const SERVICES = {
   loans:        process.env.LOANS_SERVICE_URL        || 'http://loans-service:4018',
   survey:       process.env.SURVEY_SERVICE_URL       || 'http://survey-service:4019',
   assistant:    process.env.ASSISTANT_SERVICE_URL    || 'http://assistant-service:4020',
+  admin:        process.env.ADMIN_SERVICE_URL        || 'http://admin-service:4016',
+};
+
+// Maps a tenant-app route prefix to its module code for entitlement enforcement.
+// Core modules (auth, employee) are never blocked.
+const ROUTE_MODULE = {
+  '/api/payroll': 'payroll', '/api/components': 'payroll',
+  '/api/leave': 'leave', '/api/claims': 'claims', '/api/attendance': 'attendance',
+  '/api/recruitment': 'recruitment', '/api/performance': 'performance', '/api/training': 'training',
+  '/api/offboarding': 'offboarding', '/api/assets': 'asset', '/api/reports': 'reporting',
+  '/api/notifications': 'notification', '/api/esign': 'esign', '/api/support': 'support',
 };
 
 // Explicit origin allowlist (CORS_ORIGINS is a comma-separated list of URLs).
@@ -95,6 +106,8 @@ app.get('/health', (req, res) => res.json({ service: 'api-gateway', status: 'ok'
 const PUBLIC_ROUTES = [
   { method: 'POST', path: /^\/api\/auth\/login$/ },
   { method: 'POST', path: /^\/api\/tenants\/register$/ },
+  { method: 'POST', path: /^\/api\/platform\/login$/ },
+  { method: 'POST', path: /^\/api\/platform\/mfa\/(setup|enable)$/ },
   { method: 'POST', path: /^\/api\/auth\/refresh$/ },
   { method: 'POST', path: /^\/api\/auth\/forgot-password$/ },
   { method: 'POST', path: /^\/api\/auth\/reset-password$/ },
@@ -112,7 +125,34 @@ const PUBLIC_ROUTES = [
 
 let cachedPublicKey = null;
 
-function jwtMiddleware(req, res, next) {
+function moduleForPath(p) {
+  for (const prefix of Object.keys(ROUTE_MODULE)) {
+    if (p === prefix || p.startsWith(prefix + '/') || p.startsWith(prefix + '?')) return ROUTE_MODULE[prefix];
+  }
+  return null;
+}
+
+// Per-tenant disabled-module set, fetched from the control plane with a short
+// TTL cache. Fails OPEN on control-plane outage — a platform hiccup must not
+// take down every tenant's app.
+const _entCache = new Map();
+const ENT_TTL = Number(process.env.ENTITLEMENT_TTL_MS || 30000);
+async function getDisabledModules(tenantId) {
+  const c = _entCache.get(tenantId);
+  if (c && (Date.now() - c.at) < ENT_TTL) return c.disabled;
+  try {
+    const r = await fetch(`${SERVICES.admin}/platform/entitlements/${tenantId}`, {
+      headers: { 'x-internal-key': process.env.INTERNAL_SERVICE_KEY || '' },
+    });
+    const disabled = r.ok ? ((await r.json()).disabled || []) : [];
+    _entCache.set(tenantId, { at: Date.now(), disabled });
+    return disabled;
+  } catch {
+    return [];
+  }
+}
+
+async function jwtMiddleware(req, res, next) {
   if (req.method === 'OPTIONS') return next();
 
   const isPublic = PUBLIC_ROUTES.some(r => r.method === req.method && r.path.test(req.path));
@@ -147,6 +187,17 @@ function jwtMiddleware(req, res, next) {
       return res.status(401).json({ error: 'Token is missing role claim' });
     }
     req.user = payload;
+
+    // ── Realm separation: platform tokens ONLY on /api/platform/*, and tenant
+    // tokens NEVER on /api/platform/* ──
+    const isPlatformPath = req.path.startsWith('/api/platform');
+    if (isPlatformPath && payload.scope !== 'platform') {
+      return res.status(403).json({ error: 'Platform realm requires a platform token' });
+    }
+    if (!isPlatformPath && payload.scope === 'platform') {
+      return res.status(403).json({ error: 'Platform token is not valid on tenant routes' });
+    }
+
     req.headers['x-user-id'] = payload.sub;
     req.headers['x-user-role'] = payload.role;
     req.headers['x-employee-id'] = payload.employeeId || '';
@@ -154,6 +205,17 @@ function jwtMiddleware(req, res, next) {
     // the gateway received it as a cookie. Downstream services authenticate
     // only via the Authorization header (the existing pattern).
     if (!authHeader && cookieToken) req.headers['authorization'] = `Bearer ${cookieToken}`;
+
+    // ── Module entitlement enforcement (tenant routes only) ──
+    if (!isPlatformPath && payload.tenantId) {
+      const moduleCode = moduleForPath(req.path);
+      if (moduleCode) {
+        const disabled = await getDisabledModules(payload.tenantId);
+        if (disabled.includes(moduleCode)) {
+          return res.status(403).json({ error: 'module_disabled', module: moduleCode });
+        }
+      }
+    }
     next();
   } catch (err) {
     console.error('[GATEWAY AUTH ERROR]', err.name, err.message);
@@ -200,6 +262,7 @@ app.use('/api/auth',         proxy(SERVICES.auth,         { ...proxyOpts, proxyR
 app.use('/api/users',        proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/users', '/users') }));
 app.use('/api/roles',        proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/roles', '/roles') }));
 app.use('/api/tenants',      proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/tenants', '/tenants') }));
+app.use('/api/platform',     proxy(SERVICES.admin,        { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/platform', '/platform') }));
 app.use('/api/employees',    proxy(SERVICES.employee,     { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/employees', '/employees') }));
 app.use('/api/documents',    proxy(SERVICES.employee,     { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/documents', '/documents') }));
 app.use('/api/movements',    proxy(SERVICES.employee,     { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/movements', '/movements') }));

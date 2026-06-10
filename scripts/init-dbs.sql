@@ -9,6 +9,7 @@ CREATE DATABASE hrms_attendance;
 CREATE DATABASE hrms_offboarding;
 CREATE DATABASE hrms_notification;
 CREATE DATABASE hrms_reporting;
+CREATE DATABASE hrms_admin;
 
 -- Grant permissions
 GRANT ALL PRIVILEGES ON DATABASE hrms_auth TO hrms;
@@ -21,3 +22,4 @@ GRANT ALL PRIVILEGES ON DATABASE hrms_attendance TO hrms;
 GRANT ALL PRIVILEGES ON DATABASE hrms_offboarding TO hrms;
 GRANT ALL PRIVILEGES ON DATABASE hrms_notification TO hrms;
 GRANT ALL PRIVILEGES ON DATABASE hrms_reporting TO hrms;
+GRANT ALL PRIVILEGES ON DATABASE hrms_admin TO hrms;
