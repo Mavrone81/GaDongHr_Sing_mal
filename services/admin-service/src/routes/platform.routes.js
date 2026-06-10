@@ -242,6 +242,50 @@ router.get('/audit', requirePlatform, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── Manage platform admins (SUPER_ADMIN only) ────────────────────────────────
+router.get('/admins', requirePlatform, requireRole('SUPER_ADMIN'), async (_req, res, next) => {
+  try {
+    const admins = await prisma.platformAdmin.findMany({
+      select: { id: true, email: true, name: true, role: true, mfaEnabled: true, isActive: true, lastLoginAt: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json({ admins });
+  } catch (err) { next(err); }
+});
+
+router.post('/admins', requirePlatform, requireRole('SUPER_ADMIN'), async (req, res, next) => {
+  try {
+    const email = String(req.body?.email || '').toLowerCase().trim();
+    const name = String(req.body?.name || '').trim();
+    if (!email || !name) return res.status(400).json({ error: 'email and name are required' });
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'A valid email is required' });
+    const role = ['SUPER_ADMIN', 'BILLING', 'SUPPORT'].includes(req.body?.role) ? req.body.role : 'SUPPORT';
+    const existing = await prisma.platformAdmin.findUnique({ where: { email } });
+    if (existing) return res.status(409).json({ error: 'A platform admin with that email already exists' });
+    const tempPassword = 'Vork-' + nodeCrypto.randomBytes(9).toString('base64').replace(/[/+=]/g, '').slice(0, 12) + '!';
+    const admin = await prisma.platformAdmin.create({ data: { email, name, role, passwordHash: await bcrypt.hash(tempPassword, 12) } });
+    await audit(req, 'platform_admin.create', null, null, { email, role });
+    res.status(201).json({ admin: { id: admin.id, email, name, role }, tempPassword });
+  } catch (err) { next(err); }
+});
+
+router.post('/admins/:id/deactivate', requirePlatform, requireRole('SUPER_ADMIN'), async (req, res, next) => {
+  try {
+    if (req.params.id === req.admin.sub) return res.status(400).json({ error: 'You cannot deactivate your own account' });
+    const a = await prisma.platformAdmin.update({ where: { id: req.params.id }, data: { isActive: false } });
+    await audit(req, 'platform_admin.deactivate', null, { isActive: true }, { isActive: false, email: a.email });
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+router.post('/admins/:id/activate', requirePlatform, requireRole('SUPER_ADMIN'), async (req, res, next) => {
+  try {
+    const a = await prisma.platformAdmin.update({ where: { id: req.params.id }, data: { isActive: true } });
+    await audit(req, 'platform_admin.activate', null, { isActive: false }, { isActive: true, email: a.email });
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 // ── Time-boxed, audited impersonation of a tenant owner ──────────────────────
 router.post('/tenants/:id/impersonate', requirePlatform, requireRole('SUPER_ADMIN', 'SUPPORT'), async (req, res, next) => {
   try {
