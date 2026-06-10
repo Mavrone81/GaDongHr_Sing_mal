@@ -1,9 +1,11 @@
 'use strict';
 
 const express = require('express');
+const nodeCrypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const { authenticator } = require('otplib');
+const qrcode = require('qrcode');
 const prisma = require('../utils/prisma');
 const authdb = require('../utils/authdb');
 const { signPlatformToken, verifyToken } = require('../utils/jwt');
@@ -81,7 +83,8 @@ router.post('/mfa/setup', async (req, res, next) => {
     const secret = authenticator.generateSecret();
     await prisma.platformAdmin.update({ where: { id: p.sub }, data: { mfaSecret: enc(secret) } });
     const otpauth = authenticator.keyuri(p.email, 'Vorkhive Platform', secret);
-    res.json({ secret, otpauth });
+    const qrCode = await qrcode.toDataURL(otpauth); // data URL, generated server-side (secret never leaves us)
+    res.json({ secret, otpauth, qrCode });
   } catch (err) { next(err); }
 });
 router.post('/mfa/enable', async (req, res, next) => {
@@ -112,6 +115,25 @@ router.get('/tenants', requirePlatform, async (req, res, next) => {
        WHERE ($1 = '' OR lower(t.name) LIKE '%'||$1||'%' OR lower(t.slug) LIKE '%'||$1||'%')
        ORDER BY t."createdAt" DESC LIMIT 200`, [q]);
     res.json({ tenants: rows });
+  } catch (err) { next(err); }
+});
+
+// Operator-initiated company creation — reuses auth-service's register flow
+// (tenant + owner + cloned RBAC + provisioning), returns a temp owner password.
+const AUTH_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:4001';
+router.post('/tenants', requirePlatform, requireRole('SUPER_ADMIN'), async (req, res, next) => {
+  try {
+    const { companyName, fullName, workEmail, country, companySize } = req.body || {};
+    if (!companyName || !fullName || !workEmail) return res.status(400).json({ error: 'companyName, fullName and workEmail are required' });
+    const tempPassword = 'Vork-' + nodeCrypto.randomBytes(9).toString('base64').replace(/[/+=]/g, '').slice(0, 12) + '!';
+    const r = await fetch(`${AUTH_URL}/tenants/register`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyName, fullName, workEmail, password: tempPassword, country: country || 'SG', companySize: companySize || null, referralSource: 'platform-operator' }),
+    });
+    const data = await r.json();
+    if (!r.ok) return res.status(r.status).json({ error: data.error || 'Could not create company' });
+    await audit(req, 'tenant.create', data.tenant?.id, null, { name: companyName, owner: workEmail });
+    res.status(201).json({ tenant: data.tenant, owner: { email: workEmail, name: fullName, tempPassword } });
   } catch (err) { next(err); }
 });
 

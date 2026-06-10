@@ -19,6 +19,10 @@ export default function PlatformConsole() {
   const [allModules, setAllModules] = useState<{ code: string; name: string; isCore: boolean }[]>([]);
   const [audit, setAudit] = useState<{ action: string; tenantId: string | null; createdAt: string }[]>([]);
   const [err, setErr] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [cf, setCf] = useState({ companyName: '', fullName: '', workEmail: '', country: 'SG', companySize: '1-10' });
+  const [created, setCreated] = useState<{ email: string; tempPassword: string; company: string } | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const api = useCallback(async (path: string, opts: RequestInit = {}) => {
     const res = await fetch(`${apiUrl()}/platform${path}`, {
@@ -51,6 +55,20 @@ export default function PlatformConsole() {
   }
   function isDisabled(code: string) { return detail?.modules.find((m) => m.moduleCode === code && !m.enabled); }
 
+  async function createCompany(e: React.FormEvent) {
+    e.preventDefault(); setErr(''); setCreating(true);
+    try {
+      const r = await api('/tenants', { method: 'POST', body: JSON.stringify(cf) });
+      if (r.owner) {
+        setCreated({ email: r.owner.email, tempPassword: r.owner.tempPassword, company: cf.companyName });
+        setCf({ companyName: '', fullName: '', workEmail: '', country: 'SG', companySize: '1-10' });
+        await loadTenants();
+        api('/audit').then((d) => setAudit(d.logs || []));
+      } else setErr(r.error || 'Could not create company');
+    } catch { setErr('Could not create company'); }
+    setCreating(false);
+  }
+
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
       <header className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
@@ -58,7 +76,10 @@ export default function PlatformConsole() {
           <span className="font-black tracking-tight">VORKHIVE</span>
           <span className="ml-2 text-xs font-bold uppercase tracking-[0.2em] text-indigo-400">Platform Operator</span>
         </div>
-        <button onClick={() => { localStorage.removeItem('vorkhive_platform_token'); router.push('/platform/login'); }} className="text-sm text-slate-400 hover:text-white">Sign out</button>
+        <div className="flex items-center gap-3">
+          <button onClick={() => { setCreated(null); setShowCreate(true); }} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-indigo-500">+ New company</button>
+          <button onClick={() => { localStorage.removeItem('vorkhive_platform_token'); router.push('/platform/login'); }} className="text-sm text-slate-400 hover:text-white">Sign out</button>
+        </div>
       </header>
 
       {err && <div className="m-4 rounded bg-rose-950 border border-rose-800 px-4 py-2 text-sm text-rose-300">{err}</div>}
@@ -81,6 +102,7 @@ export default function PlatformConsole() {
                     <td className="px-3 py-2.5 text-center text-xs text-slate-400">{t.trialEndsAt ? new Date(t.trialEndsAt).toLocaleDateString() : '—'}</td>
                     <td className="px-3 py-2.5 text-center text-xs">
                       <div className="flex justify-center gap-1">
+                        <Btn onClick={() => openDetail(t.id)}>Modules</Btn>
                         {t.status === 'SUSPENDED'
                           ? <Btn onClick={() => action(t.id, '/resume')}>Resume</Btn>
                           : <Btn onClick={() => action(t.id, '/suspend')} danger>Suspend</Btn>}
@@ -128,9 +150,51 @@ export default function PlatformConsole() {
           </div>
         </div>
       </div>
+
+      {showCreate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => { setShowCreate(false); setCreated(null); }}>
+          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6" onClick={(e) => e.stopPropagation()}>
+            {created ? (
+              <div>
+                <h3 className="text-lg font-black text-white">Company created 🎉</h3>
+                <p className="mt-1 text-sm text-slate-400">Share these one-time owner credentials with <b className="text-slate-200">{created.company}</b> (they sign in at the normal login):</p>
+                <div className="mt-4 space-y-2 text-sm">
+                  <div className="rounded-lg bg-slate-800 px-3 py-2"><span className="text-slate-500">Email: </span><span className="font-mono text-indigo-300">{created.email}</span></div>
+                  <div className="rounded-lg bg-slate-800 px-3 py-2"><span className="text-slate-500">Temp password: </span><span className="font-mono text-indigo-300">{created.tempPassword}</span></div>
+                </div>
+                <button onClick={() => { setShowCreate(false); setCreated(null); }} className="mt-5 w-full rounded-lg bg-indigo-600 py-2.5 font-bold text-white hover:bg-indigo-500">Done</button>
+              </div>
+            ) : (
+              <form onSubmit={createCompany}>
+                <h3 className="text-lg font-black text-white">Create a company</h3>
+                <p className="mt-1 text-xs text-slate-500">Provisions an isolated workspace + owner with full RBAC, on a 14-day trial.</p>
+                <div className="mt-4 space-y-3">
+                  <input className={MINPUT} placeholder="Company name" value={cf.companyName} onChange={(e) => setCf({ ...cf, companyName: e.target.value })} required />
+                  <input className={MINPUT} placeholder="Owner full name" value={cf.fullName} onChange={(e) => setCf({ ...cf, fullName: e.target.value })} required />
+                  <input className={MINPUT} type="email" placeholder="Owner work email" value={cf.workEmail} onChange={(e) => setCf({ ...cf, workEmail: e.target.value })} required />
+                  <div className="grid grid-cols-2 gap-3">
+                    <select className={MINPUT} value={cf.country} onChange={(e) => setCf({ ...cf, country: e.target.value })}>
+                      {['SG', 'MY', 'HK', 'ID', 'TH', 'PH', 'VN'].map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select className={MINPUT} value={cf.companySize} onChange={(e) => setCf({ ...cf, companySize: e.target.value })}>
+                      {['1-10', '11-50', '51-200', '201-500', '500+'].map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="mt-5 flex gap-2">
+                  <button type="button" onClick={() => setShowCreate(false)} className="flex-1 rounded-lg bg-slate-700 py-2.5 font-bold text-slate-200 hover:bg-slate-600">Cancel</button>
+                  <button type="submit" disabled={creating} className="flex-1 rounded-lg bg-indigo-600 py-2.5 font-bold text-white hover:bg-indigo-500 disabled:opacity-60">{creating ? 'Creating…' : 'Create'}</button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+const MINPUT = 'w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white focus:border-indigo-400 focus:outline-none';
 
 function Badge({ status }: { status: string }) {
   const c: Record<string, string> = { ACTIVE: 'bg-emerald-900 text-emerald-300', TRIALING: 'bg-indigo-900 text-indigo-300', SUSPENDED: 'bg-rose-900 text-rose-300', PAST_DUE: 'bg-amber-900 text-amber-300', CANCELED: 'bg-slate-700 text-slate-300' };

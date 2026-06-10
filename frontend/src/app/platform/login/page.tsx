@@ -15,7 +15,7 @@ export default function PlatformLogin() {
   const [password, setPassword] = useState('');
   const [mfaCode, setMfaCode] = useState('');
   const [setupToken, setSetupToken] = useState('');
-  const [otpauth, setOtpauth] = useState('');
+  const [qr, setQr] = useState('');
   const [secret, setSecret] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -35,7 +35,7 @@ export default function PlatformLogin() {
         setSetupToken(d.setupToken);
         const sres = await fetch(`${apiUrl()}/platform/mfa/setup`, { method: 'POST', headers: { Authorization: `Bearer ${d.setupToken}` } });
         const sd = await sres.json();
-        setSecret(sd.secret || ''); setOtpauth(sd.otpauth || '');
+        setSecret(sd.secret || ''); setQr(sd.qrCode || '');
         setStep('setup');
       } else if (d.mfaRequired) {
         setStep('mfa');
@@ -99,7 +99,8 @@ export default function PlatformLogin() {
         )}
         {step === 'setup' && (
           <form onSubmit={enableMfa} className="space-y-3">
-            <p className="text-sm text-slate-300">Set up MFA (mandatory). Add this secret to your authenticator, then enter a code:</p>
+            <p className="text-sm text-slate-300">Set up MFA (mandatory). Scan the QR with your authenticator app (or paste the secret), then enter a code:</p>
+            {qr && <img src={qr} alt="MFA QR code" className="mx-auto h-44 w-44 rounded-lg bg-white p-2" />}
             <div className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 font-mono text-xs text-indigo-300 break-all">{secret}</div>
             <input className={INPUT} inputMode="numeric" placeholder="123456" value={mfaCode} onChange={(e) => setMfaCode(e.target.value)} required />
             <button disabled={loading} className="w-full rounded-lg bg-indigo-600 py-2.5 font-bold text-white hover:bg-indigo-500 disabled:opacity-60">Enable MFA &amp; continue</button>
