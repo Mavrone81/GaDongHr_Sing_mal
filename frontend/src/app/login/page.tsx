@@ -375,6 +375,10 @@ export default function LoginPage() {
                   {loading ? <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3" />Verifying…</> : 'Initialize Session'}
                 </button>
               </form>
+              <p className="mt-6 text-center text-xs text-slate-500">
+                New company?{' '}
+                <a href="/register" className="font-semibold text-indigo-600 hover:underline">Register &amp; start a free trial</a>
+              </p>
             </>
           )}
 

@@ -95,6 +95,24 @@ function applyTenantScope(base, Prisma) {
   });
 }
 
+// Lazy tenant provisioning: when a tenant first accesses a config collection
+// that's empty, clone the Default tenant's rows into it (id/timestamps stripped,
+// new tenantId stamped). Idempotent — returns 0 if the tenant already has rows.
+// Use for default config like leave types, claim categories, etc.
+async function lazyProvisionFromDefault(modelDelegate, tenantId) {
+  if (!tenantId || tenantId === DEFAULT_TENANT_ID) return 0;
+  const count = await runUnscoped(async () => modelDelegate.count({ where: { tenantId } }));
+  if (count > 0) return 0;
+  const rows = await runUnscoped(async () => modelDelegate.findMany({ where: { tenantId: DEFAULT_TENANT_ID } }));
+  if (!rows.length) return 0;
+  const data = rows.map((r) => {
+    const { id, tenantId: _t, createdAt, updatedAt, ...rest } = r;
+    return { ...rest, tenantId };
+  });
+  await runUnscoped(async () => modelDelegate.createMany({ data, skipDuplicates: true }));
+  return data.length;
+}
+
 module.exports = {
   DEFAULT_TENANT_ID,
   als,
@@ -105,4 +123,5 @@ module.exports = {
   isBypassed,
   tenantContextMiddleware,
   applyTenantScope,
+  lazyProvisionFromDefault,
 };

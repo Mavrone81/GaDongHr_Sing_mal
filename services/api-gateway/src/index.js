@@ -94,6 +94,7 @@ app.get('/health', (req, res) => res.json({ service: 'api-gateway', status: 'ok'
 // ── JWT Middleware (public routes bypass) ─────────────────────────────────────
 const PUBLIC_ROUTES = [
   { method: 'POST', path: /^\/api\/auth\/login$/ },
+  { method: 'POST', path: /^\/api\/tenants\/register$/ },
   { method: 'POST', path: /^\/api\/auth\/refresh$/ },
   { method: 'POST', path: /^\/api\/auth\/forgot-password$/ },
   { method: 'POST', path: /^\/api\/auth\/reset-password$/ },
@@ -198,6 +199,7 @@ const proxyOpts = {
 app.use('/api/auth',         proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/auth', '/auth') }));
 app.use('/api/users',        proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/users', '/users') }));
 app.use('/api/roles',        proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/roles', '/roles') }));
+app.use('/api/tenants',      proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/tenants', '/tenants') }));
 app.use('/api/employees',    proxy(SERVICES.employee,     { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/employees', '/employees') }));
 app.use('/api/documents',    proxy(SERVICES.employee,     { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/documents', '/documents') }));
 app.use('/api/movements',    proxy(SERVICES.employee,     { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/movements', '/movements') }));

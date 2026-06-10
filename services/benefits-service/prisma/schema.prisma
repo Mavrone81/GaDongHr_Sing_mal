@@ -15,7 +15,7 @@ datasource db {
 model InsurancePlan {
   id                String         @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  code              String         @unique  // e.g. 'GHS-PLATINUM', 'GTL-STD'
+  code              String         // e.g. 'GHS-PLATINUM', 'GTL-STD'
   name              String
   type              PlanType
   insurerName       String
@@ -41,6 +41,7 @@ model InsurancePlan {
   enrollments       EmployeeEnrollment[]
   claims            InsuranceClaim[]
 
+  @@unique([tenantId, code])
   @@index([type, isActive])
   @@index([effectiveFrom])
   @@index([tenantId])
@@ -129,7 +130,7 @@ enum Relationship {
 model InsuranceClaim {
   id                String           @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  claimNumber       String           @unique  // e.g. CLM-2026-00001
+  claimNumber       String           // e.g. CLM-2026-00001
   enrollment        EmployeeEnrollment @relation(fields: [enrollmentId], references: [id])
   enrollmentId     String
   plan              InsurancePlan    @relation(fields: [planId], references: [id])
@@ -155,6 +156,7 @@ model InsuranceClaim {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
+  @@unique([tenantId, claimNumber])
   @@index([employeeId, status])
   @@index([planId, status])
   @@index([status, submittedAt])
@@ -204,7 +206,7 @@ enum PeriodStatus {
 model FlexiWalletConfig {
   id                   String   @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  grade                String   @unique
+  grade                String
   annualAmount         Float
   autoApproveThreshold Float    @default(50)  // claims ≤ this are auto-approved
   isActive             Boolean  @default(true)
@@ -213,6 +215,7 @@ model FlexiWalletConfig {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
+  @@unique([tenantId, grade])
   @@index([tenantId])
 }
 
@@ -220,7 +223,7 @@ model FlexiWalletConfig {
 model FlexiCategory {
   id              String       @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  code            String       @unique
+  code            String
   name            String
   description     String?
   requiresReceipt Boolean      @default(true)
@@ -231,6 +234,7 @@ model FlexiCategory {
 
   claims          FlexiClaim[]
 
+  @@unique([tenantId, code])
   @@index([isActive])
   @@index([tenantId])
 }
@@ -270,7 +274,7 @@ enum WalletStatus {
 model FlexiClaim {
   id             String           @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  claimNumber    String           @unique   // FLX-YYYY-NNNNN
+  claimNumber    String           // FLX-YYYY-NNNNN
   wallet         FlexiWallet      @relation(fields: [walletId], references: [id])
   walletId       String
   employeeId     String
@@ -294,6 +298,7 @@ model FlexiClaim {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
+  @@unique([tenantId, claimNumber])
   @@index([employeeId, status])
   @@index([walletId, status])
   @@index([status, submittedAt])

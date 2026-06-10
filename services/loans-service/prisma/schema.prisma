@@ -15,7 +15,7 @@ datasource db {
 model SalaryAdvance {
   id                String          @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  advanceNumber     String          @unique  // ADV-2026-00001
+  advanceNumber     String          // ADV-2026-00001
   employeeId        String
   employeeName      String
   monthlySalary     Float           // snapshot at request time (for max-cap enforcement)
@@ -41,6 +41,7 @@ model SalaryAdvance {
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
+  @@unique([tenantId, advanceNumber])
   @@index([employeeId, status])
   @@index([status, deductionMonth])
   @@index([tenantId])
@@ -58,7 +59,7 @@ enum AdvanceStatus {
 model StaffLoan {
   id                String          @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  loanNumber        String          @unique  // LN-2026-00001
+  loanNumber        String          // LN-2026-00001
   employeeId        String
   employeeName      String
   monthlySalary     Float           // snapshot at request time
@@ -95,6 +96,7 @@ model StaffLoan {
 
   repayments        LoanRepayment[]
 
+  @@unique([tenantId, loanNumber])
   @@index([employeeId, status])
   @@index([status])
   @@index([tenantId])

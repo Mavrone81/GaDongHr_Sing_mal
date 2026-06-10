@@ -9,6 +9,7 @@ const cookieParser = require('cookie-parser');
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
 const roleRoutes = require('./routes/role.routes');
+const tenantsRoutes = require('./routes/tenants.routes');
 const purgeRoutes = require('./routes/purge.routes');
 const { generateKeysIfNeeded, verifyToken } = require('./utils/jwt.utils');
 const { als, DEFAULT_TENANT_ID } = require('./utils/tenantContext');
@@ -54,6 +55,7 @@ app.get('/health', (req, res) => res.json({ service: 'auth-service', status: 'ok
 app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
 app.use('/roles', roleRoutes);
+app.use('/tenants', tenantsRoutes);
 app.use('/auth/purge', purgeRoutes);
 
 // Global error handler

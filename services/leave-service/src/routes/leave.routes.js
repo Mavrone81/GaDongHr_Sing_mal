@@ -10,6 +10,7 @@ const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, authorizeSelfOrRole, ROLES } = require('/app/shared/auth-middleware');
 
 const prisma = require('../utils/prisma');
+const { lazyProvisionFromDefault } = require('/app/shared/tenant-context');
 
 const EMPLOYEE_URL = process.env.EMPLOYEE_SERVICE_URL || 'http://employee-service:4002';
 const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY || '';
@@ -213,6 +214,9 @@ async function getSupervisorCheck(employeeId, checkerEmployeeId) {
 // ── GET /leave/types ──────────────────────────────────────────────────────────
 router.get('/types', authenticate, authorize('leave:view'), async (req, res, next) => {
   try {
+    // Lazy tenant provisioning: a freshly-registered company gets the Default
+    // tenant's leave types cloned on first access.
+    await lazyProvisionFromDefault(prisma.leaveType, req.user?.tenantId);
     const all = req.query.all === 'true';
     const types = await prisma.leaveType.findMany({ where: all ? {} : { isActive: true }, orderBy: { name: 'asc' } });
     res.json(types);

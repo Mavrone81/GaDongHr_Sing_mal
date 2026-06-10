@@ -269,7 +269,7 @@ model EmployeeCompetency {
 model EmployeeSfcBalance {
   id               String   @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  employeeId       String   @unique
+  employeeId       String
   balanceAmount    Float    @default(0)
   lifetimeReceived Float    @default(0)
   lifetimeUsed     Float    @default(0)
@@ -277,6 +277,7 @@ model EmployeeSfcBalance {
   updatedAt        DateTime @updatedAt
   updatedBy        String
 
+  @@unique([tenantId, employeeId])
   @@index([tenantId])
   @@map("employee_sfc_balances")
 }

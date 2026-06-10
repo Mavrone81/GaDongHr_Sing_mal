@@ -12,7 +12,7 @@ datasource db {
 model ClaimCategory {
   id              String   @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  code            String   @unique
+  code            String
   name            String
   maxAmount       Float?
   requiresReceipt Boolean  @default(true)
@@ -22,6 +22,7 @@ model ClaimCategory {
 
   claims Claim[]
 
+  @@unique([tenantId, code])
   @@index([tenantId])
   @@map("claim_categories")
 }
@@ -99,7 +100,7 @@ enum ClaimStatus {
 model VendorGstRegistration {
   id              String   @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  gstNumber       String   @unique
+  gstNumber       String
   vendorName      String
   effectiveFrom   DateTime
   effectiveTo     DateTime?  // null = currently registered
@@ -109,6 +110,7 @@ model VendorGstRegistration {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  @@unique([tenantId, gstNumber])
   @@index([vendorName])
   @@index([tenantId])
   @@map("vendor_gst_registrations")

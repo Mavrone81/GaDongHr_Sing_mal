@@ -11,7 +11,7 @@ datasource db {
 model Asset {
   id            String      @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  assetCode     String      @unique
+  assetCode     String
   name          String
   category      String
   serialNumber  String?
@@ -36,6 +36,7 @@ model Asset {
   @@index([nextMaintenanceAt])
   @@index([contractEndDate])
   @@index([tenantId])
+  @@unique([tenantId, assetCode])
   @@map("assets")
 }
 
@@ -71,7 +72,7 @@ enum AssetStatus {
 model InventoryItem {
   id           String   @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  sku          String   @unique
+  sku          String
   name         String
   category     String                    // STATIONERY, PPE, UNIFORM, CONSUMABLE, OTHER
   unit         String   @default("EA")   // EA, BOX, PACK, etc.
@@ -89,6 +90,7 @@ model InventoryItem {
   purchaseRequests  PurchaseRequest[]
 
   @@index([tenantId])
+  @@unique([tenantId, sku])
   @@map("inventory_items")
 }
 
@@ -169,7 +171,7 @@ enum StockTxType {
 model PurchaseRequest {
   id                String                 @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  prNumber          String                 @unique
+  prNumber          String
   inventoryItemId   String
   quantitySuggested Int
   status            PurchaseRequestStatus  @default(DRAFT)
@@ -184,6 +186,7 @@ model PurchaseRequest {
 
   @@index([status])
   @@index([tenantId])
+  @@unique([tenantId, prNumber])
   @@map("purchase_requests")
 }
 

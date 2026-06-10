@@ -142,7 +142,7 @@ model OnboardingTask {
 model BuddyAssignment {
   id          String    @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  employeeId  String    @unique   // the new hire
+  employeeId  String    // the new hire
   buddyId     String              // buddy's employeeId from employee-service
   buddyName   String?             // cached display name
   newHireName String?             // cached display name
@@ -151,6 +151,7 @@ model BuddyAssignment {
   assignedAt  DateTime  @default(now())
   note        String?
 
+  @@unique([tenantId, employeeId])
   @@index([buddyId])
   @@index([tenantId])
   @@map("buddy_assignments")
@@ -159,7 +160,7 @@ model BuddyAssignment {
 model WorkPass {
   id           String   @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  employeeId   String   @unique
+  employeeId   String
   passType     String
   passNumber   String
   expiryDate   DateTime
@@ -180,6 +181,7 @@ model WorkPass {
   alerts       WorkPassAlert[]
   checklistItems WorkPassRenewalChecklist[]
 
+  @@unique([tenantId, employeeId])
   @@index([tenantId])
   @@map("work_passes")
 }
@@ -252,7 +254,7 @@ model DrcQuotaConfig {
 model PolicyDocument {
   id           String   @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  code         String   @unique  // HANDBOOK | HARASSMENT_POLICY | PDPA_CONSENT | IT_ACCEPTABLE_USE | OTHER
+  code         String   // HANDBOOK | HARASSMENT_POLICY | PDPA_CONSENT | IT_ACCEPTABLE_USE | OTHER
   title        String
   description  String?
   documentUrl  String?           // link to hosted document content
@@ -267,6 +269,7 @@ model PolicyDocument {
 
   acknowledgements PolicyAcknowledgement[]
 
+  @@unique([tenantId, code])
   @@index([tenantId])
   @@map("policy_documents")
 }
@@ -311,7 +314,7 @@ enum OfferLetterStatus {
 model OfferLetter {
   id                 String            @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  candidateId        String            @unique
+  candidateId        String
   jobTitle           String
   department         String?
   startDate          DateTime?
@@ -329,6 +332,7 @@ model OfferLetter {
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
+  @@unique([tenantId, candidateId])
   @@index([status])
   @@index([tenantId])
   @@map("offer_letters")
