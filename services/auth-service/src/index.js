@@ -10,7 +10,8 @@ const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
 const roleRoutes = require('./routes/role.routes');
 const purgeRoutes = require('./routes/purge.routes');
-const { generateKeysIfNeeded } = require('./utils/jwt.utils');
+const { generateKeysIfNeeded, verifyToken } = require('./utils/jwt.utils');
+const { als, DEFAULT_TENANT_ID } = require('./utils/tenantContext');
 const prisma = require('./utils/prisma');
 
 const app = express();
@@ -25,6 +26,26 @@ app.use(cors());
 app.use(cookieParser());
 app.use(express.json({ limit: '10kb' }));
 app.use(morgan('combined'));
+
+// ── Tenant context ────────────────────────────────────────────────────────────
+// Establish the request-scoped tenantId from the VERIFIED JWT only (never from
+// headers/body/query). The auto-scoping Prisma extension reads it to isolate
+// every query. Pre-multitenancy tokens (no tenantId claim) fall back to the
+// Default tenant, so existing sessions keep working without a forced re-login.
+app.use((req, res, next) => {
+  let tenantId;
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = (authHeader && authHeader.startsWith('Bearer '))
+      ? authHeader.slice(7)
+      : req.cookies?.vorkhive_token;
+    if (token) {
+      const payload = verifyToken(token);
+      if (!payload?.sso_pending) tenantId = payload.tenantId || DEFAULT_TENANT_ID;
+    }
+  } catch { /* no/invalid token → public route, run unscoped */ }
+  als.run({ tenantId, bypass: false }, () => next());
+});
 
 // Health check
 app.get('/health', (req, res) => res.json({ service: 'auth-service', status: 'ok', ts: new Date() }));

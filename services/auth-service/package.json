@@ -9,6 +9,7 @@
     "test": "jest --runInBand",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
+    "seed:tenant": "node scripts/seed-default-tenant.js",
     "seed:rbac": "node scripts/seed-rbac.js",
     "seed:admin": "node scripts/seed-initial-admin.js"
   },

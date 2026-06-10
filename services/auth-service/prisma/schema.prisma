@@ -9,9 +9,88 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ───────────────────────── Multi-tenancy (Phase 1) ──────────────────────────
+// Shared-DB + row-level isolation. Every tenant-scoped row carries `tenantId`.
+// Existing single-tenant data is backfilled to the fixed "Default" tenant via
+// the column default below + the idempotent seed (scripts/seed-default-tenant.js).
+// DEFAULT_TENANT_ID = 00000000-0000-0000-0000-000000000001
+
+model Tenant {
+  id             String       @id @default(uuid())
+  name           String                          // company display name
+  slug           String       @unique            // e.g. acme -> subdomain/login hint
+  country        String       @default("SG")     // SG | MY | HK | ID | TH | PH | VN
+  companySize    String?                         // "1-10", "11-20", ...
+  referralSource String?                         // "where did you hear about us"
+  status         TenantStatus @default(TRIALING)
+  trialEndsAt    DateTime
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Note: User/Role reference tenantId as an indexed scalar (no FK) so `db push`
+  // can add the column to existing rows without FK-validating against this
+  // (initially empty) table. Subscription/CompanyProfile are new tables and use
+  // real relations below.
+  subscription Subscription?
+  profile      CompanyProfile?
+
+  @@map("tenants")
+}
+
+enum TenantStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELED
+}
+
+model Subscription {
+  id               String    @id @default(uuid())
+  tenantId         String    @unique
+  plan             String    @default("trial") // trial | starter | pro
+  status           String    @default("trialing") // trialing | active | past_due | canceled
+  seats            Int       @default(0)
+  trialEndsAt      DateTime
+  currentPeriodEnd DateTime?
+  stripeCustomerId String?
+  stripeSubId      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model CompanyProfile {
+  id             String   @id @default(uuid())
+  tenantId       String   @unique
+  legalName      String
+  registrationNo String? // UEN (SG) / SSM (MY) etc.
+  industry       String?
+  addressLine1   String?
+  addressLine2   String?
+  postalCode     String?
+  city           String?
+  country        String   @default("SG")
+  logoUrl        String?
+  payrollConfig  Json? // country-specific: CPF rates ref, pay cycle, etc.
+  completed      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("company_profiles")
+}
+
+// ─────────────────────────── Existing models ────────────────────────────────
+
 model User {
   id            String    @id @default(uuid())
-  email         String    @unique
+  tenantId      String    @default("00000000-0000-0000-0000-000000000001")
+  email         String
   passwordHash  String
   name          String
   roleId        String?
@@ -42,12 +121,16 @@ model User {
   refreshTokens RefreshToken[]
   auditLogs     AuditLog[]
 
+  // Email is unique PER TENANT now (two companies may share an email).
+  @@unique([tenantId, email])
+  @@index([tenantId])
   @@map("users")
 }
 
 model Role {
   id          String   @id @default(uuid())
-  name        String   @unique
+  tenantId    String   @default("00000000-0000-0000-0000-000000000001")
+  name        String
   description String?
   isSystem    Boolean  @default(false)
   createdAt   DateTime @default(now())
@@ -56,12 +139,15 @@ model Role {
   users       User[]
   permissions RolePermission[]
 
+  // Each tenant has its own role set.
+  @@unique([tenantId, name])
+  @@index([tenantId])
   @@map("roles")
 }
 
 model Permission {
   id          String   @id @default(uuid())
-  code        String   @unique // e.g., "payroll:view"
+  code        String   @unique // e.g., "payroll:view" — global catalog, not tenant-scoped
   name        String
   description String?
   module      String?  // e.g., "PAYROLL"
@@ -98,6 +184,7 @@ model RefreshToken {
 
 model AuditLog {
   id         String   @id @default(uuid())
+  tenantId   String   @default("00000000-0000-0000-0000-000000000001")
   userId     String?
   action     String
   resource   String?
@@ -111,6 +198,7 @@ model AuditLog {
 
   user User? @relation(fields: [userId], references: [id])
 
+  @@index([tenantId])
   @@index([userId])
   @@index([action])
   @@index([createdAt])
@@ -120,22 +208,26 @@ model AuditLog {
 // Short-lived OTP tokens for Email OTP method
 model OtpToken {
   id        String   @id @default(uuid())
+  tenantId  String   @default("00000000-0000-0000-0000-000000000001")
   userId    String
   codeHash  String   // bcrypt hash of the 6-digit code
   expiresAt DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
 
+  @@index([tenantId])
   @@index([userId])
   @@map("otp_tokens")
 }
 
-// Org-wide key-value settings (e.g. mfaMethod)
+// Org-wide key-value settings (e.g. mfaMethod) — now per-tenant.
 model OrgSetting {
-  key       String   @id
+  tenantId  String   @default("00000000-0000-0000-0000-000000000001")
+  key       String
   value     String
   updatedAt DateTime @updatedAt
 
+  @@id([tenantId, key])
+  @@index([tenantId])
   @@map("org_settings")
 }
-

@@ -20,7 +20,10 @@ const mockQueryRaw      = jest.fn().mockResolvedValue([]);
 
 jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({
-    user: { findUnique: mockFindUnique, update: mockUpdate, findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn(), count: jest.fn() },
+    // forgot-password now resolves the user via findFirst (email is unique per
+    // tenant); reset-password still uses findUnique (resetTokenHash). Route both
+    // to the same configured mock so the existing assertions hold.
+    user: { findUnique: mockFindUnique, update: mockUpdate, findFirst: mockFindUnique, findMany: jest.fn(), create: jest.fn(), count: jest.fn() },
     role: { findFirst: jest.fn() },
     refreshToken: { updateMany: mockRefreshUpdate, findUnique: jest.fn(), create: jest.fn() },
     auditLog: { create: mockAuditCreate },

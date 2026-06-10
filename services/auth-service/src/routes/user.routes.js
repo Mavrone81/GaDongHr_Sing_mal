@@ -79,7 +79,7 @@ router.post('/', checkInternal, (req, res, next) => {
     const { email, password, name, role, employeeId, relink } = req.body;
     if (!email || !password || !name) return res.status(400).json({ error: 'email, password, name are required' });
 
-    const exists = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const exists = await prisma.user.findFirst({ where: { email: email.toLowerCase() } });
     if (exists) return res.status(409).json({ error: 'Email already registered' });
 
     if (employeeId) {
@@ -202,7 +202,7 @@ router.patch('/link-employee', checkInternal, async (req, res, next) => {
     const { email, employeeId } = req.body;
     if (!email || !employeeId) return res.status(400).json({ error: 'email and employeeId required' });
 
-    const target = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const target = await prisma.user.findFirst({ where: { email: email.toLowerCase() } });
     if (!target) return res.status(404).json({ error: 'User not found' });
 
     const user = await prisma.user.update({
