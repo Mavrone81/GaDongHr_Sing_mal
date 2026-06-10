@@ -10,6 +10,7 @@ const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
 const roleRoutes = require('./routes/role.routes');
 const tenantsRoutes = require('./routes/tenants.routes');
+const billingRoutes = require('./routes/billing.routes');
 const purgeRoutes = require('./routes/purge.routes');
 const { generateKeysIfNeeded, verifyToken } = require('./utils/jwt.utils');
 const { als, DEFAULT_TENANT_ID } = require('./utils/tenantContext');
@@ -56,6 +57,7 @@ app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
 app.use('/roles', roleRoutes);
 app.use('/tenants', tenantsRoutes);
+app.use('/billing', billingRoutes);
 app.use('/auth/purge', purgeRoutes);
 
 // Global error handler
@@ -88,12 +90,29 @@ function schedulePurge() {
   console.log(`[purge-scheduler] Next run scheduled for ${next.toISOString()}`);
 }
 
+// Daily: flip expired free trials to PAST_DUE (the gateway then paywalls the HR
+// modules; data is retained). Runs hourly so the paywall kicks in promptly.
+async function trialExpirySweep() {
+  try {
+    const r = await prisma.$executeRawUnsafe(
+      `UPDATE tenants SET status = 'PAST_DUE', "updatedAt" = now()
+       WHERE status = 'TRIALING' AND "trialEndsAt" < now()
+         AND id <> '${DEFAULT_TENANT_ID}'
+         AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s."tenantId" = tenants.id AND s.status = 'active')`);
+    if (r) console.log(`[trial-expiry] ${r} tenant(s) moved TRIALING -> PAST_DUE`);
+  } catch (e) {
+    console.error('[trial-expiry] error:', e.message);
+  }
+}
+
 async function start() {
   await generateKeysIfNeeded();
   app.listen(PORT, () => {
     console.log(`[auth-service] Running on port ${PORT}`);
   });
   schedulePurge();
+  trialExpirySweep();
+  setInterval(trialExpirySweep, 60 * 60 * 1000); // hourly
 }
 
 if (require.main === module) {
