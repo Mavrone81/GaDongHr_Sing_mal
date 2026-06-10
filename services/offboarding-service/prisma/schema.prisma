@@ -11,6 +11,7 @@ datasource db {
 
 model OffboardingCase {
   id                  String     @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId          String     @unique
   employeeName        String     @default("")
   department          String     @default("")
@@ -39,11 +40,13 @@ model OffboardingCase {
 
   clearanceItems ClearanceItem[]
 
+  @@index([tenantId])
   @@map("offboarding_cases")
 }
 
 model ClearanceItem {
   id          String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   caseId      String
   itemName    String
   description String?
@@ -55,6 +58,7 @@ model ClearanceItem {
 
   case OffboardingCase @relation(fields: [caseId], references: [id])
 
+  @@index([tenantId])
   @@map("clearance_items")
 }
 

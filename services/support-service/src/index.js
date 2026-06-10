@@ -11,6 +11,8 @@ const app = express();
 const PORT = process.env.PORT || 4014;
 
 app.use(helmet()); app.use(cors()); app.use(express.json({ limit: '50kb' })); app.use(morgan('combined'));
+const { tenantContextMiddleware } = require('/app/shared/tenant-context');
+app.use(tenantContextMiddleware);
 app.get('/health', (req, res) => res.json({ service: 'support-service', status: 'ok', ts: new Date() }));
 app.use('/support', supportRoutes);
 app.use('/support', faqRoutes);

@@ -81,6 +81,7 @@ enum FeedbackQuestionType {
 
 model ReviewCycle {
   id           String      @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   name         String
   type         CycleType
   startDate    DateTime
@@ -101,11 +102,13 @@ model ReviewCycle {
   feedbackQuestions   FeedbackQuestion[]
   bellCurveConfig     BellCurveConfig?
 
+  @@index([tenantId])
   @@map("review_cycles")
 }
 
 model BellCurveConfig {
   id        String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   cycleId   String   @unique
   bands     Json
   createdBy String
@@ -115,11 +118,13 @@ model BellCurveConfig {
 
   cycle ReviewCycle @relation(fields: [cycleId], references: [id])
 
+  @@index([tenantId])
   @@map("bell_curve_configs")
 }
 
 model Appraisal {
   id               String          @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   cycleId          String
   employeeId       String
   managerId        String?
@@ -145,11 +150,13 @@ model Appraisal {
   incrementProposal IncrementProposal?
 
   @@unique([cycleId, employeeId])
+  @@index([tenantId])
   @@map("appraisals")
 }
 
 model IncrementProposal {
   id             String          @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   cycleId        String
   appraisalId    String          @unique
   employeeId     String
@@ -165,11 +172,13 @@ model IncrementProposal {
   cycle     ReviewCycle @relation(fields: [cycleId], references: [id])
   appraisal Appraisal   @relation(fields: [appraisalId], references: [id])
 
+  @@index([tenantId])
   @@map("increment_proposals")
 }
 
 model Goal {
   id          String       @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId  String
   cycleId     String?
   title       String
@@ -181,11 +190,13 @@ model Goal {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
+  @@index([tenantId])
   @@map("goals")
 }
 
 model PipRecord {
   id             String    @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId     String
   managerId      String
   startDate      DateTime
@@ -196,6 +207,7 @@ model PipRecord {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
+  @@index([tenantId])
   @@map("pip_records")
 }
 
@@ -203,6 +215,7 @@ model PipRecord {
 
 model FeedbackQuestion {
   id           String               @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   cycleId      String
   questionText String
   questionType FeedbackQuestionType @default(RATING)
@@ -216,11 +229,13 @@ model FeedbackQuestion {
   responses FeedbackResponse[]
 
   @@index([cycleId])
+  @@index([tenantId])
   @@map("feedback_questions")
 }
 
 model FeedbackRequest {
   id                 String                @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   cycleId            String
   subjectEmployeeId  String
   reviewerEmployeeId String
@@ -242,11 +257,13 @@ model FeedbackRequest {
   @@index([cycleId])
   @@index([subjectEmployeeId])
   @@index([reviewerEmployeeId])
+  @@index([tenantId])
   @@map("feedback_requests")
 }
 
 model FeedbackResponse {
   id          String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   requestId   String
   questionId  String
   ratingValue Float?
@@ -257,6 +274,7 @@ model FeedbackResponse {
   question FeedbackQuestion @relation(fields: [questionId], references: [id])
 
   @@unique([requestId, questionId])
+  @@index([tenantId])
   @@map("feedback_responses")
 }
 
@@ -283,6 +301,7 @@ enum DevPlanStatus {
 
 model KeyPosition {
   id              String         @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   jobTitle        String
   department      String?
   description     String?
@@ -298,11 +317,13 @@ model KeyPosition {
 
   @@index([department])
   @@index([riskLevel])
+  @@index([tenantId])
   @@map("key_positions")
 }
 
 model SuccessorNominee {
   id            String         @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   positionId    String
   employeeId    String
   readiness     ReadinessLevel
@@ -318,11 +339,13 @@ model SuccessorNominee {
 
   @@unique([positionId, employeeId])
   @@index([employeeId])
+  @@index([tenantId])
   @@map("successor_nominees")
 }
 
 model SuccessionDevPlan {
   id                String        @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   nomineeId         String
   competencyGap     String
   action            String
@@ -339,5 +362,6 @@ model SuccessionDevPlan {
   nominee SuccessorNominee @relation(fields: [nomineeId], references: [id])
 
   @@index([nomineeId])
+  @@index([tenantId])
   @@map("succession_dev_plans")
 }

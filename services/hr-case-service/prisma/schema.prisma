@@ -13,6 +13,7 @@ datasource db {
 
 model HrCase {
   id              String          @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   caseNumber      String          @unique  // DSC-2026-00001 / GRV-2026-00001
   type            CaseType
   status          CaseStatus      @default(OPEN)
@@ -54,6 +55,7 @@ model HrCase {
   @@index([type, status])
   @@index([status, escalationLevel])
   @@index([openedAt])
+  @@index([tenantId])
 }
 
 enum CaseType {
@@ -96,6 +98,7 @@ enum EscalationLevel {
 // ── Incidents (factual events on a case) ──────────────────────────────────────
 model CaseIncident {
   id           String      @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   case         HrCase      @relation(fields: [caseId], references: [id], onDelete: Cascade)
   caseId       String
   occurredAt   DateTime
@@ -108,11 +111,13 @@ model CaseIncident {
   loggedAt     DateTime    @default(now())
 
   @@index([caseId])
+  @@index([tenantId])
 }
 
 // ── Actions (warnings, suspensions, terminations, etc.) ───────────────────────
 model CaseAction {
   id            String       @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   case          HrCase       @relation(fields: [caseId], references: [id], onDelete: Cascade)
   caseId        String
   actionType    ActionType
@@ -130,6 +135,7 @@ model CaseAction {
   createdAt     DateTime     @default(now())
 
   @@index([caseId, actionType])
+  @@index([tenantId])
 }
 
 enum ActionType {
@@ -153,6 +159,7 @@ enum ActionType {
 // ── Timeline (audit log of every event on a case) ─────────────────────────────
 model CaseTimeline {
   id          String      @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   case        HrCase      @relation(fields: [caseId], references: [id], onDelete: Cascade)
   caseId      String
   event       String      // 'CASE_OPENED', 'INCIDENT_LOGGED', 'ACTION_ISSUED:VERBAL_WARNING', 'ESCALATED:HR_MANAGER', 'APPEAL_FILED', 'RESOLVED', etc.
@@ -162,11 +169,13 @@ model CaseTimeline {
   createdAt   DateTime    @default(now())
 
   @@index([caseId, createdAt])
+  @@index([tenantId])
 }
 
 // ── Appeals ───────────────────────────────────────────────────────────────────
 model CaseAppeal {
   id            String        @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   case          HrCase        @relation(fields: [caseId], references: [id], onDelete: Cascade)
   caseId        String
   filedBy       String
@@ -181,6 +190,7 @@ model CaseAppeal {
   outcomeNotes  String?
 
   @@index([caseId])
+  @@index([tenantId])
 }
 
 enum AppealStatus {
@@ -194,6 +204,7 @@ enum AppealStatus {
 // ── Inquiry Committee (for serious/gross misconduct cases) ────────────────────
 model InquiryCommittee {
   id           String      @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   case         HrCase      @relation(fields: [caseId], references: [id], onDelete: Cascade)
   caseId       String      @unique
   formedAt     DateTime    @default(now())
@@ -207,11 +218,14 @@ model InquiryCommittee {
   reportSubmittedAt DateTime?
   reportSummary String?
   recommendation String?
+
+  @@index([tenantId])
 }
 
 // ── Attachments (uploaded documents on a case) ────────────────────────────────
 model CaseAttachment {
   id          String      @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   case        HrCase      @relation(fields: [caseId], references: [id], onDelete: Cascade)
   caseId      String
   fileName    String
@@ -222,4 +236,5 @@ model CaseAttachment {
   uploadedAt  DateTime    @default(now())
 
   @@index([caseId])
+  @@index([tenantId])
 }

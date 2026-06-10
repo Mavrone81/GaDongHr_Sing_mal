@@ -8,7 +8,7 @@ const { PrismaClient } = require('@prisma/client');
 const multer = require('multer');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 const EMPLOYEE_SERVICE_URL    = process.env.EMPLOYEE_SERVICE_URL    || 'http://employee-service:4002';
 const LEAVE_SERVICE_URL       = process.env.LEAVE_SERVICE_URL       || 'http://leave-service:4004';

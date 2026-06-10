@@ -45,6 +45,7 @@ enum CertStatus {
 
 model TrainingProgram {
   id           String          @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   title        String
   description  String?
   category     ProgramCategory @default(TECHNICAL)
@@ -71,11 +72,13 @@ model TrainingProgram {
   renewalForCerts EmployeeCertification[] @relation("RenewalProgram")
   grantClaims     GrantClaim[]
 
+  @@index([tenantId])
   @@map("training_programs")
 }
 
 model TrainingMaterial {
   id           String       @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   programId    String
   title        String
   type         MaterialType @default(DOCUMENT)
@@ -88,11 +91,13 @@ model TrainingMaterial {
 
   program TrainingProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
 
+  @@index([tenantId])
   @@map("training_materials")
 }
 
 model TrainingEnrollment {
   id          String           @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   programId   String
   employeeId  String
   status      EnrollmentStatus @default(ENROLLED)
@@ -115,11 +120,13 @@ model TrainingEnrollment {
   grantClaims      GrantClaim[]
 
   @@unique([programId, employeeId])
+  @@index([tenantId])
   @@map("training_enrollments")
 }
 
 model TrainingMaterialProgress {
   id           String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   enrollmentId String
   materialId   String
   score        Int?
@@ -128,11 +135,13 @@ model TrainingMaterialProgress {
   enrollment TrainingEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
 
   @@unique([enrollmentId, materialId])
+  @@index([tenantId])
   @@map("training_material_progress")
 }
 
 model EmployeeCertification {
   id               String     @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId       String
   certName         String
   issuingBody      String?
@@ -154,6 +163,7 @@ model EmployeeCertification {
 
   @@index([employeeId])
   @@index([expiresAt])
+  @@index([tenantId])
   @@map("employee_certifications")
 }
 
@@ -163,6 +173,7 @@ model EmployeeCertification {
 // dedupe key so re-runs don't double-fire.
 model CertReminder {
   id        String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   certId    String
   threshold Int
   daysUntil Int
@@ -172,6 +183,7 @@ model CertReminder {
 
   @@unique([certId, threshold])
   @@index([sentAt])
+  @@index([tenantId])
   @@map("cert_reminders")
 }
 
@@ -180,6 +192,7 @@ model CertReminder {
 // level; an employee is assessed at a given level. Gap = required − assessed.
 model Competency {
   id          String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   name        String
   description String?
   category    String?
@@ -192,11 +205,13 @@ model Competency {
   employeeAssessments   EmployeeCompetency[]
   certifications        EmployeeCertification[]
 
+  @@index([tenantId])
   @@map("competencies")
 }
 
 model ProgramCompetency {
   id           String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   programId    String
   competencyId String
   taughtLevel  Int
@@ -206,11 +221,13 @@ model ProgramCompetency {
   competency Competency      @relation(fields: [competencyId], references: [id], onDelete: Cascade)
 
   @@unique([programId, competencyId])
+  @@index([tenantId])
   @@map("program_competencies")
 }
 
 model JobFamilyCompetency {
   id            String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   jobFamily     String
   competencyId  String
   requiredLevel Int
@@ -221,11 +238,13 @@ model JobFamilyCompetency {
 
   @@unique([jobFamily, competencyId])
   @@index([jobFamily])
+  @@index([tenantId])
   @@map("job_family_competencies")
 }
 
 model EmployeeCompetency {
   id            String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId    String
   competencyId  String
   assessedLevel Int
@@ -238,6 +257,7 @@ model EmployeeCompetency {
 
   @@unique([employeeId, competencyId])
   @@index([employeeId])
+  @@index([tenantId])
   @@map("employee_competencies")
 }
 
@@ -248,6 +268,7 @@ model EmployeeCompetency {
 // lifetime totals; declarations decrement balance.
 model EmployeeSfcBalance {
   id               String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId       String   @unique
   balanceAmount    Float    @default(0)
   lifetimeReceived Float    @default(0)
@@ -256,6 +277,7 @@ model EmployeeSfcBalance {
   updatedAt        DateTime @updatedAt
   updatedBy        String
 
+  @@index([tenantId])
   @@map("employee_sfc_balances")
 }
 
@@ -264,12 +286,14 @@ model EmployeeSfcBalance {
 // programmes. Stored as a singleton row keyed by `id = 'singleton'`.
 model SfecLedger {
   id          String   @id @default("singleton")
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   totalCredit Float    @default(10000)
   usedAmount  Float    @default(0)
   notes       String?
   updatedAt   DateTime @updatedAt
   updatedBy   String
 
+  @@index([tenantId])
   @@map("sfec_ledger")
 }
 
@@ -277,6 +301,7 @@ model SfecLedger {
 // SFEC / SFC. Each claim links to an enrollment + program; aggregated for reports.
 model GrantClaim {
   id             String          @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   enrollmentId   String?         // null if pre-enrollment claim
   programId      String
   employeeId     String
@@ -298,6 +323,7 @@ model GrantClaim {
   @@index([employeeId])
   @@index([claimType])
   @@index([status])
+  @@index([tenantId])
   @@map("grant_claims")
 }
 

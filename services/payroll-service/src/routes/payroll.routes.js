@@ -21,7 +21,7 @@ async function fireAndForget(fn) {
   try { await fn(); } catch (err) { console.error('[fire-and-forget]', err.message); }
 }
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 // ─── Helper: safe decrypt to float ───────────────────────────────────────────
 const decSafe = (enc) => { try { return enc ? parseFloat(decrypt(enc)) || 0 : 0; } catch { return 0; } };

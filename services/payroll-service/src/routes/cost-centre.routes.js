@@ -26,7 +26,7 @@ const {
   buildEntriesForEmployee, summariseEntries, toCsv, toXero, toQuickBooks, toSap,
 } = require('../engines/journal.engine');
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 const decSafe = (enc) => { try { return enc ? parseFloat(decrypt(enc)) || 0 : 0; } catch { return 0; } };
 const WRITE_ROLES = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER];

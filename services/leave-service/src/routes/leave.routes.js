@@ -9,7 +9,7 @@ const multer = require('multer');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, authorizeSelfOrRole, ROLES } = require('/app/shared/auth-middleware');
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 const EMPLOYEE_URL = process.env.EMPLOYEE_SERVICE_URL || 'http://employee-service:4002';
 const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY || '';

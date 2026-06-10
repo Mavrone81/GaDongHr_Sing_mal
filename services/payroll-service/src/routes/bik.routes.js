@@ -30,7 +30,7 @@ const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware'
 const { encrypt, decrypt } = require('/app/shared/crypto');
 const { computeBikAnnualValue, computeStockOptionGain } = require('../engines/bik.engine');
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 const decSafe = (enc) => { try { return enc ? parseFloat(decrypt(enc)) || 0 : 0; } catch { return 0; } };
 const BIK_TYPES = ['COMPANY_CAR', 'HOUSING', 'CLUB_MEMBERSHIP', 'GROUP_INSURANCE', 'OTHER'];

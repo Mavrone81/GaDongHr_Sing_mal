@@ -11,6 +11,7 @@ datasource db {
 
 model JobPosting {
   id              String     @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   title           String
   department      String
   headcount       Int        @default(1)
@@ -40,11 +41,13 @@ model JobPosting {
 
   @@index([fcfCompliant])
   @@index([fcfExempt])
+  @@index([tenantId])
   @@map("job_postings")
 }
 
 model Candidate {
   id              String     @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   jobId           String?
   firstName       String
   lastName        String
@@ -75,6 +78,7 @@ model Candidate {
   stageEvents      CandidateStageEvent[]
 
   @@index([citizenStatus])
+  @@index([tenantId])
   @@map("candidates")
 }
 
@@ -86,6 +90,7 @@ enum CitizenshipKind {
 
 model CandidateStageEvent {
   id          String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   candidateId String
   fromStage   String?
   toStage     String
@@ -96,11 +101,13 @@ model CandidateStageEvent {
   candidate   Candidate @relation(fields: [candidateId], references: [id])
 
   @@index([candidateId])
+  @@index([tenantId])
   @@map("candidate_stage_events")
 }
 
 model InterviewRound {
   id            String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   candidateId   String
   roundName     String
   scheduledAt   DateTime
@@ -111,11 +118,13 @@ model InterviewRound {
 
   candidate Candidate @relation(fields: [candidateId], references: [id])
 
+  @@index([tenantId])
   @@map("interview_rounds")
 }
 
 model OnboardingTask {
   id          String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId  String
   taskName    String
   description String?
@@ -126,11 +135,13 @@ model OnboardingTask {
   createdAt   DateTime @default(now())
 
   @@index([employeeId])
+  @@index([tenantId])
   @@map("onboarding_tasks")
 }
 
 model BuddyAssignment {
   id          String    @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId  String    @unique   // the new hire
   buddyId     String              // buddy's employeeId from employee-service
   buddyName   String?             // cached display name
@@ -141,11 +152,13 @@ model BuddyAssignment {
   note        String?
 
   @@index([buddyId])
+  @@index([tenantId])
   @@map("buddy_assignments")
 }
 
 model WorkPass {
   id           String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId   String   @unique
   passType     String
   passNumber   String
@@ -167,6 +180,7 @@ model WorkPass {
   alerts       WorkPassAlert[]
   checklistItems WorkPassRenewalChecklist[]
 
+  @@index([tenantId])
   @@map("work_passes")
 }
 
@@ -175,6 +189,7 @@ model WorkPass {
 // duplicate notifications.
 model WorkPassAlert {
   id          String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   workPassId  String
   employeeId  String   // denormalised for fast dashboard queries
   passType    String
@@ -189,12 +204,14 @@ model WorkPassAlert {
   @@unique([workPassId, threshold])
   @@index([employeeId])
   @@index([expiryDate])
+  @@index([tenantId])
   @@map("work_pass_alerts")
 }
 
 // REC-003: per-pass-type renewal checklist items. HR ticks each off.
 model WorkPassRenewalChecklist {
   id          String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   workPassId  String
   itemName    String
   isComplete  Boolean  @default(false)
@@ -206,6 +223,7 @@ model WorkPassRenewalChecklist {
   workPass    WorkPass @relation(fields: [workPassId], references: [id], onDelete: Cascade)
 
   @@index([workPassId])
+  @@index([tenantId])
   @@map("work_pass_renewal_checklist")
 }
 
@@ -215,6 +233,7 @@ model WorkPassRenewalChecklist {
 // "approaching cap" warn level (e.g. 0.85 = warn at 85% of cap).
 model DrcQuotaConfig {
   id              String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   sector          String
   workerTier      String   @default("BASIC")  // BASIC | HIGHER
   ratioLimit      Float    // e.g. 0.83 for CONSTRUCTION basic-tier
@@ -224,6 +243,7 @@ model DrcQuotaConfig {
   updatedAt       DateTime @updatedAt
 
   @@unique([sector, workerTier])
+  @@index([tenantId])
   @@map("drc_quota_configs")
 }
 
@@ -231,6 +251,7 @@ model DrcQuotaConfig {
 // HR Admin seeds / manages these; employees acknowledge each one during onboarding.
 model PolicyDocument {
   id           String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   code         String   @unique  // HANDBOOK | HARASSMENT_POLICY | PDPA_CONSENT | IT_ACCEPTABLE_USE | OTHER
   title        String
   description  String?
@@ -246,6 +267,7 @@ model PolicyDocument {
 
   acknowledgements PolicyAcknowledgement[]
 
+  @@index([tenantId])
   @@map("policy_documents")
 }
 
@@ -253,6 +275,7 @@ model PolicyDocument {
 // hired; employee flips to ACKNOWLEDGED via the ESS portal.
 model PolicyAcknowledgement {
   id             String    @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId     String
   documentId     String
   status         AckStatus @default(PENDING)
@@ -266,6 +289,7 @@ model PolicyAcknowledgement {
   @@unique([employeeId, documentId])
   @@index([employeeId])
   @@index([status])
+  @@index([tenantId])
   @@map("policy_acknowledgements")
 }
 
@@ -286,6 +310,7 @@ enum OfferLetterStatus {
 // REC-001: Offer letter generated on candidate approval, sent for e-sign via ESV-003.
 model OfferLetter {
   id                 String            @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   candidateId        String            @unique
   jobTitle           String
   department         String?
@@ -305,6 +330,7 @@ model OfferLetter {
   updatedAt          DateTime          @updatedAt
 
   @@index([status])
+  @@index([tenantId])
   @@map("offer_letters")
 }
 

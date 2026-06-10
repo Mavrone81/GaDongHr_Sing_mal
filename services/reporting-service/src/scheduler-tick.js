@@ -24,7 +24,7 @@ const { toCsv } = require('./engines/csv');
 const { toPdf } = require('./engines/pdf');
 const { sendReportEmail } = require('./engines/email');
 
-const prisma = new PrismaClient();
+const prisma = require('./utils/prisma');
 
 async function buildAttachment(tpl, format, authHeader) {
   const rawRows = await fetchDataSource(tpl.definition.dataSource, authHeader);

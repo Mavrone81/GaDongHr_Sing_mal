@@ -13,6 +13,7 @@ datasource db {
 
 model Survey {
   id               String         @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   code             String         @unique  // e.g. "ANNUAL-2026", "Q2-PULSE-2026"
   title            String
   description      String?
@@ -35,6 +36,7 @@ model Survey {
   actions          SurveyAction[]
 
   @@index([status, type])
+  @@index([tenantId])
 }
 
 enum SurveyType {
@@ -52,6 +54,7 @@ enum SurveyStatus {
 
 model SurveyQuestion {
   id           String           @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   survey       Survey           @relation(fields: [surveyId], references: [id], onDelete: Cascade)
   surveyId     String
   type         QuestionType
@@ -67,6 +70,7 @@ model SurveyQuestion {
   answers      SurveyAnswer[]
 
   @@index([surveyId, displayOrder])
+  @@index([tenantId])
 }
 
 enum QuestionType {
@@ -78,6 +82,7 @@ enum QuestionType {
 
 model SurveyResponse {
   id                    String         @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   survey                Survey         @relation(fields: [surveyId], references: [id], onDelete: Cascade)
   surveyId              String
   respondentEmployeeId  String?        // null when anonymous=true (privacy)
@@ -92,10 +97,12 @@ model SurveyResponse {
 
   @@index([surveyId, submittedAt])
   @@index([respondentEmployeeId])
+  @@index([tenantId])
 }
 
 model SurveyAnswer {
   id          String         @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   response    SurveyResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
   responseId  String
   question    SurveyQuestion @relation(fields: [questionId], references: [id])
@@ -106,11 +113,13 @@ model SurveyAnswer {
 
   @@unique([responseId, questionId])
   @@index([questionId])
+  @@index([tenantId])
 }
 
 // Manager follow-up actions tied to a survey
 model SurveyAction {
   id          String          @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   survey      Survey          @relation(fields: [surveyId], references: [id], onDelete: Cascade)
   surveyId    String
   managerId   String
@@ -126,6 +135,7 @@ model SurveyAction {
 
   @@index([surveyId])
   @@index([managerId, status])
+  @@index([tenantId])
 }
 
 enum ActionStatus {

@@ -14,11 +14,13 @@ const {
   buildSurveyDashboard, validateAnswers,
 } = require('./engines/survey.engine');
 
-const prisma = new PrismaClient();
+const prisma = require('./utils/prisma');
 const app    = express();
 const PORT   = process.env.PORT || 4019;
 
 app.use(helmet()); app.use(cors()); app.use(express.json({ limit: '256kb' })); app.use(morgan('combined'));
+const { tenantContextMiddleware } = require('/app/shared/tenant-context');
+app.use(tenantContextMiddleware);
 app.get('/health', (req, res) => res.json({ service: 'survey-service', status: 'ok', ts: new Date() }));
 
 const HR_ROLES = [ROLES.HR_ADMIN, ROLES.HR_MANAGER, ROLES.SUPER_ADMIN];

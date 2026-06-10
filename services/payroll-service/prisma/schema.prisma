@@ -11,6 +11,7 @@ datasource db {
 
 model AuditLog {
   id          String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   entityType  String   // e.g. 'PayrollRun'
   entityId    String?  // run UUID
   action      String   // e.g. 'COMPUTE_ATTENDANCE_WARNING'
@@ -25,11 +26,13 @@ model AuditLog {
   @@index([entityId])
   @@index([action])
   @@index([createdAt])
+  @@index([tenantId])
   @@map("payroll_audit_logs")
 }
 
 model PayrollRun {
   id              String        @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   period          String        // e.g. "2025-01"
   runType         RunType       @default(MONTHLY)
   periodHalf      PeriodHalf?   // only set when runType=BIMONTHLY
@@ -54,11 +57,13 @@ model PayrollRun {
 
   @@unique([period, runType, periodHalf])
   @@index([period])
+  @@index([tenantId])
   @@map("payroll_runs")
 }
 
 model PayrollLineItem {
   id              String    @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   runId           String
   employeeId      String
   componentId     String
@@ -73,11 +78,13 @@ model PayrollLineItem {
 
   @@index([runId])
   @@index([employeeId])
+  @@index([tenantId])
   @@map("payroll_line_items")
 }
 
 model Payslip {
   id                  String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   runId               String
   employeeId          String
   period              String
@@ -109,6 +116,7 @@ model Payslip {
   @@unique([runId, employeeId])
   @@index([employeeId, period])
   @@index([publishedAt])
+  @@index([tenantId])
   @@map("payslips")
 }
 
@@ -117,6 +125,7 @@ model Payslip {
 // unique (runId, type) — one row per run per SLA type, refreshable.
 model PayslipSlaAlert {
   id          String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   runId       String
   period      String
   type        SlaAlertType
@@ -132,6 +141,7 @@ model PayslipSlaAlert {
   @@unique([runId, type])
   @@index([type])
   @@index([resolvedAt])
+  @@index([tenantId])
   @@map("payslip_sla_alerts")
 }
 
@@ -148,6 +158,7 @@ enum SlaAlertType {
 // from kind + period/year on create; daily sweep flags overdue rows.
 model IrasSubmission {
   id              String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   kind            IrasSubmissionKind
   // One of period (YYYY-MM) for monthly CPF, year (Int) for annual IRAS, or
   // employeeId for IR21. The combination of (kind + the relevant scope) is
@@ -178,6 +189,7 @@ model IrasSubmission {
   @@index([deadline])
   @@index([year])
   @@index([period])
+  @@index([tenantId])
   @@map("iras_submissions")
 }
 
@@ -198,6 +210,7 @@ enum IrasSubmissionStatus {
 
 model PayComponent {
   id              String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   code            String   @unique  // e.g. "BASIC", "OT_PAY", "AWS"
   name            String
   category        String   // ORDINARY_WAGES | ALLOWANCE | OT | ADDITIONAL_WAGES | DEDUCTION | REIMBURSEMENT
@@ -209,11 +222,13 @@ model PayComponent {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  @@index([tenantId])
   @@map("pay_components")
 }
 
 model CpfRate {
   id               String      @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   citizenStatus    String      // SC_PR | PR_YEAR1 | PR_YEAR2 | FOREIGNER
   ageMin           Int
   ageMax           Int?        // null = no upper bound
@@ -225,11 +240,13 @@ model CpfRate {
   isActive         Boolean     @default(true)
   createdAt        DateTime    @default(now())
 
+  @@index([tenantId])
   @@map("cpf_rates")
 }
 
 model SdlConfig {
   id            String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   rate          Float    @default(0.0025) // 0.25%
   minAmount     Float    @default(2.00)
   maxAmount     Float    @default(11.25)
@@ -238,11 +255,13 @@ model SdlConfig {
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
 
+  @@index([tenantId])
   @@map("sdl_config")
 }
 
 model FwlRate {
   id           String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   passType     String   // WP | S_PASS
   sector       String   // SERVICES | CONSTRUCTION | MARINE | PROCESS | MANUFACTURING
   tier         String   // BASIC_SKILLED | HIGHER_SKILLED | TIER1 | TIER2
@@ -251,12 +270,14 @@ model FwlRate {
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
 
+  @@index([tenantId])
   @@map("fwl_rates")
 }
 
 // ─── PAY-004: DRC (Dependency Ratio Ceiling) quota configuration ─────────────
 model DrcQuota {
   id             String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   sector         String   // SERVICES | CONSTRUCTION | MARINE | PROCESS | MANUFACTURING
   passType       String   // WP | S_PASS
   maxRatioPct    Float    // e.g. 15.0 = 15%
@@ -266,22 +287,26 @@ model DrcQuota {
   createdAt      DateTime @default(now())
 
   @@unique([sector, passType])
+  @@index([tenantId])
   @@map("drc_quotas")
 }
 
 model PublicHoliday {
   id        String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   date      DateTime
   name      String
   year      Int
   createdAt DateTime @default(now())
 
   @@unique([date])
+  @@index([tenantId])
   @@map("public_holidays")
 }
 
 model PayrollPeriodConfig {
   id          String      @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   period      String      @unique    // "YYYY-MM"
   workDayType WorkDayType @default(FIVE_DAY)
   workingDays Int?                   // null = auto-computed from public holidays
@@ -289,6 +314,7 @@ model PayrollPeriodConfig {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
+  @@index([tenantId])
   @@map("payroll_period_configs")
 }
 
@@ -297,6 +323,7 @@ model PayrollPeriodConfig {
 // computed (IRAS formula) or entered (manual) and surfaced in IR8A + Appendix 8A.
 model BikItem {
   id                String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId        String
   year              Int                          // tax year
   bikType           BikType                      // COMPANY_CAR | HOUSING | CLUB | GROUP_INSURANCE | OTHER
@@ -318,12 +345,14 @@ model BikItem {
   @@unique([employeeId, year, bikType])
   @@index([employeeId, year])
   @@index([year])
+  @@index([tenantId])
   @@map("bik_items")
 }
 
 // ─── Stock Options / ESOP / ESPP (IRAS Appendix 8B) ───────────────────────────
 model StockOptionGrant {
   id            String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId    String
   grantDate     DateTime
   totalShares   Int
@@ -337,11 +366,13 @@ model StockOptionGrant {
 
   @@index([employeeId])
   @@index([grantDate])
+  @@index([tenantId])
   @@map("stock_option_grants")
 }
 
 model StockOptionExercise {
   id                    String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   grantId               String
   exerciseDate          DateTime
   sharesExercised       Int
@@ -354,6 +385,7 @@ model StockOptionExercise {
 
   @@index([grantId])
   @@index([exerciseDate])
+  @@index([tenantId])
   @@map("stock_option_exercises")
 }
 
@@ -368,6 +400,7 @@ enum BikType {
 // ─── Cost centres & payroll journal (PAY-012) ─────────────────────────────────
 model CostCentre {
   id                String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   code              String   @unique
   name              String
   description       String?
@@ -384,6 +417,7 @@ model CostCentre {
   allocations EmployeeCostCentre[]
   entries     PayrollJournalEntry[]
 
+  @@index([tenantId])
   @@map("cost_centres")
 }
 
@@ -391,6 +425,7 @@ model CostCentre {
 // to 100 at any point in time; the API enforces this on write.
 model EmployeeCostCentre {
   id            String    @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId    String
   costCentreId  String
   percentage    Float
@@ -402,11 +437,13 @@ model EmployeeCostCentre {
 
   @@index([employeeId])
   @@index([costCentreId])
+  @@index([tenantId])
   @@map("employee_cost_centres")
 }
 
 model PayrollJournal {
   id           String    @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   runId        String    @unique
   period       String
   generatedAt  DateTime  @default(now())
@@ -419,11 +456,13 @@ model PayrollJournal {
   entries PayrollJournalEntry[]
 
   @@index([period])
+  @@index([tenantId])
   @@map("payroll_journals")
 }
 
 model PayrollJournalEntry {
   id           String  @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   journalId    String
   account      String                       // e.g. "5100"
   accountName  String                       // e.g. "Salary Expense"
@@ -438,6 +477,7 @@ model PayrollJournalEntry {
 
   @@index([journalId])
   @@index([costCentreId])
+  @@index([tenantId])
   @@map("payroll_journal_entries")
 }
 
@@ -446,6 +486,7 @@ model PayrollJournalEntry {
 // leave applications after payroll compute. Tracks reimbursement from MSF/MINDEF.
 model GovtLeaveClaimPayroll {
   id                  String          @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId          String
   period              String          // YYYY-MM of the payroll period
   leaveTypeCode       String          // ML | PL | CCL | SPL | NSL
@@ -469,6 +510,7 @@ model GovtLeaveClaimPayroll {
   @@index([period])
   @@index([employeeId])
   @@index([status])
+  @@index([tenantId])
   @@map("govt_leave_claims_payroll")
 }
 
@@ -524,6 +566,7 @@ enum PeriodHalf {
 
 model GiroPayment {
   id           String            @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   runId        String
   employeeId   String
   employeeName String?
@@ -540,6 +583,7 @@ model GiroPayment {
   @@index([runId])
   @@index([status])
   @@index([employeeId])
+  @@index([tenantId])
   @@map("giro_payments")
 }
 

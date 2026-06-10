@@ -11,6 +11,7 @@ datasource db {
 
 model LeaveType {
   id                  String    @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   code                String    @unique
   name                String
   isStatutory         Boolean   @default(false)
@@ -34,11 +35,13 @@ model LeaveType {
   applications        LeaveApplication[]
   entitlements        LeaveEntitlement[]
 
+  @@index([tenantId])
   @@map("leave_types")
 }
 
 model LeaveEntitlement {
   id                 String    @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId         String
   leaveTypeId        String
   year               Int
@@ -58,11 +61,13 @@ model LeaveEntitlement {
 
   @@unique([employeeId, leaveTypeId, year])
   @@index([carryForwardExpiry])
+  @@index([tenantId])
   @@map("leave_entitlements")
 }
 
 model LeaveApplication {
   id                   String        @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId           String
   leaveTypeId          String
   startDate            DateTime
@@ -100,6 +105,7 @@ model LeaveApplication {
   @@index([employeeId])
   @@index([status])
   @@index([claimStatus])
+  @@index([tenantId])
   @@map("leave_applications")
 }
 
@@ -113,6 +119,7 @@ enum ClaimStatus {
 
 model LeaveApprovalStep {
   id                  String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   applicationId       String
   step                Int
   approvedByEmpId     String
@@ -121,17 +128,20 @@ model LeaveApprovalStep {
   application LeaveApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([applicationId])
+  @@index([tenantId])
   @@map("leave_approval_steps")
 }
 
 model PublicHoliday {
   id        String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   date      DateTime
   name      String
   year      Int
   createdAt DateTime @default(now())
 
   @@unique([date])
+  @@index([tenantId])
   @@map("public_holidays")
 }
 
@@ -147,6 +157,7 @@ enum AppStatus {
 
 model ChildRecord {
   id                 String           @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId         String
   fullName           String
   dateOfBirth        DateTime
@@ -161,6 +172,7 @@ model ChildRecord {
 
   @@index([employeeId])
   @@index([verificationStatus])
+  @@index([tenantId])
   @@map("child_records")
 }
 

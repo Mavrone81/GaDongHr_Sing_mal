@@ -6,7 +6,7 @@ const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
 const { compute360Score, blendScores, buildReport } = require('../engines/feedback360.engine');
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 const VALID_REVIEWER_TYPES = ['PEER', 'SUBORDINATE', 'SUPERVISOR'];
 const VALID_QUESTION_TYPES = ['RATING', 'TEXT'];

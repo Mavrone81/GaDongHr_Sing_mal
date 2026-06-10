@@ -10,6 +10,7 @@ datasource db {
 // ─── AST-001 Asset register ───────────────────────────────────────────────────
 model Asset {
   id            String      @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   assetCode     String      @unique
   name          String
   category      String
@@ -34,11 +35,13 @@ model Asset {
   @@index([warrantyExpiry])
   @@index([nextMaintenanceAt])
   @@index([contractEndDate])
+  @@index([tenantId])
   @@map("assets")
 }
 
 model AssetAssignment {
   id         String    @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   assetId    String
   employeeId String
   assignedAt DateTime  @default(now())
@@ -52,6 +55,7 @@ model AssetAssignment {
 
   @@index([employeeId, isActive])
   @@index([offboardingDate])
+  @@index([tenantId])
   @@map("asset_assignments")
 }
 
@@ -66,6 +70,7 @@ enum AssetStatus {
 
 model InventoryItem {
   id           String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   sku          String   @unique
   name         String
   category     String                    // STATIONERY, PPE, UNIFORM, CONSUMABLE, OTHER
@@ -83,11 +88,13 @@ model InventoryItem {
   stockTransactions StockTransaction[]
   purchaseRequests  PurchaseRequest[]
 
+  @@index([tenantId])
   @@map("inventory_items")
 }
 
 model LogisticsRequest {
   id                   String                 @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   requesterEmployeeId  String
   status               LogisticsRequestStatus @default(PENDING_APPROVAL)
   requestedAt          DateTime               @default(now())
@@ -104,11 +111,13 @@ model LogisticsRequest {
 
   @@index([requesterEmployeeId])
   @@index([status])
+  @@index([tenantId])
   @@map("logistics_requests")
 }
 
 model LogisticsRequestLine {
   id                String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   requestId         String
   inventoryItemId   String
   quantityRequested Int
@@ -119,11 +128,13 @@ model LogisticsRequestLine {
   inventoryItem InventoryItem    @relation(fields: [inventoryItemId], references: [id])
 
   @@index([requestId])
+  @@index([tenantId])
   @@map("logistics_request_lines")
 }
 
 model StockTransaction {
   id              String        @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   inventoryItemId String
   txType          StockTxType
   quantity        Int                              // signed: positive RECEIVE/ADJUST+; negative ISSUE/ADJUST−
@@ -136,6 +147,7 @@ model StockTransaction {
   inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
 
   @@index([inventoryItemId, createdAt])
+  @@index([tenantId])
   @@map("stock_transactions")
 }
 
@@ -156,6 +168,7 @@ enum StockTxType {
 // Purchase request — auto-generated when inventory falls below reorderPoint.
 model PurchaseRequest {
   id                String                 @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   prNumber          String                 @unique
   inventoryItemId   String
   quantitySuggested Int
@@ -170,6 +183,7 @@ model PurchaseRequest {
   inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
 
   @@index([status])
+  @@index([tenantId])
   @@map("purchase_requests")
 }
 
@@ -186,6 +200,7 @@ enum PurchaseRequestStatus {
 
 model AssetMaintenance {
   id           String           @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   assetId      String
   scheduledAt  DateTime
   completedAt  DateTime?
@@ -200,6 +215,7 @@ model AssetMaintenance {
 
   @@index([assetId])
   @@index([scheduledAt])
+  @@index([tenantId])
   @@map("asset_maintenance")
 }
 
@@ -211,6 +227,7 @@ enum MaintenanceType {
 
 model SoftwareLicence {
   id            String    @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   name          String
   vendor        String?
   licenceKey    String?
@@ -224,6 +241,7 @@ model SoftwareLicence {
   updatedAt     DateTime  @updatedAt
 
   @@index([expiryDate])
+  @@index([tenantId])
   @@map("software_licences")
 }
 
@@ -231,6 +249,7 @@ model SoftwareLicence {
 // daily sweep can be safely re-run.
 model AssetAlert {
   id         String         @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   alertType  AssetAlertType
   entityId   String                              // assetId or licenceId or assignmentId
   threshold  Int                                 // 60, 30, 14
@@ -241,6 +260,7 @@ model AssetAlert {
   @@unique([entityId, alertType, threshold])
   @@index([alertType])
   @@index([firedAt])
+  @@index([tenantId])
   @@map("asset_alerts")
 }
 

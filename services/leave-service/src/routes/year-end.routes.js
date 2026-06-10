@@ -16,7 +16,7 @@ const {
   computeCarryForward, resolveExpiry, evaluateExpiry, defaultExpiryFor,
 } = require('../engines/year-end.engine');
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 const ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN];
 

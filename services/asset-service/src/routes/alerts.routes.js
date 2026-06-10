@@ -7,7 +7,7 @@ const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
 const { THRESHOLDS, daysUntil, pendingThresholds, classifyUrgency, formatAlertMessage } = require('../engines/alert.engine');
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 const ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.IT_ADMIN];
 
 // ── ASSET MAINTENANCE ─────────────────────────────────────────────────────────

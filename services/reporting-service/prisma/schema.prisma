@@ -24,6 +24,7 @@ datasource db {
 
 model ReportTemplate {
   id          String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   name        String
   description String?
   category    String?
@@ -38,6 +39,7 @@ model ReportTemplate {
 
   @@index([ownerId])
   @@index([category])
+  @@index([tenantId])
   @@map("report_templates")
 }
 
@@ -70,6 +72,7 @@ enum SubmissionStatus {
 
 model ReportSchedule {
   id          String            @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   templateId  String
   frequency   ScheduleFrequency
   format      ScheduleFormat    @default(CSV)
@@ -86,6 +89,7 @@ model ReportSchedule {
 
   @@index([nextRunAt, isActive])
   @@index([templateId])
+  @@index([tenantId])
   @@map("report_schedules")
 }
 
@@ -96,6 +100,7 @@ enum RunStatus {
 
 model ReportRun {
   id          String     @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   templateId  String
   scheduleId  String?
   status      RunStatus
@@ -109,6 +114,7 @@ model ReportRun {
   schedule ReportSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
 
   @@index([templateId, startedAt])
+  @@index([tenantId])
   @@map("report_runs")
 }
 
@@ -123,6 +129,7 @@ enum BudgetCategory {
 
 model AnalyticsBudget {
   id        String         @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   category  BudgetCategory
   period    String         // YYYY or YYYY-MM
   value     Float
@@ -132,12 +139,14 @@ model AnalyticsBudget {
 
   @@unique([category, period])
   @@index([category])
+  @@index([tenantId])
   @@map("analytics_budgets")
 }
 
 // ── RPT-002: Statutory submission history ─────────────────────────────────────
 model StatutorySubmission {
   id              String           @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   type            SubmissionType
   period          String           // YYYY-MM or YYYY for annual
   status          SubmissionStatus @default(DRAFT)
@@ -152,5 +161,6 @@ model StatutorySubmission {
 
   @@index([type, period])
   @@index([status])
+  @@index([tenantId])
   @@map("statutory_submissions")
 }

@@ -11,6 +11,7 @@ datasource db {
 
 model ClaimCategory {
   id              String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   code            String   @unique
   name            String
   maxAmount       Float?
@@ -21,11 +22,13 @@ model ClaimCategory {
 
   claims Claim[]
 
+  @@index([tenantId])
   @@map("claim_categories")
 }
 
 model Claim {
   id              String       @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   employeeId      String
   categoryId      String
   title           String
@@ -60,11 +63,13 @@ model Claim {
   @@index([status])
   @@index([costCentre])
   @@index([payrollPeriod])
+  @@index([tenantId])
   @@map("claims")
 }
 
 model ClaimItem {
   id          String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   claimId     String
   description String
   amount      Float
@@ -73,6 +78,7 @@ model ClaimItem {
 
   claim Claim @relation(fields: [claimId], references: [id])
 
+  @@index([tenantId])
   @@map("claim_items")
 }
 
@@ -92,6 +98,7 @@ enum ClaimStatus {
 // previous record was deactivated.
 model VendorGstRegistration {
   id              String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   gstNumber       String   @unique
   vendorName      String
   effectiveFrom   DateTime
@@ -103,6 +110,7 @@ model VendorGstRegistration {
   updatedAt       DateTime @updatedAt
 
   @@index([vendorName])
+  @@index([tenantId])
   @@map("vendor_gst_registrations")
 }
 
@@ -110,6 +118,7 @@ model VendorGstRegistration {
 // Period is "YYYY-MM" or "YYYY" — caller's choice; engine treats it as opaque.
 model CategoryBudget {
   id          String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   categoryId  String
   period      String                                    // "YYYY-MM" or "YYYY"
   budgetAmount Float
@@ -120,6 +129,7 @@ model CategoryBudget {
 
   @@unique([categoryId, period])
   @@index([period])
+  @@index([tenantId])
   @@map("category_budgets")
 }
 
@@ -128,6 +138,7 @@ model CategoryBudget {
 // categoryIds is empty array = covers ALL categories; otherwise restricts.
 model ApproverDelegation {
   id          String   @id @default(uuid())
+  tenantId String @default("00000000-0000-0000-0000-000000000001")
   delegatorId String   // employeeId of the approver delegating authority
   delegateeId String   // employeeId receiving the authority
   startDate   DateTime
@@ -142,5 +153,6 @@ model ApproverDelegation {
   @@index([delegatorId])
   @@index([delegateeId])
   @@index([startDate, endDate])
+  @@index([tenantId])
   @@map("approver_delegations")
 }

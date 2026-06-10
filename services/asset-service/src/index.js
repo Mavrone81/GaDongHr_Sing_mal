@@ -14,6 +14,8 @@ const app = express();
 const PORT = process.env.PORT || 4011;
 
 app.use(helmet()); app.use(cors()); app.use(express.json({ limit: '50kb' })); app.use(morgan('combined'));
+const { tenantContextMiddleware } = require('/app/shared/tenant-context');
+app.use(tenantContextMiddleware);
 app.get('/health', (_req, res) => res.json({ service: 'asset-service', status: 'ok', ts: new Date() }));
 
 // Order matters: alertsRoutes claims /assets/alerts and /assets/:id/maintenance

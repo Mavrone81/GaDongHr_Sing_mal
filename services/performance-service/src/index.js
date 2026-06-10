@@ -12,6 +12,8 @@ const app = express();
 const PORT = process.env.PORT || 4012;
 
 app.use(helmet()); app.use(cors()); app.use(express.json({ limit: '50kb' })); app.use(morgan('combined'));
+const { tenantContextMiddleware } = require('/app/shared/tenant-context');
+app.use(tenantContextMiddleware);
 app.get('/health', (req, res) => res.json({ service: 'performance-service', status: 'ok', ts: new Date() }));
 app.use('/performance', performanceRoutes);
 app.use('/performance', feedback360Routes);

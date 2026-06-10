@@ -5,7 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
 
-const prisma = new PrismaClient();
+const prisma = require('../utils/prisma');
 
 // GET /components — list all 59 pay components
 router.get('/', authenticate, async (req, res, next) => {
