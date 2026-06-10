@@ -9,17 +9,39 @@ interface Sub {
   currentPeriodEnd: string | null; billingConfigured: boolean;
 }
 
-const PLANS = [
-  { id: 'starter', name: 'Starter', price: 'S$8 / employee / mo', features: ['Core HR', 'Leave & Claims', 'Payroll', 'Email support'] },
-  { id: 'pro', name: 'Pro', price: 'S$14 / employee / mo', features: ['Everything in Starter', 'Attendance & Recruitment', 'Performance & Training', 'Priority support'] },
+// Fallback only — live plans come from the control plane (/api/pricing), edited
+// by the platform operator. Keeps the page working if that fetch fails.
+const FALLBACK_PLANS = [
+  {
+    id: 'starter', name: 'Starter', price: 'S$5', unit: '/ user / mo',
+    tagline: 'For small teams putting HR on autopilot.',
+    features: ['Up to 5 users', 'Leave & staff directory', 'Claims & attendance', 'Community support'],
+    cta: 'Choose Starter',
+  },
+  {
+    id: 'growth', name: 'Growth', price: 'S$9', unit: '/ user / mo', popular: true,
+    tagline: 'For growing teams that need payroll & compliance.',
+    features: ['Unlimited users', 'Full payroll with CPF', 'Digital payslips & IRAS export', 'Training & appraisals', 'Priority support'],
+    cta: 'Choose Growth',
+  },
+  {
+    id: 'enterprise', name: 'Enterprise', price: 'S$15', unit: '/ user / mo', contact: true,
+    tagline: 'Advanced security and control for larger organizations.',
+    features: ['Everything in Growth', 'Single Sign-On (SSO)', 'Dedicated success manager', 'Full API access'],
+    cta: 'Contact sales',
+  },
 ];
 
 export default function BillingPage() {
   const [sub, setSub] = useState<Sub | null>(null);
+  const [plans, setPlans] = useState<typeof FALLBACK_PLANS>(FALLBACK_PLANS);
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState('');
 
-  useEffect(() => { apiFetch('/billing/subscription').then(setSub).catch(() => {}); }, []);
+  useEffect(() => {
+    apiFetch('/billing/subscription').then(setSub).catch(() => {});
+    apiFetch('/pricing').then((d) => { if (Array.isArray(d?.plans) && d.plans.length) setPlans(d.plans); }).catch(() => {});
+  }, []);
 
   async function upgrade(plan: string) {
     setBusy(plan); setMsg('');
@@ -57,17 +79,25 @@ export default function BillingPage() {
 
       {msg && <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm text-amber-800">{msg}</div>}
 
-      <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {PLANS.map((p) => (
-          <div key={p.id} className="rounded-xl border border-slate-200 bg-white p-5 flex flex-col">
+      <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {plans.map((p) => (
+          <div key={p.id} className={`relative flex flex-col rounded-xl border bg-white p-5 ${p.popular ? 'border-indigo-500 ring-1 ring-indigo-500' : 'border-slate-200'}`}>
+            {p.popular && <span className="absolute -top-2.5 left-5 rounded-full bg-indigo-600 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Most popular</span>}
             <div className="text-lg font-black text-slate-900">{p.name}</div>
-            <div className="text-sm font-semibold text-indigo-600">{p.price}</div>
+            <div className="mt-1"><span className="text-2xl font-black text-slate-900">{p.price}</span> <span className="text-sm text-slate-500">{p.unit}</span></div>
+            <p className="mt-1 text-xs text-slate-500">{p.tagline}</p>
             <ul className="mt-3 flex-1 space-y-1 text-sm text-slate-600">
               {p.features.map((f) => <li key={f}>✓ {f}</li>)}
             </ul>
-            <button onClick={() => upgrade(p.id)} disabled={!!busy} className="mt-4 rounded-lg bg-indigo-600 py-2.5 font-bold text-white hover:bg-indigo-700 disabled:opacity-60">
-              {busy === p.id ? 'Starting…' : `Choose ${p.name}`}
-            </button>
+            {p.contact ? (
+              <a href="mailto:sales@vorkhive.com?subject=Vorkhive%20Enterprise%20enquiry" className="mt-4 rounded-lg border border-slate-300 py-2.5 text-center font-bold text-slate-700 hover:bg-slate-50">
+                {p.cta}
+              </a>
+            ) : (
+              <button onClick={() => upgrade(p.id)} disabled={!!busy} className={`mt-4 rounded-lg py-2.5 font-bold text-white disabled:opacity-60 ${p.popular ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-800 hover:bg-slate-900'}`}>
+                {busy === p.id ? 'Starting…' : p.cta}
+              </button>
+            )}
           </div>
         ))}
       </div>

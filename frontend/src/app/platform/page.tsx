@@ -29,6 +29,10 @@ export default function PlatformConsole() {
   const [adminForm, setAdminForm] = useState({ email: '', name: '', role: 'SUPPORT' });
   const [newAdmin, setNewAdmin] = useState<{ email: string; tempPassword: string } | null>(null);
   const [addingAdmin, setAddingAdmin] = useState(false);
+  const [showPricing, setShowPricing] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [pricing, setPricing] = useState<any[]>([]);
+  const [savingPricing, setSavingPricing] = useState(false);
 
   const api = useCallback(async (path: string, opts: RequestInit = {}) => {
     const res = await fetch(`${apiUrl()}/platform${path}`, {
@@ -86,6 +90,21 @@ export default function PlatformConsole() {
     catch (e) { setErr(String(e)); }
   }
 
+  async function openPricing() {
+    setShowPricing(true);
+    try { const d = await api('/pricing'); setPricing(d.plans || []); } catch { /* */ }
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function setPlanField(i: number, field: string, value: any) {
+    setPricing((ps) => ps.map((p, idx) => (idx === i ? { ...p, [field]: value } : p)));
+  }
+  async function savePricing() {
+    setSavingPricing(true); setErr('');
+    try { await api('/pricing', { method: 'PUT', body: JSON.stringify({ plans: pricing }) }); setShowPricing(false); }
+    catch (e) { setErr(String(e)); }
+    setSavingPricing(false);
+  }
+
   async function createCompany(e: React.FormEvent) {
     e.preventDefault(); setErr(''); setCreating(true);
     try {
@@ -108,6 +127,7 @@ export default function PlatformConsole() {
           <span className="ml-2 text-xs font-bold uppercase tracking-[0.2em] text-indigo-400">Platform Operator</span>
         </div>
         <div className="flex items-center gap-3">
+          <button onClick={openPricing} className="rounded-lg bg-slate-700 px-3 py-1.5 text-sm font-bold text-slate-100 hover:bg-slate-600">Pricing</button>
           <button onClick={openAdmins} className="rounded-lg bg-slate-700 px-3 py-1.5 text-sm font-bold text-slate-100 hover:bg-slate-600">Admins</button>
           <button onClick={() => { setCreated(null); setShowCreate(true); }} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-indigo-500">+ New company</button>
           <button onClick={() => { localStorage.removeItem('vorkhive_platform_token'); router.push('/platform/login'); }} className="text-sm text-slate-400 hover:text-white">Sign out</button>
@@ -294,6 +314,37 @@ export default function PlatformConsole() {
               </form>
             )}
             <button onClick={() => setShowAdmins(false)} className="mt-4 w-full rounded-lg bg-slate-700 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-600">Close</button>
+          </div>
+        </div>
+      )}
+
+      {showPricing && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4" onClick={() => setShowPricing(false)}>
+          <div className="my-6 w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-900 p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-black text-white">Pricing plans</h3>
+            <p className="mt-1 text-xs text-slate-500">The single source of truth for the in-app billing page (/settings/billing). Edit and save — it updates everywhere instantly. Mirror these on your marketing site.</p>
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+              {pricing.map((p, i) => (
+                <div key={i} className="rounded-xl border border-slate-700 p-3">
+                  <input className={MINPUT + ' mb-2 font-bold'} value={p.name || ''} onChange={(e) => setPlanField(i, 'name', e.target.value)} placeholder="Plan name" />
+                  <div className="mb-2 flex gap-2">
+                    <input className={MINPUT} value={p.price || ''} onChange={(e) => setPlanField(i, 'price', e.target.value)} placeholder="S$5" />
+                    <input className={MINPUT} value={p.unit || ''} onChange={(e) => setPlanField(i, 'unit', e.target.value)} placeholder="/ user / mo" />
+                  </div>
+                  <input className={MINPUT + ' mb-2'} value={p.tagline || ''} onChange={(e) => setPlanField(i, 'tagline', e.target.value)} placeholder="Tagline" />
+                  <textarea className={MINPUT + ' mb-2 h-24'} value={(p.features || []).join('\n')} onChange={(e) => setPlanField(i, 'features', e.target.value.split('\n').map((x) => x.trim()).filter(Boolean))} placeholder="One feature per line" />
+                  <div className="flex flex-wrap gap-3 text-xs text-slate-300">
+                    <label className="flex items-center gap-1"><input type="checkbox" checked={!!p.popular} onChange={(e) => setPlanField(i, 'popular', e.target.checked)} /> Popular</label>
+                    <label className="flex items-center gap-1"><input type="checkbox" checked={!!p.contact} onChange={(e) => setPlanField(i, 'contact', e.target.checked)} /> Contact-sales</label>
+                    <label className="flex items-center gap-1"><input type="checkbox" checked={p.active !== false} onChange={(e) => setPlanField(i, 'active', e.target.checked)} /> Active</label>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 flex gap-2">
+              <button onClick={() => setShowPricing(false)} className="flex-1 rounded-lg bg-slate-700 py-2.5 font-bold text-slate-200 hover:bg-slate-600">Cancel</button>
+              <button onClick={savePricing} disabled={savingPricing} className="flex-1 rounded-lg bg-indigo-600 py-2.5 font-bold text-white hover:bg-indigo-500 disabled:opacity-60">{savingPricing ? 'Saving…' : 'Save pricing'}</button>
+            </div>
           </div>
         </div>
       )}

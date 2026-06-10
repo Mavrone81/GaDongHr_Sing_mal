@@ -52,6 +52,15 @@ model TenantModule {
   @@map("tenant_modules")
 }
 
+// Operator-editable platform config (e.g. the pricing plans shown on /settings/billing).
+model PlatformConfig {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("platform_config")
+}
+
 model TenantAiProvider {
   tenantId  String   @id
   provider  String   @default("ollama") // ollama (local, default) | claude

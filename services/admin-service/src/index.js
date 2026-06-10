@@ -15,6 +15,18 @@ app.use(express.json({ limit: '1mb' }));
 app.use(morgan('combined'));
 
 app.get('/health', (_req, res) => res.json({ service: 'admin-service', status: 'ok', ts: new Date() }));
+
+// Public pricing (single source of truth for the billing page) — no auth; only
+// active plans are exposed.
+app.get('/pricing', async (_req, res) => {
+  try {
+    const plans = (await platformRoutes.getPricing()).filter((p) => p.active !== false);
+    res.json({ plans });
+  } catch {
+    res.status(500).json({ error: 'pricing unavailable' });
+  }
+});
+
 app.use('/platform', platformRoutes);
 
 app.use((err, _req, res, _next) => {

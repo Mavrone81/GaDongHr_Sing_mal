@@ -107,6 +107,7 @@ const PUBLIC_ROUTES = [
   { method: 'POST', path: /^\/api\/auth\/login$/ },
   { method: 'POST', path: /^\/api\/tenants\/register$/ },
   { method: 'POST', path: /^\/api\/billing\/webhook$/ },
+  { method: 'GET',  path: /^\/api\/pricing$/ },
   { method: 'POST', path: /^\/api\/platform\/login$/ },
   { method: 'POST', path: /^\/api\/platform\/mfa\/(setup|enable)$/ },
   { method: 'POST', path: /^\/api\/auth\/refresh$/ },
@@ -271,6 +272,7 @@ app.use('/api/auth',         proxy(SERVICES.auth,         { ...proxyOpts, proxyR
 app.use('/api/users',        proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/users', '/users') }));
 app.use('/api/roles',        proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/roles', '/roles') }));
 app.use('/api/tenants',      proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/tenants', '/tenants') }));
+app.use('/api/pricing',      proxy(SERVICES.admin,        { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/pricing', '/pricing') }));
 app.use('/api/platform',     proxy(SERVICES.admin,        { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/platform', '/platform') }));
 app.use('/api/billing',      proxy(SERVICES.auth,         { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/billing', '/billing') }));
 app.use('/api/employees',    proxy(SERVICES.employee,     { ...proxyOpts, proxyReqPathResolver: req => req.originalUrl.replace('/api/employees', '/employees') }));
