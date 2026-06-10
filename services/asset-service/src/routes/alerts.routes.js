@@ -185,7 +185,7 @@ async function runAlertSweep(now = new Date()) {
       try {
         await prisma.assetAlert.create({
           data: {
-            id: uuidv4(), entityId: a.id, alertType: 'WARRANTY', threshold: t,
+            id: uuidv4(), tenantId: a.tenantId, entityId: a.id, alertType: 'WARRANTY', threshold: t,
             daysUntil: d, message: formatAlertMessage('WARRANTY', `${a.assetCode} ${a.name}`, d),
           },
         });
@@ -212,7 +212,7 @@ async function runAlertSweep(now = new Date()) {
       try {
         await prisma.assetAlert.create({
           data: {
-            id: uuidv4(), entityId: a.id, alertType: 'MAINTENANCE', threshold: t,
+            id: uuidv4(), tenantId: a.tenantId, entityId: a.id, alertType: 'MAINTENANCE', threshold: t,
             daysUntil: d, message: formatAlertMessage('MAINTENANCE', `${a.assetCode} ${a.name}`, d),
           },
         });
@@ -240,7 +240,7 @@ async function runAlertSweep(now = new Date()) {
       try {
         await prisma.assetAlert.create({
           data: {
-            id: uuidv4(), entityId: a.id, alertType: 'RETURN', threshold: t,
+            id: uuidv4(), tenantId: a.tenantId, entityId: a.id, alertType: 'RETURN', threshold: t,
             daysUntil: d, message: formatAlertMessage('RETURN', `${a.asset?.assetCode || ''} (emp ${a.employeeId})`, d),
           },
         });
@@ -267,7 +267,7 @@ async function runAlertSweep(now = new Date()) {
       try {
         await prisma.assetAlert.create({
           data: {
-            id: uuidv4(), entityId: l.id, alertType: 'LICENCE', threshold: t,
+            id: uuidv4(), tenantId: l.tenantId, entityId: l.id, alertType: 'LICENCE', threshold: t,
             daysUntil: d, message: formatAlertMessage('LICENCE', `${l.name} (${l.seatsUsed}/${l.seatsTotal})`, d),
           },
         });
