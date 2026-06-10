@@ -24,6 +24,11 @@ export default function PlatformConsole() {
   const [created, setCreated] = useState<{ email: string; tempPassword: string; company: string } | null>(null);
   const [creating, setCreating] = useState(false);
   const [trialDate, setTrialDate] = useState('');
+  const [showAdmins, setShowAdmins] = useState(false);
+  const [admins, setAdmins] = useState<{ id: string; email: string; name: string; role: string; mfaEnabled: boolean; isActive: boolean }[]>([]);
+  const [adminForm, setAdminForm] = useState({ email: '', name: '', role: 'SUPPORT' });
+  const [newAdmin, setNewAdmin] = useState<{ email: string; tempPassword: string } | null>(null);
+  const [addingAdmin, setAddingAdmin] = useState(false);
 
   const api = useCallback(async (path: string, opts: RequestInit = {}) => {
     const res = await fetch(`${apiUrl()}/platform${path}`, {
@@ -63,6 +68,24 @@ export default function PlatformConsole() {
   }
   function isDisabled(code: string) { return detail?.modules.find((m) => m.moduleCode === code && !m.enabled); }
 
+  async function openAdmins() {
+    setNewAdmin(null); setShowAdmins(true);
+    try { const d = await api('/admins'); setAdmins(d.admins || []); } catch { /* */ }
+  }
+  async function addAdmin(e: React.FormEvent) {
+    e.preventDefault(); setErr(''); setAddingAdmin(true);
+    try {
+      const r = await api('/admins', { method: 'POST', body: JSON.stringify(adminForm) });
+      if (r.tempPassword) { setNewAdmin({ email: r.admin.email, tempPassword: r.tempPassword }); setAdminForm({ email: '', name: '', role: 'SUPPORT' }); const d = await api('/admins'); setAdmins(d.admins || []); }
+      else setErr(r.error || 'Could not create admin');
+    } catch { setErr('Could not create admin'); }
+    setAddingAdmin(false);
+  }
+  async function toggleAdmin(id: string, active: boolean) {
+    try { await api(`/admins/${id}/${active ? 'deactivate' : 'activate'}`, { method: 'POST' }); const d = await api('/admins'); setAdmins(d.admins || []); }
+    catch (e) { setErr(String(e)); }
+  }
+
   async function createCompany(e: React.FormEvent) {
     e.preventDefault(); setErr(''); setCreating(true);
     try {
@@ -85,6 +108,7 @@ export default function PlatformConsole() {
           <span className="ml-2 text-xs font-bold uppercase tracking-[0.2em] text-indigo-400">Platform Operator</span>
         </div>
         <div className="flex items-center gap-3">
+          <button onClick={openAdmins} className="rounded-lg bg-slate-700 px-3 py-1.5 text-sm font-bold text-slate-100 hover:bg-slate-600">Admins</button>
           <button onClick={() => { setCreated(null); setShowCreate(true); }} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-indigo-500">+ New company</button>
           <button onClick={() => { localStorage.removeItem('vorkhive_platform_token'); router.push('/platform/login'); }} className="text-sm text-slate-400 hover:text-white">Sign out</button>
         </div>
@@ -107,7 +131,15 @@ export default function PlatformConsole() {
                     <td className="px-4 py-2.5"><button onClick={() => openDetail(t.id)} className="font-semibold hover:text-indigo-300">{t.name}</button><div className="text-xs text-slate-500">{t.slug} · {t.country}</div></td>
                     <td className="px-3 py-2.5 text-center"><Badge status={t.status} /></td>
                     <td className="px-3 py-2.5 text-center">{t.users}</td>
-                    <td className="px-3 py-2.5 text-center text-xs text-slate-400">{t.trialEndsAt ? new Date(t.trialEndsAt).toLocaleDateString() : '—'}</td>
+                    <td className="px-3 py-2.5 text-center">
+                      <input
+                        type="date"
+                        value={t.trialEndsAt ? new Date(t.trialEndsAt).toISOString().slice(0, 10) : ''}
+                        onChange={(e) => e.target.value && action(t.id, '/extend-trial', { date: e.target.value })}
+                        title="Click to change the trial end date"
+                        className="rounded border border-slate-700 bg-transparent px-2 py-1 text-xs text-slate-300 hover:border-indigo-500 focus:border-indigo-400 focus:outline-none"
+                      />
+                    </td>
                     <td className="px-3 py-2.5 text-center text-xs">
                       <div className="flex justify-center gap-1">
                         <Btn onClick={() => openDetail(t.id)}>Modules</Btn>
@@ -214,6 +246,49 @@ export default function PlatformConsole() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {showAdmins && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShowAdmins(false)}>
+          <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-black text-white">Platform admins</h3>
+            <div className="mt-3 max-h-56 space-y-2 overflow-y-auto">
+              {admins.map((a) => (
+                <div key={a.id} className="flex items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-sm">
+                  <div>
+                    <div className="font-semibold text-slate-100">{a.name} <span className="text-xs font-normal text-slate-500">· {a.role}</span></div>
+                    <div className="text-xs text-slate-500">{a.email} · MFA {a.mfaEnabled ? 'on' : 'pending'}{a.isActive ? '' : ' · disabled'}</div>
+                  </div>
+                  <button onClick={() => toggleAdmin(a.id, a.isActive)} className={`rounded px-2 py-1 text-xs font-semibold ${a.isActive ? 'bg-rose-900/60 text-rose-300 hover:bg-rose-900' : 'bg-emerald-900/60 text-emerald-300 hover:bg-emerald-900'}`}>{a.isActive ? 'Disable' : 'Enable'}</button>
+                </div>
+              ))}
+            </div>
+
+            {newAdmin ? (
+              <div className="mt-4 rounded-lg border border-emerald-800 bg-emerald-950/30 p-3 text-sm">
+                <div className="font-semibold text-emerald-300">Admin created — share these one-time credentials:</div>
+                <div className="mt-1 font-mono text-xs text-emerald-200">{newAdmin.email}</div>
+                <div className="font-mono text-xs text-emerald-200">{newAdmin.tempPassword}</div>
+                <div className="mt-1 text-xs text-slate-400">They enrol MFA on first login.</div>
+              </div>
+            ) : (
+              <form onSubmit={addAdmin} className="mt-4 border-t border-slate-800 pt-4">
+                <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Add a platform admin</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input className={MINPUT} placeholder="Full name" value={adminForm.name} onChange={(e) => setAdminForm({ ...adminForm, name: e.target.value })} required />
+                  <input className={MINPUT} type="email" placeholder="Email" value={adminForm.email} onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })} required />
+                  <select className={MINPUT} value={adminForm.role} onChange={(e) => setAdminForm({ ...adminForm, role: e.target.value })}>
+                    <option value="SUPER_ADMIN">SUPER_ADMIN — full control</option>
+                    <option value="BILLING">BILLING — payments & plans</option>
+                    <option value="SUPPORT">SUPPORT — read + impersonate</option>
+                  </select>
+                  <button type="submit" disabled={addingAdmin} className="rounded-lg bg-indigo-600 py-2 font-bold text-white hover:bg-indigo-500 disabled:opacity-60">{addingAdmin ? 'Creating…' : 'Create admin'}</button>
+                </div>
+              </form>
+            )}
+            <button onClick={() => setShowAdmins(false)} className="mt-4 w-full rounded-lg bg-slate-700 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-600">Close</button>
           </div>
         </div>
       )}
