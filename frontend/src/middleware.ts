@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const PUBLIC_PREFIXES = ['/login', '/onboard', '/auth'];
+// /register = public company signup (Phase 3). /platform = operator console
+// (Phase 5), which authenticates with its own localStorage token, not the
+// tenant cookie — so the cookie-based guard must not redirect it.
+const PUBLIC_PREFIXES = ['/login', '/register', '/onboard', '/auth', '/platform'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
