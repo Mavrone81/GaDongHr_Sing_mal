@@ -28,20 +28,25 @@ function detectProvider() {
   return null;
 }
 
-const PROVIDER = detectProvider();
+// Default provider when a tenant has no explicit setting (backward-compatible).
+const DEFAULT_PROVIDER = detectProvider();
 
-function defaultModel() {
-  if (process.env.ASSISTANT_MODEL) return process.env.ASSISTANT_MODEL;
-  if (PROVIDER === 'openai') return process.env.GROQ_API_KEY ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini';
-  return 'claude-haiku-4-5';
-}
-
-const MODEL = defaultModel();
+// Per-provider models. Ollama (openai-compatible) for the local/default path;
+// Claude for tenants the platform operator switches to 'claude'.
+const OPENAI_MODEL = process.env.ASSISTANT_MODEL || (process.env.GROQ_API_KEY ? 'llama-3.3-70b-versatile' : 'qwen2.5:3b');
+const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5';
 const MAX_ROUNDS = 6;
 const MAX_TOKENS = 1024;
 
+function available(provider) {
+  if (provider === 'openai') return !!OPENAI_KEY;
+  if (provider === 'anthropic') return !!ANTHROPIC_KEY;
+  return false;
+}
+function modelFor(provider) { return provider === 'anthropic' ? ANTHROPIC_MODEL : OPENAI_MODEL; }
+
 function info() {
-  return { provider: PROVIDER, model: PROVIDER ? MODEL : null, configured: !!PROVIDER };
+  return { defaultProvider: DEFAULT_PROVIDER, openai: available('openai'), anthropic: available('anthropic') };
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -78,7 +83,8 @@ async function postChat(body) {
 }
 
 // ── OpenAI-compatible (Groq etc.) ──────────────────────────────────────────
-async function runOpenAI({ system, messages, tools, exec }) {
+async function runOpenAI({ system, messages, tools, exec, model }) {
+  const useModel = model || OPENAI_MODEL;
   const oaiTools = tools.map((t) => ({
     type: 'function',
     function: { name: t.name, description: t.description, parameters: t.input_schema || { type: 'object', properties: {} } },
@@ -87,7 +93,7 @@ async function runOpenAI({ system, messages, tools, exec }) {
 
   let reply = '';
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const data = await postChat({ model: MODEL, max_tokens: MAX_TOKENS, temperature: 0.2, messages: msgs, tools: oaiTools, tool_choice: 'auto' });
+    const data = await postChat({ model: useModel, max_tokens: MAX_TOKENS, temperature: 0.2, messages: msgs, tools: oaiTools, tool_choice: 'auto' });
     const msg = data.choices?.[0]?.message;
     if (!msg) break;
     if (msg.content) reply = msg.content;
@@ -108,7 +114,7 @@ async function runOpenAI({ system, messages, tools, exec }) {
     // Small local models sometimes keep emitting tool calls without ever writing
     // a final answer. Force one textual completion from the gathered context.
     try {
-      const data = await postChat({ model: MODEL, max_tokens: MAX_TOKENS, temperature: 0.2, messages: msgs });
+      const data = await postChat({ model: useModel, max_tokens: MAX_TOKENS, temperature: 0.2, messages: msgs });
       reply = data.choices?.[0]?.message?.content || '';
     } catch { /* leave empty -> caller shows a fallback */ }
   }
@@ -124,14 +130,15 @@ function anthropicClient() {
   return _anthropic;
 }
 
-async function runAnthropic({ system, messages, tools, exec }) {
+async function runAnthropic({ system, messages, tools, exec, model }) {
+  const useModel = model || ANTHROPIC_MODEL;
   const client = anthropicClient();
   const anthTools = tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema }));
   const msgs = messages.map((m) => ({ role: m.role, content: m.content }));
 
   let reply = '';
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const response = await client.messages.create({ model: MODEL, max_tokens: MAX_TOKENS, system, tools: anthTools, messages: msgs });
+    const response = await client.messages.create({ model: useModel, max_tokens: MAX_TOKENS, system, tools: anthTools, messages: msgs });
     const textOut = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
     if (textOut) reply = textOut;
     if (response.stop_reason !== 'tool_use') break;
@@ -154,9 +161,13 @@ async function runAnthropic({ system, messages, tools, exec }) {
  * @returns {Promise<string>} the assistant's final text
  */
 async function runChat(args) {
-  if (PROVIDER === 'openai') return runOpenAI(args);
-  if (PROVIDER === 'anthropic') return runAnthropic(args);
-  throw Object.assign(new Error('No LLM provider configured'), { code: 'NOT_CONFIGURED' });
+  // The caller passes the per-tenant provider ('openai' = Ollama/local, or
+  // 'anthropic' = Claude). Fall back to whatever is actually configured.
+  let provider = args.provider || DEFAULT_PROVIDER;
+  if (!available(provider)) provider = available('openai') ? 'openai' : available('anthropic') ? 'anthropic' : null;
+  if (!provider) throw Object.assign(new Error('No LLM provider configured'), { code: 'NOT_CONFIGURED' });
+  const model = args.model || modelFor(provider);
+  return provider === 'anthropic' ? runAnthropic({ ...args, model }) : runOpenAI({ ...args, model });
 }
 
-module.exports = { runChat, info, isConfigured: () => !!PROVIDER };
+module.exports = { runChat, info, available, isConfigured: () => available('openai') || available('anthropic') };

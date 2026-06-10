@@ -52,6 +52,14 @@ model TenantModule {
   @@map("tenant_modules")
 }
 
+model TenantAiProvider {
+  tenantId  String   @id
+  provider  String   @default("ollama") // ollama (local, default) | claude
+  updatedAt DateTime @updatedAt
+
+  @@map("tenant_ai_providers")
+}
+
 model PlatformAuditLog {
   id        String   @id @default(uuid())
   adminId   String

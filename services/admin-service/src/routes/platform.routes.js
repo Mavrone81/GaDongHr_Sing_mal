@@ -145,7 +145,8 @@ router.get('/tenants/:id', requirePlatform, async (req, res, next) => {
     if (!rows[0]) return res.status(404).json({ error: 'Tenant not found' });
     const usage = await authdb.query(`SELECT count(*)::int AS users FROM users WHERE "tenantId" = $1`, [req.params.id]);
     const modules = await prisma.tenantModule.findMany({ where: { tenantId: req.params.id } });
-    res.json({ tenant: rows[0], usage: usage.rows[0], modules });
+    const ai = await prisma.tenantAiProvider.findUnique({ where: { tenantId: req.params.id } });
+    res.json({ tenant: rows[0], usage: usage.rows[0], modules, aiProvider: ai?.provider || 'ollama' });
   } catch (err) { next(err); }
 });
 
@@ -192,6 +193,30 @@ router.post('/tenants/:id/modules/:code/toggle', requirePlatform, requireRole('S
     });
     await audit(req, 'module.toggle', req.params.id, { module: req.params.code, enabled: before?.enabled }, { module: req.params.code, enabled });
     res.json({ module: row });
+  } catch (err) { next(err); }
+});
+
+// ── Per-tenant AI assistant provider (ollama=local default | claude=external) ─
+router.post('/tenants/:id/ai-provider', requirePlatform, requireRole('SUPER_ADMIN'), async (req, res, next) => {
+  try {
+    const provider = String(req.body?.provider || '').toLowerCase();
+    if (!['ollama', 'claude'].includes(provider)) return res.status(400).json({ error: 'provider must be "ollama" or "claude"' });
+    const before = await prisma.tenantAiProvider.findUnique({ where: { tenantId: req.params.id } });
+    const row = await prisma.tenantAiProvider.upsert({
+      where: { tenantId: req.params.id },
+      update: { provider }, create: { tenantId: req.params.id, provider },
+    });
+    await audit(req, 'ai_provider.set', req.params.id, { provider: before?.provider || 'ollama' }, { provider });
+    res.json({ aiProvider: row });
+  } catch (err) { next(err); }
+});
+
+// Internal: assistant-service reads which provider a tenant should use.
+router.get('/ai-provider/:tenantId', async (req, res, next) => {
+  try {
+    if (req.headers['x-internal-key'] !== process.env.INTERNAL_SERVICE_KEY) return res.status(401).json({ error: 'unauthorized' });
+    const row = await prisma.tenantAiProvider.findUnique({ where: { tenantId: req.params.tenantId } });
+    res.json({ provider: row?.provider || 'ollama' });
   } catch (err) { next(err); }
 });
 

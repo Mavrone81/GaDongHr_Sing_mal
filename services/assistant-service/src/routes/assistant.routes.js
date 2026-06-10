@@ -3,11 +3,33 @@
 const express = require('express');
 const { authenticate } = require('/app/shared/auth-middleware');
 const { TOOL_SCHEMAS, runTool } = require('../tools');
-const { runChat, isConfigured } = require('../llm');
+const { runChat, isConfigured, available } = require('../llm');
+const { maskSensitive } = require('../mask');
 
 const router = express.Router();
 
 const MAX_HISTORY = 20; // cap conversation turns sent to the model
+
+// Per-tenant AI provider: the platform operator sets each tenant to 'ollama'
+// (default, local) or 'claude'. Resolved from admin-service, cached briefly.
+const ADMIN_URL = process.env.ADMIN_SERVICE_URL || 'http://admin-service:4016';
+const _provCache = new Map();
+const PROV_TTL = Number(process.env.AI_PROVIDER_TTL_MS || 60000);
+async function resolveProvider(tenantId) {
+  const c = tenantId && _provCache.get(tenantId);
+  if (c && Date.now() - c.at < PROV_TTL) return c.provider;
+  let stored = 'ollama';
+  try {
+    if (tenantId) {
+      const r = await fetch(`${ADMIN_URL}/platform/ai-provider/${tenantId}`, { headers: { 'x-internal-key': process.env.INTERNAL_SERVICE_KEY || '' } });
+      if (r.ok) stored = (await r.json()).provider || 'ollama';
+    }
+  } catch { /* control plane down -> default */ }
+  let provider = stored === 'claude' ? 'anthropic' : 'openai';
+  if (!available(provider)) provider = available('openai') ? 'openai' : 'anthropic';
+  if (tenantId) _provCache.set(tenantId, { at: Date.now(), provider });
+  return provider;
+}
 
 function systemPrompt(user) {
   const name = user.name || 'the user';
@@ -62,11 +84,20 @@ router.post('/chat', authenticate, async (req, res, next) => {
       return res.status(400).json({ error: 'The last message must be from the user.' });
     }
 
+    // Pick the tenant's provider; on the external (Claude) path, redact PII from
+    // every tool result before it leaves the host.
+    const provider = await resolveProvider(req.user?.tenantId);
+    const exec = async (name, input) => {
+      const result = await runTool(name, input, authHeader, req.user);
+      return provider === 'anthropic' ? maskSensitive(result) : result;
+    };
+
     const reply = await runChat({
+      provider,
       system: systemPrompt(req.user),
       messages,
       tools: TOOL_SCHEMAS,
-      exec: (name, input) => runTool(name, input, authHeader, req.user),
+      exec,
     });
 
     return res.json({ reply: reply || "Sorry, I couldn't complete that. Please try rephrasing." });
