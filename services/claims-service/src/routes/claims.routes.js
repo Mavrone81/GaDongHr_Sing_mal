@@ -15,6 +15,7 @@ const {
 } = require('../engines/gst.engine');
 
 const prisma = require('../utils/prisma');
+const { lazyProvisionFromDefault } = require('/app/shared/tenant-context');
 
 const FINANCE_ADMIN_ROLES = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.FINANCE_ADMIN];
 const FINANCE_VIEW_ROLES  = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.FINANCE_ADMIN, ROLES.PAYROLL_OFFICER];
@@ -22,6 +23,8 @@ const FINANCE_VIEW_ROLES  = [ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.FINANCE_AD
 // GET /claims/categories
 router.get('/categories', authenticate, async (req, res, next) => {
   try {
+    // Lazy tenant provisioning: clone Default's claim categories on first access.
+    await lazyProvisionFromDefault(prisma.claimCategory, req.user?.tenantId);
     const cats = await prisma.claimCategory.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } });
     res.json(cats);
   } catch (err) { next(err); }

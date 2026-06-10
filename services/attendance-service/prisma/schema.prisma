@@ -320,7 +320,7 @@ enum AttStatus {
 model AttendancePeriod {
   id          String         @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  period      String         @unique          // "YYYY-MM"
+  period      String                          // "YYYY-MM"
   status      PeriodStatus   @default(OPEN)
   lockedBy    String?
   lockedAt    DateTime?
@@ -330,6 +330,7 @@ model AttendancePeriod {
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
+  @@unique([tenantId, period])
   @@index([status])
   @@index([tenantId])
   @@map("attendance_periods")

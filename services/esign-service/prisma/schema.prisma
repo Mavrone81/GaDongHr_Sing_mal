@@ -16,7 +16,7 @@ datasource db {
 model ESignDocument {
   id            String       @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  code          String       @unique  // e.g. 'EMPLOYMENT_CONTRACT', 'HANDBOOK_2026'
+  code          String       // e.g. 'EMPLOYMENT_CONTRACT', 'HANDBOOK_2026'
   title         String
   description   String?
   documentType  ESignDocType
@@ -32,6 +32,7 @@ model ESignDocument {
 
   requests ESignRequest[]
 
+  @@unique([tenantId, code])
   @@index([documentType])
   @@index([tenantId])
   @@map("esign_documents")

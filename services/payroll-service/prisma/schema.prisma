@@ -211,7 +211,7 @@ enum IrasSubmissionStatus {
 model PayComponent {
   id              String   @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  code            String   @unique  // e.g. "BASIC", "OT_PAY", "AWS"
+  code            String   // e.g. "BASIC", "OT_PAY", "AWS"
   name            String
   category        String   // ORDINARY_WAGES | ALLOWANCE | OT | ADDITIONAL_WAGES | DEDUCTION | REIMBURSEMENT
   isCpfApplicable Boolean  @default(true)
@@ -222,6 +222,7 @@ model PayComponent {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  @@unique([tenantId, code])
   @@index([tenantId])
   @@map("pay_components")
 }
@@ -299,7 +300,7 @@ model PublicHoliday {
   year      Int
   createdAt DateTime @default(now())
 
-  @@unique([date])
+  @@unique([tenantId, date])
   @@index([tenantId])
   @@map("public_holidays")
 }
@@ -307,13 +308,14 @@ model PublicHoliday {
 model PayrollPeriodConfig {
   id          String      @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  period      String      @unique    // "YYYY-MM"
+  period      String          // "YYYY-MM"
   workDayType WorkDayType @default(FIVE_DAY)
   workingDays Int?                   // null = auto-computed from public holidays
   notes       String?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
+  @@unique([tenantId, period])
   @@index([tenantId])
   @@map("payroll_period_configs")
 }
@@ -401,7 +403,7 @@ enum BikType {
 model CostCentre {
   id                String   @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  code              String   @unique
+  code              String
   name              String
   description       String?
   isActive          Boolean  @default(true)
@@ -417,6 +419,7 @@ model CostCentre {
   allocations EmployeeCostCentre[]
   entries     PayrollJournalEntry[]
 
+  @@unique([tenantId, code])
   @@index([tenantId])
   @@map("cost_centres")
 }
@@ -444,7 +447,7 @@ model EmployeeCostCentre {
 model PayrollJournal {
   id           String    @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  runId        String    @unique
+  runId        String
   period       String
   generatedAt  DateTime  @default(now())
   totalDebit   Float     @default(0)
@@ -455,6 +458,7 @@ model PayrollJournal {
 
   entries PayrollJournalEntry[]
 
+  @@unique([tenantId, runId])
   @@index([period])
   @@index([tenantId])
   @@map("payroll_journals")

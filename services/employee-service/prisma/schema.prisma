@@ -35,7 +35,7 @@ model EmployeeSupervisor {
 model Employee {
   id                  String    @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  employeeCode        String    @unique // e.g. EMP-0001
+  employeeCode        String    // e.g. EMP-0001
   fullName            String
   preferredName       String?
   nricEncrypted       String?   // AES-256-GCM encrypted NRIC/FIN
@@ -102,6 +102,7 @@ model Employee {
   supervisors         EmployeeSupervisor[] @relation("EmployeeSupervisors")
   supervising         EmployeeSupervisor[] @relation("SupervisorOf")
 
+  @@unique([tenantId, employeeCode])
   @@index([department])
   @@index([isActive])
   @@index([tenantId])
@@ -238,7 +239,7 @@ enum PassType {
 model EmployeeApplication {
   id              String   @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  userId          String   @unique
+  userId          String
   email           String
   fullName        String
   preferredName   String?
@@ -261,6 +262,7 @@ model EmployeeApplication {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  @@unique([tenantId, userId])
   @@index([status])
   @@index([tenantId])
   @@map("employee_applications")
@@ -279,7 +281,7 @@ enum AppStatus {
 model StaffMovement {
   id                  String          @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  movementNumber      String          @unique  // e.g. MOV-2026-00001
+  movementNumber      String          // e.g. MOV-2026-00001
   employeeId          String
   employeeName        String
   type                MovementType
@@ -334,6 +336,7 @@ model StaffMovement {
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 
+  @@unique([tenantId, movementNumber])
   @@index([employeeId, effectiveDate])
   @@index([status])
   @@index([effectiveDate])

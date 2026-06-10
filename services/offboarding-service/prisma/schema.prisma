@@ -12,7 +12,7 @@ datasource db {
 model OffboardingCase {
   id                  String     @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  employeeId          String     @unique
+  employeeId          String
   employeeName        String     @default("")
   department          String     @default("")
   reason              OffboardReason
@@ -40,6 +40,7 @@ model OffboardingCase {
 
   clearanceItems ClearanceItem[]
 
+  @@unique([tenantId, employeeId])
   @@index([tenantId])
   @@map("offboarding_cases")
 }

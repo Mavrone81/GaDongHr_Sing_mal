@@ -14,7 +14,7 @@ datasource db {
 model Survey {
   id               String         @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  code             String         @unique  // e.g. "ANNUAL-2026", "Q2-PULSE-2026"
+  code             String         // e.g. "ANNUAL-2026", "Q2-PULSE-2026"
   title            String
   description      String?
   type             SurveyType
@@ -35,6 +35,7 @@ model Survey {
   responses        SurveyResponse[]
   actions          SurveyAction[]
 
+  @@unique([tenantId, code])
   @@index([status, type])
   @@index([tenantId])
 }

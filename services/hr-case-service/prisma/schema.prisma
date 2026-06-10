@@ -14,7 +14,7 @@ datasource db {
 model HrCase {
   id              String          @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
-  caseNumber      String          @unique  // DSC-2026-00001 / GRV-2026-00001
+  caseNumber      String          // DSC-2026-00001 / GRV-2026-00001
   type            CaseType
   status          CaseStatus      @default(OPEN)
   severity        CaseSeverity    @default(MINOR)
@@ -56,6 +56,7 @@ model HrCase {
   @@index([status, escalationLevel])
   @@index([openedAt])
   @@index([tenantId])
+  @@unique([tenantId, caseNumber])
 }
 
 enum CaseType {
