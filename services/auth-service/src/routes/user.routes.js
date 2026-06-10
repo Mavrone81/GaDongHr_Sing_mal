@@ -101,10 +101,16 @@ router.post('/', checkInternal, (req, res, next) => {
       where: { name: { equals: role || 'EMPLOYEE', mode: 'insensitive' } }
     });
 
+    // Stamp the creator's tenant explicitly. Internal callers must pass tenantId
+    // in the body. (Don't rely on the auto-scoping extension here — this handler
+    // runs behind authenticate-inside-a-wrapper where the request tenant context
+    // isn't guaranteed to propagate, which otherwise drops the user into Default.)
+    const tenantId = req.user?.tenantId || req.body.tenantId;
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await prisma.user.create({
       data: {
         id: uuidv4(),
+        tenantId,
         email: email.toLowerCase(),
         passwordHash,
         name,

@@ -27,6 +27,10 @@ async function createAuthUser(employee) {
 
   try {
     const response = await axios.post(`${authUrl}/users`, {
+      // The auto-created login user must belong to the EMPLOYEE'S tenant. This is
+      // an internal call (no JWT), so auth-service can't infer the tenant — pass
+      // it explicitly, else the user defaults into the Default tenant.
+      tenantId: employee.tenantId,
       email: employee.workEmail,
       name: employee.fullName,
       password: generateRandomPassword(),
