@@ -136,8 +136,11 @@ export default function PlatformConsole() {
                         type="date"
                         value={t.trialEndsAt ? new Date(t.trialEndsAt).toISOString().slice(0, 10) : ''}
                         onChange={(e) => e.target.value && action(t.id, '/extend-trial', { date: e.target.value })}
-                        title="Click to change the trial end date"
-                        className="rounded border border-slate-700 bg-transparent px-2 py-1 text-xs text-slate-300 hover:border-indigo-500 focus:border-indigo-400 focus:outline-none"
+                        onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
+                        onFocus={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
+                        title="Click to open the calendar"
+                        style={{ colorScheme: 'dark' }}
+                        className="cursor-pointer rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:border-indigo-500 focus:border-indigo-400 focus:outline-none"
                       />
                     </td>
                     <td className="px-3 py-2.5 text-center text-xs">
@@ -161,7 +164,9 @@ export default function PlatformConsole() {
               <h3 className="mb-2 text-sm font-black uppercase tracking-wider text-slate-400">Trial — {tenants.find((t) => t.id === sel)?.name}</h3>
               <div className="mb-5 flex flex-wrap items-center gap-2">
                 <input type="date" value={trialDate} onChange={(e) => setTrialDate(e.target.value)}
-                  className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white focus:border-indigo-400 focus:outline-none" />
+                  onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
+                  style={{ colorScheme: 'dark' }}
+                  className="cursor-pointer rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white focus:border-indigo-400 focus:outline-none" />
                 <button onClick={() => trialDate && action(sel!, '/extend-trial', { date: trialDate })}
                   className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-bold text-white hover:bg-indigo-500">Set trial end date</button>
                 <button onClick={() => action(sel!, '/extend-trial', { days: 14 })}
