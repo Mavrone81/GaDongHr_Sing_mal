@@ -541,6 +541,11 @@ services:
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
       - ASSISTANT_PROVIDER=${ASSISTANT_PROVIDER:-}
       - ASSISTANT_MODEL=${ASSISTANT_MODEL:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-haiku-4-5}
+      # Per-tenant provider selection (set by the platform operator) is read from
+      # the control plane:
+      - ADMIN_SERVICE_URL=http://admin-service:4016
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
     # Lets the container reach a model server running on the Docker host (Ollama).
     extra_hosts:
       - "host.docker.internal:host-gateway"

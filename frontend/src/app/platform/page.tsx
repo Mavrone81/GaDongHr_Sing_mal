@@ -15,7 +15,7 @@ export default function PlatformConsole() {
   const router = useRouter();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [sel, setSel] = useState<string | null>(null);
-  const [detail, setDetail] = useState<{ modules: Mod[] } | null>(null);
+  const [detail, setDetail] = useState<{ modules: Mod[]; aiProvider: string } | null>(null);
   const [allModules, setAllModules] = useState<{ code: string; name: string; isCore: boolean }[]>([]);
   const [audit, setAudit] = useState<{ action: string; tenantId: string | null; createdAt: string }[]>([]);
   const [err, setErr] = useState('');
@@ -46,7 +46,12 @@ export default function PlatformConsole() {
 
   async function openDetail(id: string) {
     setSel(id);
-    try { const d = await api(`/tenants/${id}`); setDetail({ modules: d.modules || [] }); } catch { /* */ }
+    try { const d = await api(`/tenants/${id}`); setDetail({ modules: d.modules || [], aiProvider: d.aiProvider || 'ollama' }); } catch { /* */ }
+  }
+  async function setAi(id: string, provider: string) {
+    setErr('');
+    try { await api(`/tenants/${id}/ai-provider`, { method: 'POST', body: JSON.stringify({ provider }) }); await openDetail(id); api('/audit').then((d) => setAudit(d.logs || [])); }
+    catch (e) { setErr(String(e)); }
   }
   async function action(id: string, path: string, body?: object) {
     setErr('');
@@ -118,7 +123,16 @@ export default function PlatformConsole() {
           {/* Detail: module toggles */}
           {sel && detail && (
             <div className="mt-6 rounded-xl border border-slate-800 p-4">
-              <h3 className="mb-3 text-sm font-black uppercase tracking-wider text-slate-400">Modules — {tenants.find((t) => t.id === sel)?.name}</h3>
+              <h3 className="mb-2 text-sm font-black uppercase tracking-wider text-slate-400">AI Assistant — {tenants.find((t) => t.id === sel)?.name}</h3>
+              <div className="mb-5 flex gap-2">
+                <button onClick={() => setAi(sel!, 'ollama')} className={`flex-1 rounded-lg border px-3 py-2 text-left text-xs ${detail.aiProvider !== 'claude' ? 'border-emerald-700 bg-emerald-950/40 text-emerald-300' : 'border-slate-700 bg-slate-800/40 text-slate-400'}`}>
+                  <div className="font-semibold">Ollama · local</div><div>private · no data leaves the host · default</div>
+                </button>
+                <button onClick={() => setAi(sel!, 'claude')} className={`flex-1 rounded-lg border px-3 py-2 text-left text-xs ${detail.aiProvider === 'claude' ? 'border-indigo-600 bg-indigo-950/40 text-indigo-300' : 'border-slate-700 bg-slate-800/40 text-slate-400'}`}>
+                  <div className="font-semibold">Claude · Anthropic</div><div>cloud · higher quality · PII masked before send</div>
+                </button>
+              </div>
+              <h3 className="mb-3 text-sm font-black uppercase tracking-wider text-slate-400">Modules</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {allModules.map((m) => {
                   const off = isDisabled(m.code);
