@@ -90,9 +90,15 @@ export default function BillingPage() {
               {p.features.map((f) => <li key={f}>✓ {f}</li>)}
             </ul>
             {p.contact ? (
-              <a href="mailto:sales@vorkhive.com?subject=Vorkhive%20Enterprise%20enquiry" className="mt-4 rounded-lg border border-slate-300 py-2.5 text-center font-bold text-slate-700 hover:bg-slate-50">
+              <button
+                onClick={() => {
+                  setMsg('Opening our sales assistant in a new tab — chat about Enterprise (or ask for a human).');
+                  window.open('https://vorkhive.com/?chat=sales', '_blank', 'noopener');
+                }}
+                className="mt-4 rounded-lg border border-slate-300 py-2.5 font-bold text-slate-700 hover:bg-slate-50"
+              >
                 {p.cta}
-              </a>
+              </button>
             ) : (
               <button onClick={() => upgrade(p.id)} disabled={!!busy} className={`mt-4 rounded-lg py-2.5 font-bold text-white disabled:opacity-60 ${p.popular ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-800 hover:bg-slate-900'}`}>
                 {busy === p.id ? 'Starting…' : p.cta}
