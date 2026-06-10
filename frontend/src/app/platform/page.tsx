@@ -23,6 +23,7 @@ export default function PlatformConsole() {
   const [cf, setCf] = useState({ companyName: '', fullName: '', workEmail: '', country: 'SG', companySize: '1-10' });
   const [created, setCreated] = useState<{ email: string; tempPassword: string; company: string } | null>(null);
   const [creating, setCreating] = useState(false);
+  const [trialDate, setTrialDate] = useState('');
 
   const api = useCallback(async (path: string, opts: RequestInit = {}) => {
     const res = await fetch(`${apiUrl()}/platform${path}`, {
@@ -46,6 +47,8 @@ export default function PlatformConsole() {
 
   async function openDetail(id: string) {
     setSel(id);
+    const t = tenants.find((x) => x.id === id);
+    if (t?.trialEndsAt) setTrialDate(new Date(t.trialEndsAt).toISOString().slice(0, 10));
     try { const d = await api(`/tenants/${id}`); setDetail({ modules: d.modules || [], aiProvider: d.aiProvider || 'ollama' }); } catch { /* */ }
   }
   async function setAi(id: string, provider: string) {
@@ -123,7 +126,17 @@ export default function PlatformConsole() {
           {/* Detail: module toggles */}
           {sel && detail && (
             <div className="mt-6 rounded-xl border border-slate-800 p-4">
-              <h3 className="mb-2 text-sm font-black uppercase tracking-wider text-slate-400">AI Assistant — {tenants.find((t) => t.id === sel)?.name}</h3>
+              <h3 className="mb-2 text-sm font-black uppercase tracking-wider text-slate-400">Trial — {tenants.find((t) => t.id === sel)?.name}</h3>
+              <div className="mb-5 flex flex-wrap items-center gap-2">
+                <input type="date" value={trialDate} onChange={(e) => setTrialDate(e.target.value)}
+                  className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white focus:border-indigo-400 focus:outline-none" />
+                <button onClick={() => trialDate && action(sel!, '/extend-trial', { date: trialDate })}
+                  className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-bold text-white hover:bg-indigo-500">Set trial end date</button>
+                <button onClick={() => action(sel!, '/extend-trial', { days: 14 })}
+                  className="rounded-lg bg-slate-700 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-600">+14 days</button>
+              </div>
+
+              <h3 className="mb-2 text-sm font-black uppercase tracking-wider text-slate-400">AI Assistant</h3>
               <div className="mb-5 flex gap-2">
                 <button onClick={() => setAi(sel!, 'ollama')} className={`flex-1 rounded-lg border px-3 py-2 text-left text-xs ${detail.aiProvider !== 'claude' ? 'border-emerald-700 bg-emerald-950/40 text-emerald-300' : 'border-slate-700 bg-slate-800/40 text-slate-400'}`}>
                   <div className="font-semibold">Ollama · local</div><div>private · no data leaves the host · default</div>
