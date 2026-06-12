@@ -34,8 +34,9 @@ that catches those.
 ## 3. What Exists Today (Phase 1, shipped)
 
 ### Backend unit + integration — `npm run test:backend`
-- 263 jest tests across 8 services
+- ~1,477 jest tests across all services (mock-Prisma unit tier)
 - Lives in `services/*/__tests__/`
+- **Requires Node 20** (jest 29 hangs on Node 22+). `npm ci` (not `npm install`) for a consistent tree.
 - Includes leave-service MOM compliance, employee supervisor chain,
   payroll utils, training-service, etc.
 
@@ -121,9 +122,66 @@ export const ENDPOINTS: EndpointSpec[] = [
 | Add/change a sidebar nav definition | Sentinel in `smoke.spec.ts ROLE_SENTINEL` |
 | New file-upload endpoint | T1 spec like `leave.spec.ts` (upload → fetch → byte-equal download) |
 | New role-gated UI button/page | T1 spec confirming it's hidden for non-permitted roles |
+| Add a model with a `tenantId` field | Cross-tenant isolation test (tenant A cannot read/write tenant B's rows) in that service's `tenant-isolation.test.js` |
+| New internal service→service call that creates tenant-scoped rows | Assert the call stamps the caller's `tenantId` (regression for the "leaked into Default tenant" class of bug) |
+| Add/change a platform-console endpoint (admin-service) | Spec under `services/admin-service/__tests__/` (auth realm, role gate, audit row) |
 | Bug fix | Regression test that fails before the fix and passes after |
 
 A PR that changes business logic without a corresponding test should be sent back.
+
+---
+
+## 6a. Phase 2 — Multi-Tenancy & Platform (test backlog)
+
+> Added after the 2026-06-12 full run. The multi-tenant SaaS conversion + platform
+> console + dynamic pricing shipped **without** test coverage. These are the gaps.
+
+**Environment note:** the backend suite needs **Node 20** (`engines: ">=20"`). jest 29
+hangs/errors under Node 22+; if `npm run test:backend` produces no output, you're on a
+newer Node — run with Node 20 (`brew install node@20`). Always restore deps with
+`npm ci` (an inconsistent `npm install` is what surfaced as a `jest-util` MODULE_NOT_FOUND).
+
+**Backend unit/integration — to add (currently 0 coverage):**
+- **Tenant isolation** (per service with a `tenantId` model): `tenant-isolation.test.js` exists
+  for auth/employee/attendance/leave/payroll but is an **integration** test — it instantiates a
+  real `PrismaClient` and needs a migrated test DB + `prisma generate`. Wire it into the
+  DB-backed CI job (not the mock-only unit run). It must assert: a read in tenant-A context
+  returns only A's rows; a create stamps A's `tenantId`; `runUnscoped` sees both.
+- **`POST /users` stamps the creator's tenant** (regression for the bug where staff users
+  leaked into the Default tenant) — auth-service.
+- **`createAuthUser` (employee→auth internal call) passes `employee.tenantId`** (same bug class).
+- **Tenant signup** (`tenants.routes`): `/register` creates Tenant(TRIALING +14d) + Subscription +
+  OWNER (cloned SUPER_ADMIN) + cloned roles; rate-limited; rejects duplicate owner email.
+- **Billing** (`billing.routes`): `/subscription` trial status + `trialDaysLeft`; `/checkout`
+  stub with no Stripe key; `trialExpirySweep` flips expired TRIALING→PAST_DUE; webhook
+  `checkout.session.completed` → ACTIVE.
+- **Pricing** (admin-service): `getPricing` returns defaults when unset; `PUT /platform/pricing`
+  requires SUPER_ADMIN/BILLING + writes an audit row; public `GET /pricing` returns only active.
+- **Platform admin** (admin-service): login requires MFA; create/suspend/resume/cancel tenant;
+  module toggle; trial-extend (date + days); AI-provider set; create-platform-admin (SUPER_ADMIN
+  only, can't deactivate self); entitlements (`disabled` + `billingBlocked`).
+- **Chatbot provider** (assistant-service): `resolveProvider` maps `claude`→anthropic else openai;
+  `maskSensitive` recursively redacts SENSITIVE_KEYS when provider is anthropic.
+
+**E2E — to add:**
+- **Cross-tenant isolation E2E**: a user in tenant A gets 403/empty on tenant B's
+  employees/leave/claims across services.
+- **Gateway realm + entitlements**: platform token rejected on tenant routes (and vice versa);
+  module-disabled → 403; billing-blocked (PAST_DUE) → 402.
+- **Tenant signup → onboard → login** happy path.
+- **Pricing**: public `/api/pricing` is CORS-`*`; operator edit in the console reflects on
+  `/settings/billing`.
+
+**Known failing today (not regressions to "fix" blindly):**
+- 5× `tenant-isolation.test.js` — need a DB-backed run (see above), not the mock-only unit job.
+- `payroll-*` + `wica.engine` — **date-sensitive** working-day/proration off-by-ones against the
+  2026 public-holiday calendar; pin a fixed clock (`E2E_PAYROLL_SEED` / a frozen "today") rather
+  than the live date.
+
+**Fixed in the 2026-06-12 run:** `moduleNameMapper` for `/app/shared/tenant-context` was missing
+in performance/training/support services (their whole suites failed to load — recovered ~250
+tests); the `m03-m12` SSO security test was updated for the multi-tenant `findUnique`→`findFirst`
+email lookup.
 
 ---
 
