@@ -24,7 +24,11 @@ function decryptFormPayload(iv, data, rawToken) {
 
 const prisma = require('../utils/prisma');
 
-const ENCRYPTED_FIELDS = ['nricEncrypted', 'homeAddressEncrypted', 'basicSalaryEncrypted', 'bankAccountEncrypted'];
+// Encrypted-at-rest columns. `passNumber` is a work-pass / EP / S-Pass number
+// (identity-document PII) — encrypted in place (the column keeps its name but
+// holds AES-256-GCM ciphertext). Run scripts/encrypt-passnumber.js once to
+// migrate any pre-existing plaintext values.
+const ENCRYPTED_FIELDS = ['nricEncrypted', 'homeAddressEncrypted', 'basicSalaryEncrypted', 'bankAccountEncrypted', 'passNumber'];
 
 // Resolve employeeId from JWT claim, falling back to a DB lookup by email.
 // This makes /me endpoints resilient when a JWT was issued before the account
@@ -83,7 +87,7 @@ function normaliseEnums(data) {
 const PDPA_FIELDS = [
   'dateOfBirth', 'gender', 'race', 'religion', 'maritalStatus', 'nationality',
   'citizenshipStatus', 'nricType', 'personalEmail', 'personalPhone',
-  'passType', 'passNumber', 'passExpiryDate', 'passIssuedDate', 'workPassSector',
+  'passType', 'passExpiryDate', 'passIssuedDate', 'workPassSector', // passNumber is now encrypted-at-rest (see ENCRYPTED_FIELDS)
 ];
 
 function sanitizeEmployee(emp, user) {
@@ -502,6 +506,9 @@ router.post('/', authenticate, authorize('employee:manage', ROLES.SUPER_ADMIN, R
     if (data.homeAddress) { fieldsToEncrypt.homeAddressEncrypted = data.homeAddress; delete data.homeAddress; }
     if (data.basicSalary) { fieldsToEncrypt.basicSalaryEncrypted = data.basicSalary; delete data.basicSalary; }
     if (data.bankAccount) { fieldsToEncrypt.bankAccountEncrypted = data.bankAccount; delete data.bankAccount; }
+    // passNumber is encrypted in place; never store the '****' read-mask.
+    if (data.passNumber === '****') { delete data.passNumber; }
+    else if (data.passNumber) { fieldsToEncrypt.passNumber = data.passNumber; delete data.passNumber; }
 
     const encrypted = encryptFields(fieldsToEncrypt, Object.keys(fieldsToEncrypt));
 
@@ -628,6 +635,9 @@ async function handleUpdate(req, res, next) {
       delete data.salaryChangeReason;
     }
     if (data.bankAccount) { fieldsToEncrypt.bankAccountEncrypted = data.bankAccount; delete data.bankAccount; }
+    // passNumber is encrypted in place; never store the '****' read-mask.
+    if (data.passNumber === '****') { delete data.passNumber; }
+    else if (data.passNumber) { fieldsToEncrypt.passNumber = data.passNumber; delete data.passNumber; }
 
     // Strip encrypted field pass-throughs from body (avoid overwriting with raw ciphertext)
     ['nricEncrypted', 'homeAddressEncrypted', 'basicSalaryEncrypted', 'bankAccountEncrypted'].forEach(f => {

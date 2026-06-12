@@ -4,7 +4,17 @@
  * AES-256-GCM Field-Level Encryption
  * Used for encrypting sensitive fields: NRIC, salary, bank account, etc.
  *
- * Storage format (JSON string): { iv: hex, tag: hex, data: hex }
+ * Storage format (JSON string): { v: keyVersion, iv: hex, tag: hex, data: hex }
+ *
+ * Key versioning: each ciphertext is stamped with the key version (`v`) that
+ * encrypted it. Decrypt resolves the matching key, so keys can be rotated
+ * without re-encrypting everything at once. Ciphertext written before
+ * versioning existed has no `v` and is treated as v1 (the original
+ * ENCRYPTION_KEY) — fully backward compatible.
+ *
+ * To rotate: set ENCRYPTION_KEY_VERSION=2 + ENCRYPTION_KEY_V2=<new 64-hex key>,
+ * keep ENCRYPTION_KEY (v1) available so old rows still decrypt, then lazily
+ * re-encrypt on write (or run a background re-encrypt job).
  */
 
 const crypto = require('crypto');
@@ -12,11 +22,15 @@ const crypto = require('crypto');
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 96-bit IV recommended for GCM
 const TAG_LENGTH = 16;
+const CURRENT_KEY_VERSION = process.env.ENCRYPTION_KEY_VERSION || '1';
 
-function getKey() {
-  const hexKey = process.env.ENCRYPTION_KEY;
+// Resolve the 32-byte key for a given version. v1 falls back to the original
+// ENCRYPTION_KEY var so pre-versioning ciphertext keeps working.
+function keyForVersion(version) {
+  const v = String(version || '1');
+  const hexKey = process.env[`ENCRYPTION_KEY_V${v}`] || (v === '1' ? process.env.ENCRYPTION_KEY : undefined);
   if (!hexKey || hexKey.length !== 64) {
-    throw new Error('ENCRYPTION_KEY must be a 64-character hex string (32 bytes)');
+    throw new Error(`ENCRYPTION_KEY_V${v} (or ENCRYPTION_KEY for v1) must be a 64-character hex string (32 bytes)`);
   }
   return Buffer.from(hexKey, 'hex');
 }
@@ -27,7 +41,7 @@ function getKey() {
 function encrypt(plaintext) {
   if (plaintext === null || plaintext === undefined) return null;
   const text = String(plaintext);
-  const key = getKey();
+  const key = keyForVersion(CURRENT_KEY_VERSION);
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv, { authTagLength: TAG_LENGTH });
 
@@ -35,6 +49,7 @@ function encrypt(plaintext) {
   const tag = cipher.getAuthTag();
 
   return JSON.stringify({
+    v: CURRENT_KEY_VERSION,
     iv: iv.toString('hex'),
     tag: tag.toString('hex'),
     data: encrypted.toString('hex'),
@@ -47,8 +62,8 @@ function encrypt(plaintext) {
 function decrypt(cipherJson) {
   if (!cipherJson) return null;
   try {
-    const { iv, tag, data } = JSON.parse(cipherJson);
-    const key = getKey();
+    const { v, iv, tag, data } = JSON.parse(cipherJson);
+    const key = keyForVersion(v); // missing v → v1 (pre-versioning ciphertext)
     const decipher = crypto.createDecipheriv(
       ALGORITHM,
       key,
