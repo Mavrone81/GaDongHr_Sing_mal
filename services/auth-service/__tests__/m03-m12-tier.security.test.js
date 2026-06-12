@@ -30,11 +30,13 @@ describe('M-12 Microsoft SSO fuzzy email fallback removed', () => {
     expect(authRoutesSrc).not.toMatch(/email\.endsWith\(['"]@gmail\.com['"]\)/);
     expect(authRoutesSrc).not.toMatch(/\.replace\(\/\\\.\/g,\s*''\)\s*\+\s*['"]@gmail\.com['"]/);
   });
-  test('exact user.findUnique is the only Microsoft email lookup', () => {
+  test('exact email lookup is the only Microsoft email lookup', () => {
     const start = authRoutesSrc.indexOf("router.post('/sso/microsoft/callback'");
     const slice = authRoutesSrc.slice(start, start + 5000);
-    // Only one findUnique, no fuzzy fallback.
-    const fu = (slice.match(/findUnique/g) || []).length;
-    expect(fu).toBe(1);
+    // Multi-tenant: email is per-tenant unique, so the exact lookup is now
+    // findFirst({ where: { email } }) instead of findUnique — still an exact
+    // match with no dot-stripped fuzzy fallback. Exactly one email-keyed lookup.
+    const lookups = (slice.match(/find(First|Unique)\(\{\s*where:\s*\{\s*email\b/g) || []).length;
+    expect(lookups).toBe(1);
   });
 });
