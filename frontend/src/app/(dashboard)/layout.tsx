@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import NotificationBell from '@/components/NotificationBell';
 import FloatingAssistant from '@/components/FloatingAssistant';
 import TrialBanner from '@/components/TrialBanner';
+import { VorkhiveMark } from '@/components/VorkhiveLogo';
 
 // ─── RBAC Navigation Matrix — Section 2, Vorkhive_RBAC_Workflow_Reference.pdf ──
 // SA = Superadmin (full, unrestricted access to ALL modules)
@@ -497,21 +498,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* ── SIDEBAR ─────────────────────────────────────────────────────────── */}
       <aside
-        className={`w-64 bg-[#0a0f1e] flex flex-col z-50 shadow-2xl shadow-black/60 shrink-0 fixed lg:relative inset-y-0 left-0 transition-transform duration-300 lg:translate-x-0 ${
+        className={`w-64 bg-[#0a1628] flex flex-col z-50 shadow-2xl shadow-black/60 shrink-0 fixed lg:relative inset-y-0 left-0 transition-transform duration-300 lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
         {/* Subtle gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-b from-indigo-950/20 via-transparent to-indigo-950/10 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-indigo-900/30 via-transparent to-indigo-950/20 pointer-events-none" />
 
         {/* Brand */}
         <div className="relative px-5 pt-5 pb-4 border-b border-white/5 flex items-center gap-3">
-          <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/40 shrink-0">
-            <span className="font-black text-white text-sm italic">V</span>
-          </div>
+          <VorkhiveMark size={34} stroke="#ffffff" accent="#cda64c" className="shrink-0" />
           <div className="flex flex-col min-w-0">
-            <span className="font-black text-white tracking-wider text-sm leading-none">Vorkhive</span>
-            <span className="text-[8px] font-bold text-indigo-400/50 mt-1 tracking-widest uppercase truncate">SG Compliance · v2</span>
+            <span className="font-black text-white tracking-[0.18em] uppercase text-sm leading-none">Vorkhive</span>
+            <span className="text-[8px] font-black text-gold-400/80 mt-1 tracking-[0.25em] uppercase truncate">CRM · HR · Payroll</span>
           </div>
         </div>
 
@@ -645,9 +644,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="hidden lg:block h-4 w-px bg-slate-200" />
             <NotificationBell />
             <div className="hidden lg:block h-4 w-px bg-slate-200" />
+            {/* Brand lockup on the light top bar — cream-background JPEG */}
+            <img
+              src="/vorkhive-logo.jpg"
+              alt="Vorkhive — CRM · HR · Payroll"
+              className="hidden lg:block h-7 w-auto rounded-md"
+            />
             <div className="hidden lg:flex flex-col items-end">
               <p className="text-[8px] font-black text-slate-700 uppercase tracking-[0.15em] leading-none">v1.1.0</p>
-              <p className="text-[7px] font-bold text-slate-300 mt-0.5 uppercase tracking-widest leading-none">SG Compliance</p>
+              <p className="text-[7px] font-bold text-gold-500 mt-0.5 uppercase tracking-widest leading-none">SG Compliance</p>
             </div>
           </div>
         </header>
