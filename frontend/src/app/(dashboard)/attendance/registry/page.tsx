@@ -4,6 +4,8 @@ import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
+import { addDays, toISODate as isoDate, todayISO, formatCivil } from '@/lib/timezone';
+import { getMondayOf } from '@/lib/attendanceUtils';
 
 const ALLOWED_ROLES = ['SUPER_ADMIN', 'HR_ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'LINE_MANAGER'];
 
@@ -55,19 +57,9 @@ async function geocodePostal(postal: string): Promise<{ lat: number; lng: number
   } catch { return null; }
 }
 
-// Returns the Monday of the week containing the given date
-function getMondayOf(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  d.setDate(d.getDate() - ((day + 6) % 7));
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-function addDays(d: Date, n: number): Date {
-  const r = new Date(d); r.setDate(r.getDate() + n); return r;
-}
-function isoDate(d: Date) { return d.toISOString().slice(0, 10); }
-function fmtShortDate(d: Date) { return d.toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' }); }
+// getMondayOf, addDays, isoDate (toISODate) and todayISO come from the shared
+// business-timezone helpers so date keys stay consistent and TZ-independent.
+function fmtShortDate(d: Date) { return formatCivil(d, { weekday: 'short', day: 'numeric', month: 'short' }); }
 
 const SHIFT_COLORS = [
   '#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#14b8a6','#f97316','#6b7280',
@@ -115,7 +107,7 @@ export default function AttendanceRegistryPage() {
 
 function AdminAttendanceView({ userRole }: { userRole: string }) {
   const [tab, setTab] = useState<'scheduler' | 'shifts' | 'attendance' | 'locations'>('scheduler');
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState(() => todayISO());
   const [roster, setRoster] = useState<RosterRow[]>([]);
   const [rosterLoading, setRosterLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -260,7 +252,7 @@ function AdminAttendanceView({ userRole }: { userRole: string }) {
         </div>
         <div className="flex flex-wrap gap-3 items-center">
           {tab === 'attendance' && <>
-            <input type="date" value={selectedDate} max={new Date().toISOString().slice(0, 10)}
+            <input type="date" value={selectedDate} max={todayISO()}
               onChange={e => setSelectedDate(e.target.value)}
               className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-900 outline-none focus:border-indigo-500 transition-all" />
             <button onClick={() => loadRoster(selectedDate, employees)} className="px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-all">Refresh</button>
@@ -853,7 +845,7 @@ const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: 
                     </th>
                     <th className="px-4 py-4 text-left label-form min-w-[180px]">Employee</th>
                     {viewDays.map((d, i) => {
-                      const todayStr = isoDate(new Date());
+                      const todayStr = todayISO();
                       const isToday = isoDate(d) === todayStr;
                       const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                       const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -910,7 +902,7 @@ const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: 
                           const shift = entryShift(entry);
                           const isSaving = saving === key;
                           const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                          const isToday = dateStr === isoDate(new Date());
+                          const isToday = dateStr === todayISO();
                           return (
                             <td key={i} className={`${isCompact ? 'px-0.5 py-1' : 'px-2 py-2'} text-center ${isWeekend ? 'bg-slate-50/50' : ''}`}>
                               <button
@@ -1163,11 +1155,11 @@ type WShiftForm = {
 const defaultWShift: WShiftForm = {
   name: '', workMon: true, workTue: true, workWed: true, workThu: true, workFri: true, workSat: false, workSun: false,
   startTime: '09:00', endTime: '18:00', breakMinutes: '60', color: SHIFT_COLORS[0], isRecurring: true,
-  scheduleStartDate: new Date().toISOString().slice(0, 10),
+  scheduleStartDate: todayISO(),
 };
 
 type PatternForm = { name: string; patternType: string; workDays: string; offDays: string; startTime: string; endTime: string; breakMinutes: string; color: string; scheduleStartDate: string; };
-const defaultPattern: PatternForm = { name: '', patternType: 'CUSTOM', workDays: '5', offDays: '2', startTime: '09:00', endTime: '18:00', breakMinutes: '60', color: SHIFT_COLORS[0], scheduleStartDate: new Date().toISOString().slice(0, 10) };
+const defaultPattern: PatternForm = { name: '', patternType: 'CUSTOM', workDays: '5', offDays: '2', startTime: '09:00', endTime: '18:00', breakMinutes: '60', color: SHIFT_COLORS[0], scheduleStartDate: todayISO() };
 
 function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
   const [projects, setProjects] = useState<ShiftProject[]>([]);
@@ -1182,7 +1174,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
   const [memberModal, setMemberModal] = useState(false);
-  const [memberForm, setMemberForm] = useState({ employeeId: '', shiftId: '', shiftType: '' as 'working' | 'pattern' | '', startDate: new Date().toISOString().slice(0, 10), autoPopulate: true });
+  const [memberForm, setMemberForm] = useState({ employeeId: '', shiftId: '', shiftType: '' as 'working' | 'pattern' | '', startDate: todayISO(), autoPopulate: true });
   const [memberSaving, setMemberSaving] = useState(false);
 
   const [workingShifts, setWorkingShifts] = useState<WorkingShift[]>([]);
@@ -1203,7 +1195,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
   const [existingAssignments, setExistingAssignments] = useState<ShiftAssignment[]>([]);
   const [assignSearch, setAssignSearch] = useState('');
   const [assignSelected, setAssignSelected] = useState<Set<string>>(new Set());
-  const [assignDate, setAssignDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [assignDate, setAssignDate] = useState(() => todayISO());
   const [assignSaving, setAssignSaving] = useState(false);
 
   const loadProjects = useCallback(async () => {
@@ -1339,7 +1331,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
         }),
       });
       setMemberModal(false);
-      setMemberForm({ employeeId: '', shiftId: '', shiftType: '', startDate: new Date().toISOString().slice(0, 10), autoPopulate: true });
+      setMemberForm({ employeeId: '', shiftId: '', shiftType: '', startDate: todayISO(), autoPopulate: true });
       loadMembers(selProject.id);
     } catch (e: unknown) { alert(e instanceof Error ? e.message : 'Error'); }
     finally { setMemberSaving(false); }
@@ -1354,7 +1346,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
   // Assignments
   const openAssign = async (type: 'working' | 'pattern', id: string, name: string, defaultDate?: string) => {
     setAssignTarget({ type, id, name });
-    setAssignSearch(''); setAssignSelected(new Set()); setAssignDate(defaultDate ?? new Date().toISOString().slice(0, 10));
+    setAssignSearch(''); setAssignSelected(new Set()); setAssignDate(defaultDate ?? todayISO());
     try {
       const data = await apiFetch(`/attendance/shifts/${type === 'working' ? 'working' : 'patterns'}/${id}/assignments`);
       setExistingAssignments(data);
@@ -1571,7 +1563,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
         <div className="flex flex-col gap-4">
           <div className="flex justify-between items-center">
             <p className="eyebrow-tight">Employees assigned to this project</p>
-            <button onClick={() => { setMemberForm({ employeeId: '', shiftId: '', shiftType: '', startDate: new Date().toISOString().slice(0, 10), autoPopulate: true }); setMemberModal(true); }}
+            <button onClick={() => { setMemberForm({ employeeId: '', shiftId: '', shiftType: '', startDate: todayISO(), autoPopulate: true }); setMemberModal(true); }}
               className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all">+ Add Member</button>
           </div>
           {membersLoading ? <div className="p-12 text-center"><div className="w-7 h-7 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin mx-auto" /></div>
