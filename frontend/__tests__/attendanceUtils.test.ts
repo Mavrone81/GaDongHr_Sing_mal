@@ -2,11 +2,11 @@ import { getMondayOf, getPeriodBounds, buildPeriodLog } from '../src/lib/attenda
 import type { ApiRecord } from '../src/lib/attendanceUtils';
 
 // Fixed reference date: Friday 2026-05-15
-const FRIDAY = new Date('2026-05-15T00:00:00');
+const FRIDAY = new Date('2026-05-15T00:00:00+08:00');
 
 describe('getMondayOf', () => {
   test('Monday → same day', () => {
-    const mon = new Date('2026-05-11T00:00:00'); // Monday
+    const mon = new Date('2026-05-11T00:00:00+08:00'); // Monday
     const result = getMondayOf(mon);
     expect(result.toISOString().slice(0, 10)).toBe('2026-05-11');
   });
@@ -17,18 +17,19 @@ describe('getMondayOf', () => {
   });
 
   test('Sunday → previous Monday', () => {
-    const sun = new Date('2026-05-17T00:00:00');
+    const sun = new Date('2026-05-17T00:00:00+08:00');
     const result = getMondayOf(sun);
     expect(result.toISOString().slice(0, 10)).toBe('2026-05-11');
   });
 
-  test('time is reset to 00:00:00.000', () => {
-    const d = new Date('2026-05-15T14:30:00');
+  test('returns a UTC-midnight civil-date anchor', () => {
+    const d = new Date('2026-05-15T14:30:00+08:00');
     const result = getMondayOf(d);
-    expect(result.getHours()).toBe(0);
-    expect(result.getMinutes()).toBe(0);
-    expect(result.getSeconds()).toBe(0);
-    expect(result.getMilliseconds()).toBe(0);
+    // Anchored at UTC-midnight so toISODate / getUTC* arithmetic is exact.
+    expect(result.getUTCHours()).toBe(0);
+    expect(result.getUTCMinutes()).toBe(0);
+    expect(result.getUTCSeconds()).toBe(0);
+    expect(result.getUTCMilliseconds()).toBe(0);
   });
 });
 
@@ -110,8 +111,8 @@ describe('getPeriodBounds', () => {
 });
 
 describe('buildPeriodLog', () => {
-  const mon = new Date('2026-05-11T00:00:00');
-  const fri = new Date('2026-05-15T00:00:00');
+  const mon = new Date('2026-05-11T00:00:00+08:00');
+  const fri = new Date('2026-05-15T00:00:00+08:00');
 
   test('produces one row per day inclusive of start and end', () => {
     const rows = buildPeriodLog([], mon, fri);
@@ -124,8 +125,8 @@ describe('buildPeriodLog', () => {
   });
 
   test('weekends get status "weekend"', () => {
-    const startSat = new Date('2026-05-09T00:00:00'); // Saturday
-    const endSun   = new Date('2026-05-10T00:00:00'); // Sunday
+    const startSat = new Date('2026-05-09T00:00:00+08:00'); // Saturday
+    const endSun   = new Date('2026-05-10T00:00:00+08:00'); // Sunday
     const rows = buildPeriodLog([], startSat, endSun);
     expect(rows[0].status).toBe('weekend');
     expect(rows[1].status).toBe('weekend');

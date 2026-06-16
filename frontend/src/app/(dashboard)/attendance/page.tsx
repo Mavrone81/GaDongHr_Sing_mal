@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { getMondayOf, getPeriodBounds, buildPeriodLog } from '@/lib/attendanceUtils';
 import type { ViewMode, AttendanceRecord, ApiRecord } from '@/lib/attendanceUtils';
+import { todayISO, toISODate } from '@/lib/timezone';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -65,7 +66,7 @@ function EmployeeAttendanceView() {
 
   // ── Sync isClockedIn from loaded log so button label is correct on load ────
   useEffect(() => {
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = todayISO();
     const todayRec = weekLog.find(r => r.isoDate === todayIso);
     if (todayRec) {
       const clockedIn = !!todayRec.clockIn && !todayRec.clockOut;
@@ -101,11 +102,11 @@ function EmployeeAttendanceView() {
     if (!user?.employeeId) { setWeekLoading(false); return; }
     setWeekLoading(true);
     const { start, end } = getPeriodBounds(viewMode, periodOffset);
-    const from = start.toISOString().slice(0, 10);
+    const from = toISODate(start);
     // Add one day to `to` so the backend's lte covers all records on the end date
     const toDate = new Date(end);
-    toDate.setDate(toDate.getDate() + 1);
-    const to = toDate.toISOString().slice(0, 10);
+    toDate.setUTCDate(toDate.getUTCDate() + 1);
+    const to = toISODate(toDate);
     apiFetch(`/attendance/${user.employeeId}?from=${from}&to=${to}`)
       .then((records: any[]) => setWeekLog(buildPeriodLog(Array.isArray(records) ? records : [], start, end)))
       .catch(() => setWeekLog(buildPeriodLog([], start, end)))
@@ -242,7 +243,7 @@ function EmployeeAttendanceView() {
       if (result.matched) {
         setClockState('success');
         // Call the actual attendance API now that identity is confirmed
-        const todayIso = new Date().toISOString().slice(0, 10);
+        const todayIso = todayISO();
         const endpoint = isClockedIn ? '/attendance/clock-out' : '/attendance/clock-in';
         try {
           const rec = await apiFetch(endpoint, { method: 'POST', body: JSON.stringify({}) });
@@ -764,28 +765,27 @@ function EmployeeAttendanceView() {
         // ── Month: calendar grid ──────────────────────────────────────────────
         if (viewMode === 'month') {
           const { start } = getPeriodBounds('month', periodOffset);
-          // group rows into weeks (7-day chunks starting Mon)
+          // group rows into weeks (7-day chunks starting Mon). All dates are
+          // UTC-midnight civil-date anchors → use UTC getters/setters throughout.
           const firstMonday = getMondayOf(start);
-          const calStart = new Date(firstMonday);
-          calStart.setHours(0, 0, 0, 0);
           const recMap = new Map(weekLog.map(r => [r.isoDate, r]));
           const weeks: (AttendanceRecord | null)[][] = [];
-          const cur = new Date(calStart);
+          const cur = new Date(firstMonday);
           const { end: mEnd } = getPeriodBounds('month', periodOffset);
           while (cur <= mEnd || weeks.length === 0) {
             const week: (AttendanceRecord | null)[] = [];
             for (let d = 0; d < 7; d++) {
-              const iso = cur.toISOString().slice(0, 10);
+              const iso = toISODate(cur);
               const rec = recMap.get(iso) ?? null;
               // days outside the current month
-              const inMonth = cur.getMonth() === start.getMonth();
+              const inMonth = cur.getUTCMonth() === start.getUTCMonth();
               week.push(inMonth ? (rec ?? {
-                date: cur.toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' }),
-                isoDate: iso, dayOfWeek: cur.getDay(),
+                date: cur.toLocaleDateString('en-SG', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' }),
+                isoDate: iso, dayOfWeek: cur.getUTCDay(),
                 clockIn: null, clockOut: null, duration: null,
-                status: (cur.getDay() === 0 || cur.getDay() === 6) ? 'weekend' : 'absent',
+                status: (cur.getUTCDay() === 0 || cur.getUTCDay() === 6) ? 'weekend' : 'absent',
               } as AttendanceRecord) : null);
-              cur.setDate(cur.getDate() + 1);
+              cur.setUTCDate(cur.getUTCDate() + 1);
             }
             weeks.push(week);
             if (cur > mEnd) break;
@@ -857,7 +857,7 @@ function EmployeeAttendanceView() {
                       {week.map((rec, di) => {
                         if (!rec) return <div key={di} className="h-14 rounded-xl bg-slate-50/30" />;
                         const dayNum = rec.isoDate.slice(8);
-                        const isToday = rec.isoDate === new Date().toISOString().slice(0, 10);
+                        const isToday = rec.isoDate === todayISO();
                         return (
                           <div key={di} className={`h-14 rounded-xl border px-2 py-1.5 flex flex-col justify-between transition-all ${cellColor(rec.status)} ${isToday ? 'ring-2 ring-indigo-400 ring-offset-1' : ''}`}>
                             <div className="flex items-center justify-between">
@@ -925,7 +925,7 @@ function EmployeeAttendanceView() {
                   </div>
                 ))
               ) : weekLog.map((rec) => {
-                const isToday = rec.isoDate === new Date().toISOString().slice(0, 10);
+                const isToday = rec.isoDate === todayISO();
                 const badge = statusBadge(rec.status);
                 const isWeekendRow = rec.status === 'weekend';
                 return (

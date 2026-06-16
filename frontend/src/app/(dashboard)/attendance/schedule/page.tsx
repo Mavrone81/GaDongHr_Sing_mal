@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { getMondayOf } from '@/lib/attendanceUtils';
+import { addDays, toISODate as toISO, todayISO } from '@/lib/timezone';
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -31,23 +33,9 @@ interface RosterDay {
   note: string | null;
 }
 
-function getWeekStart(base: Date): Date {
-  const d = new Date(base);
-  const day = d.getDay();
-  d.setDate(d.getDate() - ((day + 6) % 7)); // Monday
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function addDays(d: Date, n: number): Date {
-  const r = new Date(d);
-  r.setDate(r.getDate() + n);
-  return r;
-}
-
-function toISO(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
+// Week-start, addDays, toISO (toISODate) and today come from the shared
+// business-timezone helpers so roster date keys stay consistent across TZs.
+const getWeekStart = getMondayOf;
 
 export default function MySchedulePage() {
   const { user } = useAuth();
@@ -94,7 +82,7 @@ export default function MySchedulePage() {
   const totalHours = roster.reduce((s, d) => s + (d.shift?.hoursPerDay ?? 0), 0);
   const workDays   = roster.filter(d => d.shift !== null).length;
 
-  const today = toISO(new Date());
+  const today = todayISO();
 
   return (
     <div className="flex flex-col gap-6 max-w-[1100px] mx-auto pb-12 animate-in fade-in duration-700">
