@@ -1,5 +1,14 @@
 // Pure utility functions for attendance period calculations.
 // Extracted here so they can be unit-tested without importing the full React page.
+//
+// All calendar math runs in the business timezone via the helpers in
+// `./timezone`: dates are UTC-midnight civil-date anchors, advanced with
+// setUTCDate and keyed with toISODate. This keeps day boundaries, ISO keys and
+// labels mutually consistent and independent of the viewer's browser timezone
+// (the old code mixed local arithmetic with UTC `toISOString()`, which shifted
+// every date back a day in Singapore time).
+
+import { BUSINESS_TZ, civilDate, toISODate, formatCivil } from './timezone';
 
 export type ViewMode = 'work-week' | 'week' | 'bi-weekly' | 'month';
 
@@ -21,43 +30,45 @@ export type ApiRecord = {
   status?: string;
 };
 
-/** Returns the Monday of the week containing date d (ISO week, Mon=start). */
+/** Returns the Monday (business-TZ) of the week containing date d, as a
+ *  UTC-midnight civil-date anchor (ISO week, Mon=start). */
 export function getMondayOf(d: Date): Date {
-  const out = new Date(d);
-  const day = out.getDay();
-  out.setDate(out.getDate() - ((day + 6) % 7));
-  out.setHours(0, 0, 0, 0);
+  const out = civilDate(d);
+  const day = out.getUTCDay();
+  out.setUTCDate(out.getUTCDate() - ((day + 6) % 7));
   return out;
 }
 
-/** Returns start/end Date and a human-readable label for the given view mode and offset. */
+/** Returns start/end civil-date anchors and a human-readable label for the
+ *  given view mode and offset. */
 export function getPeriodBounds(
   mode: ViewMode,
   offset: number,
   today: Date = new Date()
 ): { start: Date; end: Date; label: string } {
-  const fmt = (d: Date) => d.toLocaleDateString('en-SG', { day: 'numeric', month: 'short' });
+  const fmt = (d: Date) => formatCivil(d, { day: 'numeric', month: 'short' });
 
   if (mode === 'work-week' || mode === 'week') {
     const monday = getMondayOf(today);
-    monday.setDate(monday.getDate() + offset * 7);
+    monday.setUTCDate(monday.getUTCDate() + offset * 7);
     const end = new Date(monday);
-    end.setDate(monday.getDate() + (mode === 'work-week' ? 4 : 6));
-    return { start: monday, end, label: `${fmt(monday)} – ${fmt(end)} ${end.getFullYear()}` };
+    end.setUTCDate(monday.getUTCDate() + (mode === 'work-week' ? 4 : 6));
+    return { start: monday, end, label: `${fmt(monday)} – ${fmt(end)} ${end.getUTCFullYear()}` };
   }
   if (mode === 'bi-weekly') {
     const monday = getMondayOf(today);
-    monday.setDate(monday.getDate() + offset * 14);
+    monday.setUTCDate(monday.getUTCDate() + offset * 14);
     const end = new Date(monday);
-    end.setDate(monday.getDate() + 13);
-    return { start: monday, end, label: `${fmt(monday)} – ${fmt(end)} ${end.getFullYear()}` };
+    end.setUTCDate(monday.getUTCDate() + 13);
+    return { start: monday, end, label: `${fmt(monday)} – ${fmt(end)} ${end.getUTCFullYear()}` };
   }
   // month
-  const d = new Date(today.getFullYear(), today.getMonth() + offset, 1);
-  const start = new Date(d.getFullYear(), d.getMonth(), 1);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-  return { start, end, label: start.toLocaleDateString('en-SG', { month: 'long', year: 'numeric' }) };
+  const base = civilDate(today);
+  const y = base.getUTCFullYear();
+  const m = base.getUTCMonth();
+  const start = new Date(Date.UTC(y, m + offset, 1));
+  const end = new Date(Date.UTC(y, m + offset + 1, 0));
+  return { start, end, label: formatCivil(start, { month: 'long', year: 'numeric' }) };
 }
 
 /** Builds a full list of AttendanceRecord rows covering start→end, merging API data. */
@@ -69,15 +80,18 @@ export function buildPeriodLog(
   const recMap = new Map<string, ApiRecord>();
   for (const r of apiRecords) recMap.set(r.date.slice(0, 10), r);
 
+  // Clock timestamps are instants → render them in the business timezone so a
+  // viewer abroad still sees the company's wall-clock time.
   const fmtT = (iso: string | null | undefined): string | null =>
-    iso ? new Date(iso).toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', hour12: true }) : null;
+    iso ? new Date(iso).toLocaleTimeString('en-SG', { timeZone: BUSINESS_TZ, hour: '2-digit', minute: '2-digit', hour12: true }) : null;
 
   const rows: AttendanceRecord[] = [];
-  const cur = new Date(start);
-  while (cur <= end) {
-    const iso = cur.toISOString().slice(0, 10);
-    const dow = cur.getDay();
-    const label = cur.toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' });
+  const cur = civilDate(start);
+  const last = civilDate(end);
+  while (cur <= last) {
+    const iso = toISODate(cur);
+    const dow = cur.getUTCDay();
+    const label = formatCivil(cur, { weekday: 'short', day: 'numeric', month: 'short' });
     const isWeekend = dow === 0 || dow === 6;
     const rec = recMap.get(iso);
 
@@ -92,7 +106,7 @@ export function buildPeriodLog(
       else if (rec.status === 'LEAVE') status = 'leave';
       rows.push({ date: label, isoDate: iso, dayOfWeek: dow, clockIn: fmtT(rec.clockIn), clockOut: fmtT(rec.clockOut), duration: dur, status });
     }
-    cur.setDate(cur.getDate() + 1);
+    cur.setUTCDate(cur.getUTCDate() + 1);
   }
   return rows;
 }
