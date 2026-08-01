@@ -10,6 +10,7 @@ const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
 const roleRoutes = require('./routes/role.routes');
 const tenantsRoutes = require('./routes/tenants.routes');
+const entitiesRoutes = require('./routes/entities.routes');
 const billingRoutes = require('./routes/billing.routes');
 const purgeRoutes = require('./routes/purge.routes');
 const { generateKeysIfNeeded, verifyToken } = require('./utils/jwt.utils');
@@ -57,6 +58,11 @@ app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
 app.use('/roles', roleRoutes);
 app.use('/tenants', tenantsRoutes);
+// Shares the /tenants prefix so the gateway's existing /api/tenants proxy
+// (api-gateway/src/index.js) reaches it with no gateway change. No path
+// collision: tenantsRoutes exposes only POST /register, POST /:id/profile
+// and GET /me.
+app.use('/tenants', entitiesRoutes);
 app.use('/billing', billingRoutes);
 app.use('/auth/purge', purgeRoutes);
 

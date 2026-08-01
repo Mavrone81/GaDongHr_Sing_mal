@@ -231,3 +231,39 @@ model OrgSetting {
   @@index([tenantId])
   @@map("org_settings")
 }
+
+// ENT-001 — the country anchor. A tenant owns 1..n legal entities; each has its
+// own country, currency and statutory employer registrations. Every employee and
+// every payroll run belongs to exactly one, so a run is always single-country.
+//
+// CompanyProfile is the *first* legal entity rather than a peer concept —
+// scripts/migrate-legal-entities.js derives one primary entity per existing
+// tenant from it.
+//
+// Deliberately no FK to Tenant: User/Role already reference tenantId as an
+// indexed scalar so `db push` can add columns to existing rows without
+// FK-validating against a table that may be empty. Same reasoning applies here.
+model LegalEntity {
+  id             String   @id @default(uuid())
+  tenantId       String
+  name           String
+  code           String
+  country        String   @default("SG")             // SG | MY
+  currency       String   @default("SGD")            // SGD | MYR
+  timezone       String   @default("Asia/Singapore")
+  state          String?                             // MY only — drives the state holiday set
+  registrationNo String?                             // UEN (SG) / SSM (MY)
+  // Country-specific employer registrations, intentionally untyped: SG needs a
+  // CPF Submission Number, MY needs EPF/SOCSO/LHDN numbers. Typing them here
+  // would drag country knowledge into auth-service. The shape is declared and
+  // validated by each statutory service's GET /statutory/schema.
+  statutoryIds   Json?
+  isPrimary      Boolean  @default(false)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("legal_entities")
+}
