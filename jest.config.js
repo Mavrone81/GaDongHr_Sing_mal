@@ -2,6 +2,7 @@
 module.exports = {
   projects: [
     '<rootDir>/frontend',
+    '<rootDir>/shared/entity-client',
     '<rootDir>/services/attendance-service',
     '<rootDir>/services/auth-service',
     '<rootDir>/services/employee-service',
