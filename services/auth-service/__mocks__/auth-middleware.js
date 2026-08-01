@@ -1,7 +1,10 @@
 'use strict';
 module.exports = {
   authenticate: (req, _res, next) => {
-    req.user = { sub: 'admin-001', email: 'admin@test.com', role: 'HR_ADMIN' };
+    // tenantId mirrors a real access token (signed at auth.routes.js:300).
+    // Routes that scope by tenant read it, so omitting it here would let a
+    // missing scope check pass unnoticed in tests.
+    req.user = { sub: 'admin-001', email: 'admin@test.com', role: 'HR_ADMIN', tenantId: 'ten-1' };
     next();
   },
   authorize: () => (_req, _res, next) => next(),
