@@ -77,3 +77,120 @@ describe('GET /tenants/internal/entities/:id', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('entity CRUD', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('lists entities for a tenant', async () => {
+    mockPrisma.legalEntity.findMany.mockResolvedValue([ENTITY]);
+    const res = await request(buildApp()).get('/tenants/ten-1/entities');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].code).toBe('ACME-SG');
+  });
+
+  test('creates an entity with a supported country', async () => {
+    mockPrisma.legalEntity.create.mockResolvedValue({ ...ENTITY, id: 'ent-2', code: 'ACME-MY' });
+    const res = await request(buildApp())
+      .post('/tenants/ten-1/entities')
+      .send({ name: 'Acme Sdn Bhd', code: 'ACME-MY', country: 'MY' });
+
+    expect(res.status).toBe(201);
+    // Currency and timezone are derived from country, never client-supplied.
+    expect(mockPrisma.legalEntity.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        tenantId: 'ten-1', country: 'MY', currency: 'MYR', timezone: 'Asia/Kuala_Lumpur',
+      }),
+    }));
+  });
+
+  test('derives SGD / Asia/Singapore for an SG entity', async () => {
+    mockPrisma.legalEntity.create.mockResolvedValue(ENTITY);
+    await request(buildApp())
+      .post('/tenants/ten-1/entities')
+      .send({ name: 'Acme Pte Ltd', code: 'ACME-SG', country: 'SG' });
+
+    expect(mockPrisma.legalEntity.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ currency: 'SGD', timezone: 'Asia/Singapore' }),
+    }));
+  });
+
+  // Adding a country without a statutory service behind it would let a tenant
+  // create entities whose payroll cannot compute (PRD §A1.2).
+  test('rejects an unsupported country', async () => {
+    const res = await request(buildApp())
+      .post('/tenants/ten-1/entities')
+      .send({ name: 'Acme KK', code: 'ACME-HK', country: 'HK' });
+    expect(res.status).toBe(400);
+    expect(mockPrisma.legalEntity.create).not.toHaveBeenCalled();
+  });
+
+  test('ignores a client-supplied currency (ENT-002)', async () => {
+    mockPrisma.legalEntity.create.mockResolvedValue(ENTITY);
+    await request(buildApp())
+      .post('/tenants/ten-1/entities')
+      .send({ name: 'Acme', code: 'A1', country: 'SG', currency: 'USD' });
+
+    expect(mockPrisma.legalEntity.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ currency: 'SGD' }),
+    }));
+  });
+
+  test('rejects a missing name or code', async () => {
+    const res = await request(buildApp())
+      .post('/tenants/ten-1/entities').send({ country: 'SG' });
+    expect(res.status).toBe(400);
+  });
+
+  test('maps a duplicate code to 409', async () => {
+    mockPrisma.legalEntity.create.mockRejectedValue({ code: 'P2002' });
+    const res = await request(buildApp())
+      .post('/tenants/ten-1/entities')
+      .send({ name: 'Acme', code: 'ACME-SG', country: 'SG' });
+    expect(res.status).toBe(409);
+  });
+});
+
+/**
+ * Cross-tenant scoping. Not specified in the plan, added because without it
+ * these routes are an IDOR of the same class as VAPT C-01/C-02 — a caller in
+ * one tenant could enumerate or create legal entities in another. Follows the
+ * convention already used at tenants.routes.js:186 (mock JWT is tenant ten-1).
+ */
+describe('entity routes are tenant-scoped', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('listing another tenant\'s entities is 403', async () => {
+    const res = await request(buildApp()).get('/tenants/ten-OTHER/entities');
+    expect(res.status).toBe(403);
+    expect(mockPrisma.legalEntity.findMany).not.toHaveBeenCalled();
+  });
+
+  test('creating in another tenant is 403', async () => {
+    const res = await request(buildApp())
+      .post('/tenants/ten-OTHER/entities')
+      .send({ name: 'Evil Sdn Bhd', code: 'EVIL', country: 'MY' });
+    expect(res.status).toBe(403);
+    expect(mockPrisma.legalEntity.create).not.toHaveBeenCalled();
+  });
+
+  test('"me" resolves to the caller\'s own tenant', async () => {
+    mockPrisma.legalEntity.findMany.mockResolvedValue([ENTITY]);
+    const res = await request(buildApp()).get('/tenants/me/entities');
+    expect(res.status).toBe(200);
+    expect(mockPrisma.legalEntity.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { tenantId: 'ten-1' } }),
+    );
+  });
+
+  test('create always stamps the caller\'s tenantId, never the path value', async () => {
+    mockPrisma.legalEntity.create.mockResolvedValue(ENTITY);
+    await request(buildApp())
+      .post('/tenants/me/entities')
+      .send({ name: 'Acme', code: 'A2', country: 'SG' });
+
+    expect(mockPrisma.legalEntity.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ tenantId: 'ten-1' }),
+    }));
+  });
+});

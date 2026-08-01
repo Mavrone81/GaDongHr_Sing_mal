@@ -484,6 +484,10 @@ git commit -m "feat(entity): fail-closed cached entity resolver (ENT-002)"
 
 **Context:** Task 1 built only the internal endpoint. Operators and tenant admins need to list and create entities. Role gating follows the existing convention: `authenticate` then `authorize(...)` from `/app/shared/auth-middleware`.
 
+**Tenant scoping is mandatory, not optional.** `:tenantId` is attacker-controlled, so role gating alone leaves an IDOR of the same class as VAPT C-01/C-02 — a caller in one tenant could enumerate or create entities in another. The authoritative tenant is the one in the verified JWT (`req.user.tenantId`, signed at `auth.routes.js:300`); the path segment may only *match* it, or be the literal `me`. Follow the convention at `tenants.routes.js:186`. `prisma.legalEntity.create` must stamp the token's tenantId, never `req.params.tenantId`.
+
+This also means `services/auth-service/__mocks__/auth-middleware.js` must put `tenantId` on `req.user` — without it a missing scope check passes unnoticed in tests.
+
 **Files:**
 - Modify: `services/auth-service/src/routes/entities.routes.js`
 - Test: `services/auth-service/__tests__/entities.integration.test.js`
