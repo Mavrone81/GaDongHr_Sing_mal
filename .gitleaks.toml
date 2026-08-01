@@ -22,17 +22,21 @@ description = "Hardcoded 'dev-encryption-key-...' fallback"
 regex = '''dev-encryption-key-[a-z0-9-]{16,}'''
 tags = ["secret", "vapt"]
 
-[[rules]]
-id = "vorkhive-default-admin-password"
-description = "Seed/initial '***REMOVED***' fallback (VAPT C-05)"
-regex = '''***REMOVED***'''
-tags = ["secret", "vapt"]
-
-[[rules]]
-id = "vorkhive-default-bulk-sync-password"
-description = "Bulk-sync '***REMOVED***' fallback (VAPT C-06)"
-regex = '''***REMOVED***'''
-tags = ["secret", "vapt"]
+# REMOVED 2026-08-02 — two rules (VAPT C-05 seed admin password, C-06 bulk-sync
+# password) had their `regex` values replaced by a literal redaction marker when
+# secrets were scrubbed from this repo. `***` is not a valid regex, so gitleaks
+# PANICKED on config load and scanned nothing. Combined with `2>/dev/null` in
+# .git/hooks/pre-commit, that surfaced as "potential secret in staged changes"
+# on every commit: 100% of commits blocked, 0% of secrets detected, since
+# 2026-07-13.
+#
+# The rules are dropped rather than restored because rewriting them would mean
+# re-embedding the very passwords they detect. If that coverage is wanted back,
+# match the *shape* of a hardcoded credential assignment, never the literal.
+#
+# Still outstanding: .github/workflows/pr-tests.yml has no secret scanning at
+# all. VAPT §9 recommended a permanent CI gate (semgrep, npm audit, gitleaks);
+# only this local hook was ever added.
 
 # ── Allowlist ───────────────────────────────────────────────────────────────
 
