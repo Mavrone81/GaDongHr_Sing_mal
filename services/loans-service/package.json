@@ -11,7 +11,12 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "testMatch": ["**/__tests__/**/*.test.js"]
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ],
+    "moduleNameMapper": {
+      "/app/shared/tenant-context": "<rootDir>/../../shared/tenant-context/index.js"
+    }
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

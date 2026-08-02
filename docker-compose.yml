@@ -582,6 +582,190 @@ services:
   # pg_dumpall (postgres:16-alpine — matches the server major version) captures
   # all DBs + roles/globals into one gzip file under the db_backups volume.
   # Schedule: 0 19 * * * UTC = 03:00 SGT (Asia/Singapore, fixed UTC+8, no DST).
+  # ── Services below were gateway-routed with live frontend pages but had no
+  # compose entry, so every one of those pages hit nothing in any deployment.
+  # api-gateway/src/index.js has proxied /api/support, /api/esign, /api/benefits,
+  # /api/hr-cases, /api/loans and /api/surveys since they were written.
+  #
+  # NOTE on ports: the container port is what the gateway addresses over the
+  # docker network, and it must keep matching the *_SERVICE_URL defaults in
+  # api-gateway/src/index.js. Only the PUBLISHED host port has to be unique on
+  # the host — benefits listens on 4016 like admin-service does, which is fine
+  # across containers, so it publishes on 4022 instead.
+
+  support-service:
+    build:
+      context: .
+      dockerfile: services/support-service/Dockerfile
+    container_name: hrms-support
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${SUPPORT_SERVICE_PORT:-4014}:4014"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4014
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/hrms_support
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+    volumes:
+      - shared_certs:/app/certs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 64m
+
+  esign-service:
+    build:
+      context: .
+      dockerfile: services/esign-service/Dockerfile
+    container_name: hrms-esign
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${ESIGN_SERVICE_PORT:-4015}:4015"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4015
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/hrms_esign
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      # Document-integrity HMAC (VAPT M-01 replaced a bare SHA-256 with an HMAC).
+      # Falls back to ENCRYPTION_KEY only if unset; set it separately in prod.
+      - ESIGN_HMAC_KEY=${ESIGN_HMAC_KEY:-${ENCRYPTION_KEY}}
+      - NOTIFICATION_SERVICE_URL=http://notification-service:4009
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+    volumes:
+      - shared_certs:/app/certs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 64m
+
+  benefits-service:
+    build:
+      context: .
+      dockerfile: services/benefits-service/Dockerfile
+    container_name: hrms-benefits
+    init: true
+    restart: unless-stopped
+    # Container port 4016 matches BENEFITS_SERVICE_URL in the gateway. Published
+    # on 4022 because admin-service already publishes 4016 on the host.
+    ports:
+      - "127.0.0.1:${BENEFITS_SERVICE_PORT:-4022}:4016"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4016
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/hrms_benefits
+      - EMPLOYEE_SERVICE_URL=http://employee-service:4002
+      - NOTIFICATION_SERVICE_URL=http://notification-service:4009
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+    volumes:
+      - shared_certs:/app/certs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 64m
+
+  hr-case-service:
+    build:
+      context: .
+      dockerfile: services/hr-case-service/Dockerfile
+    container_name: hrms-hr-case
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${HR_CASE_SERVICE_PORT:-4017}:4017"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4017
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/hrms_hr_case
+      - NOTIFICATION_SERVICE_URL=http://notification-service:4009
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+    volumes:
+      - shared_certs:/app/certs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 64m
+
+  loans-service:
+    build:
+      context: .
+      dockerfile: services/loans-service/Dockerfile
+    container_name: hrms-loans
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${LOANS_SERVICE_PORT:-4018}:4018"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4018
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/hrms_loans
+      # Salary is fetched server-side from employee-service (VAPT C-17: the
+      # client used to declare monthlySalary and inflate its own loan cap), so
+      # the internal key is mandatory for this service to function.
+      - EMPLOYEE_SERVICE_URL=http://employee-service:4002
+      - NOTIFICATION_SERVICE_URL=http://notification-service:4009
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+    volumes:
+      - shared_certs:/app/certs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 64m
+
+  survey-service:
+    build:
+      context: .
+      dockerfile: services/survey-service/Dockerfile
+    container_name: hrms-survey
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${SURVEY_SERVICE_PORT:-4019}:4019"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4019
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/hrms_survey
+      - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
+    volumes:
+      - shared_certs:/app/certs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 64m
+
   db-backup:
     build:
       context: ./backup
