@@ -33,6 +33,13 @@ model AuditLog {
 model PayrollRun {
   id              String        @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
+  // ENT-001 — the entity this run belongs to, so the run has exactly one
+  // country, currency and statutory rule set. Nullable for `db push` against
+  // existing rows; scripts/migrate-legal-entities.js backfills it.
+  legalEntityId   String?
+  country         String?       // denormalised from the entity, for reporting
+  currency        String?       // denormalised from the entity
+  rateVersion     String?       // ENT-006 — statutory rate version used to compute
   period          String        // e.g. "2025-01"
   runType         RunType       @default(MONTHLY)
   periodHalf      PeriodHalf?   // only set when runType=BIMONTHLY
@@ -55,9 +62,23 @@ model PayrollRun {
   lineItems       PayrollLineItem[]
   payslips        Payslip[]
 
-  @@unique([period, runType, periodHalf])
+  // Was [period, runType, periodHalf] — no tenant dimension, so two tenants
+  // could not both run the same BIMONTHLY period (the second got a P2002
+  // reported as "run already exists"). legalEntityId is in the key because a
+  // group tenant runs one payroll per entity per period.
+  //
+  // ⚠ KNOWN LIMITATION, pre-existing and NOT closed by this key: Postgres
+  // treats NULLs as DISTINCT in a unique index, so this constrains nothing for
+  // MONTHLY/ADHOC runs, where periodHalf is NULL. Duplicate MONTHLY runs are
+  // rejected only by the application-level findFirst check in
+  // payroll.routes.js POST /runs (covered by the duplicate-run 409 E2E).
+  // Closing it properly needs Postgres 15+ `UNIQUE NULLS NOT DISTINCT`, which
+  // Prisma 5.22 cannot express, a partial index that `db push` would drop, or
+  // making periodHalf non-nullable with a sentinel.
+  @@unique([tenantId, legalEntityId, period, runType, periodHalf])
   @@index([period])
   @@index([tenantId])
+  @@index([legalEntityId])
   @@map("payroll_runs")
 }
 
@@ -287,7 +308,10 @@ model DrcQuota {
   updatedAt      DateTime @updatedAt
   createdAt      DateTime @default(now())
 
-  @@unique([sector, passType])
+  // Was [sector, passType] — same missing-tenant defect as PayrollRun had.
+  // (This table moves to statutory-sg-service in Task 10; scoped correctly
+  // here so the interim state is sound rather than knowingly broken.)
+  @@unique([tenantId, sector, passType])
   @@index([tenantId])
   @@map("drc_quotas")
 }

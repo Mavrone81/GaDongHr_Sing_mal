@@ -40,10 +40,16 @@ Singapore is baked in at ten seams:
 Found during design; both block multi-entity and one is a live multi-tenancy bug.
 
 **`PayrollRun.@@unique([period, runType, periodHalf])`** — `schema.prisma:58`, not
-tenant-scoped. Two tenants cannot both run January 2026 monthly payroll; the
-second receives a P2002, which `payroll.routes.js:170` renders as *"A payroll run
-for this period already exists"* — a cross-tenant collision wearing a plausible
-error message. `FwlRate.@@unique([sector, passType])` has the same defect.
+tenant-scoped. The second tenant to create a run for a given period receives a
+P2002, which `payroll.routes.js:170` renders as *"A payroll run for this period
+already exists"* — a cross-tenant collision wearing a plausible error message.
+`FwlRate.@@unique([sector, passType])` has the same defect.
+
+*Corrected during implementation:* this affects **BIMONTHLY** runs, not MONTHLY.
+`periodHalf` is `NULL` for MONTHLY/ADHOC and Postgres treats NULLs as distinct in
+a unique index, so those rows never collide. The same behaviour means neither the
+old nor the new key constrains duplicate MONTHLY runs at all — a separate,
+pre-existing hole guarded only by the application-level check in `POST /runs`.
 
 **`PublicHoliday.@@unique([tenantId, date])`** — `schema.prisma:303`. A tenant
 cannot hold a Malaysian and a Singapore holiday on the same date, which blocks

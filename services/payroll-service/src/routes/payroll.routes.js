@@ -130,8 +130,11 @@ router.get('/runs', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, R
 // ─── POST /payroll/runs ─ Initiate Payroll Run ───────────────────────────────
 router.post('/runs', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
   try {
-    const { period, runType = 'MONTHLY', employeeGroup, paymentDate } = req.body;
+    const { period, runType = 'MONTHLY', employeeGroup, paymentDate, legalEntityId } = req.body;
     if (!period) return res.status(400).json({ error: 'Period is required (YYYY-MM)' });
+    // ENT-001: a run belongs to exactly one legal entity, which fixes its
+    // country, currency and statutory rule set for the whole compute.
+    if (!legalEntityId) return res.status(400).json({ error: 'legalEntityId is required to create a payroll run' });
 
     const RT = runType.toUpperCase();
     const periodHalf = req.body.periodHalf ? String(req.body.periodHalf).toUpperCase() : null;
@@ -140,9 +143,11 @@ router.post('/runs', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, 
     const shapeErr = validateRunTypeShape(RT, periodHalf);
     if (shapeErr) return res.status(400).json({ error: shapeErr });
 
-    // Duplicate check: (period, runType, periodHalf) is the natural key
+    // Duplicate check. tenantId is auto-injected by the tenant-scope extension;
+    // legalEntityId must be explicit, or a group tenant's second entity would
+    // be refused a run once its first entity had run the same period.
     const existing = await prisma.payrollRun.findFirst({
-      where: { period, runType: RT, periodHalf },
+      where: { period, runType: RT, periodHalf, legalEntityId },
     });
     if (existing) {
       const halfLabel = periodHalf ? ` ${periodHalf} half` : '';
@@ -163,11 +168,14 @@ router.post('/runs', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, 
         id: uuidv4(), period, runType: RT, periodHalf, status: 'DRAFT',
         initiatedBy: req.user.sub, employeeGroup,
         paymentDate: resolvedPaymentDate,
+        legalEntityId,
       },
     });
     res.status(201).json(run);
   } catch (err) {
-    if (err.code === 'P2002') return res.status(409).json({ error: `A payroll run for this period already exists. Please check the payroll list before creating a new one.` });
+    // Now genuinely a duplicate: the unique key is scoped to tenant + entity,
+    // so this can no longer fire because another tenant ran the same period.
+    if (err.code === 'P2002') return res.status(409).json({ error: `A payroll run for this period already exists for this legal entity. Please check the payroll list before creating a new one.` });
     next(err);
   }
 });

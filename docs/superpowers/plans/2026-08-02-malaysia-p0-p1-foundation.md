@@ -1113,7 +1113,11 @@ git commit -m "feat(entity): Employee.legalEntityId + cross-tenant assignment gu
 
 **Context:** Two defects found during design, both in `services/payroll-service/prisma/schema.prisma`:
 
-- Line 58: `@@unique([period, runType, periodHalf])` — **not tenant-scoped.** Two tenants cannot both run January 2026 monthly payroll; the second gets a Prisma `P2002`, which `payroll.routes.js:170` reports as "A payroll run for this period already exists".
+- Line 58: `@@unique([period, runType, periodHalf])` — **not tenant-scoped.** The second tenant to create a run for a given period gets a Prisma `P2002`, which `payroll.routes.js:170` reports as "A payroll run for this period already exists".
+
+  **Corrected while executing (the original wording said MONTHLY, which is wrong):** this bites **BIMONTHLY** runs, not MONTHLY. `periodHalf` is `NULL` for MONTHLY/ADHOC, and Postgres treats NULLs as distinct in a unique index, so those rows never collide. Verified both directions: two `('2026-01','MONTHLY',NULL)` rows are accepted; a second `('2026-02','BIMONTHLY','FIRST')` raises `duplicate key value violates unique constraint`.
+
+  That same NULL behaviour means the **new** key does not constrain MONTHLY duplicates either — a pre-existing hole this task does not close. Duplicate MONTHLY runs are caught only by the application-level `findFirst` in `POST /runs`. Recorded in the schema comment; closing it needs PG15+ `UNIQUE NULLS NOT DISTINCT` (not expressible in Prisma 5.22), a partial index (`db push` would drop it), or a non-nullable `periodHalf` sentinel.
 - Line 290: `FwlRate.@@unique([sector, passType])` — same defect. (That table moves to the statutory service in Task 10; scope it correctly here so the interim state is sound.)
 
 **Files:**
@@ -1323,7 +1327,16 @@ async function backfillPayrollRuns(dryRun) {
 
 Export it and call it from `run()` after `backfillEmployees`.
 
-**Order matters:** run the backfill *before* `prisma db push` applies the new unique constraint, or rows with `legalEntityId = NULL` may collide.
+**Order (corrected while executing Task 6):** `prisma db push` **first**, then backfill. The original instruction — backfill before the push — is impossible, since `legalEntityId` does not exist until the push creates it. It is also unnecessary: Postgres treats NULLs as *distinct* in a unique index, so pre-backfill rows carrying `legalEntityId = NULL` cannot collide with each other. Verified directly:
+
+```sql
+CREATE TABLE probe (t text, e text, p text);
+CREATE UNIQUE INDEX ON probe (t, e, p);
+INSERT INTO probe VALUES ('ten-1', NULL, '2026-01');
+INSERT INTO probe VALUES ('ten-1', NULL, '2026-01');   -- accepted; 2 rows
+```
+
+The real consequence runs the other way: between the push and the backfill the constraint is effectively inert for existing rows, so genuine duplicates could be created in that window. Keep the two steps adjacent. The route's application-level `findFirst` check still guards in the meantime.
 
 - [ ] **Step 8: Run the full payroll suite**
 
