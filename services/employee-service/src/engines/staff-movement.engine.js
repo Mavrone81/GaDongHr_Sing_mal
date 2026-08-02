@@ -159,8 +159,14 @@ function escapeHtml(input) {
 
 function suggestLetterText(m) {
   if (!m) return '';
-  const eff = m.effectiveDate ? new Date(m.effectiveDate).toLocaleDateString('en-SG', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
-  const todayStr = new Date().toLocaleDateString('en-SG', { day: 'numeric', month: 'long', year: 'numeric' });
+  // timeZone: 'UTC' is required, not cosmetic. effectiveDate is a date-only
+  // business value stored UTC-anchored; without it toLocaleDateString formats
+  // in the SERVER's zone and renders the previous day west of UTC — a transfer
+  // letter stating the wrong effective date. Matches formatCivil in
+  // frontend/src/lib/timezone.ts, which formats with timeZone:'UTC' for the
+  // same reason.
+  const eff = m.effectiveDate ? new Date(m.effectiveDate).toLocaleDateString('en-SG', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+  const todayStr = new Date().toLocaleDateString('en-SG', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' });
   const typeLabel = escapeHtml((m.type || '').replace(/_/g, ' ').toLowerCase());
   const employeeName = escapeHtml(m.employeeName || 'Colleague');
   const reason = escapeHtml((m.reason || '').trim());
