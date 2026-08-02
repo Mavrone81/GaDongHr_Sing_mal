@@ -157,6 +157,56 @@ async function backfillPayrollRuns(dryRun) {
   }
 }
 
+/**
+ * Point every existing public holiday at its tenant's primary entity, and stamp
+ * the denormalised country.
+ *
+ * Runs AFTER `prisma db push` has added the column. Unlike the periodHalf
+ * sentinel this one is order-safe either way — legalEntityId stays nullable, so
+ * the push has nothing to reject.
+ */
+async function backfillPublicHolidays(dryRun) {
+  const { Client } = require('pg');
+
+  const authDb = new Client(pgConfig(process.env.AUTH_DB || 'hrms_auth'));
+  const payDb  = new Client(pgConfig(process.env.PAYROLL_DB || 'hrms_payroll'));
+  await authDb.connect();
+  await payDb.connect();
+
+  try {
+    const { rows: entities } = await authDb.query(
+      'SELECT id, "tenantId", country FROM legal_entities WHERE "isPrimary" = true',
+    );
+
+    let updated = 0;
+    for (const e of entities) {
+      if (dryRun) {
+        const { rows } = await payDb.query(
+          'SELECT COUNT(*)::int AS n FROM public_holidays WHERE "tenantId" = $1 AND "legalEntityId" IS NULL',
+          [e.tenantId],
+        );
+        if (rows[0].n > 0) {
+          console.log(`[dry-run] would set legalEntityId=${e.id} on ${rows[0].n} public holidays`);
+        }
+        updated += rows[0].n;
+      } else {
+        const r = await payDb.query(
+          `UPDATE public_holidays
+              SET "legalEntityId" = $1, country = $2
+            WHERE "tenantId" = $3 AND "legalEntityId" IS NULL`,
+          [e.id, e.country, e.tenantId],
+        );
+        updated += r.rowCount;
+      }
+    }
+
+    console.log(`${dryRun ? '[dry-run] ' : ''}public holidays backfilled=${updated}`);
+  } finally {
+    await authDb.end();
+    await payDb.end();
+  }
+}
+
 async function run() {
   const { Client } = require('pg');
   const dryRun = process.env.DRY_RUN === 'true';
@@ -209,11 +259,12 @@ async function run() {
   // Must run after the entities exist — both resolve them by tenant.
   await backfillEmployees(dryRun);
   await backfillPayrollRuns(dryRun);
+  await backfillPublicHolidays(dryRun);
 }
 
 module.exports = {
   buildEntityFromTenant, deriveEntityCode, pgConfig,
-  backfillEmployees, backfillPayrollRuns, run,
+  backfillEmployees, backfillPayrollRuns, backfillPublicHolidays, run,
 };
 
 if (require.main === module) {
