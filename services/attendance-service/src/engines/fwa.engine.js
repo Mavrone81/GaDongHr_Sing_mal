@@ -20,9 +20,16 @@ const RESPONSE_MONTHS = 2;
  * after the request creation date.
  */
 function computeReviewDeadline(requestDate) {
+  // UTC-anchored, matching shared/payroll-utils and the convention in
+  // frontend/src/lib/timezone.ts. setMonth/getMonth walk the LOCAL calendar
+  // while callers read the result with the getUTC accessors, so off UTC the
+  // deadline landed on the wrong date.
   const d = new Date(requestDate);
-  d.setMonth(d.getMonth() + RESPONSE_MONTHS);
-  return d;
+  return new Date(Date.UTC(
+    d.getUTCFullYear(),
+    d.getUTCMonth() + RESPONSE_MONTHS,
+    d.getUTCDate(),
+  ));
 }
 
 /**
