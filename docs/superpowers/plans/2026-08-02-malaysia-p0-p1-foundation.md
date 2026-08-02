@@ -28,6 +28,11 @@ Every task's requirements implicitly include this section.
 - **Internal service-to-service auth** uses the `x-internal-service-key` header checked against `INTERNAL_SERVICE_KEY`. Fail closed if the env var is unset (VAPT C-07).
 - **Commit after every task.** Do not batch commits across tasks.
 - **Migration scripts read `POSTGRES_PASSWORD` from the environment.** Export it from your own shell before running any script in this plan — it is the value in the repo's git-ignored `.env`. Do not inline a read of `.env` into a command, and never paste the value into a file, a commit message, or a terminal transcript.
+- **Local verification setup (learned running Task 4).** Three frictions recur across the migration tasks:
+  1. `.env` sets `POSTGRES_PORT=5434`, but on this machine that port is held by an unrelated container (`bevops-testpg`). Start postgres with an inline override — `POSTGRES_PORT=5445 docker compose up -d postgres` — rather than editing `.env`, and pass the same `POSTGRES_PORT` to the migration script.
+  2. Do not `source .env`: two lines have unquoted values containing spaces and break shell sourcing. Read single values with `sed -n 's/^KEY=//p' .env`.
+  3. Push a service's schema from the host (`cd services/<svc> && DATABASE_URL=... npx prisma db push --skip-generate`) instead of building the container — same result, far faster.
+  Also note `docker exec` needs **`-i`** to accept a heredoc; without it psql silently receives nothing and reports success.
 
 ---
 

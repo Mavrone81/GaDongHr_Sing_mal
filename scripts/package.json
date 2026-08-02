@@ -4,7 +4,14 @@
   "description": "Vorkhive database seed & utility scripts",
   "private": true,
   "scripts": {
-    "seed": "node seed.js"
+    "seed": "node seed.js",
+    "test": "jest --runInBand"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
