@@ -35,6 +35,10 @@ model EmployeeSupervisor {
 model Employee {
   id                  String    @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
+  // ENT-001 — the employing legal entity. Drives which country's statutory
+  // rules apply to this employee. Nullable so `db push` can add the column to
+  // existing rows; scripts/migrate-legal-entities.js backfills it.
+  legalEntityId       String?
   employeeCode        String    // e.g. EMP-0001
   fullName            String
   preferredName       String?
@@ -106,6 +110,7 @@ model Employee {
   @@index([department])
   @@index([isActive])
   @@index([tenantId])
+  @@index([legalEntityId])
   @@map("employees")
 }
 
