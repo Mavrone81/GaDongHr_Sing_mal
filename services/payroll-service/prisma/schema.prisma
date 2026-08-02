@@ -42,7 +42,10 @@ model PayrollRun {
   rateVersion     String?       // ENT-006 — statutory rate version used to compute
   period          String        // e.g. "2025-01"
   runType         RunType       @default(MONTHLY)
-  periodHalf      PeriodHalf?   // only set when runType=BIMONTHLY
+  // NONE for every non-bimonthly run. Non-nullable so it can participate in the
+  // unique key below — as NULL it could not, and duplicate monthly runs slipped
+  // through the database entirely.
+  periodHalf      PeriodHalf    @default(NONE)
   status          RunStatus     @default(DRAFT)
   employeeGroup   String?
   initiatedBy     String        // userId
@@ -67,14 +70,10 @@ model PayrollRun {
   // reported as "run already exists"). legalEntityId is in the key because a
   // group tenant runs one payroll per entity per period.
   //
-  // ⚠ KNOWN LIMITATION, pre-existing and NOT closed by this key: Postgres
-  // treats NULLs as DISTINCT in a unique index, so this constrains nothing for
-  // MONTHLY/ADHOC runs, where periodHalf is NULL. Duplicate MONTHLY runs are
-  // rejected only by the application-level findFirst check in
-  // payroll.routes.js POST /runs (covered by the duplicate-run 409 E2E).
-  // Closing it properly needs Postgres 15+ `UNIQUE NULLS NOT DISTINCT`, which
-  // Prisma 5.22 cannot express, a partial index that `db push` would drop, or
-  // making periodHalf non-nullable with a sentinel.
+  // periodHalf is non-nullable (NONE sentinel) precisely so this key works for
+  // MONTHLY/ADHOC runs. While it was nullable the key constrained nothing for
+  // them — Postgres treats every NULL as distinct — and duplicate monthly
+  // payroll was possible at the database level.
   @@unique([tenantId, legalEntityId, period, runType, periodHalf])
   @@index([period])
   @@index([tenantId])
@@ -590,6 +589,14 @@ enum RunType {
 enum PeriodHalf {
   FIRST
   SECOND
+  // Storage sentinel for runs with no half (MONTHLY, ADHOC, BONUS, …).
+  // NOT part of the API contract — callers still omit periodHalf entirely, and
+  // validateRunTypeShape still rejects one on a non-bimonthly run. It exists
+  // because NULL cannot participate in a unique constraint: Postgres treats
+  // every NULL as distinct from every other NULL, so the run key silently
+  // permitted duplicate monthly payroll.
+  // See services/payroll-service/src/utils/run-scope.js.
+  NONE
 }
 
 model GiroPayment {
