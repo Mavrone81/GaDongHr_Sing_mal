@@ -1,0 +1,80 @@
+// Singapore statutory rate tables.
+//
+// GLOBAL — deliberately NO tenantId on any model (ENT-004). These are national
+// figures published by CPF Board and IRAS; they are identical for every tenant,
+// so a per-tenant copy is both wasted storage and a compliance hazard. Under the
+// old per-tenant model the January 2026 CPF revision had to be applied to every
+// deployment individually via scripts/migrate-cpf-jan2026.js, and any tenant
+// that missed it silently kept computing on stale rates.
+//
+// Rows are versioned by RateVersion and are read-only to tenants; the platform
+// operator maintains them. Payroll pins the version it used onto every payslip
+// line (ENT-006) so a figure stays reproducible after the tables move on.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model RateVersion {
+  id            String   @id @default(uuid())
+  country       String   @default("SG")
+  version       String   @unique // e.g. "SG-2026.1"
+  effectiveFrom DateTime
+  // Provenance is part of the data (PRD §A7.1): every figure must be traceable
+  // to a named publication, and retrievedAt records when it was taken from it.
+  source        String
+  retrievedAt   DateTime
+  isActive      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([country, effectiveFrom])
+  @@map("rate_versions")
+}
+
+model CpfRate {
+  id            String   @id @default(uuid())
+  rateVersion   String
+  citizenStatus String // SC_PR | PR_YEAR1 | PR_YEAR2 | FOREIGNER
+  ageMin        Int
+  ageMax        Int? // null = no upper bound
+  employeeRate  Float
+  employerRate  Float
+  owCeiling     Float
+  awCeiling     Float
+  createdAt     DateTime @default(now())
+
+  @@unique([rateVersion, citizenStatus, ageMin])
+  @@index([rateVersion])
+  @@map("cpf_rates")
+}
+
+model SdlConfig {
+  id          String   @id @default(uuid())
+  rateVersion String   @unique
+  rate        Float    @default(0.0025)
+  minAmount   Float    @default(2.00)
+  maxAmount   Float    @default(11.25)
+  salaryCap   Float    @default(4500)
+  createdAt   DateTime @default(now())
+
+  @@map("sdl_config")
+}
+
+model FwlRate {
+  id          String   @id @default(uuid())
+  rateVersion String
+  passType    String // WP | S_PASS
+  sector      String // SERVICES | CONSTRUCTION | MARINE | PROCESS | MANUFACTURING
+  tier        String // BASIC_SKILLED | HIGHER_SKILLED | TIER1 | TIER2
+  dailyRate   Float
+  createdAt   DateTime @default(now())
+
+  @@unique([rateVersion, passType, sector, tier])
+  @@index([rateVersion])
+  @@map("fwl_rates")
+}

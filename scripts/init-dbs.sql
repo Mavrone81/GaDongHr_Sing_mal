@@ -51,3 +51,7 @@ CREATE DATABASE hrms_training;
 GRANT ALL PRIVILEGES ON DATABASE hrms_asset       TO hrms;
 GRANT ALL PRIVILEGES ON DATABASE hrms_performance TO hrms;
 GRANT ALL PRIVILEGES ON DATABASE hrms_training    TO hrms;
+
+-- Singapore statutory rate tables (global, platform-managed — no tenantId).
+CREATE DATABASE hrms_statutory_sg;
+GRANT ALL PRIVILEGES ON DATABASE hrms_statutory_sg TO hrms;
