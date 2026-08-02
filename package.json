@@ -13,12 +13,13 @@
     "down": "docker-compose down",
     "logs": "docker-compose logs -f",
     "seed": "node scripts/seed.js",
-    "test:backend": "jest --maxWorkers=2 --testPathIgnorePatterns=/node_modules/ --testPathIgnorePatterns=frontend --testPathIgnorePatterns=e2e",
+    "test:backend": "jest --maxWorkers=2 --testPathIgnorePatterns=/node_modules/ --testPathIgnorePatterns=frontend --testPathIgnorePatterns=e2e --testPathIgnorePatterns=tenant-isolation",
+    "test:isolation": "scripts/dev/test-isolation.sh",
     "test:frontend": "jest --maxWorkers=2 --projects frontend",
     "test:e2e": "cd e2e && npm test",
     "test:rbac": "cd e2e && npm run test:rbac",
     "test:smoke": "cd e2e && npm run test:smoke",
-    "test:all": "npm run test:backend && npm run test:frontend && npm run test:e2e",
+    "test:all": "npm run test:backend && npm run test:frontend && npm run test:isolation && npm run test:e2e",
     "test:e2e:seed": "cd e2e && npm run seed-test-users"
   },
   "engines": {

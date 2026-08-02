@@ -60,6 +60,53 @@ jobs:
       - run: npm run test:backend
       - run: npm run test:frontend
 
+  # Cross-tenant isolation. Separate from the unit job because these suites need
+  # a real Postgres AND each service's own generated Prisma client — @prisma/client
+  # is hoisted in this workspace, so `prisma generate` for one service overwrites
+  # every other, and all five can never pass in a single jest invocation. The
+  # runner does one service per pass.
+  #
+  # These are the tests proving tenant A cannot read tenant B's data. They had
+  # never actually run — they failed to LOAD in the unit job and were written off
+  # as "known failing". They pass 16/16 when run correctly.
+  tenant-isolation:
+    name: Cross-tenant isolation (DB-backed)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: hrms
+          POSTGRES_PASSWORD: ci_postgres_pw_2026
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hrms"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      POSTGRES_HOST: localhost
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Create per-service databases
+        run: |
+          for db in hrms_auth hrms_employee hrms_payroll hrms_leave hrms_attendance; do
+            PGPASSWORD=ci_postgres_pw_2026 psql -h localhost -U hrms -d postgres -c "CREATE DATABASE $db;"
+          done
+      - name: Run cross-tenant isolation suites
+        run: |
+          # The runner reads credentials from .env, which is git-ignored and so
+          # absent in CI. Write a CI-only one matching the service block above.
+          printf 'POSTGRES_USER=hrms\nPOSTGRES_PASSWORD=ci_postgres_pw_2026\nPOSTGRES_PORT=5432\n' > .env
+          npm run test:isolation
+
   e2e:
     name: End-to-end (RBAC + smoke + happy paths)
     runs-on: ubuntu-latest
@@ -176,7 +223,7 @@ jobs:
     runs-on: ubuntu-latest
     # secret-scan gates the deploy too: a leaked credential must never reach
     # production, even if every test passes.
-    needs: [secret-scan, backend-and-frontend, e2e]
+    needs: [secret-scan, backend-and-frontend, tenant-isolation, e2e]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     concurrency:
       group: deploy-production
