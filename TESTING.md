@@ -84,6 +84,43 @@ npm run test:all
 
 If `npm run test:e2e:seed` reports "already exists" — that's expected and idempotent.
 
+### 4.1 Local database helpers
+
+Two wrappers in `scripts/dev/` exist because the obvious way to do each of
+these is quietly wrong:
+
+```bash
+scripts/dev/psql.sh hrms_auth -c 'SELECT * FROM tenants;'
+scripts/dev/psql.sh hrms_auth <<'SQL'
+SELECT code, country FROM legal_entities;
+SQL
+
+scripts/dev/push-schema.sh auth-service          # db name inferred: hrms_auth
+scripts/dev/push-schema.sh statutory-sg-service  # -> hrms_statutory_sg
+```
+
+- **`psql.sh`** — always passes `docker exec **-i**`. Without `-i`, stdin is not
+  attached: a heredoc is silently discarded and psql exits 0 having executed
+  nothing, so the command *appears* to succeed. It also sets `ON_ERROR_STOP=1`
+  so a failing statement is a non-zero exit rather than a buried warning.
+- **`push-schema.sh`** — pushes a service's Prisma schema from the **host**
+  against the published Postgres port. Identical result to
+  `docker compose exec <svc> npx prisma db push`, but only Postgres has to be
+  running, so it takes seconds instead of a container build.
+
+### 4.2 Two `.env` gotchas
+
+- **`POSTGRES_PORT` must be free on your machine.** `docker compose up` fails
+  with `Bind for 0.0.0.0:<port> failed: port is already allocated` if another
+  project holds it. Change `POSTGRES_PORT` in your `.env` (it is git-ignored);
+  the helper scripts read the port from there, so nothing else needs updating.
+- **Values containing spaces or globs must be quoted** — e.g.
+  `BACKUP_CRON="0 19 * * *"`, `COMPANY_NAME="Vorkhive Pte Ltd"`. Docker Compose
+  parses them either way, but an unquoted value breaks `source .env` in a shell
+  (`command not found: Pte`) and an unquoted `*` glob-expands against the
+  working directory. `.env.example` is quoted correctly — keep it that way when
+  adding variables.
+
 ---
 
 ## 5. The Role × Endpoint Matrix (auto-generated)
