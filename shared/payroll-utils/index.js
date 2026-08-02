@@ -92,19 +92,38 @@ function computeNetPay({ grossPay, employeeCpf, nplDeduction = 0, absenceDeducti
   return Math.round((grossPay - employeeCpf - nplDeduction - absenceDeduction - loanRepayment - advanceRecovery - garnishment + reimbursements) * 100) / 100;
 }
 
+/**
+ * Anchor a date-only value at UTC midnight.
+ *
+ * Server-side counterpart of the convention in frontend/src/lib/timezone.ts:
+ * a business date is a calendar date, not an instant, so it is represented as
+ * UTC midnight and read back with the getUTC accessors. SG/MY/ID observe no
+ * DST, so this is exact for the business timezones in scope.
+ */
+function toUtcMidnight(value) {
+  const d = new Date(value);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
 // Count Mon-Fri (or Mon-Sat for SIX_DAY) working days between two dates, inclusive.
 // holidaySet: Set of 'YYYY-MM-DD' strings for public holidays.
+//
+// TIMEZONE: everything here is UTC-anchored. The previous implementation mixed
+// local accessors (setHours/getDay/setDate) with a UTC holiday key
+// (toISOString), so east of UTC local midnight serialised to the PREVIOUS
+// calendar date — the holiday key missed, the holiday counted as a working
+// day, and EA s.20 pro-rated salary was wrong. CI runs UTC, where the two
+// agree, so it only failed on +08 machines: every SG and MY deployment.
+// Do not reintroduce a local getter here.
 function countWorkingDays(from, to, holidaySet = new Set(), workDayType = 'FIVE_DAY') {
   const maxDow = workDayType === 'SIX_DAY' ? 6 : 5;
   let count = 0;
-  const d = new Date(from);
-  d.setHours(0, 0, 0, 0);
-  const end = new Date(to);
-  end.setHours(23, 59, 59, 999);
+  const d = toUtcMidnight(from);
+  const end = toUtcMidnight(to);
   while (d <= end) {
-    const dow = d.getDay();
+    const dow = d.getUTCDay();
     if (dow >= 1 && dow <= maxDow && !holidaySet.has(d.toISOString().slice(0, 10))) count++;
-    d.setDate(d.getDate() + 1);
+    d.setUTCDate(d.getUTCDate() + 1);
   }
   return count;
 }
@@ -118,8 +137,12 @@ function countPeriodLeaveWorkingDays(leaveStart, leaveEnd, periodStart, periodEn
   if (effStart > effEnd) return 0;
 
   if (isHalfDay) {
-    const ds  = effStart.toISOString().slice(0, 10);
-    const dow = effStart.getDay();
+    // Same UTC anchoring as countWorkingDays. This branch previously read the
+    // day-of-week locally while keying the holiday in UTC — correct only when
+    // the input happened to already be UTC midnight.
+    const anchor = toUtcMidnight(effStart);
+    const ds  = anchor.toISOString().slice(0, 10);
+    const dow = anchor.getUTCDay();
     const maxDow = workDayType === 'SIX_DAY' ? 6 : 5;
     return (dow >= 1 && dow <= maxDow && !holidaySet.has(ds)) ? 0.5 : 0;
   }

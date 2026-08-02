@@ -35,8 +35,21 @@ jobs:
             --redact --verbose
 
   backend-and-frontend:
-    name: Backend + frontend unit/integration
+    name: Backend + frontend unit/integration (TZ ${{ matrix.tz }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Runners default to UTC. Every business timezone this product serves is
+        # +08, and date-only bugs that mix local accessors with UTC
+        # serialisation are INVISIBLE under UTC — they only misbehave off it.
+        # A server-side one shipped this way: countWorkingDays keyed public
+        # holidays a day early in +08, so EA s.20 pro-rated salary was wrong on
+        # any SG/MY machine while CI stayed green. Asia/Singapore is the guard
+        # that would have caught it.
+        tz: [UTC, Asia/Singapore]
+    env:
+      TZ: ${{ matrix.tz }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

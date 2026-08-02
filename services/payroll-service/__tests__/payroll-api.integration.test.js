@@ -534,11 +534,20 @@ describe('G) Pro-rating — EA s.20 working-day salary (MOM guidelines)', () => 
   });
 
   // Helper: count working days Mon–Fri between two date strings (no holidays)
+  // UTC-anchored, mirroring shared/payroll-utils countWorkingDays. This helper
+  // previously used local accessors (setHours/getDay/setDate), so it computed
+  // expected values on a different calendar to the code under test — they
+  // agreed in UTC and +08 but diverged west of UTC, making these assertions
+  // silently timezone-dependent.
   function wd(fromStr, toStr) {
     let count = 0;
-    const d = new Date(fromStr); d.setHours(0,0,0,0);
-    const e = new Date(toStr);   e.setHours(23,59,59,999);
-    while (d <= e) { const dow = d.getDay(); if (dow >= 1 && dow <= 5) count++; d.setDate(d.getDate()+1); }
+    const d = new Date(fromStr);
+    const e = new Date(toStr);
+    while (d <= e) {
+      const dow = d.getUTCDay();
+      if (dow >= 1 && dow <= 5) count++;
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
     return count;
   }
 

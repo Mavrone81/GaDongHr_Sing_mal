@@ -42,39 +42,42 @@ describe('run-types — category predicates', () => {
 });
 
 describe('run-types — computePeriodBoundaries', () => {
+  // Boundaries are UTC-anchored (see computePeriodBoundaries). Assert with the
+  // getUTC accessors: local getters would read a different calendar date west
+  // of UTC and make these assertions timezone-dependent.
   test('R4 MONTHLY: full month boundaries (May 2026 → 1 to 31, 31 days)', () => {
     const b = computePeriodBoundaries('2026-05', 'MONTHLY', null);
-    expect(b.periodStart.getDate()).toBe(1);
-    expect(b.periodStart.getMonth()).toBe(4); // May = index 4
-    expect(b.periodEnd.getDate()).toBe(31);
+    expect(b.periodStart.getUTCDate()).toBe(1);
+    expect(b.periodStart.getUTCMonth()).toBe(4); // May = index 4
+    expect(b.periodEnd.getUTCDate()).toBe(31);
     expect(b.daysInMonth).toBe(31);
     expect(b.halfLabel).toBeNull();
   });
 
   test('R5 BIMONTHLY FIRST: days 1-15', () => {
     const b = computePeriodBoundaries('2026-05', 'BIMONTHLY', 'FIRST');
-    expect(b.periodStart.getDate()).toBe(1);
-    expect(b.periodEnd.getDate()).toBe(15);
+    expect(b.periodStart.getUTCDate()).toBe(1);
+    expect(b.periodEnd.getUTCDate()).toBe(15);
     expect(b.halfLabel).toBe('FIRST');
   });
 
   test('R6 BIMONTHLY SECOND: days 16 to end-of-month', () => {
     const b = computePeriodBoundaries('2026-05', 'BIMONTHLY', 'SECOND');
-    expect(b.periodStart.getDate()).toBe(16);
-    expect(b.periodEnd.getDate()).toBe(31);
+    expect(b.periodStart.getUTCDate()).toBe(16);
+    expect(b.periodEnd.getUTCDate()).toBe(31);
     expect(b.halfLabel).toBe('SECOND');
   });
 
   test('R7 BIMONTHLY SECOND Feb leap-year (2024-02) ends Feb 29', () => {
     const b = computePeriodBoundaries('2024-02', 'BIMONTHLY', 'SECOND');
-    expect(b.periodStart.getDate()).toBe(16);
-    expect(b.periodEnd.getDate()).toBe(29);
+    expect(b.periodStart.getUTCDate()).toBe(16);
+    expect(b.periodEnd.getUTCDate()).toBe(29);
     expect(b.daysInMonth).toBe(29);
   });
 
   test('R8 BIMONTHLY SECOND Feb non-leap (2026-02) ends Feb 28', () => {
     const b = computePeriodBoundaries('2026-02', 'BIMONTHLY', 'SECOND');
-    expect(b.periodEnd.getDate()).toBe(28);
+    expect(b.periodEnd.getUTCDate()).toBe(28);
     expect(b.daysInMonth).toBe(28);
   });
 
@@ -91,8 +94,8 @@ describe('run-types — computePeriodBoundaries', () => {
 
   test('R11 ADHOC ignores periodHalf and returns full month', () => {
     const b = computePeriodBoundaries('2026-05', 'ADHOC', null);
-    expect(b.periodStart.getDate()).toBe(1);
-    expect(b.periodEnd.getDate()).toBe(31);
+    expect(b.periodStart.getUTCDate()).toBe(1);
+    expect(b.periodEnd.getUTCDate()).toBe(31);
     expect(b.halfLabel).toBeNull();
   });
 });
