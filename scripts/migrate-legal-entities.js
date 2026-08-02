@@ -105,6 +105,58 @@ async function backfillEmployees(dryRun) {
   }
 }
 
+/**
+ * Point every existing payroll run at its tenant's primary entity, and stamp
+ * the denormalised country/currency.
+ *
+ * Runs AFTER `prisma db push` has added the column — it cannot precede it.
+ * Postgres treats NULLs as distinct in a unique index, so pre-backfill rows
+ * with legalEntityId = NULL never collide with each other; the risk is the
+ * reverse, that the constraint is inert for those rows until this completes.
+ * Keep push and backfill adjacent.
+ */
+async function backfillPayrollRuns(dryRun) {
+  const { Client } = require('pg');
+
+  const authDb = new Client(pgConfig(process.env.AUTH_DB || 'hrms_auth'));
+  const payDb  = new Client(pgConfig(process.env.PAYROLL_DB || 'hrms_payroll'));
+  await authDb.connect();
+  await payDb.connect();
+
+  try {
+    const { rows: entities } = await authDb.query(
+      'SELECT id, "tenantId", country, currency FROM legal_entities WHERE "isPrimary" = true',
+    );
+
+    let updated = 0;
+    for (const e of entities) {
+      if (dryRun) {
+        const { rows } = await payDb.query(
+          'SELECT COUNT(*)::int AS n FROM payroll_runs WHERE "tenantId" = $1 AND "legalEntityId" IS NULL',
+          [e.tenantId],
+        );
+        if (rows[0].n > 0) {
+          console.log(`[dry-run] would set legalEntityId=${e.id} on ${rows[0].n} payroll runs`);
+        }
+        updated += rows[0].n;
+      } else {
+        const r = await payDb.query(
+          `UPDATE payroll_runs
+              SET "legalEntityId" = $1, country = $2, currency = $3
+            WHERE "tenantId" = $4 AND "legalEntityId" IS NULL`,
+          [e.id, e.country, e.currency, e.tenantId],
+        );
+        updated += r.rowCount;
+      }
+    }
+
+    console.log(`${dryRun ? '[dry-run] ' : ''}payroll runs backfilled=${updated}`);
+  } finally {
+    await authDb.end();
+    await payDb.end();
+  }
+}
+
 async function run() {
   const { Client } = require('pg');
   const dryRun = process.env.DRY_RUN === 'true';
@@ -154,11 +206,15 @@ async function run() {
   console.log(`${dryRun ? '[dry-run] ' : ''}tenants=${tenants.length} created=${created} skipped=${skipped}`);
   await client.end();
 
-  // Must run after the entities exist — it resolves them by tenant.
+  // Must run after the entities exist — both resolve them by tenant.
   await backfillEmployees(dryRun);
+  await backfillPayrollRuns(dryRun);
 }
 
-module.exports = { buildEntityFromTenant, deriveEntityCode, pgConfig, backfillEmployees, run };
+module.exports = {
+  buildEntityFromTenant, deriveEntityCode, pgConfig,
+  backfillEmployees, backfillPayrollRuns, run,
+};
 
 if (require.main === module) {
   run().catch(err => { console.error(err); process.exit(1); });
