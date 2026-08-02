@@ -12,6 +12,10 @@ app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan('combined'));
 
+// The contract payroll-service calls. Every route inside is gated by
+// INTERNAL_SERVICE_KEY — service-to-service only, no JWT path.
+app.use('/statutory', require('./routes/statutory.routes'));
+
 /**
  * Liveness. Deliberately NOT behind the internal-key check: an orchestrator
  * probing health must not need a credential, and this leaks nothing.

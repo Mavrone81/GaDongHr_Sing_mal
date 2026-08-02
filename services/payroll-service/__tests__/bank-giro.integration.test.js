@@ -58,7 +58,7 @@ const app = require('../src/index');
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 const FINALISED_RUN = {
-  id: 'run-giro-001', period: '2026-05', runType: 'MONTHLY', status: 'FINALISED',
+  id: 'run-giro-001', period: '2026-05', legalEntityId: 'ent-1', runType: 'MONTHLY', status: 'FINALISED',
   payslips: [
     { id: 'ps-1', employeeId: 'emp-1', netPayEnc: '3500', grossPayEnc: '4000' },
     { id: 'ps-2', employeeId: 'emp-2', netPayEnc: '2800', grossPayEnc: '3200' },

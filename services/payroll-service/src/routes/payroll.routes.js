@@ -8,7 +8,11 @@ const fs = require('fs');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
 const { encrypt, decrypt, encryptNumber, decryptNumber } = require('/app/shared/crypto');
-const { computeCpf, computeSdl, computeNetPay, countWorkingDays, countPeriodLeaveWorkingDays } = require('../engines/cpf.engine');
+const { computeNetPay, countWorkingDays, countPeriodLeaveWorkingDays } = require('../engines/cpf.engine');
+// Statutory computation now lives behind an HTTP contract, one service per
+// country. This file no longer knows what CPF or SDL is.
+const { computeStatutoryBatch, findResult, sumByKind } = require('../utils/statutory-client');
+const { resolveEntity } = require('/app/shared/entity-client');
 const { buildEntriesForEmployee, summariseEntries } = require('../engines/journal.engine');
 const { isSupplemental, isBiMonthly, computePeriodBoundaries, trimSupplementalEmployee, validateRunTypeShape } = require('../engines/run-types');
 const { toStoredPeriodHalf } = require('../utils/run-scope');
@@ -331,8 +335,6 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
       }
     }
 
-    const cpfRates = await prisma.cpfRate.findMany({ where: { isActive: true } });
-    const sdlConfig = await prisma.sdlConfig.findFirst({ where: { isActive: true } });
     const savedLineItems = await prisma.payrollLineItem.findMany({ where: { runId: run.id } });
 
     // Fetch all approved leave applications overlapping this period from leave service.
@@ -463,7 +465,8 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
 
     let totalGross = 0, totalNet = 0, totalEmployee = 0, totalEmployer = 0, totalSdl = 0;
     const zeroSalaryWarnings = [];
-    const computedResults = []; // { employeeId, effectiveOw, effectiveGross, net, hasPaycodes }
+    const computedResults = [];
+    const pendingPayslips = []; // { employeeId, effectiveOw, effectiveGross, net, hasPaycodes }
 
     // Track auto-feed line items we create here so we can include them in
     // empItems when computing CPF/net for THIS run (without re-querying).
@@ -537,25 +540,77 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
       const autoNpl     = Math.round(dailyRate * leave.nplDays * 100) / 100;
       const govtPaidAmt = Math.round(dailyRate * leave.govtPaidDays * 100) / 100;
 
-      const rate = findCpfRate(cpfRates, emp.citizenStatus, emp.age);
-      const cpf  = computeCpf({ ow: effectiveOw, aw: effectiveAw, ytdOw: emp.ytdOw || 0, ytdAw: emp.ytdAw || 0, citizenStatus: emp.citizenStatus, age: emp.age, rates: rate });
-      const sdl  = computeSdl(effectiveGross, sdlConfig);
-      const net  = computeNetPay({ grossPay: effectiveGross, employeeCpf: cpf.totalEmployee, nplDeduction: (emp.nplDeduction || 0) + deductions + autoNpl, reimbursements: (emp.reimbursements || 0) + reimbursements });
+      // Defer statutory + payslip writing to the second pass below: the
+      // statutory service is called ONCE for the whole run, not once per
+      // employee, so the effective figures have to be collected first.
+      pendingPayslips.push({
+        emp, effectiveOw, effectiveAw, effectiveGross,
+        leave, autoNpl, govtPaidAmt, deductions, reimbursements,
+        hasPaycodes: empItems.length > 0,
+      });
+    }
+
+    // ── Statutory computation ─────────────────────────────────────────────────
+    // One HTTP call for the entire run. The entity fixes the country, and this
+    // file never learns which statutory rules were applied — that is what lets
+    // a Malaysian service exist without touching Singapore payroll.
+    //
+    // FAIL CLOSED: resolveEntity and computeStatutoryBatch both throw with
+    // status 503, which propagates to the error handler and leaves the run in
+    // DRAFT with no payslips written. Never caught-and-continued.
+    const entityCtx = await resolveEntity(run.legalEntityId);
+    const [periodYear, periodMonth] = run.period.split('-').map(Number);
+    const statutoryBatch = await computeStatutoryBatch({
+      country: entityCtx.country,
+      period: { year: periodYear, month: periodMonth },
+      entity: {
+        country: entityCtx.country,
+        state: entityCtx.state,
+        statutoryIds: entityCtx.statutoryIds,
+      },
+      employees: pendingPayslips.map(p => ({
+        employeeId: p.emp.employeeId,
+        profile: { citizenStatus: p.emp.citizenStatus, age: p.emp.age },
+        remuneration: {
+          ordinary: p.effectiveOw,
+          additional: p.effectiveAw,
+          gross: p.effectiveGross,
+          ytdOrdinary: p.emp.ytdOw || 0,
+          ytdAdditional: p.emp.ytdAw || 0,
+        },
+      })),
+    });
+
+    for (const p of pendingPayslips) {
+      const {
+        emp, effectiveOw, effectiveGross,
+        leave, autoNpl, govtPaidAmt, deductions, reimbursements,
+      } = p;
+
+      const statutory         = findResult(statutoryBatch.results, emp.employeeId);
+      const employeeStatutory = sumByKind(statutory, 'employeeDeductions');
+      const employerStatutory = sumByKind(statutory, 'employerContributions');
+      const levies            = sumByKind(statutory, 'employerLevies');
+
+      const net = computeNetPay({ grossPay: effectiveGross, employeeCpf: employeeStatutory, nplDeduction: (emp.nplDeduction || 0) + deductions + autoNpl, reimbursements: (emp.reimbursements || 0) + reimbursements });
 
       totalGross += effectiveGross; totalNet += net;
-      totalEmployee += cpf.totalEmployee; totalEmployer += cpf.totalEmployer; totalSdl += sdl;
+      totalEmployee += employeeStatutory; totalEmployer += employerStatutory; totalSdl += levies;
 
+      // The SG-named encrypted columns keep being written unchanged so every
+      // existing reader (PDF engine, IRAS engine, reporting) is untouched.
+      // Task 14 adds the generic PayslipStatutoryLine child rows alongside.
       const payslipData = {
         runId: run.id, employeeId: emp.employeeId, period: run.period,
         basicSalaryEnc: encrypt(String(effectiveOw)),
         grossPayEnc: encrypt(String(effectiveGross)),
         netPayEnc: encrypt(String(net)),
-        employeeCpfEnc: encrypt(String(cpf.totalEmployee)),
-        employerCpfEnc: encrypt(String(cpf.totalEmployer)),
-        sdlAmountEnc: encrypt(String(sdl)),
+        employeeCpfEnc: encrypt(String(employeeStatutory)),
+        employerCpfEnc: encrypt(String(employerStatutory)),
+        sdlAmountEnc: encrypt(String(levies)),
         ytdGrossEnc: encrypt(String((emp.ytdGross || 0) + effectiveGross)),
-        ytdEmployeeCpfEnc: encrypt(String((emp.ytdEmployeeCpf || 0) + cpf.totalEmployee)),
-        ytdEmployerCpfEnc: encrypt(String((emp.ytdEmployerCpf || 0) + cpf.totalEmployer)),
+        ytdEmployeeCpfEnc: encrypt(String((emp.ytdEmployeeCpf || 0) + employeeStatutory)),
+        ytdEmployerCpfEnc: encrypt(String((emp.ytdEmployerCpf || 0) + employerStatutory)),
         nplDays: leave.nplDays || null,
         nplDeductionEnc: autoNpl > 0 ? encrypt(String(autoNpl)) : null,
         govtPaidDays: leave.govtPaidDays || null,
@@ -564,7 +619,7 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
 
       if (effectiveOw === 0) zeroSalaryWarnings.push(emp.employeeId);
 
-      computedResults.push({ employeeId: emp.employeeId, effectiveOw, effectiveGross, net, hasPaycodes: empItems.length > 0 });
+      computedResults.push({ employeeId: emp.employeeId, effectiveOw, effectiveGross, net, hasPaycodes: p.hasPaycodes });
 
       await prisma.payslip.upsert({
         where: { runId_employeeId: { runId: run.id, employeeId: emp.employeeId } },
@@ -1705,11 +1760,6 @@ router.delete('/public-holidays/:id', authenticate, authorize(ROLES.SUPER_ADMIN,
 });
 
 // ─── Helper functions ────────────────────────────────────────────────────────
-function findCpfRate(rates, citizenStatus, age) {
-  const statusMap = { SC: 'SC_PR', PR_YR3_PLUS: 'SC_PR', PR_YEAR1: 'PR_YEAR1', PR_YEAR2: 'PR_YEAR2', FOREIGNER: 'FOREIGNER' };
-  const mappedStatus = statusMap[citizenStatus] || 'SC_PR';
-  return rates.find(r => r.citizenStatus === mappedStatus && r.ageMin <= age && (r.ageMax === null || r.ageMax >= age)) || null;
-}
 
 function drawLine(doc) {
   doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();

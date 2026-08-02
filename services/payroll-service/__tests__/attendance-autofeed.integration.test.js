@@ -73,7 +73,7 @@ const app = require('../src/index');
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
-const DRAFT_RUN = { id: 'run-001', period: '2026-05', runType: 'MONTHLY', status: 'DRAFT' };
+const DRAFT_RUN = { id: 'run-001', period: '2026-05', legalEntityId: 'ent-1', runType: 'MONTHLY', status: 'DRAFT' };
 const CPF_RATES = [{ id: 'r1', citizenStatus: 'SC', ageFrom: 0, ageTo: 55, employeeRate: 0.20, employerRate: 0.17, owCeiling: 6800, awCeiling: 102000, isActive: true }];
 const SDL_CONFIG = { rate: 0.0025, minAmount: 2.0, maxAmount: 11.25, salaryCap: 4500, isActive: true };
 const EMP_A = { employeeId: 'emp-A', fullName: 'Alice', ow: 5000, grossPay: 5000, citizenStatus: 'SC', age: 35, ytdOw: 0, ytdAw: 0, ytdGross: 0, ytdEmployeeCpf: 0, ytdEmployerCpf: 0 };
@@ -91,13 +91,31 @@ const DAILY_RATE = 5000 / MAY_WORKING_DAYS; // ≈ 238.10
 const HOURLY_RATE = DAILY_RATE / 8;          // ≈ 29.76
 
 function installAttendanceFetch(periodStatus, summary, attendanceError = false) {
-  global.fetch = jest.fn().mockImplementation((url) => {
+  global.fetch = jest.fn().mockImplementation((url, init) => {
     if (typeof url === 'string' && url.includes('/attendance/internal/period-summary')) {
       if (attendanceError) return Promise.reject(new Error('attendance unreachable'));
       return Promise.resolve({
         ok: true,
         json: async () => ({ periodStatus, summary, expectedWorkDays: MAY_WORKING_DAYS }),
       });
+    }
+    // Entity resolution + statutory computation moved out of process in P1.
+    // Handled here so the auto-feed assertions below are unaffected by it.
+    if (typeof url === 'string' && url.includes('/tenants/internal/entities/')) {
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({
+        id: 'ent-1', tenantId: 'ten-1', country: 'SG', currency: 'SGD',
+        timezone: 'Asia/Singapore', state: null, statutoryIds: {},
+      }) });
+    }
+    if (typeof url === 'string' && url.includes('/statutory/compute-batch')) {
+      const body = JSON.parse((init && init.body) || '{}');
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({
+        rateVersion: 'SG-TEST',
+        results: (body.employees || []).map(e => ({
+          employeeId: e.employeeId,
+          employeeDeductions: [], employerContributions: [], employerLevies: [],
+        })),
+      }) });
     }
     return Promise.resolve({ ok: true, json: async () => ({ applications: [] }) });
   });
