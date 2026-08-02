@@ -1117,7 +1117,11 @@ git commit -m "feat(entity): Employee.legalEntityId + cross-tenant assignment gu
 
   **Corrected while executing (the original wording said MONTHLY, which is wrong):** this bites **BIMONTHLY** runs, not MONTHLY. `periodHalf` is `NULL` for MONTHLY/ADHOC, and Postgres treats NULLs as distinct in a unique index, so those rows never collide. Verified both directions: two `('2026-01','MONTHLY',NULL)` rows are accepted; a second `('2026-02','BIMONTHLY','FIRST')` raises `duplicate key value violates unique constraint`.
 
-  That same NULL behaviour means the **new** key does not constrain MONTHLY duplicates either — a pre-existing hole this task does not close. Duplicate MONTHLY runs are caught only by the application-level `findFirst` in `POST /runs`. Recorded in the schema comment; closing it needs PG15+ `UNIQUE NULLS NOT DISTINCT` (not expressible in Prisma 5.22), a partial index (`db push` would drop it), or a non-nullable `periodHalf` sentinel.
+  That same NULL behaviour meant the new key did not constrain MONTHLY duplicates either — a pre-existing hole Task 6 left open.
+
+  **CLOSED after Task 6** with a non-nullable `NONE` sentinel. Of the three candidates, the other two were rejected as fragile: `UNIQUE NULLS NOT DISTINCT` is inexpressible in Prisma 5.22, and a partial index is silently dropped by `db push`. `periodHalf` is now `PeriodHalf @default(NONE)`. The API contract is unchanged — callers still omit `periodHalf` on non-bimonthly runs and `validateRunTypeShape` still rejects one; `NONE` is applied server-side at the storage boundary by `toStoredPeriodHalf`.
+
+  ⚠ **Migration order matters, and the naive path destroys data.** `prisma db push` refuses to make the column non-nullable while NULLs exist and offers `--force-reset`, which **drops the database**. Run `scripts/migrate-period-half-sentinel.js` FIRST — it adds the enum value and backfills — then push. Verified: a duplicate monthly run is now rejected by the database, while a second entity in the same period and coexisting bimonthly halves are still permitted.
 - Line 290: `FwlRate.@@unique([sector, passType])` — same defect. (That table moves to the statutory service in Task 10; scope it correctly here so the interim state is sound.)
 
 **Files:**

@@ -11,6 +11,7 @@ const { encrypt, decrypt, encryptNumber, decryptNumber } = require('/app/shared/
 const { computeCpf, computeSdl, computeNetPay, countWorkingDays, countPeriodLeaveWorkingDays } = require('../engines/cpf.engine');
 const { buildEntriesForEmployee, summariseEntries } = require('../engines/journal.engine');
 const { isSupplemental, isBiMonthly, computePeriodBoundaries, trimSupplementalEmployee, validateRunTypeShape } = require('../engines/run-types');
+const { toStoredPeriodHalf } = require('../utils/run-scope');
 const { classifyRunSla, isAlertResolved } = require('../engines/sla.engine');
 const { buildPayslipPdf, splitLineItems } = require('../engines/pdf.engine');
 
@@ -139,15 +140,21 @@ router.post('/runs', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, 
     const RT = runType.toUpperCase();
     const periodHalf = req.body.periodHalf ? String(req.body.periodHalf).toUpperCase() : null;
 
-    // PAY-001: validate periodHalf — required for BIMONTHLY, forbidden otherwise
+    // PAY-001: validate periodHalf — required for BIMONTHLY, forbidden otherwise.
+    // Validated against the CLIENT-supplied value (null when omitted), so the
+    // API contract is unchanged by the storage sentinel below.
     const shapeErr = validateRunTypeShape(RT, periodHalf);
     if (shapeErr) return res.status(400).json({ error: shapeErr });
+
+    // NONE rather than NULL from here on: NULL cannot participate in the unique
+    // key, which is what let duplicate monthly runs through the database.
+    const storedHalf = toStoredPeriodHalf(periodHalf);
 
     // Duplicate check. tenantId is auto-injected by the tenant-scope extension;
     // legalEntityId must be explicit, or a group tenant's second entity would
     // be refused a run once its first entity had run the same period.
     const existing = await prisma.payrollRun.findFirst({
-      where: { period, runType: RT, periodHalf, legalEntityId },
+      where: { period, runType: RT, periodHalf: storedHalf, legalEntityId },
     });
     if (existing) {
       const halfLabel = periodHalf ? ` ${periodHalf} half` : '';
@@ -165,7 +172,7 @@ router.post('/runs', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN, 
 
     const run = await prisma.payrollRun.create({
       data: {
-        id: uuidv4(), period, runType: RT, periodHalf, status: 'DRAFT',
+        id: uuidv4(), period, runType: RT, periodHalf: storedHalf, status: 'DRAFT',
         initiatedBy: req.user.sub, employeeGroup,
         paymentDate: resolvedPaymentDate,
         legalEntityId,
