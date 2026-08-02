@@ -40,9 +40,14 @@ function computePeriodBoundaries(period, runType, periodHalf) {
   if (!year || !month || month < 1 || month > 12) {
     throw new Error(`Invalid period: ${period} (expected YYYY-MM)`);
   }
-  const monthStart = new Date(year, month - 1, 1);
-  const monthEnd   = new Date(year, month, 0); // last day of the month
-  const daysInMonth = monthEnd.getDate();
+  // UTC-anchored, matching shared/payroll-utils and frontend/src/lib/timezone.ts.
+  // These were local-midnight constructors: in +08 `new Date(2026, 4, 1)` is
+  // 2026-04-30T16:00Z, so every downstream UTC read (holiday keys, working-day
+  // counting, EA s.20 pro-ration) landed a day early. CI runs UTC where the two
+  // coincide, so it only broke on SG/MY machines.
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+  const monthEnd   = new Date(Date.UTC(year, month, 0)); // last day of the month
+  const daysInMonth = monthEnd.getUTCDate();
 
   if (runType === 'BIMONTHLY') {
     if (!PERIOD_HALVES.includes(periodHalf)) {
@@ -51,14 +56,14 @@ function computePeriodBoundaries(period, runType, periodHalf) {
     if (periodHalf === 'FIRST') {
       return {
         periodStart: monthStart,
-        periodEnd:   new Date(year, month - 1, 15),
+        periodEnd:   new Date(Date.UTC(year, month - 1, 15)),
         daysInMonth,
         halfLabel:   'FIRST',
       };
     }
     // SECOND
     return {
-      periodStart: new Date(year, month - 1, 16),
+      periodStart: new Date(Date.UTC(year, month - 1, 16)),
       periodEnd:   monthEnd,
       daysInMonth,
       halfLabel:   'SECOND',

@@ -40,12 +40,18 @@ function computeMomDeadline(incidentDate, category) {
   const days = DEADLINE_WORKING_DAYS[category];
   if (days === null || days === undefined) return null;
 
-  const date    = new Date(incidentDate);
+  // UTC-anchored, matching shared/payroll-utils and frontend/src/lib/timezone.ts.
+  // This walked the calendar with local accessors (setDate/getDay) while callers
+  // and tests read the result with toISOString — so east of UTC the statutory
+  // MOM reporting deadline came out a day early. A wrong deadline here is a
+  // compliance miss, not a display glitch.
+  const src     = new Date(incidentDate);
+  const date    = new Date(Date.UTC(src.getUTCFullYear(), src.getUTCMonth(), src.getUTCDate()));
   let remaining = days;
 
   while (remaining > 0) {
-    date.setDate(date.getDate() + 1);
-    const dow = date.getDay(); // 0=Sun, 6=Sat
+    date.setUTCDate(date.getUTCDate() + 1);
+    const dow = date.getUTCDay(); // 0=Sun, 6=Sat
     if (dow !== 0 && dow !== 6) remaining--;
   }
 

@@ -50,14 +50,14 @@ test('WE-04 MEDICAL_LEAVE_ONLY is not reportable', () => {
 // ── computeMomDeadline ────────────────────────────────────────────────────────
 test('WD-01 FATAL deadline is 1 working day after incident (Mon)', () => {
   // Monday 2026-06-01 → deadline Tue 2026-06-02
-  const incident = new Date('2026-06-01T00:00:00');
+  const incident = new Date('2026-06-01T00:00:00Z');
   const deadline = computeMomDeadline(incident, 'FATAL');
   expect(deadline.toISOString().slice(0, 10)).toBe('2026-06-02');
 });
 
 test('WD-02 HOSPITALISATION deadline is 10 working days', () => {
   // Monday 2026-06-01 → 10 working days = Fri 2026-06-12 (skip Sat/Sun)
-  const incident = new Date('2026-06-01T00:00:00');
+  const incident = new Date('2026-06-01T00:00:00Z');
   const deadline = computeMomDeadline(incident, 'HOSPITALISATION');
   // 10 working days from Mon Jun 1:
   // Week 1: Tue(1), Wed(2), Thu(3), Fri(4) = 4, then Sat/Sun skip
@@ -73,7 +73,7 @@ test('WD-03 MEDICAL_LEAVE_ONLY returns null', () => {
 
 test('WD-04 FATAL deadline skips weekend correctly (Friday incident)', () => {
   // Friday 2026-05-29 → next working day is Monday 2026-06-01
-  const incident = new Date('2026-05-29T00:00:00');
+  const incident = new Date('2026-05-29T00:00:00Z');
   const deadline = computeMomDeadline(incident, 'FATAL');
   expect(deadline.toISOString().slice(0, 10)).toBe('2026-06-01');
 });
