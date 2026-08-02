@@ -318,13 +318,24 @@ model DrcQuota {
 model PublicHoliday {
   id        String   @id @default(uuid())
   tenantId String @default("00000000-0000-0000-0000-000000000001")
+  // ENT-001 — holidays belong to the jurisdiction an entity operates in, not to
+  // the tenant. Nullable for `db push` against existing rows;
+  // scripts/migrate-legal-entities.js backfills it.
+  legalEntityId String?
+  country   String?  // denormalised from the entity, for reporting
+  state     String?  // MY only — federal holidays plus the state's own set
   date      DateTime
   name      String
   year      Int
   createdAt DateTime @default(now())
 
-  @@unique([tenantId, date])
+  // Was [tenantId, date], which allowed a tenant only ONE holiday per calendar
+  // date and so blocked multi-entity outright: a group tenant could not hold
+  // both Labour Day (SG) and Hari Pekerja (MY) on 1 May, nor differ on any
+  // other date. Scoped per entity now.
+  @@unique([tenantId, legalEntityId, date])
   @@index([tenantId])
+  @@index([legalEntityId])
   @@map("public_holidays")
 }
 
