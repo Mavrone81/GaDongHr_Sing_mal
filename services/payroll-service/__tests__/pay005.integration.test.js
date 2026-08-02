@@ -72,7 +72,7 @@ beforeEach(() => {
 describe('POST /payroll/runs — paymentDate', () => {
   test('P1 — defaults paymentDate to period-end + 7 days when not supplied', async () => {
     mockDb.payrollRun.create.mockImplementation(async ({ data }) => ({ ...data, id: 'r1' }));
-    const res = await request(app).post('/payroll/runs').send({ period: '2026-05', runType: 'MONTHLY' });
+    const res = await request(app).post('/payroll/runs').send({ legalEntityId: 'ent-1', period: '2026-05', runType: 'MONTHLY' });
     expect(res.status).toBe(201);
     const createArg = mockDb.payrollRun.create.mock.calls[0][0];
     // 2026-05 ends 2026-05-31; +7 = 2026-06-07
@@ -82,7 +82,7 @@ describe('POST /payroll/runs — paymentDate', () => {
   test('P2 — accepts explicit paymentDate from body', async () => {
     mockDb.payrollRun.create.mockImplementation(async ({ data }) => ({ ...data, id: 'r1' }));
     const res = await request(app).post('/payroll/runs').send({
-      period: '2026-05', runType: 'MONTHLY', paymentDate: '2026-06-15',
+      legalEntityId: 'ent-1', period: '2026-05', runType: 'MONTHLY', paymentDate: '2026-06-15',
     });
     expect(res.status).toBe(201);
     const createArg = mockDb.payrollRun.create.mock.calls[0][0];

@@ -180,7 +180,7 @@ describe('B) POST /payroll/runs', () => {
 
     const res = await request(app)
       .post('/payroll/runs')
-      .send({ period: '2026-05', runType: 'MONTHLY' });
+      .send({ legalEntityId: 'ent-1', period: '2026-05', runType: 'MONTHLY' });
 
     expect(res.status).toBe(201);
     expect(res.body.status).toBe('DRAFT');
@@ -198,7 +198,7 @@ describe('B) POST /payroll/runs', () => {
 
     const res = await request(app)
       .post('/payroll/runs')
-      .send({ period: '2026-05', runType: 'MONTHLY' });
+      .send({ legalEntityId: 'ent-1', period: '2026-05', runType: 'MONTHLY' });
 
     expect(res.status).toBe(409);
     expect(res.body.error).toMatch(/already exists/i);
@@ -1098,7 +1098,7 @@ describe('PAY-001) Bi-monthly run validation on POST /payroll/runs', () => {
   test('K1 — POST 400 when BIMONTHLY missing periodHalf', async () => {
     const res = await request(app)
       .post('/payroll/runs')
-      .send({ period: '2026-05', runType: 'BIMONTHLY' });
+      .send({ legalEntityId: 'ent-1', period: '2026-05', runType: 'BIMONTHLY' });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/periodHalf/);
   });
@@ -1106,7 +1106,7 @@ describe('PAY-001) Bi-monthly run validation on POST /payroll/runs', () => {
   test('K2 — POST 400 when BIMONTHLY has bad periodHalf', async () => {
     const res = await request(app)
       .post('/payroll/runs')
-      .send({ period: '2026-05', runType: 'BIMONTHLY', periodHalf: 'MIDDLE' });
+      .send({ legalEntityId: 'ent-1', period: '2026-05', runType: 'BIMONTHLY', periodHalf: 'MIDDLE' });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/periodHalf/);
   });
@@ -1114,7 +1114,7 @@ describe('PAY-001) Bi-monthly run validation on POST /payroll/runs', () => {
   test('K3 — POST 400 when non-BIMONTHLY supplies periodHalf', async () => {
     const res = await request(app)
       .post('/payroll/runs')
-      .send({ period: '2026-05', runType: 'MONTHLY', periodHalf: 'FIRST' });
+      .send({ legalEntityId: 'ent-1', period: '2026-05', runType: 'MONTHLY', periodHalf: 'FIRST' });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/only valid for BIMONTHLY/);
   });
@@ -1127,7 +1127,7 @@ describe('PAY-001) Bi-monthly run validation on POST /payroll/runs', () => {
     });
     const res = await request(app)
       .post('/payroll/runs')
-      .send({ period: '2026-05', runType: 'BIMONTHLY', periodHalf: 'FIRST' });
+      .send({ legalEntityId: 'ent-1', period: '2026-05', runType: 'BIMONTHLY', periodHalf: 'FIRST' });
     expect(res.status).toBe(201);
     expect(res.body.periodHalf).toBe('FIRST');
   });
@@ -1139,7 +1139,7 @@ describe('PAY-001) Bi-monthly run validation on POST /payroll/runs', () => {
     });
     const res = await request(app)
       .post('/payroll/runs')
-      .send({ period: '2026-05', runType: 'BIMONTHLY', periodHalf: 'SECOND' });
+      .send({ legalEntityId: 'ent-1', period: '2026-05', runType: 'BIMONTHLY', periodHalf: 'SECOND' });
     expect(res.status).toBe(409);
     expect(res.body.error).toMatch(/SECOND half/);
   });
@@ -1153,10 +1153,17 @@ describe('PAY-001) Bi-monthly run validation on POST /payroll/runs', () => {
     });
     const res = await request(app)
       .post('/payroll/runs')
-      .send({ period: '2026-05', runType: 'BIMONTHLY', periodHalf: 'SECOND' });
+      .send({ legalEntityId: 'ent-1', period: '2026-05', runType: 'BIMONTHLY', periodHalf: 'SECOND' });
     expect(res.status).toBe(201);
+    // legalEntityId joins the duplicate check (ENT-001): a group tenant's
+    // second entity must not be refused a run because its first entity
+    // already ran the same period+half. tenantId stays implicit — the
+    // tenant-scope Prisma extension injects it.
     expect(mockRunFindFirst).toHaveBeenCalledWith({
-      where: { period: '2026-05', runType: 'BIMONTHLY', periodHalf: 'SECOND' },
+      where: {
+        period: '2026-05', runType: 'BIMONTHLY', periodHalf: 'SECOND',
+        legalEntityId: 'ent-1',
+      },
     });
   });
 });
