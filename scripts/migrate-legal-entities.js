@@ -58,6 +58,53 @@ function pgConfig(database) {
   };
 }
 
+/**
+ * Point every employee at their tenant's primary entity.
+ *
+ * Crosses a database boundary: entities live in hrms_auth, employees in
+ * hrms_employee, because each service owns its own database. Two connections
+ * rather than a join.
+ */
+async function backfillEmployees(dryRun) {
+  const { Client } = require('pg');
+
+  const authDb = new Client(pgConfig(process.env.AUTH_DB || 'hrms_auth'));
+  const empDb  = new Client(pgConfig(process.env.EMPLOYEE_DB || 'hrms_employee'));
+  await authDb.connect();
+  await empDb.connect();
+
+  try {
+    const { rows: entities } = await authDb.query(
+      'SELECT id, "tenantId" FROM legal_entities WHERE "isPrimary" = true',
+    );
+
+    let updated = 0;
+    for (const e of entities) {
+      if (dryRun) {
+        const { rows } = await empDb.query(
+          'SELECT COUNT(*)::int AS n FROM employees WHERE "tenantId" = $1 AND "legalEntityId" IS NULL',
+          [e.tenantId],
+        );
+        if (rows[0].n > 0) {
+          console.log(`[dry-run] would set legalEntityId=${e.id} on ${rows[0].n} employees`);
+        }
+        updated += rows[0].n;
+      } else {
+        const r = await empDb.query(
+          'UPDATE employees SET "legalEntityId" = $1 WHERE "tenantId" = $2 AND "legalEntityId" IS NULL',
+          [e.id, e.tenantId],
+        );
+        updated += r.rowCount;
+      }
+    }
+
+    console.log(`${dryRun ? '[dry-run] ' : ''}employees backfilled=${updated}`);
+  } finally {
+    await authDb.end();
+    await empDb.end();
+  }
+}
+
 async function run() {
   const { Client } = require('pg');
   const dryRun = process.env.DRY_RUN === 'true';
@@ -106,9 +153,12 @@ async function run() {
 
   console.log(`${dryRun ? '[dry-run] ' : ''}tenants=${tenants.length} created=${created} skipped=${skipped}`);
   await client.end();
+
+  // Must run after the entities exist — it resolves them by tenant.
+  await backfillEmployees(dryRun);
 }
 
-module.exports = { buildEntityFromTenant, deriveEntityCode, pgConfig, run };
+module.exports = { buildEntityFromTenant, deriveEntityCode, pgConfig, backfillEmployees, run };
 
 if (require.main === module) {
   run().catch(err => { console.error(err); process.exit(1); });
