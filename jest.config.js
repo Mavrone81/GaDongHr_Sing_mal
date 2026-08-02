@@ -20,5 +20,6 @@ module.exports = {
     '<rootDir>/services/hr-case-service',
     '<rootDir>/services/loans-service',
     '<rootDir>/services/survey-service',
+    '<rootDir>/services/statutory-sg-service',
   ],
 };

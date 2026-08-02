@@ -766,6 +766,39 @@ services:
         reservations:
           memory: 64m
 
+  # Singapore statutory computation (CPF, SDL, FWL) and the global,
+  # platform-managed rate tables — no tenantId on any row (ENT-004).
+  #
+  # payroll-service keeps the run lifecycle and calls this over HTTP. The split
+  # is on the LAYER boundary, not the country boundary: payroll.routes.js is
+  # ~2,300 lines of which statutory computation was three, so forking the whole
+  # service per country would duplicate the lifecycle to vary the arithmetic.
+  # The Malaysian sibling (statutory-my-service, P2) slots in beside this one.
+  statutory-sg-service:
+    build:
+      context: .
+      dockerfile: services/statutory-sg-service/Dockerfile
+    container_name: hrms-statutory-sg
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${STATUTORY_SG_SERVICE_PORT:-4021}:4021"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4021
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/hrms_statutory_sg
+      # Service-to-service only — no JWT path into this service at all.
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 64m
+
   db-backup:
     build:
       context: ./backup
