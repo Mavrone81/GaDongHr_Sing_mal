@@ -27,12 +27,11 @@ async function seedAuth() {
   const db = client('hrms_auth');
   await db.connect();
   try {
-    // Dev seed only — production callers MUST set SEED_*_PASSWORD env vars.
-    const isProd = process.env.NODE_ENV === 'production';
-    const defaultUserPass = process.env.SEED_USER_PASSWORD ?? (isProd ? null : 'Password@123!');
-    const defaultAdminPass = process.env.SEED_ADMIN_PASSWORD ?? (isProd ? null : '***REMOVED***');
+    // No fallback literal in any environment — see the note in seed.js.
+    const defaultUserPass = process.env.SEED_USER_PASSWORD;
+    const defaultAdminPass = process.env.SEED_ADMIN_PASSWORD;
     if (!defaultUserPass || !defaultAdminPass) {
-      throw new Error('SEED_USER_PASSWORD and SEED_ADMIN_PASSWORD are required when NODE_ENV=production');
+      throw new Error('SEED_USER_PASSWORD and SEED_ADMIN_PASSWORD env vars are required');
     }
     const hash = await bcrypt.hash(defaultUserPass, 12);
     const adminHash = await bcrypt.hash(defaultAdminPass, 12);

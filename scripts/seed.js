@@ -27,17 +27,19 @@ async function seedAuth() {
   const db = client('hrms_auth');
   await db.connect();
   try {
-    // Dev seed. Real bootstrap passwords MUST come from env so this script
-    // can't accidentally seed a known-credential SUPER_ADMIN into a real
-    // environment. Fallbacks only fire when NODE_ENV != 'production'.
-    const isProd = process.env.NODE_ENV === 'production';
-    const defaultUserPass = process.env.SEED_USER_PASSWORD
-      ?? (isProd ? null : 'Password@123!');
-    const defaultAdminPass = process.env.SEED_ADMIN_PASSWORD
-      ?? (isProd ? null : '***REMOVED***');
+    // Bootstrap passwords MUST come from env, in every environment.
+    //
+    // There is deliberately no fallback literal, not even a dev one. The old
+    // NODE_ENV-gated fallback is exactly the shape VAPT C-05/C-06 flagged: a
+    // known credential one mis-set env var away from reaching a real system.
+    // A literal here is also a password sitting in git forever.
+    const defaultUserPass = process.env.SEED_USER_PASSWORD;
+    const defaultAdminPass = process.env.SEED_ADMIN_PASSWORD;
     if (!defaultUserPass || !defaultAdminPass) {
       throw new Error(
-        'SEED_USER_PASSWORD and SEED_ADMIN_PASSWORD env vars are required when NODE_ENV=production',
+        'SEED_USER_PASSWORD and SEED_ADMIN_PASSWORD env vars are required.\n' +
+        'Set them before seeding, e.g.:\n' +
+        '  SEED_USER_PASSWORD=... SEED_ADMIN_PASSWORD=... node scripts/seed.js',
       );
     }
     const hash = await bcrypt.hash(defaultUserPass, 12);
