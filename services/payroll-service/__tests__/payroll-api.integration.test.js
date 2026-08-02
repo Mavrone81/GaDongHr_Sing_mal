@@ -105,6 +105,15 @@ jest.mock('dotenv', () => ({ config: () => {} }));
 // payroll-service /runs/:id/compute now makes TWO external calls:
 //   1) GET /attendance/internal/period-summary/:period (must be APPROVED_FOR_PAYROLL)
 //   2) GET /leave/applications?... (existing behaviour)
+// Statutory computation moved to statutory-sg-service; the fetch mock below
+// calls its real engine so no expected CPF/SDL figure in this file changes.
+const STATUTORY_ENGINE = require('../../statutory-sg-service/src/engines/cpf.engine');
+const FIXTURE_CPF_BAND = {
+  citizenStatus: 'SC_PR', ageMin: 0, ageMax: 55,
+  employeeRate: 0.20, employerRate: 0.17, owCeiling: 6800, awCeiling: 102000,
+};
+const FIXTURE_SDL_CONFIG = { rate: 0.0025, minAmount: 2.00, maxAmount: 11.25, salaryCap: 4500 };
+
 // installFetchMock() returns a single fetch jest.fn() that routes by URL:
 //   - attendance URL → APPROVED_FOR_PAYROLL + empty per-employee summary
 //   - leave URL      → { applications } from the second arg
@@ -112,9 +121,39 @@ jest.mock('dotenv', () => ({ config: () => {} }));
 // or the attendance half via the optional `attendance` override.
 function installFetchMock({ applications = [], attendance } = {}) {
   const defaultAttendance = { periodStatus: 'APPROVED_FOR_PAYROLL', summary: {}, expectedWorkDays: 22 };
-  global.fetch = jest.fn().mockImplementation((url) => {
+  global.fetch = jest.fn().mockImplementation((url, init) => {
     if (typeof url === 'string' && url.includes('/attendance/internal/period-summary')) {
       return Promise.resolve({ ok: true, json: async () => ({ ...defaultAttendance, ...(attendance || {}) }) });
+    }
+    // Entity resolution — every fixture run belongs to a Singapore entity.
+    if (typeof url === 'string' && url.includes('/tenants/internal/entities/')) {
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({
+        id: 'ent-1', tenantId: 'ten-1', name: 'Fixture Pte Ltd', code: 'FIX',
+        country: 'SG', currency: 'SGD', timezone: 'Asia/Singapore',
+        state: null, registrationNo: null, statutoryIds: {},
+      }) });
+    }
+    // Statutory computation. Deliberately runs the REAL engine rather than
+    // returning canned figures, so every expected CPF/SDL value in this file
+    // stays exactly what it was before the computation moved out of process.
+    if (typeof url === 'string' && url.includes('/statutory/compute-batch')) {
+      const body = JSON.parse((init && init.body) || '{}');
+      const results = (body.employees || []).map((e) => {
+        const cpf = STATUTORY_ENGINE.computeCpf({
+          ow: e.remuneration.ordinary, aw: e.remuneration.additional,
+          ytdOw: e.remuneration.ytdOrdinary, ytdAw: e.remuneration.ytdAdditional,
+          citizenStatus: e.profile.citizenStatus, age: e.profile.age,
+          rates: FIXTURE_CPF_BAND,
+        });
+        const sdl = STATUTORY_ENGINE.computeSdl(e.remuneration.gross, FIXTURE_SDL_CONFIG);
+        return {
+          employeeId: e.employeeId,
+          employeeDeductions:    [{ code: 'CPF_EE', label: 'CPF (Employee)', amount: cpf.totalEmployee, basis: FIXTURE_CPF_BAND }],
+          employerContributions: [{ code: 'CPF_ER', label: 'CPF (Employer)', amount: cpf.totalEmployer, basis: FIXTURE_CPF_BAND }],
+          employerLevies:        [{ code: 'SDL',    label: 'Skills Development Levy', amount: sdl, basis: FIXTURE_SDL_CONFIG }],
+        };
+      });
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ rateVersion: 'SG-TEST', results }) });
     }
     return Promise.resolve({ ok: true, json: async () => ({ applications }) });
   });
@@ -147,7 +186,7 @@ describe('GET /health', () => {
 describe('A) GET /payroll/runs', () => {
   test('200 — returns paginated list of runs', async () => {
     mockRunFindMany.mockResolvedValue([
-      { id: 'run-001', period: '2026-05', runType: 'MONTHLY', status: 'DRAFT', initiatedBy: 'admin-001', approvedBy: null, createdAt: new Date(), finalisedAt: null },
+      { id: 'run-001', period: '2026-05', legalEntityId: 'ent-1', runType: 'MONTHLY', status: 'DRAFT', initiatedBy: 'admin-001', approvedBy: null, createdAt: new Date(), finalisedAt: null },
     ]);
     mockRunCount.mockResolvedValue(1);
 
@@ -176,7 +215,7 @@ describe('A) GET /payroll/runs', () => {
 describe('B) POST /payroll/runs', () => {
   test('201 — creates new DRAFT payroll run', async () => {
     mockRunFindFirst.mockResolvedValue(null); // no existing run
-    mockRunCreate.mockResolvedValue({ id: 'run-001', period: '2026-05', runType: 'MONTHLY', status: 'DRAFT' });
+    mockRunCreate.mockResolvedValue({ id: 'run-001', period: '2026-05', legalEntityId: 'ent-1', runType: 'MONTHLY', status: 'DRAFT' });
 
     const res = await request(app)
       .post('/payroll/runs')
@@ -237,7 +276,7 @@ describe('D) POST /payroll/runs/:id/compute — CPF + SDL integration', () => {
   const sdlConfig = { rate: 0.0025, minAmount: 2.00, maxAmount: 11.25, salaryCap: 4500, isActive: true };
 
   const draftRun = {
-    id: 'run-001', period: '2026-05', runType: 'MONTHLY', status: 'DRAFT',
+    id: 'run-001', period: '2026-05', legalEntityId: 'ent-1', runType: 'MONTHLY', status: 'DRAFT',
     employeeGroup: null, initiatedBy: 'admin-001',
   };
 
@@ -274,8 +313,12 @@ describe('D) POST /payroll/runs/:id/compute — CPF + SDL integration', () => {
       .send({ employees });
 
     expect(res.status).toBe(200);
-    expect(mockCpfRateFindMany).toHaveBeenCalled();
-    expect(mockSdlConfigFindFirst).toHaveBeenCalled();
+    // Payroll no longer queries cpf_rates/sdl_config — statutory-sg-service owns
+    // them (ENT-004). Assert the contract call happened instead.
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/statutory/compute-batch'),
+      expect.objectContaining({ method: 'POST' }),
+    );
   });
 
   test('400 — rejects compute on FINALISED run', async () => {
@@ -352,9 +395,9 @@ describe('D) POST /payroll/runs/:id/compute — CPF + SDL integration', () => {
 
 // ── F) Consolidation and variance ─────────────────────────────────────────────
 describe('F) Consolidation and variance', () => {
-  const finalisedRun = { id: 'run-fin', period: '2026-05', runType: 'MONTHLY', status: 'FINALISED' };
-  const approvedRun  = { id: 'run-apr', period: '2026-05', runType: 'ADHOC',   status: 'APPROVED' };
-  const draftRun2    = { id: 'run-drft', period: '2026-05', runType: 'BONUS',  status: 'DRAFT' };
+  const finalisedRun = { id: 'run-fin', period: '2026-05', legalEntityId: 'ent-1', runType: 'MONTHLY', status: 'FINALISED' };
+  const approvedRun  = { id: 'run-apr', period: '2026-05', legalEntityId: 'ent-1', runType: 'ADHOC',   status: 'APPROVED' };
+  const draftRun2    = { id: 'run-drft', period: '2026-05', legalEntityId: 'ent-1', runType: 'BONUS',  status: 'DRAFT' };
 
   const makeSlip = (id, empId, runId, net, gross) => ({
     id, runId, employeeId: empId, period: '2026-05', isPublished: true,
@@ -513,7 +556,7 @@ describe('G) Pro-rating — EA s.20 working-day salary (MOM guidelines)', () => 
     { id: 'rate-1', citizenStatus: 'SC', ageFrom: 0, ageTo: 55, employeeRate: 0.20, employerRate: 0.17, owCeiling: 6800, awCeiling: 102000, isActive: true },
   ];
   const sdlConfig = { rate: 0.0025, minAmount: 2.00, maxAmount: 11.25, salaryCap: 4500, isActive: true };
-  const adhocRun  = { id: 'run-adhoc', period: '2026-05', runType: 'ADHOC', status: 'DRAFT', employeeGroup: null, initiatedBy: 'admin-001' };
+  const adhocRun  = { id: 'run-adhoc', period: '2026-05', legalEntityId: 'ent-1', runType: 'ADHOC', status: 'DRAFT', employeeGroup: null, initiatedBy: 'admin-001' };
 
   const baseEmp = {
     employeeId: 'emp-001', employeeCode: 'EMP-001', fullName: 'Test',
@@ -743,7 +786,7 @@ describe('H) Deductible leave — working-day rate + cross-month pro-ration', ()
     { id: 'rate-1', citizenStatus: 'SC_PR', ageMin: 0, ageMax: 55, employeeRate: 0.20, employerRate: 0.17, owCeiling: 6800, awCeiling: 102000, isActive: true },
   ];
   const sdlConfig = { rate: 0.0025, minAmount: 2.00, maxAmount: 11.25, salaryCap: 4500, isActive: true };
-  const draftRun = { id: 'run-001', period: '2026-05', runType: 'MONTHLY', status: 'DRAFT', employeeGroup: null, initiatedBy: 'admin-001' };
+  const draftRun = { id: 'run-001', period: '2026-05', legalEntityId: 'ent-1', runType: 'MONTHLY', status: 'DRAFT', employeeGroup: null, initiatedBy: 'admin-001' };
   const baseEmp = {
     employeeId: 'emp-001', employeeCode: 'EMP-001', fullName: 'Alice',
     ow: 5000, grossPay: 5000, citizenStatus: 'SC', age: 35,
@@ -911,9 +954,38 @@ describe('H) Deductible leave — working-day rate + cross-month pro-ration', ()
 
   test('H8 — leave service unreachable: payroll completes with zero deductions', async () => {
     // TAT-005: keep the attendance side happy; only the leave call fails.
-    global.fetch = jest.fn().mockImplementation((url) => {
+    global.fetch = jest.fn().mockImplementation((url, init) => {
       if (typeof url === 'string' && url.includes('/attendance/internal/period-summary')) {
         return Promise.resolve({ ok: true, json: async () => ({ periodStatus: 'APPROVED_FOR_PAYROLL', summary: {}, expectedWorkDays: 22 }) });
+      }
+      // Entity resolution and statutory computation must still succeed — this
+      // test is about the LEAVE service being down, and both of those fail
+      // closed by design, so rejecting them would assert the wrong thing.
+      if (typeof url === 'string' && url.includes('/tenants/internal/entities/')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({
+          id: 'ent-1', tenantId: 'ten-1', country: 'SG', currency: 'SGD',
+          timezone: 'Asia/Singapore', state: null, statutoryIds: {},
+        }) });
+      }
+      if (typeof url === 'string' && url.includes('/statutory/compute-batch')) {
+        const b = JSON.parse((init && init.body) || '{}');
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({
+          rateVersion: 'SG-TEST',
+          results: (b.employees || []).map(e => {
+            const cpf = STATUTORY_ENGINE.computeCpf({
+              ow: e.remuneration.ordinary, aw: e.remuneration.additional,
+              ytdOw: e.remuneration.ytdOrdinary, ytdAw: e.remuneration.ytdAdditional,
+              citizenStatus: e.profile.citizenStatus, age: e.profile.age,
+              rates: FIXTURE_CPF_BAND,
+            });
+            return {
+              employeeId: e.employeeId,
+              employeeDeductions:    [{ code: 'CPF_EE', amount: cpf.totalEmployee, basis: FIXTURE_CPF_BAND }],
+              employerContributions: [{ code: 'CPF_ER', amount: cpf.totalEmployer, basis: FIXTURE_CPF_BAND }],
+              employerLevies:        [{ code: 'SDL', amount: STATUTORY_ENGINE.computeSdl(e.remuneration.gross, FIXTURE_SDL_CONFIG), basis: FIXTURE_SDL_CONFIG }],
+            };
+          }),
+        }) });
       }
       return Promise.reject(new Error('fetch failed'));
     });
@@ -931,7 +1003,7 @@ describe('H) Deductible leave — working-day rate + cross-month pro-ration', ()
 
 // ── I) Reimbursement paycodes — claims integration ────────────────────────────
 describe('I) Reimbursement paycodes (claims integration)', () => {
-  const draftRun     = { id: 'run-001', period: '2026-05', runType: 'MONTHLY', status: 'DRAFT', employeeGroup: null, initiatedBy: 'admin-001' };
+  const draftRun     = { id: 'run-001', period: '2026-05', legalEntityId: 'ent-1', runType: 'MONTHLY', status: 'DRAFT', employeeGroup: null, initiatedBy: 'admin-001' };
   const finalisedRun = { ...draftRun, status: 'FINALISED' };
   const reimbComponent = { id: 'comp-reimb', name: 'Claims Reimbursement', wageType: 'REIMBURSEMENT', isCpfApplicable: false, isIrasTaxable: false };
 
@@ -1131,7 +1203,7 @@ describe('PAY-001) Bi-monthly run validation on POST /payroll/runs', () => {
   test('K4 — POST 201 creates BIMONTHLY FIRST run', async () => {
     mockRunFindFirst.mockResolvedValue(null);
     mockRunCreate.mockResolvedValue({
-      id: 'run-bm-1', period: '2026-05', runType: 'BIMONTHLY',
+      id: 'run-bm-1', period: '2026-05', legalEntityId: 'ent-1', runType: 'BIMONTHLY',
       periodHalf: 'FIRST', status: 'DRAFT',
     });
     const res = await request(app)
@@ -1143,7 +1215,7 @@ describe('PAY-001) Bi-monthly run validation on POST /payroll/runs', () => {
 
   test('K5 — POST 409 rejects duplicate BIMONTHLY+SECOND for same period', async () => {
     mockRunFindFirst.mockResolvedValue({
-      id: 'run-existing', period: '2026-05', runType: 'BIMONTHLY',
+      id: 'run-existing', period: '2026-05', legalEntityId: 'ent-1', runType: 'BIMONTHLY',
       periodHalf: 'SECOND', status: 'DRAFT',
     });
     const res = await request(app)
@@ -1157,7 +1229,7 @@ describe('PAY-001) Bi-monthly run validation on POST /payroll/runs', () => {
     // findFirst is called scoped to the requested half — return null for SECOND
     mockRunFindFirst.mockResolvedValue(null);
     mockRunCreate.mockResolvedValue({
-      id: 'run-bm-2', period: '2026-05', runType: 'BIMONTHLY',
+      id: 'run-bm-2', period: '2026-05', legalEntityId: 'ent-1', runType: 'BIMONTHLY',
       periodHalf: 'SECOND', status: 'DRAFT',
     });
     const res = await request(app)
@@ -1207,7 +1279,7 @@ describe('PAY-001) Supplemental run auto-trim on compute', () => {
 
   test('K7 — BONUS run with prior payslip: OW is trimmed to 0; only paycode delta contributes', async () => {
     mockRunFindUnique.mockResolvedValue({
-      id: 'run-bonus', period: '2026-05', runType: 'BONUS', status: 'DRAFT',
+      id: 'run-bonus', period: '2026-05', legalEntityId: 'ent-1', runType: 'BONUS', status: 'DRAFT',
       initiatedBy: 'admin-001', periodHalf: null,
     });
     // Prior MONTHLY payslip exists for this employee in this period
@@ -1238,7 +1310,7 @@ describe('PAY-001) Supplemental run auto-trim on compute', () => {
 
   test('K8 — ADHOC run, employee with prior + no paycodes: payslip is auto-removed', async () => {
     mockRunFindUnique.mockResolvedValue({
-      id: 'run-adhoc', period: '2026-05', runType: 'ADHOC', status: 'DRAFT',
+      id: 'run-adhoc', period: '2026-05', legalEntityId: 'ent-1', runType: 'ADHOC', status: 'DRAFT',
       initiatedBy: 'admin-001', periodHalf: null,
     });
     mockPayslipFindMany.mockResolvedValue([{
@@ -1261,7 +1333,7 @@ describe('PAY-001) Supplemental run auto-trim on compute', () => {
 
   test('K9 — MONTHLY run does not trigger trim (no priorPayslip fetch on primary)', async () => {
     mockRunFindUnique.mockResolvedValue({
-      id: 'run-m', period: '2026-05', runType: 'MONTHLY', status: 'DRAFT',
+      id: 'run-m', period: '2026-05', legalEntityId: 'ent-1', runType: 'MONTHLY', status: 'DRAFT',
       initiatedBy: 'admin-001', periodHalf: null,
     });
     mockLineItemFindMany.mockResolvedValue([]);
@@ -1282,7 +1354,7 @@ describe('PAY-001) Supplemental run auto-trim on compute', () => {
 
   test('K10 — BIMONTHLY FIRST run uses days 1-15 boundary (mid-month leaver still gets full half pay)', async () => {
     mockRunFindUnique.mockResolvedValue({
-      id: 'run-bm', period: '2026-05', runType: 'BIMONTHLY', status: 'DRAFT',
+      id: 'run-bm', period: '2026-05', legalEntityId: 'ent-1', runType: 'BIMONTHLY', status: 'DRAFT',
       initiatedBy: 'admin-001', periodHalf: 'FIRST',
     });
     mockLineItemFindMany.mockResolvedValue([]);
