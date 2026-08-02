@@ -4,8 +4,8 @@
  *
  *   C-05 — seed-initial-admin requires ADMIN_EMAIL + ADMIN_PASSWORD env;
  *          no Admin@123 default; password must meet complexity rules.
- *   C-06 — sync-users mints a random per-user password (not the literal
- *          '***REMOVED***') and stamps mustChangePassword=true.
+ *   C-06 — sync-users mints a random per-user password (never a shared
+ *          literal) and stamps mustChangePassword=true.
  *   C-09 — MFA OTP generation uses crypto.randomInt, never Math.random.
  *   C-15 — login rate limiter is bound by LOGIN_RATELIMIT_MAX (default 10),
  *          not the deliberate 10000 "effectively disabled" value.
@@ -21,7 +21,23 @@ const authRoutesSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes'
 describe('C-05 seed-initial-admin', () => {
   test('contains no Admin@123 literal default', () => {
     expect(seedAdminSrc).not.toMatch(/['"]Admin@123['"]/);
-    expect(seedAdminSrc).not.toMatch(/['"]***REMOVED***['"]/);
+  });
+
+  /**
+   * Generalised from two hardcoded-literal checks.
+   *
+   * The original pair asserted against two specific historical passwords. A
+   * 2026-07-13 secret scrub rewrote one of them in place, producing the regex
+   * /['"]***REMOVED***['"]/ — invalid syntax, so this whole file stopped
+   * parsing and the C-05 guard silently died for three weeks.
+   *
+   * Matching the *shape* of a hardcoded credential instead of one known value
+   * is both immune to that and strictly stronger: it catches any future
+   * literal, not just the two we already knew about.
+   */
+  test('has no literal fallback for any password variable', () => {
+    // e.g.  const p = process.env.X ?? 'literal'   /   ... || "literal"
+    expect(seedAdminSrc).not.toMatch(/password[^\n]*(?:\?\?|\|\|)\s*['"][^'"]+['"]/i);
   });
   test('asserts presence of ADMIN_EMAIL and ADMIN_PASSWORD env', () => {
     expect(seedAdminSrc).toContain("assertEnv('ADMIN_EMAIL')");
@@ -38,7 +54,7 @@ describe('C-05 seed-initial-admin', () => {
 
 // ── C-06 ──────────────────────────────────────────────────────────────────────
 describe('C-06 sync-users', () => {
-  test('contains no hardcoded ***REMOVED*** literal', () => {
+  test('contains no shared hardcoded password literal', () => {
     expect(syncUsersSrc).not.toMatch(/Vorkhive@2025/);
   });
   test('uses crypto.randomBytes for the per-user temp password', () => {

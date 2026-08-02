@@ -65,10 +65,17 @@ jest.mock('@prisma/client', () => ({
 
 jest.mock('dotenv', () => ({ config: () => {} }));
 
+// Obviously-fake fixture value, not a real credential.
+//
+// This must be set BEFORE requiring the app: employee.routes.js reads
+// INTERNAL_KEY at module load (line 11), so assigning it afterwards would
+// leave the service holding '' and every internal-path assertion below would
+// silently exercise the non-internal branch instead.
+const INTERNAL_KEY = 'test-internal-service-key';
+process.env.INTERNAL_SERVICE_KEY = INTERNAL_KEY;
+
 const request = require('supertest');
 const app = require('../src/index');
-
-const INTERNAL_KEY = '***REMOVED***';
 
 afterEach(() => {
   jest.clearAllMocks();

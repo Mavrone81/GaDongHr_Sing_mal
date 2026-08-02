@@ -259,13 +259,12 @@ async function seedEmployees() {
   if (!EMPLOYEE_ROLE_ID) throw new Error('EMPLOYEE role not found in hrms_auth.roles — run seed-rbac first');
 
   try {
-    // Dev seed only. Set SEED_EMPLOYEE_PASSWORD (or fall back to a dev literal
-     // only outside production). Same password for every seeded employee is
-     // acceptable in dev fixtures; production loads come via the invite flow.
-    const isProd = process.env.NODE_ENV === 'production';
-    const defaultPass = process.env.SEED_EMPLOYEE_PASSWORD ?? (isProd ? null : '***REMOVED***');
+    // SEED_EMPLOYEE_PASSWORD is required — no fallback literal in any
+    // environment (see the note in seed.js). The same password across seeded
+    // dev fixtures is fine; production onboarding goes through the invite flow.
+    const defaultPass = process.env.SEED_EMPLOYEE_PASSWORD;
     if (!defaultPass) {
-      throw new Error('SEED_EMPLOYEE_PASSWORD is required when NODE_ENV=production');
+      throw new Error('SEED_EMPLOYEE_PASSWORD env var is required');
     }
     const passwordHash = await bcrypt.hash(defaultPass, 12);
 

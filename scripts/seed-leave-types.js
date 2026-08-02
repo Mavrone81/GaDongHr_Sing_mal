@@ -167,10 +167,10 @@ const LEAVE_TYPES = [
 
 async function main() {
   console.log('🔐 Logging in...');
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD
-    ?? (process.env.NODE_ENV === 'production' ? null : '***REMOVED***');
+  // Required in every environment — no fallback literal (see note in seed.js).
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
   if (!adminPassword) {
-    console.error('SEED_ADMIN_PASSWORD env var required when NODE_ENV=production'); process.exit(1);
+    console.error('SEED_ADMIN_PASSWORD env var is required'); process.exit(1);
   }
   const loginRes = await request('POST', `${AUTH_URL}/auth/login`, { email: 'admin@vorkhive.sg', password: adminPassword });
   if (!loginRes.body.accessToken) { console.error('Login failed:', loginRes.body); process.exit(1); }
