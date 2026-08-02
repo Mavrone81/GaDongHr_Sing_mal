@@ -12,5 +12,13 @@ module.exports = {
     '<rootDir>/services/performance-service',
     '<rootDir>/services/support-service',
     '<rootDir>/services/training-service',
+    // Added 2026-08 alongside their docker-compose entries. These services had
+    // test files that npm run test:backend never executed, because a project
+    // absent from this array is silently skipped — no error, no warning.
+    '<rootDir>/services/benefits-service',
+    '<rootDir>/services/esign-service',
+    '<rootDir>/services/hr-case-service',
+    '<rootDir>/services/loans-service',
+    '<rootDir>/services/survey-service',
   ],
 };
