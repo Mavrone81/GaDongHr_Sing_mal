@@ -226,10 +226,13 @@ newer Node — run with Node 20 (`brew install node@20`). Always restore deps wi
   Asia/Singapore) so it cannot regress unseen.
 
 **Known flaky (open):** the full `npm run test:backend` run is green on ~5 runs in 8;
-the rest fail 1–5 scattered tests. Seven services call `setInterval` at module load
-unguarded, so requiring an app in a test starts timers that fire during unrelated
-suites. See `docs/superpowers/plans/p1-verification-record.md` for the evidence and
-the suggested fix.
+the rest fail 1–5 scattered tests. Cause is **mock-order leakage**, not the app:
+`jest.clearAllMocks()` in `beforeEach` resets call history but NOT queued
+`mockResolvedValueOnce` / `mockRejectedValueOnce` implementations, so an unconsumed
+`...Once` leaks into the next test and async timing under load decides whether that
+happens. Fix is `resetAllMocks` in the affected suites. See
+`docs/superpowers/plans/p1-verification-record.md` for the full evidence, including
+two hypotheses that were tested and disproved (schedulers, test timeouts).
 
 **Fixed in the 2026-06-12 run:** `moduleNameMapper` for `/app/shared/tenant-context` was missing
 in performance/training/support services (their whole suites failed to load — recovered ~250

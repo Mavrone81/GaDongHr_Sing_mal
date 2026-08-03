@@ -97,24 +97,35 @@ It is **not** caused by the statutory work:
 - `performance-service` + `payroll-service` in parallel: **6/6 runs stable**
 - only the full 16-project run flakes
 
-**Probable root cause:** seven services call `setInterval` at module load,
-unguarded by environment —
+**Root cause — corrected.** My first hypothesis was that seven services start
+`setInterval` at module load. **That was wrong**, and it is recorded here rather
+than quietly dropped: all seven guard correctly, six with
+`require.main === module` and `movement.routes.js` twice over with
+`NODE_ENV === 'test'` checks. Schedulers are not the cause. Neither is a test
+timeout — the flake persists at `--testTimeout=30000`.
 
-```
-asset-service, auth-service, leave-service, hr-case-service,
-reporting-service, training-service, employee-service (movement.routes.js)
-```
+What the evidence actually shows, from capturing a real failure rather than
+inferring one: the failures are **mock-order violations**. In
+`leave-service/__tests__/govt-claims.integration.test.js`, `M2` reads
+`mock.calls[0][0]` and gets `undefined`, and `M5` queues a
+`mockRejectedValueOnce` that never takes effect (expects 404, gets 200).
 
-Requiring the app in a test starts those timers, and under parallel workers they
-fire during unrelated suites. This also explains the "Cannot log after tests are
-done" warnings and the stray `[leave-service] Auto-provision run`,
-`[hr-case sweep] start`, `[movement-sweep] start` output that appears throughout
-test runs.
+`beforeEach` calls `jest.clearAllMocks()`, which resets *call history* but
+**not queued implementations** — values queued with `mockResolvedValueOnce` /
+`mockRejectedValueOnce` survive it, since clearing implementations requires
+`resetAllMocks()`. So any `...Once` a test queues but does not consume leaks
+into the following test, and async timing under a loaded 16-project run decides
+whether it is consumed.
 
-**Suggested fix:** guard the schedulers with `if (process.env.NODE_ENV !==
-'test')`, or export a `startSchedulers()` the entrypoint calls rather than
-running them on require. Not attempted here — it touches seven services and
-belongs in its own change with its own verification.
+That explains every observed property: scattered across services, never the same
+test twice, invisible when a project runs alone or in a small pair, and
+unaffected by timeouts.
+
+**Suggested fix:** switch the affected suites to `jest.resetAllMocks()` (or set
+`resetMocks: true` at project level) and remove reliance on `mock.calls[0]`
+where a prior call in the same file may precede it. Not attempted here: it is
+test hygiene across several suites, unrelated to the statutory work, and
+deserves its own change with its own verification.
 
 **Impact on the gate:** every gate above was confirmed on clean runs, and the
 flaky failures are unrelated to statutory computation. But a gate that fails
