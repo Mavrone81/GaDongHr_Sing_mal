@@ -1,22 +1,49 @@
 /* ─────────────────────────────────────────────────────────────────────
-   GaDongHR Design System — Core Tokens
+   GaDongHR — "Official Record" design system
+   ─────────────────────────────────────────────────────────────────────
+   Eight tokens. The discipline is not the palette, it is the RESERVATION:
+   --seal means exactly one thing (an authority citation) and appears
+   nowhere else. Enforced by frontend/__tests__/seal-reservation.test.ts,
+   because the source document watched this rule erode within hours of
+   being written down.
+
+   Vocabulary: it is a DOCUMENT, not a dashboard. Hairlines separate,
+   whitespace groups. No cards, no drop shadows, no rounded containers —
+   buttons and seals use 2px and nothing else is rounded.
    ───────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* ── BRAND PRIMARY — Navy (2026 rebrand) ────────────────────────────
-     The `--indigo-*` token names are retained so existing components keep
-     working; their VALUES now resolve to the new navy brand scale. */
-  --indigo-50:  #eef2f8;
-  --indigo-100: #d8e2f0;
-  --indigo-200: #aec1de;
-  --indigo-300: #7d9bc4;
-  --indigo-400: #4d6fa3;
-  --indigo-500: #2b4a7d;
-  --indigo-600: #1c3a66;
-  --indigo-700: #162d50;
-  --indigo-800: #11233f;
-  --indigo-900: #0c1a30;
-  --indigo-950: #0a1628;
+  --paper:     #FCFBF7;   /* every surface — never pure white, it glares    */
+  --ink:       #171614;   /* body text, and the 2px rule under a section    */
+  --rule:      #DBD5C6;   /* the hairline between fields — most-used token  */
+  --seal:      #A8322A;   /* RESERVED — authority citations ONLY            */
+  --accent:    #1B4A3C;   /* primary actions, current-page marker           */
+  --highlight: #C08A3E;   /* sparing emphasis — fails contrast at body size */
+  --muted:     #6E685C;   /* secondary text and labels                      */
+  --shadow:    #102A22;   /* dark surfaces only — a header bar, a kiosk     */
+  --page:      #F2F1EC;   /* the ground the paper sits on                   */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root { --page:#12100D; --paper:#1A1815; --ink:#EDE9E0; --rule:#332F28; --muted:#9A9384; }
+}
+:root[data-theme="dark"]  { --page:#12100D; --paper:#1A1815; --ink:#EDE9E0; --rule:#332F28; --muted:#9A9384; }
+:root[data-theme="light"] { --page:#F2F1EC; --paper:#FCFBF7; --ink:#171614; --rule:#DBD5C6; --muted:#6E685C; }
+
+/* Thai marks sit above and below the baseline. At Latin leading they clip —
+   illegible to a native reader, invisible to anyone testing in English. The
+   acquirer is a Thai company; this costs one line. */
+:lang(th) { line-height: 1.85; }
+
+/* ─────────────────────────────────────────────────────────────────────
+   LEGACY PALETTE — being retired
+   ─────────────────────────────────────────────────────────────────────
+   Neutrals and status colours the un-converted screens still reference.
+   Stage 2 replaces their usages with the Official Record tokens above,
+   after which this block is deleted. Do not add to it.
+   ───────────────────────────────────────────────────────────────────── */
+
+:root {
 
   /* ── BRAND ACCENT — Gold ────────────────────────────────────────── */
   --gold-50:  #faf6ec;
@@ -32,9 +59,9 @@
   --accent-hover: var(--gold-600);
   --accent-light: var(--gold-50);
 
-  --primary:        var(--indigo-600);
-  --primary-hover:  var(--indigo-700);
-  --primary-light:  var(--indigo-50);
+  --primary:        var(--accent);
+  --primary-hover:  var(--accent);
+  --primary-light:  var(--accent);
 
   /* ── NEUTRAL — Slate scale ──────────────────────────────────────── */
   --slate-50:  #f7f3ea;
@@ -213,7 +240,7 @@
     box-shadow: var(--shadow-sm);
   }
   .form-input:focus {
-    border-color: var(--indigo-500);
+    border-color: var(--accent);
     box-shadow: 0 0 0 4px rgba(28, 58, 102, 0.08);
   }
 
@@ -305,7 +332,7 @@
   .badge-success  { background: var(--emerald-50); color: var(--emerald-700); border-color: var(--emerald-100); }
   .badge-warning  { background: var(--amber-50);   color: #92400e;            border-color: var(--amber-100); }
   .badge-danger   { background: var(--red-50);     color: var(--red-600);     border-color: var(--red-100); }
-  .badge-primary  { background: var(--primary-light); color: var(--primary);  border-color: var(--indigo-100); }
+  .badge-primary  { background: var(--primary-light); color: var(--primary);  border-color: var(--accent); }
   .badge-neutral  { background: var(--slate-50);   color: var(--slate-500);   border-color: var(--slate-200); }
   .badge-accent   { background: var(--accent-light); color: var(--accent-hover); border-color: var(--gold-200); }
 
@@ -336,7 +363,7 @@
 /* ── Focus ring ───────────────────────────────────────────────────── */
 .focus-ring:focus {
   outline: none;
-  border-color: var(--indigo-500) !important;
+  border-color: var(--accent) !important;
   box-shadow: 0 0 0 4px rgba(28, 58, 102, 0.08) !important;
 }
 

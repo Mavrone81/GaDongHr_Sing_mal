@@ -56,13 +56,27 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Brand-primary remap: indigo → navy (app-wide reskin)
-        indigo: navy,
+        // ── Official Record — GaDong house design system ──────────────
+        // Eight tokens. --seal is RESERVED for authority citations and is
+        // enforced by frontend/__tests__/seal-reservation.test.ts.
+        paper:     '#FCFBF7',
+        ink:       '#171614',
+        rule:      '#DBD5C6',
+        seal:      '#A8322A',
+        accent:    '#1B4A3C',
+        highlight: '#C08A3E',
+        muted:     '#6E685C',
+        shadow:    '#102A22',
+        page:      '#F2F1EC',
+
+        // The 2026 `indigo: navy` remap is RETIRED, not repointed. It made
+        // brand colour arrive through a class named "indigo" — a lie in the
+        // config. Un-converted screens therefore render Tailwind's default
+        // indigo until Stage 2 moves them onto the tokens above, which makes
+        // remaining work visible rather than hiding it behind a plausible skin.
         navy,
         gold,
         cream,
-        // `brand` alias kept for any future direct use
-        brand: navy,
         // Warm a few slate steps so backgrounds/headlines match the brochure
         // while leaving the mid neutrals (200–800) as legible cool greys.
         slate: {
