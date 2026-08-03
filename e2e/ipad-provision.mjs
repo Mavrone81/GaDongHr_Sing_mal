@@ -24,7 +24,7 @@ for (const vp of viewports) {
     hasTouch: true,
   });
   await context.addCookies([
-    { name: 'vorkhive_token', value: 'test-token', domain: 'localhost', path: '/' },
+    { name: 'gadonghr_token', value: 'test-token', domain: 'localhost', path: '/' },
   ]);
   const page = await context.newPage();
 

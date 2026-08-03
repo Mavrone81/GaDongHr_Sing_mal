@@ -29,7 +29,7 @@ export async function contextAsRole(browser: Browser, role: Role): Promise<Brows
   const token = signJwt(user, role);
   const context = await browser.newContext();
   await context.addCookies([{
-    name: 'vorkhive_token',
+    name: 'gadonghr_token',
     value: token,
     domain: BASE_HOST,
     path: '/',

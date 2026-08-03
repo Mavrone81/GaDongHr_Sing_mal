@@ -8,7 +8,7 @@ const PUBLIC_PREFIXES = ['/login', '/register', '/onboard', '/auth', '/platform'
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const token = request.cookies.get('vorkhive_token')?.value;
+  const token = request.cookies.get('gadonghr_token')?.value;
 
   const isPublic = PUBLIC_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'));
 

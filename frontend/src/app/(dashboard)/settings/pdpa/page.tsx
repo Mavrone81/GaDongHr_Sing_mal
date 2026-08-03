@@ -122,7 +122,7 @@ export default function PdpaPage() {
   useEffect(() => {
     // Load saved PDPA settings from localStorage
     try {
-      const saved = localStorage.getItem('vorkhive_pdpa_settings');
+      const saved = localStorage.getItem('gadonghr_pdpa_settings');
       if (saved) {
         const s = JSON.parse(saved);
         if (s.access) setAccess(s.access);
@@ -169,7 +169,7 @@ export default function PdpaPage() {
 
   const handleSave = async () => {
     setSaving(true);
-    localStorage.setItem('vorkhive_pdpa_settings', JSON.stringify({ access, retention }));
+    localStorage.setItem('gadonghr_pdpa_settings', JSON.stringify({ access, retention }));
     // Persist retention periods to server so the purge scheduler uses live values
     const retentionNums = {
       employeeRecords: Number(retention.employeeRecords),

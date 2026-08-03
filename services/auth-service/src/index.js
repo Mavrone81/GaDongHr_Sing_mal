@@ -41,7 +41,7 @@ app.use((req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = (authHeader && authHeader.startsWith('Bearer '))
       ? authHeader.slice(7)
-      : req.cookies?.vorkhive_token;
+      : req.cookies?.gadonghr_token;
     if (token) {
       const payload = verifyToken(token);
       if (!payload?.sso_pending) tenantId = payload.tenantId || DEFAULT_TENANT_ID;

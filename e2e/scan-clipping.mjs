@@ -40,7 +40,7 @@ const findings = [];
 for (const route of routes) {
   for (const vp of viewports) {
     const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } });
-    await context.addCookies([{ name:'vorkhive_token', value:'t', domain:'localhost', path:'/' }]);
+    await context.addCookies([{ name:'gadonghr_token', value:'t', domain:'localhost', path:'/' }]);
     const page = await context.newPage();
     await page.route('**/api/**', async (route2) => {
       await route2.fulfill({ status:200, contentType:'application/json', body: JSON.stringify(mockBody(route2.request().url())) }).catch(()=>{});

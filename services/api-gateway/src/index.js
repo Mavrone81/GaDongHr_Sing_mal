@@ -170,9 +170,9 @@ async function jwtMiddleware(req, res, next) {
   if (isPublic) return next();
 
   // Accept the JWT from either the Authorization header (legacy / non-browser
-  // clients) or the HttpOnly vorkhive_token cookie (browser clients post C-12).
+  // clients) or the HttpOnly gadonghr_token cookie (browser clients post C-12).
   const authHeader = req.headers['authorization'];
-  const cookieToken = req.cookies?.vorkhive_token;
+  const cookieToken = req.cookies?.gadonghr_token;
   let token = null;
   if (authHeader && authHeader.startsWith('Bearer ')) token = authHeader.slice(7);
   else if (cookieToken) token = cookieToken;

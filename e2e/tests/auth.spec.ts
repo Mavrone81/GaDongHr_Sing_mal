@@ -21,7 +21,7 @@ test('auth: HR_ADMIN can log in with password and reach dashboard', async ({ pag
 
   // Confirm /auth/me cookie was set
   const cookies = await page.context().cookies();
-  expect(cookies.find(c => c.name === 'vorkhive_token')).toBeTruthy();
+  expect(cookies.find(c => c.name === 'gadonghr_token')).toBeTruthy();
 });
 
 test('auth: invalid password is rejected', async ({ page }) => {
