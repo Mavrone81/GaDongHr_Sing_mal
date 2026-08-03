@@ -46,6 +46,9 @@ const mockExerciseFindMany = jest.fn();
 
 jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn(() => ({
+    // ENT-006 dual-write target. Payroll writes one row per statutory
+    // figure alongside the legacy SG-named columns.
+    payslipStatutoryLine: { deleteMany: jest.fn(), createMany: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
     payslip: {
       findMany: mockPayslipFindMany,
       findUnique: jest.fn(),

@@ -54,6 +54,8 @@ jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({
     payrollRun:           { findUnique: mockRunFindUnique, update: mockRunUpdate, findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn(), count: jest.fn() },
     payrollLineItem:      { findMany: mockLineItemFindMany, create: mockLineItemCreate, delete: jest.fn(), deleteMany: jest.fn(), createMany: jest.fn() },
+    // ENT-006 dual-write target.
+    payslipStatutoryLine: { deleteMany: jest.fn(), createMany: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
     payslip:              { upsert: mockPayslipUpsert, findMany: mockPayslipFindMany, deleteMany: jest.fn(), createMany: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     cpfRate:              { findMany: mockCpfRateFindMany },
     sdlConfig:            { findFirst: mockSdlConfigFindFirst },

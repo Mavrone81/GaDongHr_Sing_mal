@@ -16,6 +16,7 @@ const { resolveEntity } = require('/app/shared/entity-client');
 const { buildEntriesForEmployee, summariseEntries } = require('../engines/journal.engine');
 const { isSupplemental, isBiMonthly, computePeriodBoundaries, trimSupplementalEmployee, validateRunTypeShape } = require('../engines/run-types');
 const { toStoredPeriodHalf } = require('../utils/run-scope');
+const { buildStatutoryLines } = require('../utils/statutory-lines');
 const { classifyRunSla, isAlertResolved } = require('../engines/sla.engine');
 const { buildPayslipPdf, splitLineItems } = require('../engines/pdf.engine');
 
@@ -621,11 +622,30 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
 
       computedResults.push({ employeeId: emp.employeeId, effectiveOw, effectiveGross, net, hasPaycodes: p.hasPaycodes });
 
-      await prisma.payslip.upsert({
+      const upserted = await prisma.payslip.upsert({
         where: { runId_employeeId: { runId: run.id, employeeId: emp.employeeId } },
         create: { id: uuidv4(), ...payslipData },
         update: payslipData,
+        select: { id: true },
       });
+
+      // ENT-006 dual-write. The SG-named columns above keep being written so
+      // every existing reader is untouched; these rows are the country-agnostic
+      // source of truth and carry the rate version that produced each figure.
+      const statutoryLines = buildStatutoryLines({
+        payslipId: upserted.id,
+        tenantId: run.tenantId,
+        statutory,
+        rateVersion: statutoryBatch.rateVersion,
+        encrypt,
+      });
+
+      // Recompute must be clean: a re-run of the same period must not leave
+      // stale lines from the previous attempt alongside the new ones.
+      await prisma.payslipStatutoryLine.deleteMany({ where: { payslipId: upserted.id } });
+      if (statutoryLines.length) {
+        await prisma.payslipStatutoryLine.createMany({ data: statutoryLines });
+      }
     }
 
     // ── PAY-001 Post-compute cleanup for supplemental runs ──
@@ -655,6 +675,12 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
       where: { id: run.id },
       data: {
         status: 'PENDING_APPROVAL',
+        // ENT-006: pin the rate version the whole run computed under. The
+        // per-line copy is the guarantee; this is the run-level record, and
+        // they are equal for a normal run.
+        rateVersion: statutoryBatch.rateVersion,
+        country: entityCtx.country,
+        currency: entityCtx.currency,
         totalGross: encrypt(String(totalGross)),
         totalNet: encrypt(String(totalNet)),
         totalCpf: encrypt(String(totalEmployee)),

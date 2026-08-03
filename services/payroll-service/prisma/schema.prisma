@@ -639,3 +639,29 @@ enum GiroPaymentStatus {
   RETURNED
   FAILED
 }
+
+/// ENT-006 — one row per statutory figure on a payslip, with the rate version
+/// that produced it. Country-agnostic by design: CPF_EE/SDL for Singapore,
+/// EPF_EE/SOCSO_ER/PCB/HRDF for Malaysia, same table.
+///
+/// Written ALONGSIDE the legacy SG-named columns on Payslip during the
+/// transition, so existing readers (PDF, IRAS, reporting) are untouched. MY
+/// runs write only these rows — "employeeCpfEnc" means nothing for EPF.
+model PayslipStatutoryLine {
+  id          String   @id @default(uuid())
+  tenantId    String
+  payslipId   String
+  code        String   // CPF_EE | CPF_ER | SDL | FWL | EPF_EE | SOCSO_ER | PCB | HRDF ...
+  label       String
+  party       String   // EMPLOYEE | EMPLOYER
+  kind        String   // DEDUCTION | CONTRIBUTION | LEVY
+  amountEnc   String   // AES-256-GCM, like every other money column
+  basis       Json?    // which band/rate applied — the audit trail
+  rateVersion String   // ENT-006: reproducibility after the tables move on
+  createdAt   DateTime @default(now())
+
+  @@unique([payslipId, code])
+  @@index([tenantId])
+  @@index([payslipId])
+  @@map("payslip_statutory_lines")
+}
