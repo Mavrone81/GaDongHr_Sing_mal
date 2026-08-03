@@ -1232,7 +1232,7 @@ router.get('/bank-giro/:runId', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES
     const valueDate = req.query.valueDate ? new Date(req.query.valueDate) : today;
     const opts = {
       acct:        (req.query.acct        || '').slice(0, 34),
-      companyName: (req.query.companyName || process.env.COMPANY_NAME || 'GADONGHR PTE LTD').slice(0, 140).toUpperCase(),
+      companyName: resolveGiroCompanyName(req.query.companyName).slice(0, 140).toUpperCase(),
       ref:         (req.query.ref         || `PAYROLL${run.period.replace('-','')}`).slice(0, 16).toUpperCase(),
       batchNo:     (req.query.batchNo     || '001').slice(0, 3),
       payDesc:     (req.query.payDesc     || `SALARY ${run.period}`).slice(0, 35).toUpperCase(),
@@ -1455,6 +1455,29 @@ function toDbsCode(code, name) {
   return m[k] || m[n] || '7171';
 }
 
+
+/**
+ * Originating employer name for a GIRO / bank payment file.
+ *
+ * Deliberately has NO default. This is the customer's own registered entity —
+ * per-company payroll data, not a product brand — and it is printed on a file
+ * the bank acts on. A fallback would silently stamp the wrong company onto a
+ * real payment instruction, which the bank accepts and the customer discovers
+ * only afterwards. Better to refuse to generate the file.
+ *
+ * Supplied per request, or per deployment via COMPANY_NAME.
+ */
+function resolveGiroCompanyName(supplied) {
+  const name = supplied || process.env.COMPANY_NAME;
+  if (!name || !String(name).trim()) {
+    throw Object.assign(
+      new Error('companyName is required to generate a bank file — set it on the request or COMPANY_NAME'),
+      { status: 400 },
+    );
+  }
+  return String(name).trim();
+}
+
 function yyyymmdd(d) { return `${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}`; }
 function ddmmyyyy(d) { return `${pad2(d.getDate())}${pad2(d.getMonth()+1)}${d.getFullYear()}`; }
 function ddmmyy(d)   { return `${pad2(d.getDate())}${pad2(d.getMonth()+1)}${String(d.getFullYear()).slice(-2)}`; }
@@ -1464,7 +1487,7 @@ function ddmmyy(d)   { return `${pad2(d.getDate())}${pad2(d.getMonth()+1)}${Stri
 // Record size: 615 chars, CRLF line endings
 function generateUobGiro(payments, totalAmount, run, today, opts = {}) {
   const companyAcct = (opts.acct || process.env.UOB_ACCOUNT_NO || '').replace(/[-\s]/g, '');
-  const companyName = opts.companyName || process.env.COMPANY_NAME || 'GADONGHR PTE LTD';
+  const companyName = resolveGiroCompanyName(opts.companyName);
   const valueDate = opts.valueDate || today;
   const ref = opts.ref || `PAYROLL${run.period.replace('-','')}`;
   const payDesc = opts.payDesc || `SALARY ${run.period}`;
@@ -1584,7 +1607,7 @@ function generateOcbcGiro(payments, totalAmount, run, today, opts = {}) {
 // "0"=header  "1"=detail  "9"=trailer
 function generateDbsGiro(payments, totalAmount, run, today, opts = {}) {
   const companyAcctRaw = (opts.acct || process.env.DBS_ACCOUNT_NO || '').replace(/[-\s]/g, '');
-  const companyName = (opts.companyName || process.env.COMPANY_NAME || 'GADONGHR PTE LTD').slice(0, 20);
+  const companyName = resolveGiroCompanyName(opts.companyName).slice(0, 20);
   const ref = (opts.ref || `SAL${run.period.replace('-','')}`).slice(0, 10);
   const lines = [];
 
@@ -2382,5 +2405,7 @@ router.get('/drc-status', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_AD
 });
 
 module.exports = router;
+// Exported for direct unit testing — see __tests__/giro-company-name.unit.test.js
+module.exports.resolveGiroCompanyName = resolveGiroCompanyName;
 module.exports.runPayslipSlaSweep = runPayslipSlaSweep;
 module.exports.sendPublishNotifications = sendPublishNotifications;
