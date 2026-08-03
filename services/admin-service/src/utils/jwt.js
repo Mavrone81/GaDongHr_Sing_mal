@@ -12,11 +12,11 @@ function signPlatformToken(payload) {
   return jwt.sign({ ...payload, scope: 'platform' }, fs.readFileSync(PRIVATE, 'utf8'), {
     algorithm: 'RS256',
     expiresIn: process.env.PLATFORM_JWT_EXPIRES || '8h',
-    issuer: 'vorkhive',
+    issuer: 'gadonghr',
     jwtid: crypto.randomUUID(),
   });
 }
 function verifyToken(token) {
-  return jwt.verify(token, fs.readFileSync(PUBLIC, 'utf8'), { algorithms: ['RS256'], issuer: 'vorkhive' });
+  return jwt.verify(token, fs.readFileSync(PUBLIC, 'utf8'), { algorithms: ['RS256'], issuer: 'gadonghr' });
 }
 module.exports = { signPlatformToken, verifyToken };

@@ -36,7 +36,7 @@ function signAccessToken(payload) {
   return jwt.sign(payload, privateKey, {
     algorithm: 'RS256',
     expiresIn: process.env.JWT_ACCESS_EXPIRES || '15m',
-    issuer: 'vorkhive',
+    issuer: 'gadonghr',
     jwtid: crypto.randomUUID(),
   });
 }
@@ -50,7 +50,7 @@ function signRefreshToken(payload) {
   return jwt.sign(payload, privateKey, {
     algorithm: 'RS256',
     expiresIn: process.env.JWT_REFRESH_EXPIRES || '7d',
-    issuer: 'vorkhive',
+    issuer: 'gadonghr',
     jwtid: crypto.randomUUID(),
   });
 }

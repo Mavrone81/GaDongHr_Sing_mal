@@ -68,7 +68,7 @@ test('H08 E2E: SSO-pending token cannot reach /auth/me or protected endpoints', 
     const jwt = require('jsonwebtoken');
     const fs = require('fs');
     const key = fs.readFileSync('/app/certs/private.pem');
-    process.stdout.write(jwt.sign({sub:'${TEST_USERS.SUPER_ADMIN.id}',sso_pending:true}, key, {algorithm:'RS256',issuer:'vorkhive',expiresIn:'5m'}));
+    process.stdout.write(jwt.sign({sub:'${TEST_USERS.SUPER_ADMIN.id}',sso_pending:true}, key, {algorithm:'RS256',issuer: 'gadonghr',expiresIn:'5m'}));
   `.trim().replace(/\n+/g, ' ');
   const ssoPending = execSync(`docker exec hrms-auth node -e "${script.replace(/"/g, '\\"')}"`).toString().trim();
 

@@ -186,7 +186,7 @@ async function jwtMiddleware(req, res, next) {
       const keyPath = process.env.JWT_PUBLIC_KEY_PATH || path.join(__dirname, '../../../certs/public.pem');
       cachedPublicKey = fs.readFileSync(keyPath, 'utf8');
     }
-    const payload = jwt.verify(token, cachedPublicKey, { algorithms: ['RS256'], issuer: 'vorkhive' });
+    const payload = jwt.verify(token, cachedPublicKey, { algorithms: ['RS256'], issuer: 'gadonghr' });
     // SSO-pending tokens have no `role` claim; downstream services reject them
     // via the shared auth-middleware. Block them here at the gateway too so
     // we never forward an `x-user-role: undefined` header (which crashes
