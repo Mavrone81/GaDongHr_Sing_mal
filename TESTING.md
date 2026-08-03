@@ -209,11 +209,27 @@ newer Node — run with Node 20 (`brew install node@20`). Always restore deps wi
 - **Pricing**: public `/api/pricing` is CORS-`*`; operator edit in the console reflects on
   `/settings/billing`.
 
-**Known failing today (not regressions to "fix" blindly):**
-- 5× `tenant-isolation.test.js` — need a DB-backed run (see above), not the mock-only unit job.
-- `payroll-*` + `wica.engine` — **date-sensitive** working-day/proration off-by-ones against the
-  2026 public-holiday calendar; pin a fixed clock (`E2E_PAYROLL_SEED` / a frozen "today") rather
-  than the live date.
+**Previously listed as "known failing" — both entries were wrong, both now pass (2026-08):**
+
+- ~~5× `tenant-isolation.test.js`~~ — these were never failing; they had never been
+  **run**. They need a real Postgres *and* each service's own generated Prisma client
+  (`@prisma/client` is hoisted, so `prisma generate` for one service overwrites every
+  other — all five can never pass in one jest invocation). `npm run test:isolation`
+  runs one service per pass: **16/16 green**, and CI gates `deploy` on it.
+
+- ~~`payroll-*` + `wica.engine` date-sensitive off-by-ones~~ — the diagnosis was wrong.
+  These tests already use fixed 2026 dates, so a frozen clock would have **masked** the
+  bug rather than fixed it. The real cause was mixing LOCAL date accessors with UTC
+  serialisation: holidays were keyed a day early in any +08 zone, so EA s.20 pro-rated
+  salary was wrong on every SG/MY machine while CI (UTC) stayed green. Fixed by
+  UTC-anchoring the server-side date logic; CI now runs a TZ matrix (UTC +
+  Asia/Singapore) so it cannot regress unseen.
+
+**Known flaky (open):** the full `npm run test:backend` run is green on ~5 runs in 8;
+the rest fail 1–5 scattered tests. Seven services call `setInterval` at module load
+unguarded, so requiring an app in a test starts timers that fire during unrelated
+suites. See `docs/superpowers/plans/p1-verification-record.md` for the evidence and
+the suggested fix.
 
 **Fixed in the 2026-06-12 run:** `moduleNameMapper` for `/app/shared/tenant-context` was missing
 in performance/training/support services (their whole suites failed to load — recovered ~250

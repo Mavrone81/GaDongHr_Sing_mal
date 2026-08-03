@@ -86,6 +86,9 @@ jest.mock('@prisma/client', () => ({
     // ── Stubs for payroll.routes.js so app boots ────────────────────────────
     payrollRun: { findMany: jest.fn(), findFirst: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), count: jest.fn() },
     payrollLineItem: { deleteMany: jest.fn(), createMany: jest.fn(), findMany: mockLineItemFindMany, create: jest.fn(), delete: jest.fn() },
+    // ENT-006 dual-write target. Payroll writes one row per statutory
+    // figure alongside the legacy SG-named columns.
+    payslipStatutoryLine: { deleteMany: jest.fn(), createMany: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
     payslip: { deleteMany: jest.fn(), createMany: jest.fn(), upsert: jest.fn(), findMany: mockPayslipFindMany, update: jest.fn(), updateMany: jest.fn() },
     cpfRate: { findMany: jest.fn() },
     sdlConfig: { findFirst: jest.fn() },

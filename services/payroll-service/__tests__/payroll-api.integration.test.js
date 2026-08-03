@@ -88,6 +88,9 @@ jest.mock('@prisma/client', () => ({
       create: mockLineItemCreate,
       delete: mockLineItemDelete,
     },
+    // ENT-006 dual-write target. Payroll writes one row per statutory
+    // figure alongside the legacy SG-named columns.
+    payslipStatutoryLine: { deleteMany: jest.fn(), createMany: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
     payslip: { deleteMany: mockPayslipDeleteMany, createMany: mockPayslipCreateMany, upsert: mockPayslipUpsert, findMany: mockPayslipFindMany, update: mockPayslipUpdate, updateMany: mockPayslipUpdateMany },
     cpfRate: { findMany: mockCpfRateFindMany },
     sdlConfig: { findFirst: mockSdlConfigFindFirst },
