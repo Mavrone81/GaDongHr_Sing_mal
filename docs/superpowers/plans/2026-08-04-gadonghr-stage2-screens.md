@@ -140,8 +140,20 @@ git add -A && git commit -m "feat(design): convert dashboard chrome to Official 
 Done fully and carefully, because it is the most document-like screen in the product and becomes the worked example every later screen copies. A payslip is *exactly* the artefact this design system was built for: a figure someone may have to defend.
 
 **Files:**
-- Modify: `frontend/src/app/(dashboard)/payroll/me/page.tsx`
+- Create: `frontend/src/app/(dashboard)/payroll/EmployeePayslipsView.tsx`
+- Create: `frontend/src/app/(dashboard)/payroll/format.ts`
+- Modify: `frontend/src/app/(dashboard)/payroll/me/page.tsx`, `payroll/page.tsx`
 - Test: `frontend/__tests__/payslip-screen.test.tsx`
+
+> **Correction to this plan, found during execution.** The plan named
+> `payroll/me/page.tsx` as the screen. That file is a 7-line re-export with 0
+> violations — the real payslip UI (109 violations) is `EmployeePayslipsView`,
+> defined inside the 2,048-line `payroll/page.tsx` and imported by the route via
+> `from '../page'`. It was extracted to its own module so that (a) the screen can
+> be asserted and read in isolation, (b) Task 3's rewrite of the admin dashboard
+> cannot silently regress it, and (c) the employee route stops pulling the whole
+> admin dashboard into its bundle. `payroll/page.tsx` drops 2,048 → 1,678 lines,
+> which is a real reduction in Task 3's scope.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -176,10 +188,24 @@ Run: `npx jest --projects frontend --runInBand payslip-screen`
 
 - Earnings/deductions become a `DataTable` with `total` = net pay
 - CPF employee/employer rows carry `<Seal cite="CPF Act s.7 · Jan 2026 table" />`
-- SDL carries `<Seal cite="SDL Act · 0.25% cap 4,500" />`
-- Payment date carries `<Seal cite="EA s.21 · within 7 days" />`
+- ~~SDL carries `<Seal cite="SDL Act · 0.25% cap 4,500" />`~~ — **dropped, deliberately.**
+  SDL is an *employer* levy; it is not withheld from the employee and no SDL
+  figure appears on this statement. Citing an authority for a number that is not
+  on the page is precisely the decoration the seal reservation exists to prevent.
+  The SDL seal belongs on the employer-facing screens in Task 3.
+- Payment deadline carries `<Seal cite="EA s.21 · within 7 days" />`
 - Eyebrow: the payslip period and `IR8A` where year-end applies
 - Employee summary rows become `Field`
+- Deductions read as negative from the **minus sign**, not from red text — the
+  old screen used `text-red-500` alone, which half the readers cannot rely on.
+
+**Primitive changes this screen surfaced** (both in `DataTable.tsx`):
+- `columns[].label` widened `string` → `ReactNode`, so a sortable column keeps
+  its sort control in its own header. The register sorts on five columns today
+  and that must not be lost to a visual conversion.
+- `numeric` was declared but never read — alignment keyed off "is this the first
+  column". A non-numeric column such as the PDF action was therefore right-aligned
+  with `tabular-nums`. Alignment now honours `numeric`.
 
 - [ ] **Step 4: Verify + commit**
 

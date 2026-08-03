@@ -1,6 +1,6 @@
 'use client';
 
-import { EmployeePayslipsView } from '../page';
+import { EmployeePayslipsView } from '../EmployeePayslipsView';
 
 export default function MyPayslipsPage() {
   return <EmployeePayslipsView />;
