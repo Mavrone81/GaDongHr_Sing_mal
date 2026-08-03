@@ -115,7 +115,7 @@ scripts/dev/push-schema.sh statutory-sg-service  # -> hrms_statutory_sg
   project holds it. Change `POSTGRES_PORT` in your `.env` (it is git-ignored);
   the helper scripts read the port from there, so nothing else needs updating.
 - **Values containing spaces or globs must be quoted** — e.g.
-  `BACKUP_CRON="0 19 * * *"`, `COMPANY_NAME="Vorkhive Pte Ltd"`. Docker Compose
+  `BACKUP_CRON="0 19 * * *"`, `COMPANY_NAME="GaDongHR Pte Ltd"`. Docker Compose
   parses them either way, but an unquoted value breaks `source .env` in a shell
   (`command not found: Pte`) and an unquoted `*` glob-expands against the
   working directory. `.env.example` is quoted correctly — keep it that way when
@@ -249,7 +249,7 @@ against a docker compose stack with `GATEWAY_RATELIMIT_MAX=5000` (relaxed for
 the suite; production stays at 200).
 
 - ~~**AUTH-03** Account lockout after N failed attempts~~ — `auth-extended.spec.ts`: 5 failed bcrypt comparisons set `lockedUntil` for 15 min; the 6th attempt returns 423 even with the correct password. Uses per-test spoofed `X-Forwarded-For` so the per-IP login rate-limit (10/15min) doesn't bleed across tests.
-- ~~**AUTH-04** Refresh token rotation~~ — `auth-extended.spec.ts`: rotated token works once and old token replay → 401. Uses fresh `APIRequestContext` per call because the route prefers the `vorkhive_refresh` cookie over body (the cookie set by the first refresh would otherwise shadow the rt1 replay attempt).
+- ~~**AUTH-04** Refresh token rotation~~ — `auth-extended.spec.ts`: rotated token works once and old token replay → 401. Uses fresh `APIRequestContext` per call because the route prefers the `gadonghr_refresh` cookie over body (the cookie set by the first refresh would otherwise shadow the rt1 replay attempt).
 - ~~**AUTH-07/08** MFA enroll + login challenge~~ — `auth-extended.spec.ts`: full TOTP secret generation → `/mfa/verify` → login challenge round-trip. TOTPs are minted inside the auth container via `docker exec -i hrms-auth node` so the e2e package doesn't need to depend on `otplib`.
 - ~~**AUTH-09/10** SSO callback (Google + Microsoft)~~ — `auth-sso.spec.ts`: pins the public `/sso/<provider>/config` shape, missing-field 400s, and the unconfigured/bogus-code → 401/503 branch on both `/sso/google/callback` and `/sso/microsoft/callback`. Happy path is not mocked (heavy OIDC machinery for a nightly test).
 - ~~**LV-15** Leave working-days vs backend `totalDays`~~ — `leave-extended.spec.ts`: pins the backend's calendar-day contract (7 days for Mon-Sun) so any future move to working-days requires reconciling with the frontend display module. Also asserts the half-day override and the inverted-range 400.

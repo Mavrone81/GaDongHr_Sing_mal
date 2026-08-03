@@ -1,7 +1,7 @@
 {
-  "name": "vorkhive-hrms",
+  "name": "gadonghr",
   "version": "1.0.0",
-  "description": "Vorkhive - Singapore-compliant HRMS Microservice System",
+  "description": "GaDongHR - Singapore-compliant HRMS Microservice System",
   "private": true,
   "workspaces": [
     "shared/*",

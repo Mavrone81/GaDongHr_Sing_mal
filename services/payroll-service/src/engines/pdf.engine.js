@@ -84,7 +84,7 @@ function buildPayslipPdf(stream, data) {
 
   // ── Header ─────────────────────────────────────────────────────────────────
   doc.font('Helvetica-Bold').fontSize(18).text('PAYSLIP', { align: 'center' });
-  doc.font('Helvetica').fontSize(11).text(company.name || 'Vorkhive Pte Ltd', { align: 'center' });
+  doc.font('Helvetica').fontSize(11).text(company.name || 'GaDongHR Pte Ltd', { align: 'center' });
   if (company.uen) doc.fontSize(9).text(`UEN: ${company.uen}`, { align: 'center' });
   if (company.address) doc.fontSize(9).text(company.address, { align: 'center' });
   doc.moveDown(0.6);

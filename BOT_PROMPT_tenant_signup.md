@@ -4,7 +4,7 @@
 
 ---
 
-We are turning Vorkhive HRMS from single-tenant into a multi-tenant SaaS. Read `MULTITENANCY_SAAS_SPEC.md` in the repo root first — it has the full plan and the current-state findings. Follow it. Use the **shared-DB + `tenantId` row-level isolation** approach. Reference UX for company signup is payboy.biz/register (Register Company form, no credit card, instant isolated workspace).
+We are turning GaDongHR HRMS from single-tenant into a multi-tenant SaaS. Read `MULTITENANCY_SAAS_SPEC.md` in the repo root first — it has the full plan and the current-state findings. Follow it. Use the **shared-DB + `tenantId` row-level isolation** approach. Reference UX for company signup is payboy.biz/register (Register Company form, no credit card, instant isolated workspace).
 
 **Context you must respect:**
 - Microservices, each with its own Postgres DB (`hrms_auth`, `hrms_employee`, …). Auth is in `services/auth-service` (Prisma), JWT is RS256 with PEM keys in `/app/certs`. `User.email` is currently globally unique — that must become unique per tenant.

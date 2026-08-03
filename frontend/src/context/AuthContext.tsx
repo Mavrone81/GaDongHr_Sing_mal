@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const applyUserData = (userData: any) => {
     // Role is taken verbatim from the server. The prior email-based override
-    // (admin@vorkhive.sg / admin@hrms.com → SUPER_ADMIN) was a backdoor and
+    // (admin@gadonghr.sg / admin@hrms.com → SUPER_ADMIN) was a backdoor and
     // has been removed.
     const normalizedRole = (userData.role || 'EMPLOYEE').toUpperCase().trim();
 

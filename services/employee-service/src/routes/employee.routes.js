@@ -12,7 +12,7 @@ const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY || '';
 
 function decryptFormPayload(iv, data, rawToken) {
   // IKM: hex string as UTF-8 bytes (matches browser's TextEncoder(rawTokenHex))
-  const key = crypto.hkdfSync('sha256', Buffer.from(rawToken, 'utf8'), Buffer.from('vorkhive-onboard-v1'), Buffer.from('form-encryption'), 32);
+  const key = crypto.hkdfSync('sha256', Buffer.from(rawToken, 'utf8'), Buffer.from('gadonghr-onboard-v1'), Buffer.from('form-encryption'), 32);
   const ivBuf = Buffer.from(iv, 'base64');
   const dataBuf = Buffer.from(data, 'base64');
   const authTag = dataBuf.slice(dataBuf.length - 16);

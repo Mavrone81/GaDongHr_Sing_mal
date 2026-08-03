@@ -1,7 +1,7 @@
 {
   "name": "@hrms/scripts",
   "version": "1.0.0",
-  "description": "Vorkhive database seed & utility scripts",
+  "description": "GaDongHR database seed & utility scripts",
   "private": true,
   "scripts": {
     "seed": "node seed.js",

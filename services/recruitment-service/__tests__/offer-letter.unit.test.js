@@ -64,7 +64,7 @@ describe('buildOfferLetterData', () => {
 describe('renderOfferLetterHtml', () => {
   test('includes candidate name', () => {
     const d = buildOfferLetterData(CANDIDATE, JOB, {});
-    const html = renderOfferLetterHtml(d, 'Vorkhive');
+    const html = renderOfferLetterHtml(d, 'GaDongHR');
     expect(html).toContain('Jane Doe');
   });
 

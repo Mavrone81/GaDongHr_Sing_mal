@@ -38,9 +38,9 @@ app.get('/health', (_req, res) => res.json({ service: 'notification-service', st
 let smtpConfig = {
   host: process.env.SMTP_HOST || 'smtp.titan.email',
   port: parseInt(process.env.SMTP_PORT) || 587,
-  user: process.env.SMTP_USER || 'enquires@vorkhive.com',
+  user: process.env.SMTP_USER || 'enquires@gadonghr.com',
   pass: process.env.SMTP_PASS || '',
-  from: process.env.SMTP_FROM || 'enquires@vorkhive.com',
+  from: process.env.SMTP_FROM || 'enquires@gadonghr.com',
 };
 // Reject SMTP hosts that can't be a real relay. A loopback/empty host (the
 // in-container localhost) silently breaks ALL outbound mail — including login
@@ -169,7 +169,7 @@ function buildEmailHtml(title, body, category) {
     <div style="background:white;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;padding:24px">
       <p style="color:#334155;margin:0;line-height:1.6">${body}</p>
       <hr style="border:none;border-top:1px solid #f1f5f9;margin:20px 0">
-      <p style="color:#94a3b8;font-size:11px;margin:0">Vorkhive HRMS · This is an automated notification.</p>
+      <p style="color:#94a3b8;font-size:11px;margin:0">GaDongHR HRMS · This is an automated notification.</p>
     </div>
   </div>`;
 }
@@ -424,8 +424,8 @@ app.post('/notifications/smtp-test', authenticate, authorize(ROLES.SUPER_ADMIN, 
   try {
     const { to } = req.body;
     if (!to) return res.status(400).json({ error: 'to is required' });
-    const html = buildEmailHtml('SMTP Test Successful', `Your Vorkhive SMTP configuration is working. Host: ${smtpConfig.host}, Port: ${smtpConfig.port}`, 'SYSTEM');
-    await transporter.sendMail({ from: smtpConfig.from, to, subject: 'Vorkhive — SMTP Configuration Test', html });
+    const html = buildEmailHtml('SMTP Test Successful', `Your GaDongHR SMTP configuration is working. Host: ${smtpConfig.host}, Port: ${smtpConfig.port}`, 'SYSTEM');
+    await transporter.sendMail({ from: smtpConfig.from, to, subject: 'GaDongHR — SMTP Configuration Test', html });
     res.json({ message: `Test email sent to ${to}` });
   } catch (err) { next(err); }
 });

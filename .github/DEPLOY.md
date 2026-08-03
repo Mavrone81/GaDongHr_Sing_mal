@@ -24,23 +24,23 @@ On your local machine (or any machine you trust):
 
 ```bash
 # 1. Generate a dedicated deploy key — don't reuse a personal key.
-ssh-keygen -t ed25519 -f vorkhive-deploy -N "" -C "github-actions-deploy"
+ssh-keygen -t ed25519 -f gadonghr-deploy -N "" -C "github-actions-deploy"
 
 # 2. Copy the PUBLIC key to the production host's authorized_keys.
-ssh-copy-id -i vorkhive-deploy.pub root@157.230.240.163
+ssh-copy-id -i gadonghr-deploy.pub root@157.230.240.163
 # Or manually:
-#   cat vorkhive-deploy.pub | ssh root@157.230.240.163 \
+#   cat gadonghr-deploy.pub | ssh root@157.230.240.163 \
 #     "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
 
 # 3. Verify the key works.
-ssh -i vorkhive-deploy root@157.230.240.163 'echo OK'
+ssh -i gadonghr-deploy root@157.230.240.163 'echo OK'
 
 # 4. Paste the PRIVATE key (whole file, BEGIN/END lines included) into the
 #    DEPLOY_SSH_KEY GitHub secret.
-cat vorkhive-deploy
+cat gadonghr-deploy
 
 # 5. Delete the local key file once it's in GitHub.
-rm vorkhive-deploy vorkhive-deploy.pub
+rm gadonghr-deploy gadonghr-deploy.pub
 ```
 
 ## First-time setup on the server

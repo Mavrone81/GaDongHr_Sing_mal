@@ -1,7 +1,7 @@
 import type { Config } from 'tailwindcss';
 
 /* ─────────────────────────────────────────────────────────────────────
-   Vorkhive Brand Palette — 2026 Rebrand (Navy · Gold · Cream)
+   GaDongHR Brand Palette — 2026 Rebrand (Navy · Gold · Cream)
    ─────────────────────────────────────────────────────────────────────
    The product was built with `indigo` as the brand-primary hue, used
    across ~70 pages. Rather than hand-edit every file, we REMAP Tailwind's

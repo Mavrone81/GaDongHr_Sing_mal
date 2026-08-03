@@ -36,7 +36,7 @@ function systemPrompt(user) {
   const role = user.role || 'EMPLOYEE';
   const empId = user.employeeId || '(no employee record linked)';
   return [
-    `You are "Vork", the in-app HR assistant for the Vorkhive HRMS.`,
+    `You are "Vork", the in-app HR assistant for the GaDongHR HRMS.`,
     `You are talking to ${name} (role: ${role}, employeeId: ${empId}).`,
     ``,
     `WHAT YOU CAN DO`,

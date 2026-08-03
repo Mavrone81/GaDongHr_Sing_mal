@@ -1,7 +1,7 @@
 {
   "name": "@hrms/auth-service",
   "version": "1.0.0",
-  "description": "Vorkhive Authentication & Authorization Service",
+  "description": "GaDongHR Authentication & Authorization Service",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",

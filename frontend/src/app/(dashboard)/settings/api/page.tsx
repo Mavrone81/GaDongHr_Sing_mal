@@ -152,14 +152,14 @@ function EmailTab() {
           <div className="flex flex-col gap-1.5">
             <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">From Address</label>
             <input value={smtp.from} onChange={e => setSmtp(p => ({ ...p, from: e.target.value }))}
-              placeholder="no-reply@vorkhive.com"
+              placeholder="no-reply@gadonghr.com"
               className="border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
           </div>
 
           <div className="flex flex-col gap-1.5">
             <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Username</label>
             <input value={smtp.user} onChange={e => setSmtp(p => ({ ...p, user: e.target.value }))}
-              placeholder="enquires@vorkhive.com"
+              placeholder="enquires@gadonghr.com"
               className="border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
           </div>
 
@@ -443,8 +443,8 @@ function WebhooksTab() {
     try {
       const resp = await fetch(wh.url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Vorkhive-Event': 'test', 'X-Vorkhive-Signature': `sha256=${wh.secret.slice(0, 16)}` },
-        body: JSON.stringify({ event: 'test', timestamp: new Date().toISOString(), data: { message: 'Vorkhive test delivery' } }),
+        headers: { 'Content-Type': 'application/json', 'X-GaDongHR-Event': 'test', 'X-GaDongHR-Signature': `sha256=${wh.secret.slice(0, 16)}` },
+        body: JSON.stringify({ event: 'test', timestamp: new Date().toISOString(), data: { message: 'GaDongHR test delivery' } }),
         signal: AbortSignal.timeout(8000),
       });
       setToast({ msg: `Delivered — HTTP ${resp.status} ${resp.statusText}`, type: resp.ok ? 'ok' : 'err' });
@@ -472,7 +472,7 @@ function WebhooksTab() {
         <span className="text-lg shrink-0">📬</span>
         <div>
           <p className="text-xs font-black text-indigo-800">Signature Verification</p>
-          <p className="text-xs text-indigo-600 mt-0.5">Each delivery includes <code className="bg-indigo-100 px-1 rounded font-mono">X-Vorkhive-Signature</code>. Verify with <code className="bg-indigo-100 px-1 rounded font-mono">HMAC-SHA256(secret, rawBody)</code>.</p>
+          <p className="text-xs text-indigo-600 mt-0.5">Each delivery includes <code className="bg-indigo-100 px-1 rounded font-mono">X-GaDongHR-Signature</code>. Verify with <code className="bg-indigo-100 px-1 rounded font-mono">HMAC-SHA256(secret, rawBody)</code>.</p>
         </div>
       </div>
 
@@ -535,7 +535,7 @@ function WebhooksTab() {
               <div>
                 <label className="text-xs font-black uppercase tracking-widest text-slate-500 mb-1.5 block">Endpoint URL</label>
                 <input type="url" value={newUrl} onChange={e => setNewUrl(e.target.value)}
-                  placeholder="https://your-server.com/webhooks/vorkhive"
+                  placeholder="https://your-server.com/webhooks/gadonghr"
                   className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100" />
               </div>
               <div>

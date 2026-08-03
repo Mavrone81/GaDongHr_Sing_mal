@@ -22,21 +22,21 @@ for line in open("/tmp/default_users.txt"):
     else:
         pw = "Staff@Test2026!"
     default_rows.append({"name": name, "email": email, "role": role, "password": pw})
-data["Vorkhive (Default / main)"] = default_rows
+data["GaDongHR (Default / main)"] = default_rows
 
 NOTE = {
-    "Mellinial Toys": "Test company. Owner is SUPER_ADMIN; all staff share the password below. Sign in at app.vorkhive.com/login.",
-    "Vorkhive (test)": "Test company. Owner is SUPER_ADMIN; all staff share the password below. Sign in at app.vorkhive.com/login.",
-    "Vorkhive (Default / main)": "Main tenant. Non-admin staff have been reset to the shared password below; SUPER_ADMIN and Google-SSO accounts were left unchanged. Sign in at app.vorkhive.com/login.",
+    "Mellinial Toys": "Test company. Owner is SUPER_ADMIN; all staff share the password below. Sign in at app.bevorasg.com/login.",
+    "GaDongHR (test)": "Test company. Owner is SUPER_ADMIN; all staff share the password below. Sign in at app.bevorasg.com/login.",
+    "GaDongHR (Default / main)": "Main tenant. Non-admin staff have been reset to the shared password below; SUPER_ADMIN and Google-SSO accounts were left unchanged. Sign in at app.bevorasg.com/login.",
 }
-SLUG = {"Mellinial Toys": "Mellinial-Toys-test", "Vorkhive (test)": "Vorkhive-test", "Vorkhive (Default / main)": "Vorkhive-Default"}
+SLUG = {"Mellinial Toys": "Mellinial-Toys-test", "GaDongHR (test)": "GaDongHR-test", "GaDongHR (Default / main)": "GaDongHR-Default"}
 
 def make_pdf(label, rows):
     pdf = FPDF(orientation="L", unit="mm", format="A4")
     pdf.set_auto_page_break(auto=True, margin=12)
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 18)
-    pdf.cell(0, 10, f"VORKHIVE - {label}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, f"GADONGHR - {label}", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(90, 90, 90)
     pdf.cell(0, 6, f"Test employee logins - {len(rows)} users - generated {DATE}", new_x="LMARGIN", new_y="NEXT")
@@ -72,5 +72,5 @@ def make_pdf(label, rows):
     print(f"  {path}  ({len(rows)} users)")
 
 print("Generated PDFs:")
-for label in ["Mellinial Toys", "Vorkhive (test)", "Vorkhive (Default / main)"]:
+for label in ["Mellinial Toys", "GaDongHR (test)", "GaDongHR (Default / main)"]:
     make_pdf(label, data[label])

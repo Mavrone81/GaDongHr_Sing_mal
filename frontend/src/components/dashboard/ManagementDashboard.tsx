@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 
 /* ─────────────────────────────────────────────────────────────────────
-   Vorkhive Command Centre — HR / Payroll management dashboard.
+   GaDongHR Command Centre — HR / Payroll management dashboard.
    Every figure on this dashboard is sourced from a live service endpoint:
      • headcount / new hires / departments  → /employees
      • payroll total + run status           → /payroll/runs

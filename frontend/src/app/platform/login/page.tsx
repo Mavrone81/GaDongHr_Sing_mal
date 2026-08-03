@@ -78,7 +78,7 @@ export default function PlatformLogin() {
     <div className="min-h-screen flex items-center justify-center bg-slate-900 p-6">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          <div className="text-xl font-black tracking-tight text-white">VORKHIVE</div>
+          <div className="text-xl font-black tracking-tight text-white">GADONGHR</div>
           <div className="text-xs font-bold uppercase tracking-[0.3em] text-indigo-400">Platform Operator</div>
         </div>
         {error && <div className="mb-4 rounded-lg bg-rose-950 border border-rose-800 px-4 py-2.5 text-sm text-rose-300">{error}</div>}

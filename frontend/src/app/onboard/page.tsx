@@ -46,7 +46,7 @@ async function deriveKey(rawTokenHex: string): Promise<CryptoKey> {
     {
       name: 'HKDF',
       hash: 'SHA-256',
-      salt: new TextEncoder().encode('vorkhive-onboard-v1'),
+      salt: new TextEncoder().encode('gadonghr-onboard-v1'),
       info: new TextEncoder().encode('form-encryption'),
     },
     keyMaterial,

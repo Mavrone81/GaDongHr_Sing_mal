@@ -196,7 +196,7 @@ services:
       - NOTIFICATION_SERVICE_URL=http://notification-service:4009
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
       - DISABLE_MAKER_CHECKER=${DISABLE_MAKER_CHECKER:-true}
-      - COMPANY_NAME=${COMPANY_NAME:-VORKHIVE PTE LTD}
+      - COMPANY_NAME=${COMPANY_NAME:-GADONGHR PTE LTD}
       - COMPANY_UEN=${COMPANY_UEN:-202512345A}
       - UOB_ACCOUNT_NO=${UOB_ACCOUNT_NO:-}
       - OCBC_ACCOUNT_NO=${OCBC_ACCOUNT_NO:-}
@@ -391,7 +391,7 @@ services:
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASS=${SMTP_PASS}
-      - SMTP_FROM=${SMTP_FROM:-noreply@vorkhive.sg}
+      - SMTP_FROM=${SMTP_FROM:-noreply@gadonghr.sg}
     volumes:
       - shared_certs:/app/certs:ro
     depends_on:

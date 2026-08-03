@@ -77,7 +77,7 @@ const corsOptions = {
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
 // /api/pricing is public marketing data (no credentials) — readable from ANY
-// origin so the marketing site (vorkhive.com) can render live pricing. Every
+// origin so the marketing site (gadonghr.com) can render live pricing. Every
 // other route uses the strict per-origin allowlist.
 const publicCors = cors({ origin: '*', methods: ['GET', 'OPTIONS'] });
 const strictCors = cors(corsOptions);
@@ -246,7 +246,7 @@ app.use(jwtMiddleware);
 // ── Proxy Routes ─────────────────────────────────────────────────────────────
 const proxyOpts = {
   proxyReqOptDecorator: (opts, srcReq) => {
-    opts.headers['x-gateway'] = 'vorkhive-gateway';
+    opts.headers['x-gateway'] = 'gadonghr-gateway';
     return opts;
   },
   // Downstream services each run a permissive `cors()` that emits

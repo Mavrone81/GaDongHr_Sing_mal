@@ -1,7 +1,7 @@
 {
   "name": "@hrms/admin-service",
   "version": "1.0.0",
-  "description": "Vorkhive platform admin (SaaS operator control plane)",
+  "description": "GaDongHR platform admin (SaaS operator control plane)",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",

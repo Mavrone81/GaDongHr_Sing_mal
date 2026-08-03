@@ -54,7 +54,7 @@ const PROGRAMS = [
     description: 'Company culture, values, org structure, and essential tools walkthrough for new joiners.',
     category: 'ONBOARDING', status: 'PUBLISHED', durationMins: 60, passingScore: null, isMandatory: true,
     materials: [
-      { title: 'Welcome to VorkHive', type: 'VIDEO', url: 'https://example.com/welcome.mp4', orderIndex: 0, durationMins: 15 },
+      { title: 'Welcome to GaDongHR', type: 'VIDEO', url: 'https://example.com/welcome.mp4', orderIndex: 0, durationMins: 15 },
       { title: 'Employee Handbook', type: 'DOCUMENT', url: null, orderIndex: 1, durationMins: 20 },
       { title: 'IT & Tools Setup Guide', type: 'LINK', url: 'https://example.com/it-setup', orderIndex: 2, durationMins: null },
     ],

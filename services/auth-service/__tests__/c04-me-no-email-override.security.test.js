@@ -3,13 +3,13 @@
  * Security regression test for C-04:
  *   The /auth/me endpoint must NOT override the DB-assigned role based on
  *   the user's email address. The prior backdoor forced
- *     email === 'admin@vorkhive.sg' || 'admin@hrms.com'  →  role: 'SUPER_ADMIN'
+ *     email === 'admin@gadonghr.sg' || 'admin@hrms.com'  →  role: 'SUPER_ADMIN'
  *   regardless of what the DB said. That is now removed.
  *
  * These tests pin the new behaviour to prevent regression.
  */
 
-let mockUser = { sub: 'user-001', role: 'EMPLOYEE', email: 'admin@vorkhive.sg' };
+let mockUser = { sub: 'user-001', role: 'EMPLOYEE', email: 'admin@gadonghr.sg' };
 const setUser = (u) => { mockUser = { ...mockUser, ...u }; };
 
 jest.mock('/app/shared/auth-middleware', () => ({
@@ -50,7 +50,7 @@ const app = require('../src/index');
 
 beforeEach(() => {
   jest.clearAllMocks();
-  setUser({ sub: 'user-001', role: 'EMPLOYEE', email: 'admin@vorkhive.sg' });
+  setUser({ sub: 'user-001', role: 'EMPLOYEE', email: 'admin@gadonghr.sg' });
 });
 
 function dbUser(email, roleName) {
@@ -65,9 +65,9 @@ function dbUser(email, roleName) {
 }
 
 // ── C04-01 ──────────────────────────────────────────────────────────────────
-test('C04-01 GET /auth/me returns DB role EMPLOYEE even when email is admin@vorkhive.sg', async () => {
-  setUser({ email: 'admin@vorkhive.sg' });
-  mockUserFindUnique.mockResolvedValue(dbUser('admin@vorkhive.sg', 'EMPLOYEE'));
+test('C04-01 GET /auth/me returns DB role EMPLOYEE even when email is admin@gadonghr.sg', async () => {
+  setUser({ email: 'admin@gadonghr.sg' });
+  mockUserFindUnique.mockResolvedValue(dbUser('admin@gadonghr.sg', 'EMPLOYEE'));
 
   const res = await request(app).get('/auth/me');
   expect(res.status).toBe(200);

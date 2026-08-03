@@ -3,7 +3,7 @@
 Usage: python3 collect-logins.py <base_url>   -> writes /tmp/logins.json"""
 import sys, json, time, urllib.request, urllib.error
 
-BASE = (sys.argv[1] if len(sys.argv) > 1 else 'https://app.vorkhive.com/api').rstrip('/')
+BASE = (sys.argv[1] if len(sys.argv) > 1 else 'https://app.bevorasg.com/api').rstrip('/')
 
 def req(method, path, token=None, body=None):
     url = f"{BASE}{path}"
@@ -26,7 +26,7 @@ def req(method, path, token=None, body=None):
 
 COMPANIES = [
     ("Mellinial Toys", "founder@mellinialtoys.test", "Owner@Test2026!"),
-    ("Vorkhive (test)", "founder@vorkhive.test", "Owner@Test2026!"),
+    ("GaDongHR (test)", "founder@gadonghr.test", "Owner@Test2026!"),
 ]
 result = {}
 for label, owner_email, owner_pw in COMPANIES:

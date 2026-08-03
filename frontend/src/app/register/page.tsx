@@ -58,7 +58,7 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-stretch bg-slate-50">
       {/* Left brand panel */}
       <div className="hidden lg:flex w-1/2 flex-col justify-between bg-gradient-to-br from-indigo-600 to-violet-700 p-12 text-white">
-        <div className="text-2xl font-black tracking-tight">VORKHIVE</div>
+        <div className="text-2xl font-black tracking-tight">GADONGHR</div>
         <div>
           <h1 className="text-4xl font-black leading-tight">Run your whole HR in one place.</h1>
           <p className="mt-4 text-indigo-100 text-lg">Payroll, leave, claims, attendance, appraisals — set up your company in minutes.</p>
@@ -68,7 +68,7 @@ export default function RegisterPage() {
             <li>✓ Your own isolated, secure workspace</li>
           </ul>
         </div>
-        <div className="text-indigo-200 text-sm">© {new Date().getFullYear()} Vorkhive</div>
+        <div className="text-indigo-200 text-sm">© {new Date().getFullYear()} GaDongHR</div>
       </div>
 
       {/* Right form */}

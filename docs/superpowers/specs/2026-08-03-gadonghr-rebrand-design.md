@@ -9,7 +9,7 @@
 
 ## 1. Context
 
-GaDong, a Thai HR company, has acquired the Vorkhive application with service
+GaDong, a Thai HR company, has acquired the GaDongHR application with service
 rights. The product is rebranded **GaDongHR** and redeployed on GaDong
 infrastructure, because the previous company no longer funds the current server.
 
@@ -43,13 +43,13 @@ Exact strings. Nothing here is inferred.
 
 | Surface | From | To |
 |---|---|---|
-| Display name | Vorkhive | `GaDongHR` |
-| Code identifier | `vorkhive` | `gadonghr` |
-| Root package | `vorkhive-hrms` | `gadonghr` |
-| JWT issuer | `vorkhive` | `gadonghr` |
-| Cookies (8) | `vorkhive_token`, `vorkhive_refresh`, `vorkhive_admin`, `vorkhive_platform`, `vorkhive_pdpa`, `vorkhive_security`, `vorkhive_sso`, `vorkhive_user` | `gadonghr_*` |
-| Email domains | `@vorkhive.sg` `.com` `.app` `.test` | `@gadonghr.*` |
-| Logo component | `VorkhiveLogo.tsx`, `VorkhiveMark` | `GaDongLogo.tsx`, `GaDongMark` |
+| Display name | GaDongHR | `GaDongHR` |
+| Code identifier | `gadonghr` | `gadonghr` |
+| Root package | `gadonghr-hrms` | `gadonghr` |
+| JWT issuer | `gadonghr` | `gadonghr` |
+| Cookies (8) | `gadonghr_token`, `gadonghr_refresh`, `gadonghr_admin`, `gadonghr_platform`, `gadonghr_pdpa`, `gadonghr_security`, `gadonghr_sso`, `gadonghr_user` | `gadonghr_*` |
+| Email domains | `@gadonghr.sg` `.com` `.app` `.test` | `@gadonghr.*` |
+| Logo component | `GaDongLogo.tsx`, `GaDongMark` | `GaDongLogo.tsx`, `GaDongMark` |
 
 **The JWT issuer is the sharp edge — 9 lines across 6 files.** Corrected during
 spec self-review, which found my first pass listed only the verifiers and missed
@@ -95,7 +95,7 @@ stays as published.
 
 ### 3.1 The existing indigo remap is removed, not repointed
 
-The 2026 Vorkhive rebrand aliased Tailwind's `indigo` scale to navy so that
+The 2026 GaDongHR rebrand aliased Tailwind's `indigo` scale to navy so that
 `bg-indigo-600` rendered navy across ~72 files without touching them. That trick
 is retired here. Keeping it would deliver Official Record colours through a class
 named `indigo` — a lie in the config that makes every subsequent reader distrust
@@ -210,7 +210,7 @@ commit.
 - Cross-tenant isolation still 16/16
 - Frontend suite green; `tsc --noEmit` clean
 - Seal-reservation test passes
-- No `vorkhive` / `Vorkhive` in tracked files, mirroring the EzyHRM sweep
+- No `gadonghr` / `GaDongHR` in tracked files, mirroring the EzyHRM sweep
 - Auth works end to end after the issuer/cookie rename — login, refresh,
   platform login, all three JWT verify sites agreeing
 
