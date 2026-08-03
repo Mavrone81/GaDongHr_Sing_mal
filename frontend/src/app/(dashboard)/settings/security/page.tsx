@@ -101,7 +101,7 @@ export default function SecurityPage() {
 
   // Load persisted settings from localStorage + MFA method from API
   useEffect(() => {
-    const saved = localStorage.getItem('vorkhive_security_settings');
+    const saved = localStorage.getItem('gadonghr_security_settings');
     if (saved) {
       try {
         const s = JSON.parse(saved);
@@ -225,7 +225,7 @@ export default function SecurityPage() {
     setSaving(true);
     try {
       const settings = { mfaRequired, ssoEnabled, ssoConfig, sessionTimeout, ipWhitelist };
-      localStorage.setItem('vorkhive_security_settings', JSON.stringify(settings));
+      localStorage.setItem('gadonghr_security_settings', JSON.stringify(settings));
 
       // Persist public SSO config (clientId, domain, tenantId) to server
       await apiFetch('/auth/org-settings/general', { method: 'PUT', body: JSON.stringify({ ssoConfig }) }).catch(() => {});

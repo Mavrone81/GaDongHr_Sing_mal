@@ -22,7 +22,7 @@ function apiUrl() {
 
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
-  const c = document.cookie.split('; ').find(r => r.startsWith('vorkhive_token='));
+  const c = document.cookie.split('; ').find(r => r.startsWith('gadonghr_token='));
   return c ? c.split('=').slice(1).join('=') : null;
 }
 
@@ -82,7 +82,7 @@ export default function LoginPage() {
       if (Object.keys(cfg).length > 0) { setSsoConfig(cfg); setActiveSso(active.filter(Boolean)); return; }
       // Fall back to localStorage
       try {
-        const saved = localStorage.getItem('vorkhive_security_settings');
+        const saved = localStorage.getItem('gadonghr_security_settings');
         if (!saved) return;
         const settings = JSON.parse(saved);
         const enabled = (settings.ssoEnabled ?? {}) as Record<string, boolean>;
@@ -95,7 +95,7 @@ export default function LoginPage() {
 
   const orgMfaRequired = () => {
     try {
-      const s = localStorage.getItem('vorkhive_security_settings');
+      const s = localStorage.getItem('gadonghr_security_settings');
       return s ? JSON.parse(s).mfaRequired === true : false;
     } catch { return false; }
   };

@@ -10,8 +10,8 @@
 // as no-ops so any older callers still compile, but they neither read nor
 // write any sensitive token from JavaScript.
 
-const ACCESS_COOKIE  = 'vorkhive_token';
-const REFRESH_COOKIE = 'vorkhive_refresh';
+const ACCESS_COOKIE  = 'gadonghr_token';
+const REFRESH_COOKIE = 'gadonghr_refresh';
 
 // ── Legacy/back-compat helpers (no-ops post C-12) ────────────────────────────
 // They used to read/write JWTs via document.cookie. That made any XSS able

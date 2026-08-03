@@ -9,11 +9,11 @@ export default function DashboardPage() {
   const { user, loading } = useAuth();
 
   // SECURITY (M-07): one-time migration — drop the legacy
-  // 'vorkhive_admin_confirmed' cache key so a stale value cannot influence
+  // 'gadonghr_admin_confirmed' cache key so a stale value cannot influence
   // the management-vs-employee dashboard branch.
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('vorkhive_admin_confirmed');
+      localStorage.removeItem('gadonghr_admin_confirmed');
     }
   }, []);
 

@@ -149,8 +149,8 @@ const loginLimiter = rateLimit({
 // also kept in the JSON body for now so non-browser consumers (E2E specs,
 // programmatic clients) keep working — that JSON payload should be removed
 // once all browser callers are migrated.
-const ACCESS_TOKEN_COOKIE  = 'vorkhive_token';
-const REFRESH_TOKEN_COOKIE = 'vorkhive_refresh';
+const ACCESS_TOKEN_COOKIE  = 'gadonghr_token';
+const REFRESH_TOKEN_COOKIE = 'gadonghr_refresh';
 const COOKIE_PATH          = '/';
 const REFRESH_COOKIE_PATH  = '/api/auth';
 // Cookie TTL is intentionally generous (the JWT itself enforces the real
@@ -196,7 +196,7 @@ function clearAuthCookies(res) {
 // path-restricted to /api/auth so they cannot be replayed against general API
 // endpoints. Previously the SSO callback returned the pending token in JSON
 // and the frontend stored it in sessionStorage, where any XSS could read it.
-const PENDING_TOKEN_COOKIE = 'vorkhive_sso_pending';
+const PENDING_TOKEN_COOKIE = 'gadonghr_sso_pending';
 const PENDING_TTL_SECONDS  = 5 * 60; // 5 min — matches signAccessToken expiresIn
 
 function setPendingTokenCookie(res, pendingToken) {

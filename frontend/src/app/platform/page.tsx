@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 function apiUrl() {
   return process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:4000/api`;
 }
-function tok() { return typeof window !== 'undefined' ? localStorage.getItem('vorkhive_platform_token') : null; }
+function tok() { return typeof window !== 'undefined' ? localStorage.getItem('gadonghr_platform_token') : null; }
 
 interface Tenant { id: string; name: string; slug: string; country: string; status: string; trialEndsAt: string; plan?: string; users: number; }
 interface Mod { moduleCode: string; enabled: boolean; }
@@ -130,7 +130,7 @@ export default function PlatformConsole() {
           <button onClick={openPricing} className="rounded-lg bg-slate-700 px-3 py-1.5 text-sm font-bold text-slate-100 hover:bg-slate-600">Pricing</button>
           <button onClick={openAdmins} className="rounded-lg bg-slate-700 px-3 py-1.5 text-sm font-bold text-slate-100 hover:bg-slate-600">Admins</button>
           <button onClick={() => { setCreated(null); setShowCreate(true); }} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-indigo-500">+ New company</button>
-          <button onClick={() => { localStorage.removeItem('vorkhive_platform_token'); router.push('/platform/login'); }} className="text-sm text-slate-400 hover:text-white">Sign out</button>
+          <button onClick={() => { localStorage.removeItem('gadonghr_platform_token'); router.push('/platform/login'); }} className="text-sm text-slate-400 hover:text-white">Sign out</button>
         </div>
       </header>
 

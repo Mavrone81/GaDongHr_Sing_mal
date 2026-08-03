@@ -73,7 +73,7 @@ test('C11 E2E: proxied GET echoes the request origin, never "*" with credentials
   const token = signJwt(TEST_USERS.SUPER_ADMIN, 'SUPER_ADMIN');
   const ctx = await request.newContext({
     baseURL: API_BASE,
-    extraHTTPHeaders: { Origin: 'http://localhost:3000', Cookie: `vorkhive_token=${token}` },
+    extraHTTPHeaders: { Origin: 'http://localhost:3000', Cookie: `gadonghr_token=${token}` },
   });
   const res = await ctx.get('/api/auth/me');
   expect(res.ok(), 'auth/me reachable').toBe(true);
@@ -105,11 +105,11 @@ test('C11 E2E: client-supplied x-user-role header is stripped at the gateway', a
 });
 
 // ── C-12 ──────────────────────────────────────────────────────────────────────
-test('C12 E2E: /auth/me accepts the vorkhive_token cookie alone (no Bearer header)', async () => {
+test('C12 E2E: /auth/me accepts the gadonghr_token cookie alone (no Bearer header)', async () => {
   const adminToken = signJwt(TEST_USERS.SUPER_ADMIN, 'SUPER_ADMIN');
   const ctx = await request.newContext({
     baseURL: API_BASE,
-    extraHTTPHeaders: { Cookie: `vorkhive_token=${adminToken}` },
+    extraHTTPHeaders: { Cookie: `gadonghr_token=${adminToken}` },
   });
   const res = await ctx.get('/api/auth/me');
   expect(res.ok(), 'cookie-only auth must succeed').toBe(true);

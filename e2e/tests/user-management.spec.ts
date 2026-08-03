@@ -3,7 +3,7 @@
  *
  * Guards against the C-12 fallout where the page read the access token via
  * `document.cookie` and sent `Authorization: Bearer <token>` by hand. After
- * C-12 the `vorkhive_token` cookie is HttpOnly, so `document.cookie` returns
+ * C-12 the `gadonghr_token` cookie is HttpOnly, so `document.cookie` returns
  * undefined, every /users request went out as `Bearer undefined` with no
  * credentials, the gateway rejected it 401, and the table showed
  * "No users found" even though the page itself rendered (SUPER_ADMIN passes
@@ -32,7 +32,7 @@ test('SUPER_ADMIN sees the user list with an HttpOnly auth cookie (C-12 regressi
   const context = await browser.newContext();
   // Mirror production: the real /auth/login sets this cookie HttpOnly.
   await context.addCookies([{
-    name: 'vorkhive_token',
+    name: 'gadonghr_token',
     value: token,
     domain: BASE_HOST,
     path: '/',

@@ -150,7 +150,7 @@ test.describe('AUTH-04 refresh-token rotation', () => {
 
   test('valid refresh issues new pair; old refresh is single-use', async () => {
     // 1. Real login → grab first refresh token. New context per call so the
-    //    vorkhive_refresh cookie from a prior response doesn't shadow the body
+    //    gadonghr_refresh cookie from a prior response doesn't shadow the body
     //    on the next /refresh (route prefers cookie over body).
     const loginCtx = await apiCtx();
     const login = await loginCtx.post('/api/auth/login', {

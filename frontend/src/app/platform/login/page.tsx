@@ -30,7 +30,7 @@ export default function PlatformLogin() {
       });
       const d = await res.json();
       if (!res.ok) { setError(d.error || 'Login failed'); setLoading(false); return; }
-      if (d.token) { localStorage.setItem('vorkhive_platform_token', d.token); router.push('/platform'); return; }
+      if (d.token) { localStorage.setItem('gadonghr_platform_token', d.token); router.push('/platform'); return; }
       if (d.mfaSetupRequired) {
         setSetupToken(d.setupToken);
         const sres = await fetch(`${apiUrl()}/platform/mfa/setup`, { method: 'POST', headers: { Authorization: `Bearer ${d.setupToken}` } });
@@ -54,7 +54,7 @@ export default function PlatformLogin() {
       });
       const d = await res.json();
       if (!res.ok || !d.token) { setError(d.error || 'Invalid code'); setLoading(false); return; }
-      localStorage.setItem('vorkhive_platform_token', d.token); router.push('/platform');
+      localStorage.setItem('gadonghr_platform_token', d.token); router.push('/platform');
     } catch { setError('Could not reach the server.'); }
     setLoading(false);
   }
@@ -69,7 +69,7 @@ export default function PlatformLogin() {
       });
       const d = await res.json();
       if (!res.ok || !d.token) { setError(d.error || 'Invalid code'); setLoading(false); return; }
-      localStorage.setItem('vorkhive_platform_token', d.token); router.push('/platform');
+      localStorage.setItem('gadonghr_platform_token', d.token); router.push('/platform');
     } catch { setError('Could not reach the server.'); }
     setLoading(false);
   }

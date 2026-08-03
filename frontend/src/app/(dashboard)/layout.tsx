@@ -403,8 +403,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     // One-time migration: clean any stale cache from previous build.
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('vorkhive_admin_confirmed');
-      localStorage.removeItem('vorkhive_user_role');
+      localStorage.removeItem('gadonghr_admin_confirmed');
+      localStorage.removeItem('gadonghr_user_role');
     }
   }, []);
 
@@ -600,8 +600,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
           <button
             onClick={() => {
-              localStorage.removeItem('vorkhive_admin_confirmed');
-              localStorage.removeItem('vorkhive_user_role');
+              localStorage.removeItem('gadonghr_admin_confirmed');
+              localStorage.removeItem('gadonghr_user_role');
               logout();
             }}
             className="w-full py-2 text-[8px] font-black text-slate-600 hover:text-red-400 transition-all uppercase tracking-[0.3em] border border-slate-900 rounded-xl hover:bg-red-500/5 hover:border-red-500/20 active:scale-95"
