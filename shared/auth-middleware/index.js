@@ -43,7 +43,7 @@ function authenticate(req, res, next) {
   }
   const token = authHeader.slice(7);
   try {
-    const payload = jwt.verify(token, getPublicKey(), { algorithms: ['RS256'], issuer: 'vorkhive' });
+    const payload = jwt.verify(token, getPublicKey(), { algorithms: ['RS256'], issuer: 'gadonghr' });
     if (payload?.sso_pending === true) {
       return res.status(401).json({ error: 'SSO pending token is not accepted on protected endpoints' });
     }

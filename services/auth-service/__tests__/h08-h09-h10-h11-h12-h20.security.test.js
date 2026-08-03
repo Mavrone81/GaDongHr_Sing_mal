@@ -22,8 +22,8 @@ const userSrc       = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes'
 
 // ── H-08 ──────────────────────────────────────────────────────────────────────
 describe('H-08 shared auth-middleware hardening', () => {
-  test('authenticate enforces issuer: vorkhive', () => {
-    expect(middlewareSrc).toMatch(/issuer:\s*['"]vorkhive['"]/);
+  test('authenticate enforces issuer: gadonghr', () => {
+    expect(middlewareSrc).toMatch(/issuer:\s*['"]gadonghr['"]/);
   });
   test('authenticate rejects sso_pending tokens', () => {
     expect(middlewareSrc).toMatch(/sso_pending\s*===\s*true/);
