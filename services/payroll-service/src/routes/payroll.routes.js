@@ -1081,7 +1081,7 @@ async function streamPayslipPdf(req, res, employeeId, period) {
 
   const data = {
     company: {
-      name: process.env.COMPANY_NAME || 'Vorkhive Pte Ltd',
+      name: process.env.COMPANY_NAME || 'GaDongHR Pte Ltd',
       uen:  process.env.COMPANY_UEN  || '202512345A',
       address: process.env.COMPANY_ADDRESS || null,
     },
@@ -1232,7 +1232,7 @@ router.get('/bank-giro/:runId', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES
     const valueDate = req.query.valueDate ? new Date(req.query.valueDate) : today;
     const opts = {
       acct:        (req.query.acct        || '').slice(0, 34),
-      companyName: (req.query.companyName || process.env.COMPANY_NAME || 'VORKHIVE PTE LTD').slice(0, 140).toUpperCase(),
+      companyName: (req.query.companyName || process.env.COMPANY_NAME || 'GADONGHR PTE LTD').slice(0, 140).toUpperCase(),
       ref:         (req.query.ref         || `PAYROLL${run.period.replace('-','')}`).slice(0, 16).toUpperCase(),
       batchNo:     (req.query.batchNo     || '001').slice(0, 3),
       payDesc:     (req.query.payDesc     || `SALARY ${run.period}`).slice(0, 35).toUpperCase(),
@@ -1464,7 +1464,7 @@ function ddmmyy(d)   { return `${pad2(d.getDate())}${pad2(d.getMonth()+1)}${Stri
 // Record size: 615 chars, CRLF line endings
 function generateUobGiro(payments, totalAmount, run, today, opts = {}) {
   const companyAcct = (opts.acct || process.env.UOB_ACCOUNT_NO || '').replace(/[-\s]/g, '');
-  const companyName = opts.companyName || process.env.COMPANY_NAME || 'VORKHIVE PTE LTD';
+  const companyName = opts.companyName || process.env.COMPANY_NAME || 'GADONGHR PTE LTD';
   const valueDate = opts.valueDate || today;
   const ref = opts.ref || `PAYROLL${run.period.replace('-','')}`;
   const payDesc = opts.payDesc || `SALARY ${run.period}`;
@@ -1584,7 +1584,7 @@ function generateOcbcGiro(payments, totalAmount, run, today, opts = {}) {
 // "0"=header  "1"=detail  "9"=trailer
 function generateDbsGiro(payments, totalAmount, run, today, opts = {}) {
   const companyAcctRaw = (opts.acct || process.env.DBS_ACCOUNT_NO || '').replace(/[-\s]/g, '');
-  const companyName = (opts.companyName || process.env.COMPANY_NAME || 'VORKHIVE PTE LTD').slice(0, 20);
+  const companyName = (opts.companyName || process.env.COMPANY_NAME || 'GADONGHR PTE LTD').slice(0, 20);
   const ref = (opts.ref || `SAL${run.period.replace('-','')}`).slice(0, 10);
   const lines = [];
 

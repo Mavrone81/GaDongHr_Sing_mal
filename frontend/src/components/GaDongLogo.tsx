@@ -3,15 +3,15 @@
 import React from 'react';
 
 /* ─────────────────────────────────────────────────────────────────────
-   Vorkhive brand mark — inline SVG re-creation of the 2026 hexagon logo.
+   GaDongHR brand mark — inline SVG re-creation of the 2026 hexagon logo.
    Rendered inline (rather than the cream-background JPEG) so it sits
    cleanly on dark navy chrome. Colours are configurable so the same mark
    works on light surfaces (navy stroke + gold chevron) and dark surfaces
    (white stroke + gold chevron). The cream-background JPEG lives at
-   /public/vorkhive-logo.jpg and is used only on light backgrounds.
+   /public/gadonghr-logo.jpg and is used only on light backgrounds.
    ───────────────────────────────────────────────────────────────────── */
 
-export function VorkhiveMark({
+export function GaDongMark({
   size = 36,
   stroke = '#ffffff',
   accent = '#cda64c',
@@ -59,7 +59,7 @@ export function VorkhiveMark({
   );
 }
 
-export default function VorkhiveLogo({
+export default function GaDongLogo({
   variant = 'dark',
   showWordmark = true,
   showTagline = true,
@@ -79,11 +79,11 @@ export default function VorkhiveLogo({
 
   return (
     <div className={`flex items-center gap-3 ${className}`}>
-      <VorkhiveMark size={markSize} stroke={stroke} accent="#cda64c" />
+      <GaDongMark size={markSize} stroke={stroke} accent="#cda64c" />
       {showWordmark && (
         <div className="flex flex-col min-w-0 leading-none">
           <span className={`font-black tracking-[0.18em] uppercase ${wordColor}`} style={{ fontSize: markSize * 0.46 }}>
-            Vorkhive
+            GaDongHR
           </span>
           {showTagline && (
             <span className="mt-1 text-[8px] font-black tracking-[0.3em] uppercase text-gold-500">

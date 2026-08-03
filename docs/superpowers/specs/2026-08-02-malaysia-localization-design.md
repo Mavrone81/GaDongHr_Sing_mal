@@ -9,7 +9,7 @@
 
 ## 1. Problem
 
-Vorkhive must sell in Malaysia. A tenant labelled Malaysian must compute
+GaDongHR must sell in Malaysia. A tenant labelled Malaysian must compute
 Malaysian payroll, apply Malaysian employment terms, and file Malaysian returns —
 without Singapore customers experiencing any change.
 

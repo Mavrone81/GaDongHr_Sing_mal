@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Rename Vorkhive → GaDongHR everywhere, replace the theme with the Official Record tokens, build the five primitives, and lock the seal reservation with a test — so Stage 2 can hand-convert 74 screens against a vocabulary that already exists.
+**Goal:** Rename GaDongHR → GaDongHR everywhere, replace the theme with the Official Record tokens, build the five primitives, and lock the seal reservation with a test — so Stage 2 can hand-convert 74 screens against a vocabulary that already exists.
 
 **Architecture:** Identity first (JWT issuer and cookies must move atomically or auth breaks), then tokens, then primitives, then enforcement. No screens are converted here; Stage 2 does that.
 
@@ -13,13 +13,13 @@
 ## Global Constraints
 
 - **Display name is `GaDongHR`; code identifier is `gadonghr`.** Never "GaDong HR", never "Gadong".
-- **App URL is `app.bevorasg.com`.** Replaces `app.vorkhive.com` in CORS origins, email links and docs.
+- **App URL is `app.bevorasg.com`.** Replaces `app.bevorasg.com` in CORS origins, email links and docs.
 - **All 9 JWT issuer sites change in ONE commit**, signer included. Verifiers without the signer breaks every login.
-- **All 8 cookies rename together:** `vorkhive_token`, `_refresh`, `_admin`, `_platform`, `_pdpa`, `_security`, `_sso`, `_user` → `gadonghr_*`.
+- **All 8 cookies rename together:** `gadonghr_token`, `_refresh`, `_admin`, `_platform`, `_pdpa`, `_security`, `_sso`, `_user` → `gadonghr_*`.
 - **`--seal` (#A8322A) is RESERVED** for authority citations. Never errors, never destructive actions. Enforced by test in Task 6.
 - **No cards, no drop shadows, no rounded containers** in new components. Buttons and seals use `border-radius: 2px`; nothing else is rounded.
 - **Every number right-aligned with `tabular-nums`.**
-- **Do NOT rename** `hrms_*` databases, `hrms-*` containers, or the compose project — they read "HRMS", not "Vorkhive".
+- **Do NOT rename** `hrms_*` databases, `hrms-*` containers, or the compose project — they read "HRMS", not "GaDongHR".
 - **Statutory scope is unchanged** — Singapore + Malaysia. The seal cites CPF Act / EA / EPF Act, never the Thai LPA.
 - **The backend suite must not move:** 103 suites / 1,909 tests, green under UTC *and* Asia/Singapore.
 - **Commit after every task.**
@@ -39,7 +39,7 @@
 | `frontend/src/app/globals.css` | Official Record CSS variables |
 | `frontend/tailwind.config.ts` | Palette; remove the indigo remap |
 | `frontend/src/components/official/*.tsx` | The five primitives |
-| `frontend/src/components/GaDongLogo.tsx` | Replaces `VorkhiveLogo.tsx` |
+| `frontend/src/components/GaDongLogo.tsx` | Replaces `GaDongLogo.tsx` |
 | `frontend/__tests__/seal-reservation.test.ts` | Enforces the reservation |
 
 ---
@@ -83,7 +83,7 @@ describe('JWT issuer is gadonghr everywhere', () => {
   test.each([...SIGN_SITES, ...VERIFY_SITES])('%s uses gadonghr', (rel) => {
     const src = fs.readFileSync(path.join(__dirname, rel), 'utf8');
     expect(src).toMatch(/issuer:\s*'gadonghr'/);
-    expect(src).not.toMatch(/issuer:\s*'vorkhive'/);
+    expect(src).not.toMatch(/issuer:\s*'gadonghr'/);
   });
 });
 ```
@@ -91,14 +91,14 @@ describe('JWT issuer is gadonghr everywhere', () => {
 - [ ] **Step 2: Run it and confirm it fails**
 
 Run: `npx jest --projects services/auth-service --runInBand jwt-issuer`
-Expected: FAIL — every site still says `vorkhive`.
+Expected: FAIL — every site still says `gadonghr`.
 
 - [ ] **Step 3: Replace the issuer at all 9 lines**
 
 ```bash
-git grep -l "issuer: *'vorkhive'" | xargs perl -pi -e "s/issuer: *'vorkhive'/issuer: 'gadonghr'/g"
+git grep -l "issuer: *'gadonghr'" | xargs perl -pi -e "s/issuer: *'gadonghr'/issuer: 'gadonghr'/g"
 git grep -n "issuer: *'gadonghr'" | wc -l   # expect 9
-git grep -n "issuer: *'vorkhive'" | wc -l   # expect 0
+git grep -n "issuer: *'gadonghr'" | wc -l   # expect 0
 ```
 
 - [ ] **Step 4: Run the test and the auth suite**
@@ -109,7 +109,7 @@ Expected: PASS, including the new issuer test.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add -A && git commit -m "refactor(auth): JWT issuer vorkhive -> gadonghr across all 9 sites"
+git add -A && git commit -m "refactor(auth): JWT issuer gadonghr -> gadonghr across all 9 sites"
 ```
 
 ---
@@ -118,7 +118,7 @@ git add -A && git commit -m "refactor(auth): JWT issuer vorkhive -> gadonghr acr
 
 **Files:**
 - Modify: `frontend/src/lib/api.ts`
-- Modify: every file matching `git grep -l "vorkhive_"` under `services/`, `frontend/`, `e2e/`
+- Modify: every file matching `git grep -l "gadonghr_"` under `services/`, `frontend/`, `e2e/`
 - Test: `frontend/__tests__/cookie-names.test.ts`
 
 **Interfaces:**
@@ -131,7 +131,7 @@ git add -A && git commit -m "refactor(auth): JWT issuer vorkhive -> gadonghr acr
 /**
  * Cookie names are part of the brand surface — they are visible in devtools
  * and in any audit. A fresh-start deployment means renaming them costs
- * nothing, so no vorkhive_ prefix should survive.
+ * nothing, so no gadonghr_ prefix should survive.
  */
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -145,8 +145,8 @@ describe('cookie names are gadonghr-prefixed', () => {
   it('uses the gadonghr refresh cookie', () => {
     expect(API).toContain("'gadonghr_refresh'");
   });
-  it('retains no vorkhive_ prefix', () => {
-    expect(API).not.toMatch(/vorkhive_/);
+  it('retains no gadonghr_ prefix', () => {
+    expect(API).not.toMatch(/gadonghr_/);
   });
 });
 ```
@@ -154,14 +154,14 @@ describe('cookie names are gadonghr-prefixed', () => {
 - [ ] **Step 2: Run it and confirm it fails**
 
 Run: `npx jest --projects frontend --runInBand cookie-names`
-Expected: FAIL — `api.ts` still declares `vorkhive_token`.
+Expected: FAIL — `api.ts` still declares `gadonghr_token`.
 
 - [ ] **Step 3: Rename every cookie**
 
 ```bash
-git grep -l "vorkhive_" -- services frontend e2e shared \
-  | xargs perl -pi -e "s/vorkhive_/gadonghr_/g"
-git grep -n "vorkhive_" -- services frontend e2e shared | wc -l   # expect 0
+git grep -l "gadonghr_" -- services frontend e2e shared \
+  | xargs perl -pi -e "s/gadonghr_/gadonghr_/g"
+git grep -n "gadonghr_" -- services frontend e2e shared | wc -l   # expect 0
 ```
 
 - [ ] **Step 4: Verify**
@@ -172,7 +172,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add -A && git commit -m "refactor(auth): rename all 8 cookies vorkhive_* -> gadonghr_*"
+git add -A && git commit -m "refactor(auth): rename all 8 cookies gadonghr_* -> gadonghr_*"
 ```
 
 ---
@@ -181,8 +181,8 @@ git add -A && git commit -m "refactor(auth): rename all 8 cookies vorkhive_* -> 
 
 **Files:**
 - Modify: `package.json` (`name`), `package-lock.json`
-- Rename: `frontend/src/components/VorkhiveLogo.tsx` → `GaDongLogo.tsx`
-- Modify: every file referencing `Vorkhive` / `vorkhive` / `app.vorkhive.com`
+- Rename: `frontend/src/components/GaDongLogo.tsx` → `GaDongLogo.tsx`
+- Modify: every file referencing `GaDongHR` / `gadonghr` / `app.bevorasg.com`
 
 **Interfaces:**
 - Produces: `GaDongLogo`, `GaDongMark` exported from `frontend/src/components/GaDongLogo.tsx`
@@ -190,22 +190,22 @@ git add -A && git commit -m "refactor(auth): rename all 8 cookies vorkhive_* -> 
 - [ ] **Step 1: Rename the logo component and its exports**
 
 ```bash
-git mv frontend/src/components/VorkhiveLogo.tsx frontend/src/components/GaDongLogo.tsx
-perl -pi -e "s/VorkhiveLogo/GaDongLogo/g; s/VorkhiveMark/GaDongMark/g" \
-  $(git grep -l "VorkhiveLogo\|VorkhiveMark")
+git mv frontend/src/components/GaDongLogo.tsx frontend/src/components/GaDongLogo.tsx
+perl -pi -e "s/GaDongLogo/GaDongLogo/g; s/GaDongMark/GaDongMark/g" \
+  $(git grep -l "GaDongLogo\|GaDongMark")
 ```
 
 - [ ] **Step 2: Replace remaining brand strings**
 
 ```bash
 # Display name, then lowercase identifier, then the app URL.
-git grep -l "Vorkhive" | xargs perl -pi -e "s/Vorkhive/GaDongHR/g"
-git grep -l "vorkhive" | xargs perl -pi -e "s/vorkhive/gadonghr/g"
+git grep -l "GaDongHR" | xargs perl -pi -e "s/GaDongHR/GaDongHR/g"
+git grep -l "gadonghr" | xargs perl -pi -e "s/gadonghr/gadonghr/g"
 git grep -l "app\.gadonghr\.com" | xargs perl -pi -e "s/app\.gadonghr\.com/app.bevorasg.com/g"
 ```
 
-Note the third line: step 2's blanket replace turns `app.vorkhive.com` into
-`app.gadonghr.com`, which is **not** the real URL — it is corrected to
+Note the third line: step 2's blanket replace turns `app.bevorasg.com` into
+`app.bevorasg.com`, which is **not** the real URL — it is corrected to
 `app.bevorasg.com` immediately after.
 
 - [ ] **Step 3: Set the package name**
@@ -213,10 +213,10 @@ Note the third line: step 2's blanket replace turns `app.vorkhive.com` into
 `package.json` → `"name": "gadonghr"`. Update the two matching fields in
 `package-lock.json`.
 
-- [ ] **Step 4: Verify nothing named Vorkhive survives**
+- [ ] **Step 4: Verify nothing named GaDongHR survives**
 
 ```bash
-git grep -Iic "vorkhive" | wc -l    # expect 0
+git grep -Iic "gadonghr" | wc -l    # expect 0
 grep -rn "app.bevorasg.com" .github/ docker-compose.yml 2>/dev/null | head
 npx tsc --noEmit -p frontend/tsconfig.json
 ```
@@ -229,7 +229,7 @@ Expected: 103 suites / 1,909 backend, 89 frontend — unchanged.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add -A && git commit -m "refactor(brand): Vorkhive -> GaDongHR; app URL -> app.bevorasg.com"
+git add -A && git commit -m "refactor(brand): GaDongHR -> GaDongHR; app URL -> app.bevorasg.com"
 ```
 
 ---
@@ -700,7 +700,7 @@ Expected: 89 existing + the new token/primitive/seal/cookie tests; zero type err
 - [ ] **Step 4: Brand sweep**
 
 ```bash
-git grep -Iic "vorkhive" | wc -l   # expect 0
+git grep -Iic "gadonghr" | wc -l   # expect 0
 ```
 
 - [ ] **Step 5: Commit the verification note**

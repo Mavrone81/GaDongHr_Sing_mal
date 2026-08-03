@@ -219,7 +219,7 @@ router.get('/templates/:id/export.xlsx', authenticate, authorize(...REPORT_ROLES
     const out = await runTemplate(tpl.definition, req.headers['authorization']);
 
     const wb = new ExcelJS.Workbook();
-    wb.creator = 'Vorkhive Reporting';
+    wb.creator = 'GaDongHR Reporting';
     wb.created = new Date();
     const ws = wb.addWorksheet(tpl.name.slice(0, 30) || 'Report');
     ws.columns = out.columns.map(c => ({ header: c.label, key: c.key, width: 18 }));

@@ -53,7 +53,7 @@ function toPdf(reportName, columns, rows) {
 
     // ── Footer ───────────────────────────────────────────────────────────────
     doc.fontSize(6).font('Helvetica').fillColor('#94a3b8')
-      .text(`${rows.length} rows  ·  Vorkhive HRMS`, 40, y + 6);
+      .text(`${rows.length} rows  ·  GaDongHR HRMS`, 40, y + 6);
 
     doc.end();
   });

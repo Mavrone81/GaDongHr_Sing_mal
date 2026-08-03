@@ -11,7 +11,7 @@
  *   SMTP_SECURE        — "true" for TLS on port 465 (default false)
  *   SMTP_USER          — login username (optional if relay doesn't auth)
  *   SMTP_PASS          — login password
- *   SMTP_FROM          — From address (default noreply@vorkhive.app)
+ *   SMTP_FROM          — From address (default noreply@gadonghr.app)
  */
 
 const nodemailer = require('nodemailer');
@@ -50,7 +50,7 @@ async function sendReportEmail({ recipients, subject, html, attachmentName, atta
     console.warn(`[reporting/email] SMTP_HOST not configured — skipping delivery to: ${to}`);
     return { skipped: true };
   }
-  const from = process.env.SMTP_FROM || 'noreply@vorkhive.app';
+  const from = process.env.SMTP_FROM || 'noreply@gadonghr.app';
   const to = Array.isArray(recipients) ? recipients.join(',') : recipients;
   await transporter.sendMail({
     from, to, subject, html,

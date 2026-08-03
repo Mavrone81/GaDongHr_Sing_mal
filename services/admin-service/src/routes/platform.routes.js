@@ -82,7 +82,7 @@ router.post('/mfa/setup', async (req, res, next) => {
     if (!p || p.scope !== 'platform') return res.status(401).json({ error: 'Setup token required' });
     const secret = authenticator.generateSecret();
     await prisma.platformAdmin.update({ where: { id: p.sub }, data: { mfaSecret: enc(secret) } });
-    const otpauth = authenticator.keyuri(p.email, 'Vorkhive Platform', secret);
+    const otpauth = authenticator.keyuri(p.email, 'GaDongHR Platform', secret);
     const qrCode = await qrcode.toDataURL(otpauth); // data URL, generated server-side (secret never leaves us)
     res.json({ secret, otpauth, qrCode });
   } catch (err) { next(err); }

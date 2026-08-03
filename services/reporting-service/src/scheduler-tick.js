@@ -80,7 +80,7 @@ async function tick(now = new Date()) {
         const filename = `${sched.template.name.replace(/[^\w.-]+/g, '_')}.${ext}`;
         const result = await sendReportEmail({
           recipients,
-          subject: `[Vorkhive Report] ${sched.template.name}`,
+          subject: `[GaDongHR Report] ${sched.template.name}`,
           html: `<p>Your scheduled report <strong>${safeName}</strong> is ready (${rowCount} rows).</p>` +
                 `<p>Generated: ${now.toISOString()}</p>`,
           attachmentName: filename,

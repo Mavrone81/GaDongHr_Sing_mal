@@ -12,7 +12,7 @@ const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware'
 const router = express.Router();
 const STRIPE_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
-// Plans mirror the marketing site (vorkhive.com): Starter S$5, Growth S$9 (popular),
+// Plans mirror the marketing site (gadonghr.com): Starter S$5, Growth S$9 (popular),
 // Enterprise S$15 is contact-sales (not a self-serve checkout).
 const PLANS = { starter: process.env.STRIPE_PRICE_STARTER || '', growth: process.env.STRIPE_PRICE_GROWTH || '' };
 

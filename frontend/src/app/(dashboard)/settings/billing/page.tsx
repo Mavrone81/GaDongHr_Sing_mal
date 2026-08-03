@@ -93,7 +93,7 @@ export default function BillingPage() {
               <button
                 onClick={() => {
                   setMsg('Opening our sales assistant in a new tab — chat about Enterprise (or ask for a human).');
-                  window.open('https://vorkhive.com/?chat=sales', '_blank', 'noopener');
+                  window.open('https://gadonghr.com/?chat=sales', '_blank', 'noopener');
                 }}
                 className="mt-4 rounded-lg border border-slate-300 py-2.5 font-bold text-slate-700 hover:bg-slate-50"
               >

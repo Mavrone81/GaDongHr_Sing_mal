@@ -55,7 +55,7 @@ describe('C-05 seed-initial-admin', () => {
 // ── C-06 ──────────────────────────────────────────────────────────────────────
 describe('C-06 sync-users', () => {
   test('contains no shared hardcoded password literal', () => {
-    expect(syncUsersSrc).not.toMatch(/Vorkhive@2025/);
+    expect(syncUsersSrc).not.toMatch(/GaDongHR@2025/);
   });
   test('uses crypto.randomBytes for the per-user temp password', () => {
     expect(syncUsersSrc).toMatch(/crypto\.randomBytes\(32\)/);

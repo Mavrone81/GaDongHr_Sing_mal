@@ -123,7 +123,7 @@ export default function PlatformConsole() {
     <div className="min-h-screen bg-slate-900 text-slate-100">
       <header className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
         <div>
-          <span className="font-black tracking-tight">VORKHIVE</span>
+          <span className="font-black tracking-tight">GADONGHR</span>
           <span className="ml-2 text-xs font-bold uppercase tracking-[0.2em] text-indigo-400">Platform Operator</span>
         </div>
         <div className="flex items-center gap-3">

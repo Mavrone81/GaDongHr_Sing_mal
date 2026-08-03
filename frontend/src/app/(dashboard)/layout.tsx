@@ -7,9 +7,9 @@ import { useAuth } from '@/context/AuthContext';
 import NotificationBell from '@/components/NotificationBell';
 import FloatingAssistant from '@/components/FloatingAssistant';
 import TrialBanner from '@/components/TrialBanner';
-import { VorkhiveMark } from '@/components/VorkhiveLogo';
+import { GaDongMark } from '@/components/GaDongLogo';
 
-// ─── RBAC Navigation Matrix — Section 2, Vorkhive_RBAC_Workflow_Reference.pdf ──
+// ─── RBAC Navigation Matrix — Section 2, GaDongHR_RBAC_Workflow_Reference.pdf ──
 // SA = Superadmin (full, unrestricted access to ALL modules)
 interface NavItem {
   name: string;
@@ -507,9 +507,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Brand */}
         <div className="relative px-5 pt-5 pb-4 border-b border-white/5 flex items-center gap-3">
-          <VorkhiveMark size={34} stroke="#ffffff" accent="#cda64c" className="shrink-0" />
+          <GaDongMark size={34} stroke="#ffffff" accent="#cda64c" className="shrink-0" />
           <div className="flex flex-col min-w-0">
-            <span className="font-black text-white tracking-[0.18em] uppercase text-sm leading-none">Vorkhive</span>
+            <span className="font-black text-white tracking-[0.18em] uppercase text-sm leading-none">GaDongHR</span>
             <span className="text-[8px] font-black text-gold-400/80 mt-1 tracking-[0.25em] uppercase truncate">CRM · HR · Payroll</span>
           </div>
         </div>
@@ -646,8 +646,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="hidden lg:block h-4 w-px bg-slate-200" />
             {/* Brand lockup on the light top bar — cream-background JPEG */}
             <img
-              src="/vorkhive-logo.jpg"
-              alt="Vorkhive — CRM · HR · Payroll"
+              src="/gadonghr-logo.jpg"
+              alt="GaDongHR — CRM · HR · Payroll"
               className="hidden lg:block h-7 w-auto rounded-md"
             />
             <div className="hidden lg:flex flex-col items-end">

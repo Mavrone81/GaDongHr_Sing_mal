@@ -47,7 +47,7 @@ test('SUPER_ADMIN sees the user list with an HttpOnly auth cookie (C-12 regressi
   // :3000 (cross-origin gateway), auth-service's bare `cors()` emits
   // `Access-Control-Allow-Origin: *`, which browsers reject under
   // credentials:'include'. Production serves the app and /api from the SAME
-  // origin (app.vorkhive.com), so CORS never applies there. Normalising the
+  // origin (app.bevorasg.com), so CORS never applies there. Normalising the
   // header here makes the credentialed flow behave exactly as it does in prod.
   // No-op when the response origin is already a concrete value.
   await page.route('**/api/**', async route => {

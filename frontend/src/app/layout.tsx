@@ -9,7 +9,7 @@ const inter = Inter({
 })
 
 export const metadata = {
-  title: 'Vorkhive - SG Compliant HRMS',
+  title: 'GaDongHR - SG Compliant HRMS',
   description: 'Singapore Payroll, CPF, and Leave Management',
   icons: {
     icon: '/favicon.svg',

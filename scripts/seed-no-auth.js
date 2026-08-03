@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * Vorkhive Seed Script — uses raw pg (PostgreSQL) queries
+ * GaDongHR Seed Script — uses raw pg (PostgreSQL) queries
  * Run from repo root: node scripts/seed.js
  * Requires: docker-compose up  (postgres must be running on localhost:5432)
  */
@@ -37,11 +37,11 @@ async function seedAuth() {
     const adminHash = await bcrypt.hash(defaultAdminPass, 12);
 
     const usersToSeed = [
-      { email: 'admin@vorkhive.sg', hash: adminHash, name: 'System Admin', role: 'SUPER_ADMIN' },
-      { email: 'hr@vorkhive.sg', hash: hash, name: 'HR Admin', role: 'HR_ADMIN' },
-      { email: 'payroll@vorkhive.sg', hash: hash, name: 'Payroll Officer', role: 'PAYROLL_OFFICER' },
-      { email: 'manager@vorkhive.sg', hash: hash, name: 'Line Manager', role: 'MANAGER' },
-      { email: 'employee@vorkhive.sg', hash: hash, name: 'Standard Employee', role: 'EMPLOYEE' }
+      { email: 'admin@gadonghr.sg', hash: adminHash, name: 'System Admin', role: 'SUPER_ADMIN' },
+      { email: 'hr@gadonghr.sg', hash: hash, name: 'HR Admin', role: 'HR_ADMIN' },
+      { email: 'payroll@gadonghr.sg', hash: hash, name: 'Payroll Officer', role: 'PAYROLL_OFFICER' },
+      { email: 'manager@gadonghr.sg', hash: hash, name: 'Line Manager', role: 'MANAGER' },
+      { email: 'employee@gadonghr.sg', hash: hash, name: 'Standard Employee', role: 'EMPLOYEE' }
     ];
 
     let count = 0;
@@ -332,13 +332,13 @@ async function seedClaims() {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log('\n🌱 Vorkhive Seed Script');
+  console.log('\n🌱 GaDongHR Seed Script');
   console.log(`   Connecting to postgres at ${HOST}:${PORT}\n`);
   // await seedAuth(); // skipped: stale schema
   await seedPayroll();
   await seedLeave();
   await seedClaims();
-  console.log('\n✅ All done! Login as admin@vorkhive.sg with SEED_ADMIN_PASSWORD (or the dev fallback).\n');
+  console.log('\n✅ All done! Login as admin@gadonghr.sg with SEED_ADMIN_PASSWORD (or the dev fallback).\n');
 }
 
 main().catch(err => {

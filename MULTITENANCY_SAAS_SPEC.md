@@ -1,4 +1,4 @@
-# Vorkhive HRMS — Multi-Tenant SaaS Onboarding Spec
+# GaDongHR HRMS — Multi-Tenant SaaS Onboarding Spec
 
 **Goal:** Let any company self-register (Payboy-style), get an isolated tenant provisioned automatically for free-trial testing, set up its company profile, and use the full HR system. Each company has its own tenant; trials convert to paid after the trial period.
 
@@ -8,7 +8,7 @@
 
 ## 1. Current state (important — read first)
 
-Vorkhive is **single-tenant today.** Confirmed by reading the codebase:
+GaDongHR is **single-tenant today.** Confirmed by reading the codebase:
 
 - **No tenant concept exists.** No `Tenant`/`Company`/`Subscription` model anywhere; zero `tenantId` columns across all 22 service schemas.
 - **Architecture:** Node microservices behind an `api-gateway`. Each service owns its **own Postgres database** (`hrms_auth`, `hrms_employee`, …) on one shared Postgres instance. Per-service DBs are created by `scripts/init-dbs.sql`.

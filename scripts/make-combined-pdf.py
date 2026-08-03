@@ -2,7 +2,7 @@
 import json, os
 from fpdf import FPDF
 
-OUT = os.path.expanduser("~/Desktop/Vorkhive-ALL-test-logins.pdf")
+OUT = os.path.expanduser("~/Desktop/GaDongHR-ALL-test-logins.pdf")
 DATE = "2026-06-11"
 
 data = json.load(open("/tmp/logins.json"))
@@ -15,13 +15,13 @@ for line in open("/tmp/default_users.txt"):
     elif "@gmail.com" in email: pw = "[Google SSO]"
     else: pw = "Staff@Test2026!"
     default_rows.append({"name": name, "email": email, "role": role, "password": pw})
-data["Vorkhive (Default / main)"] = default_rows
+data["GaDongHR (Default / main)"] = default_rows
 
-ORDER = ["Mellinial Toys", "Vorkhive (test)", "Vorkhive (Default / main)"]
+ORDER = ["Mellinial Toys", "GaDongHR (test)", "GaDongHR (Default / main)"]
 SUB = {
     "Mellinial Toys": "Test company - 10 users",
-    "Vorkhive (test)": "Test company - 50 users",
-    "Vorkhive (Default / main)": "Main tenant - 40 users (non-admin staff reset; admins/SSO unchanged)",
+    "GaDongHR (test)": "Test company - 50 users",
+    "GaDongHR (Default / main)": "Main tenant - 40 users (non-admin staff reset; admins/SSO unchanged)",
 }
 
 pdf = FPDF(orientation="L", unit="mm", format="A4")
@@ -30,19 +30,19 @@ pdf.set_auto_page_break(auto=True, margin=12)
 # cover / quick reference
 pdf.add_page()
 pdf.set_font("Helvetica", "B", 22)
-pdf.cell(0, 12, "VORKHIVE - Test Login Sheet", new_x="LMARGIN", new_y="NEXT")
+pdf.cell(0, 12, "GADONGHR - Test Login Sheet", new_x="LMARGIN", new_y="NEXT")
 pdf.set_font("Helvetica", "", 10); pdf.set_text_color(90, 90, 90)
-pdf.cell(0, 6, f"All instances - sign in at app.vorkhive.com/login - generated {DATE}", new_x="LMARGIN", new_y="NEXT")
+pdf.cell(0, 6, f"All instances - sign in at app.bevorasg.com/login - generated {DATE}", new_x="LMARGIN", new_y="NEXT")
 pdf.ln(4)
 pdf.set_text_color(20, 20, 20); pdf.set_font("Helvetica", "B", 12)
 pdf.cell(0, 8, "Quick reference (shared test passwords)", new_x="LMARGIN", new_y="NEXT")
 pdf.set_font("Helvetica", "", 10)
 for t in [
-    "Test-company owners (founder@mellinialtoys.test, founder@vorkhive.test):  Owner@Test2026!",
+    "Test-company owners (founder@mellinialtoys.test, founder@gadonghr.test):  Owner@Test2026!",
     "All test-company staff + reset Default staff:  Staff@Test2026!",
     "Default SUPER_ADMIN accounts:  unchanged (your existing passwords)",
     "fudunchuan.rsn@gmail.com:  Google SSO",
-    "Vorkhive (test) company chatbot uses Claude; others use Ollama.",
+    "GaDongHR (test) company chatbot uses Claude; others use Ollama.",
 ]:
     pdf.cell(4, 6, "-"); pdf.cell(0, 6, t, new_x="LMARGIN", new_y="NEXT")
 pdf.ln(2)

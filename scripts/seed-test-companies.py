@@ -3,7 +3,7 @@
 
 Usage: python3 seed-test-companies.py <base_url>
   e.g. python3 seed-test-companies.py http://localhost:4000/api
-       python3 seed-test-companies.py https://app.vorkhive.com/api
+       python3 seed-test-companies.py https://app.bevorasg.com/api
 """
 import sys, json, time, urllib.request, urllib.error, random
 
@@ -112,6 +112,6 @@ def seed_company(name, slug_domain, owner_email, owner_name, country, count, dep
 
 seed_company("Mellinial Toys", "mellinialtoys.test", "founder@mellinialtoys.test", "Megan Toh", "SG", 10,
              ["Design","Production","Sales","Marketing","Operations","Finance"])
-seed_company("Vorkhive", "vorkhive.test", "founder@vorkhive.test", "Victor Khoo", "SG", 50,
+seed_company("GaDongHR", "gadonghr.test", "founder@gadonghr.test", "Victor Khoo", "SG", 50,
              ["Engineering","Product","Sales","Marketing","Customer Success","People Ops","Finance","Data"])
 print("\nDone.")

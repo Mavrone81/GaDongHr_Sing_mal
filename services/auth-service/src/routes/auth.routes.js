@@ -93,7 +93,7 @@ async function sendEmailOtp(user) {
       headers: { 'Content-Type': 'application/json', 'x-internal-service-key': process.env.INTERNAL_SERVICE_KEY || '' },
       body: JSON.stringify({
         to: user.email,
-        subject: 'Your Vorkhive login code',
+        subject: 'Your GaDongHR login code',
         html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto">
           <h2 style="color:#1e293b;font-size:20px;margin-bottom:8px">Your one-time login code</h2>
           <p style="color:#64748b;font-size:14px;margin-bottom:24px">Use this code to complete your sign-in. It expires in 10 minutes.</p>
@@ -102,7 +102,7 @@ async function sendEmailOtp(user) {
           </div>
           <p style="color:#94a3b8;font-size:12px;margin-top:16px">If you didn't request this, ignore this email — your account is safe.</p>
         </div>`,
-        text: `Your Vorkhive login code: ${code} (expires in 10 minutes)`,
+        text: `Your GaDongHR login code: ${code} (expires in 10 minutes)`,
       }),
     });
     if (!otpRes.ok) {
@@ -485,7 +485,7 @@ router.post('/forgot-password', resetLimiter, async (req, res, next) => {
           headers: { 'Content-Type': 'application/json', 'x-internal-service-key': process.env.INTERNAL_SERVICE_KEY || '' },
           body: JSON.stringify({
             to: user.email,
-            subject: 'Reset your Vorkhive password',
+            subject: 'Reset your GaDongHR password',
             html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto">
               <div style="background:#4f46e5;padding:32px;border-radius:16px 16px 0 0;text-align:center">
                 <h1 style="color:white;margin:0;font-size:20px;font-weight:900;letter-spacing:-0.5px">Reset Your Password</h1>
@@ -500,7 +500,7 @@ router.post('/forgot-password', resetLimiter, async (req, res, next) => {
                 <p style="color:#94a3b8;font-size:11px;margin-top:24px">If you didn't request this, ignore this email — your password is unchanged and your account is safe.</p>
               </div>
             </div>`,
-            text: `Reset your Vorkhive password: ${resetUrl} (expires in 1 hour). If you didn't request this, ignore this email.`,
+            text: `Reset your GaDongHR password: ${resetUrl} (expires in 1 hour). If you didn't request this, ignore this email.`,
           }),
         });
         // fetch() only rejects on network failure, not on a non-2xx response.
@@ -600,7 +600,7 @@ router.post('/mfa/setup', authenticate, async (req, res, next) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.user.sub } });
     const secret = authenticator.generateSecret();
-    const otpauthUrl = authenticator.keyuri(user.email, 'Vorkhive', secret);
+    const otpauthUrl = authenticator.keyuri(user.email, 'GaDongHR', secret);
     const qrDataUrl = await qrcode.toDataURL(otpauthUrl);
 
     // Store encrypted secret (not yet enabled until verified)
@@ -740,7 +740,7 @@ router.get('/org-settings/general', authenticate, authorize(ROLES.SUPER_ADMIN, R
     }
     res.json({
       smtpFrom: map.smtpFrom || '',
-      orgName: map.orgName || 'Vorkhive',
+      orgName: map.orgName || 'GaDongHR',
       apiKeys: map.apiKeys || [],
       webhooks: map.webhooks || [],
       retentionPeriods: map.retentionPeriods || null,
@@ -914,7 +914,7 @@ router.post('/sso/mfa-verify', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /auth/sso/google/callback — public, exchanges OAuth code for Vorkhive JWT
+// POST /auth/sso/google/callback — public, exchanges OAuth code for GaDongHR JWT
 router.post('/sso/google/callback', async (req, res, next) => {
   try {
     const { code, redirectUri } = req.body;
@@ -963,14 +963,14 @@ router.post('/sso/google/callback', async (req, res, next) => {
 
     if (!email_verified) return res.status(401).json({ error: 'Google email not verified' });
 
-    // Find the matching user in Vorkhive. Email is unique PER TENANT now, so this
+    // Find the matching user in GaDongHR. Email is unique PER TENANT now, so this
     // must be findFirst (runs unscoped here — no tenant context pre-auth).
     const user = await prisma.user.findFirst({
       where: { email: email.toLowerCase() },
       include: { role: { include: { permissions: { include: { permission: true } } } } },
     });
 
-    if (!user) return res.status(401).json({ error: 'No Vorkhive account found for this Google account. Contact your administrator.' });
+    if (!user) return res.status(401).json({ error: 'No GaDongHR account found for this Google account. Contact your administrator.' });
     if (!user.isActive) return res.status(403).json({ error: 'Account deactivated' });
 
     // Check domain restriction if configured
@@ -986,7 +986,7 @@ router.post('/sso/google/callback', async (req, res, next) => {
       return res.json(mfaResult);
     }
 
-    // Issue Vorkhive JWT
+    // Issue GaDongHR JWT
     const permissions = user.role?.permissions.map(p => p.permission.code) || [];
     const tokenPayload = {
       sub: user.id, tenantId: user.tenantId, email: user.email, role: (user.role?.name || 'EMPLOYEE').toUpperCase(),
@@ -1023,7 +1023,7 @@ router.get('/sso/microsoft/config', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /auth/sso/microsoft/callback — public, exchanges code for Vorkhive JWT
+// POST /auth/sso/microsoft/callback — public, exchanges code for GaDongHR JWT
 router.post('/sso/microsoft/callback', async (req, res, next) => {
   try {
     const { code, redirectUri } = req.body;
@@ -1095,7 +1095,7 @@ router.post('/sso/microsoft/callback', async (req, res, next) => {
     // SECURITY (M-12): exact email match only. The previous "@gmail.com
     // dot-stripped" fallback was a fuzzy lookup that broadened matchable
     // accounts (an attacker who controlled `j.smith@gmail.com` could
-    // potentially log in as a Vorkhive account stored as `jsmith@gmail.com`).
+    // potentially log in as a GaDongHR account stored as `jsmith@gmail.com`).
     // Now that H-09 verifies the Microsoft id_token signature and email_verified,
     // the exact match is the only safe match.
     const user = await prisma.user.findFirst({
@@ -1103,7 +1103,7 @@ router.post('/sso/microsoft/callback', async (req, res, next) => {
       include: { role: { include: { permissions: { include: { permission: true } } } } },
     });
 
-    if (!user) return res.status(401).json({ error: 'No Vorkhive account found for this Microsoft account. Contact your administrator.' });
+    if (!user) return res.status(401).json({ error: 'No GaDongHR account found for this Microsoft account. Contact your administrator.' });
     if (!user.isActive) return res.status(403).json({ error: 'Account deactivated' });
 
     // Domain restriction
@@ -1119,7 +1119,7 @@ router.post('/sso/microsoft/callback', async (req, res, next) => {
       return res.json(mfaResult);
     }
 
-    // Issue Vorkhive JWT
+    // Issue GaDongHR JWT
     const permissions = user.role?.permissions.map(p => p.permission.code) || [];
     const tokenPayload = {
       sub: user.id, tenantId: user.tenantId, email: user.email, role: (user.role?.name || 'EMPLOYEE').toUpperCase(),

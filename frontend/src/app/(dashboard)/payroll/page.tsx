@@ -436,7 +436,7 @@ function AdminPayrollDashboard() {
   const todayIso = () => new Date().toISOString().slice(0, 10);
   const [giroBank, setGiroBank] = useState<'uob' | 'ocbc' | 'dbs'>('uob');
   const [giroFields, setGiroFields] = useState({
-    acct: '', companyName: 'VORKHIVE PTE LTD', valueDate: todayIso(),
+    acct: '', companyName: 'GADONGHR PTE LTD', valueDate: todayIso(),
     ref: '', batchNo: '001', payDesc: '',
   });
   const gf = (k: keyof typeof giroFields, v: string) => setGiroFields(f => ({ ...f, [k]: v }));
@@ -1224,7 +1224,7 @@ function AdminPayrollDashboard() {
                         <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest italic opacity-50">Locked for Archive</span>
                       ) : (
                         <div className="flex items-center gap-3">
-                          <button onClick={() => { const ref = generateGiroRef(run.period); setGiroRunId(run.id); setGiroBank('uob'); setGiroFields({ acct: '', companyName: 'VORKHIVE PTE LTD', valueDate: new Date().toISOString().slice(0,10), ref, batchNo: '001', payDesc: `SALARY ${run.period}` }); }} className="px-4 py-2 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-slate-800 transition-all">GIRO</button>
+                          <button onClick={() => { const ref = generateGiroRef(run.period); setGiroRunId(run.id); setGiroBank('uob'); setGiroFields({ acct: '', companyName: 'GADONGHR PTE LTD', valueDate: new Date().toISOString().slice(0,10), ref, batchNo: '001', payDesc: `SALARY ${run.period}` }); }} className="px-4 py-2 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-slate-800 transition-all">GIRO</button>
                           <button
                             onClick={() => downloadCpfFile(run.id, run.period)}
                             title="Download CPF e-Submit flat file (creates a tracked DRAFT submission)"

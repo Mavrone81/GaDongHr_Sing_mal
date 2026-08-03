@@ -97,7 +97,7 @@ async function main() {
   if (!adminPassword) {
     console.error('SEED_ADMIN_PASSWORD env var is required'); process.exit(1);
   }
-  const loginRes = await request('POST', `${AUTH_URL}/auth/login`, { email: 'admin@vorkhive.sg', password: adminPassword });
+  const loginRes = await request('POST', `${AUTH_URL}/auth/login`, { email: 'admin@gadonghr.sg', password: adminPassword });
   if (!loginRes.body.accessToken) { console.error('Login failed:', loginRes.body); process.exit(1); }
   const TOKEN = loginRes.body.accessToken;
   console.log('✅ Logged in\n');

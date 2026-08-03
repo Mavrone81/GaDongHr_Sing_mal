@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import VorkhiveLogo, { VorkhiveMark } from '@/components/VorkhiveLogo';
+import GaDongLogo, { GaDongMark } from '@/components/GaDongLogo';
 
 type Step = 'credentials' | 'mfa-challenge' | 'mfa-setup';
 type MfaMethod = 'TOTP' | 'EMAIL_OTP' | 'EITHER';
@@ -277,7 +277,7 @@ export default function LoginPage() {
       {/* Full-screen navigation overlay */}
       {navigating && (
         <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center gap-6">
-          <VorkhiveMark size={52} stroke="#ffffff" accent="#cda64c" />
+          <GaDongMark size={52} stroke="#ffffff" accent="#cda64c" />
 
           <div className="flex flex-col items-center gap-3">
             <div className="w-6 h-6 border-2 border-indigo-400/30 border-t-indigo-500 rounded-full animate-spin" />
@@ -291,7 +291,7 @@ export default function LoginPage() {
         <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-indigo-500/5 rounded-full blur-[100px]" />
         <div className="relative z-10 space-y-10">
-          <VorkhiveLogo variant="dark" markSize={48} />
+          <GaDongLogo variant="dark" markSize={48} />
           <div className="space-y-6">
             <h1 className="text-5xl font-black text-white tracking-tighter leading-[0.9]">
               Enterprise <br/><span className="text-gold-400 underline decoration-gold-500/40 underline-offset-8">Intelligence</span> Suite

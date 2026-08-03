@@ -1,6 +1,6 @@
 # PRD Amendment A — Malaysia Edition & Multi-Country Tenancy
 
-**Amends:** PRD-HRMS-001 v2.0 (Vorkhive — Singapore, Full Statutory Compliance Edition)
+**Amends:** PRD-HRMS-001 v2.0 (GaDongHR — Singapore, Full Statutory Compliance Edition)
 **Amendment reference:** PRD-HRMS-001-A
 **Version:** 1.0
 **Date:** 2026-08-02
@@ -11,7 +11,7 @@
 
 ## A1. Purpose of this amendment
 
-PRD-HRMS-001 v2.0 defines Vorkhive as a Singapore product: its Target Market is
+PRD-HRMS-001 v2.0 defines GaDongHR as a Singapore product: its Target Market is
 "Singapore-based organisations", and §16 is a *Singapore* Regulatory Compliance
 Matrix. This amendment extends the product to **Malaysia** and, in doing so,
 generalises the tenancy model from one country per customer to **one tenant
@@ -44,7 +44,7 @@ periodic statutory filing; the multi-country tenancy model that carries them.
   statutes from the Employment Act 1955, with different provisions. v1 supports
   **Peninsular Malaysia only**. `LegalEntity.state` is the designed hook for
   adding the ordinances later without rework. **This is a sales constraint:
-  Vorkhive must not be represented as compliant for East Malaysian employment
+  GaDongHR must not be represented as compliant for East Malaysian employment
   until those ordinances are implemented.**
 - Malaysian equivalents of the Singapore-only modules — MYFutureJobs posting
   compliance (vs FCF), HRD Corp claimable-course administration (vs SkillsFuture
