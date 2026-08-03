@@ -93,7 +93,7 @@ test('GR-01 GET bank-giro UOB returns fixed-width file', async () => {
   mockEmployeeFetch();
 
   const res = await request(app)
-    .get('/payroll/bank-giro/run-giro-001?bank=uob')
+    .get('/payroll/bank-giro/run-giro-001?bank=uob&companyName=ACME%20PTE%20LTD')
     .set('Authorization', 'Bearer test');
 
   expect(res.status).toBe(200);
@@ -112,7 +112,7 @@ test('GR-02 GET bank-giro OCBC returns 1000-char records', async () => {
   mockEmployeeFetch();
 
   const res = await request(app)
-    .get('/payroll/bank-giro/run-giro-001?bank=ocbc')
+    .get('/payroll/bank-giro/run-giro-001?bank=ocbc&companyName=ACME%20PTE%20LTD')
     .set('Authorization', 'Bearer test');
 
   expect(res.status).toBe(200);
@@ -126,7 +126,7 @@ test('GR-03 GET bank-giro DBS returns file with record types at end', async () =
   mockEmployeeFetch();
 
   const res = await request(app)
-    .get('/payroll/bank-giro/run-giro-001?bank=dbs')
+    .get('/payroll/bank-giro/run-giro-001?bank=dbs&companyName=ACME%20PTE%20LTD')
     .set('Authorization', 'Bearer test');
 
   expect(res.status).toBe(200);
@@ -142,7 +142,7 @@ test('GR-04 GET bank-giro SCB returns generic CSV with warning header', async ()
   mockEmployeeFetch();
 
   const res = await request(app)
-    .get('/payroll/bank-giro/run-giro-001?bank=scb')
+    .get('/payroll/bank-giro/run-giro-001?bank=scb&companyName=ACME%20PTE%20LTD')
     .set('Authorization', 'Bearer test');
 
   expect(res.status).toBe(200);
@@ -158,7 +158,7 @@ test('GR-05 GET bank-giro HSBC returns generic CSV', async () => {
   mockEmployeeFetch();
 
   const res = await request(app)
-    .get('/payroll/bank-giro/run-giro-001?bank=hsbc')
+    .get('/payroll/bank-giro/run-giro-001?bank=hsbc&companyName=ACME%20PTE%20LTD')
     .set('Authorization', 'Bearer test');
 
   expect(res.status).toBe(200);
@@ -172,7 +172,7 @@ test('GR-06 GET bank-giro Maybank returns generic CSV', async () => {
   mockEmployeeFetch();
 
   const res = await request(app)
-    .get('/payroll/bank-giro/run-giro-001?bank=maybank')
+    .get('/payroll/bank-giro/run-giro-001?bank=maybank&companyName=ACME%20PTE%20LTD')
     .set('Authorization', 'Bearer test');
 
   expect(res.status).toBe(200);
@@ -183,7 +183,7 @@ test('GR-06 GET bank-giro Maybank returns generic CSV', async () => {
 test('GR-07 GET bank-giro unknown bank returns 400', async () => {
   mockRun(FINALISED_RUN);
   const res = await request(app)
-    .get('/payroll/bank-giro/run-giro-001?bank=xyz')
+    .get('/payroll/bank-giro/run-giro-001?bank=xyz&companyName=ACME%20PTE%20LTD')
     .set('Authorization', 'Bearer test');
   expect(res.status).toBe(400);
   expect(res.body.error).toMatch(/Unsupported bank/);
@@ -193,7 +193,7 @@ test('GR-07 GET bank-giro unknown bank returns 400', async () => {
 test('GR-08 GET bank-giro non-finalised run returns 400', async () => {
   mockRun({ ...FINALISED_RUN, status: 'APPROVED', payslips: [] });
   const res = await request(app)
-    .get('/payroll/bank-giro/run-giro-001?bank=uob')
+    .get('/payroll/bank-giro/run-giro-001?bank=uob&companyName=ACME%20PTE%20LTD')
     .set('Authorization', 'Bearer test');
   expect(res.status).toBe(400);
   expect(res.body.error).toMatch(/FINALISED/);
@@ -205,7 +205,7 @@ test('GR-09 GIRO generation writes GiroPayment records', async () => {
   mockEmployeeFetch();
 
   await request(app)
-    .get('/payroll/bank-giro/run-giro-001?bank=uob')
+    .get('/payroll/bank-giro/run-giro-001?bank=uob&companyName=ACME%20PTE%20LTD')
     .set('Authorization', 'Bearer test');
 
   // fire-and-forget — give it a tick to resolve
@@ -340,3 +340,5 @@ test('GR-15 POST ack unmatched accounts are counted', async () => {
   expect(res.body.matched).toBe(0);
   expect(res.body.unmatched).toBe(1);
 });
+
+
