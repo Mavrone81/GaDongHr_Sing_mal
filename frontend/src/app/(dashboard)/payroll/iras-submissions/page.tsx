@@ -14,6 +14,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { Seal } from '@/components/official';
 
 const KINDS = ['CPF_E_SUBMIT', 'IR8A', 'APPENDIX_8A', 'APPENDIX_8B', 'IR21'] as const;
 const STATUSES = ['DRAFT', 'SUBMITTED', 'ACKNOWLEDGED', 'REJECTED'] as const;
@@ -67,20 +68,48 @@ const KIND_LABELS: Record<Kind, string> = {
   IR21: 'IR21 (Tax Clearance)',
 };
 
+/**
+ * The authority behind each deadline.
+ *
+ * A missed filing here is a penalty, not an inconvenience, and the date is not
+ * the same rule for every row — CPF is monthly, IR8A is annual, IR21 is keyed
+ * to the employee's last day. Putting the citation beside the date means the
+ * person chasing the filing can check the rule without leaving the screen.
+ */
+const KIND_CITATIONS: Record<Kind, string> = {
+  CPF_E_SUBMIT: 'CPF Act s.7 · by 14th of following month',
+  IR8A:         'ITA s.68(2) · by 1 Mar',
+  APPENDIX_8A:  'ITA s.68(2) · with IR8A, by 1 Mar',
+  APPENDIX_8B:  'ITA s.68(2) · with IR8A, by 1 Mar',
+  IR21:         'ITA s.68(6) · 1 month before cessation',
+};
+
+/**
+ * Status and urgency are distinguished by WEIGHT and FILL, not by hue.
+ *
+ * The old screen keyed these off six different hues — blue, emerald, rose,
+ * red, orange, amber, yellow. The Official Record palette has no error red and
+ * no success green to spend (seal red is reserved for citations), so mapping
+ * them onto tokens collapsed several states onto the same colour. Rather than
+ * leave two states looking identical, the distinction is carried by fill:
+ * the states that need action are FILLED and therefore heaviest on the page;
+ * the settled ones are outlined; the inert ones are muted. The word is always
+ * present regardless — colour never carries the meaning alone.
+ */
 const STATUS_STYLES: Record<Status, string> = {
-  DRAFT:        'bg-slate-100 text-slate-700 ring-slate-300',
-  SUBMITTED:    'bg-blue-100 text-blue-700 ring-blue-300',
-  ACKNOWLEDGED: 'bg-emerald-100 text-emerald-700 ring-emerald-300',
-  REJECTED:     'bg-rose-100 text-rose-700 ring-rose-300',
+  DRAFT:        'bg-transparent text-muted ring-rule',
+  SUBMITTED:    'bg-transparent text-ink ring-ink font-medium',
+  ACKNOWLEDGED: 'bg-transparent text-accent ring-accent font-medium',
+  REJECTED:     'bg-ink text-paper ring-ink font-semibold',
 };
 
 const URGENCY_STYLES: Record<string, string> = {
-  OVERDUE:     'bg-red-600 text-white',
-  CRITICAL:    'bg-orange-500 text-white',
-  WARNING:     'bg-amber-400 text-amber-950',
-  NOTICE:      'bg-yellow-200 text-yellow-900',
-  OK:          'bg-emerald-100 text-emerald-700',
-  UNSCHEDULED: 'bg-slate-200 text-slate-700',
+  OVERDUE:     'bg-ink text-paper font-semibold',
+  CRITICAL:    'bg-highlight text-ink font-semibold',
+  WARNING:     'bg-transparent text-ink ring-1 ring-highlight',
+  NOTICE:      'bg-transparent text-muted ring-1 ring-rule',
+  OK:          'bg-transparent text-accent',
+  UNSCHEDULED: 'bg-transparent text-muted',
 };
 
 function fmtDate(value: string | null | undefined): string {
@@ -155,13 +184,13 @@ export default function IrasSubmissionsPage() {
     <div className="px-6 py-8 max-w-7xl mx-auto">
       <div className="flex items-start justify-between mb-6">
         <div>
-          <div className="text-xs text-slate-500 mb-1">
+          <div className="text-xs text-muted mb-1">
             <Link href="/payroll" className="hover:underline">Payroll</Link>
             <span className="mx-1">/</span>
             <span>IRAS Submissions</span>
           </div>
-          <h1 className="text-2xl font-semibold text-slate-900">IRAS / CPF Submission Tracking</h1>
-          <p className="text-sm text-slate-600 mt-1">
+          <h1 className="text-2xl font-semibold text-ink">IRAS / CPF Submission Tracking</h1>
+          <p className="text-sm text-ink mt-1">
             Records every CPF e-Submit, annual IR8A / Appendix 8A / 8B, and per-employee IR21 filing.
             Capture the IRAS / CPF Board reference number when submitted, then mark ACKNOWLEDGED on confirmation.
           </p>
@@ -169,7 +198,7 @@ export default function IrasSubmissionsPage() {
         {isAdmin && (
           <button
             type="button"
-            className="px-4 py-2 bg-indigo-600 text-white text-sm rounded shadow hover:bg-indigo-700"
+            className="px-4 py-2 bg-accent text-paper text-sm shadow hover:bg-accent"
             onClick={() => setCreating(true)}
           >
             + New Submission
@@ -181,9 +210,9 @@ export default function IrasSubmissionsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         {URGENCIES.map(u => {
           const n = dlSummary?.byUrgency?.[u] ?? 0;
-          const styles = URGENCY_STYLES[u] ?? 'bg-slate-100 text-slate-700';
+          const styles = URGENCY_STYLES[u] ?? 'bg-page text-ink';
           return (
-            <div key={u} className={`rounded-lg px-4 py-3 ${styles}`}>
+            <div key={u} className={` px-4 py-3 ${styles}`}>
               <div className="text-xs uppercase tracking-wide opacity-80">{u}</div>
               <div className="text-2xl font-bold mt-1">{n}</div>
             </div>
@@ -194,54 +223,54 @@ export default function IrasSubmissionsPage() {
       {/* ── Filters ─────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-3 mb-4 items-end">
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Kind</label>
+          <label className="block text-xs font-medium text-ink mb-1">Kind</label>
           <select
             value={kindFilter}
             onChange={(e) => setKindFilter(e.target.value as Kind | '')}
-            className="border border-slate-300 rounded px-2 py-1 text-sm"
+            className="border border-rule px-2 py-1 text-sm"
           >
             <option value="">All kinds</option>
             {KINDS.map(k => <option key={k} value={k}>{KIND_LABELS[k]}</option>)}
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
+          <label className="block text-xs font-medium text-ink mb-1">Status</label>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as Status | '')}
-            className="border border-slate-300 rounded px-2 py-1 text-sm"
+            className="border border-rule px-2 py-1 text-sm"
           >
             <option value="">All statuses</option>
             {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Period (YYYY-MM)</label>
+          <label className="block text-xs font-medium text-ink mb-1">Period (YYYY-MM)</label>
           <input
             type="text" placeholder="2026-05"
             value={periodFilter}
             onChange={(e) => setPeriodFilter(e.target.value)}
-            className="border border-slate-300 rounded px-2 py-1 text-sm w-28"
+            className="border border-rule px-2 py-1 text-sm w-28"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Year</label>
+          <label className="block text-xs font-medium text-ink mb-1">Year</label>
           <input
             type="number" placeholder="2026"
             value={yearFilter}
             onChange={(e) => setYearFilter(e.target.value)}
-            className="border border-slate-300 rounded px-2 py-1 text-sm w-24"
+            className="border border-rule px-2 py-1 text-sm w-24"
           />
         </div>
         <button
           type="button"
           onClick={() => { setKindFilter(''); setStatusFilter(''); setPeriodFilter(''); setYearFilter(''); }}
-          className="text-xs text-slate-600 hover:text-slate-900 underline ml-2 pb-2"
+          className="text-xs text-ink hover:text-ink underline ml-2 pb-2"
         >
           Clear
         </button>
         {summary && (
-          <div className="ml-auto text-xs text-slate-600 pb-2">
+          <div className="ml-auto text-xs text-ink pb-2">
             {list?.total ?? 0} total ·
             {' '}{summary.byStatus?.DRAFT ?? 0} draft ·
             {' '}{summary.byStatus?.SUBMITTED ?? 0} submitted ·
@@ -252,15 +281,15 @@ export default function IrasSubmissionsPage() {
       </div>
 
       {error && (
-        <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded px-3 py-2 text-sm mb-4">
+        <div className="bg-page border border-ink text-ink px-3 py-2 text-sm mb-4">
           {error}
         </div>
       )}
 
       {/* ── Submissions table ──────────────────────────────────────────── */}
-      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+      <div className="bg-paper border border-rule overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-600 text-xs uppercase tracking-wide">
+          <thead className="bg-page text-ink text-xs uppercase tracking-wide">
             <tr>
               <th className="text-left px-3 py-2">Kind</th>
               <th className="text-left px-3 py-2">Scope</th>
@@ -274,35 +303,38 @@ export default function IrasSubmissionsPage() {
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-500">Loading…</td></tr>
+              <tr><td colSpan={8} className="px-3 py-8 text-center text-muted">Loading…</td></tr>
             )}
             {!loading && (list?.submissions?.length ?? 0) === 0 && (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-500">
+              <tr><td colSpan={8} className="px-3 py-8 text-center text-muted">
                 No submissions match the current filters. Generating a CPF or IR8A file from the Payroll page will
                 auto-create a DRAFT row here.
               </td></tr>
             )}
             {list?.submissions?.map(s => (
-              <tr key={s.id} className="border-t border-slate-100 hover:bg-slate-50">
-                <td className="px-3 py-2 text-slate-900 font-medium">{KIND_LABELS[s.kind]}</td>
-                <td className="px-3 py-2 text-slate-700 font-mono text-xs">{fmtScope(s)}</td>
+              <tr key={s.id} className="border-t border-rule hover:bg-page">
+                <td className="px-3 py-2 text-ink font-medium">{KIND_LABELS[s.kind]}</td>
+                <td className="px-3 py-2 text-ink font-mono text-xs">{fmtScope(s)}</td>
                 <td className="px-3 py-2">
-                  <span className={`px-2 py-0.5 rounded-full text-xs ring-1 ${STATUS_STYLES[s.status]}`}>
+                  <span className={`px-2 py-0.5  text-xs ring-1 ${STATUS_STYLES[s.status]}`}>
                     {s.status}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-slate-700 text-xs">{fmtDate(s.deadline)}</td>
+                <td className="px-3 py-2 text-ink text-xs">
+                  <span className="tabular-nums">{fmtDate(s.deadline)}</span>
+                  <span className="block mt-0.5"><Seal cite={KIND_CITATIONS[s.kind]} /></span>
+                </td>
                 <td className="px-3 py-2">
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${URGENCY_STYLES[s.urgency] ?? ''}`}>
+                  <span className={`px-2 py-0.5  text-xs font-medium ${URGENCY_STYLES[s.urgency] ?? ''}`}>
                     {s.urgency}{s.daysUntilDeadline != null ? ` (${s.daysUntilDeadline}d)` : ''}
                   </span>
                 </td>
-                <td className="px-3 py-2 font-mono text-xs text-slate-700">{s.referenceNumber ?? '—'}</td>
-                <td className="px-3 py-2 text-xs text-slate-600">
+                <td className="px-3 py-2 font-mono text-xs text-ink">{s.referenceNumber ?? '—'}</td>
+                <td className="px-3 py-2 text-xs text-ink">
                   {s.fileName ? (
                     <div>
                       <div>{s.fileName}</div>
-                      <div className="text-slate-400">{fmtBytes(s.fileSize)} · {s.fileHash ? `${s.fileHash.slice(0, 8)}…` : 'no hash'}</div>
+                      <div className="text-muted">{fmtBytes(s.fileSize)} · {s.fileHash ? `${s.fileHash.slice(0, 8)}…` : 'no hash'}</div>
                     </div>
                   ) : '—'}
                 </td>
@@ -311,7 +343,7 @@ export default function IrasSubmissionsPage() {
                     <button
                       type="button"
                       onClick={() => setEditing(s)}
-                      className="text-indigo-600 hover:text-indigo-800 text-xs font-medium"
+                      className="text-accent hover:text-accent text-xs font-medium"
                     >
                       Manage
                     </button>
@@ -389,37 +421,37 @@ function ManageSubmissionModal({ submission, onClose, onSaved }: ManageProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
-        <div className="px-5 py-4 border-b border-slate-200 flex items-start justify-between">
+    <div className="fixed inset-0 bg-shadow flex items-center justify-center z-50 p-4">
+      <div className="bg-paper max-w-lg w-full">
+        <div className="px-5 py-4 border-b border-rule flex items-start justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Manage submission</h2>
-            <div className="text-xs text-slate-500 mt-0.5">
+            <h2 className="text-lg font-semibold text-ink">Manage submission</h2>
+            <div className="text-xs text-muted mt-0.5">
               {KIND_LABELS[submission.kind]} · {fmtScope(submission)} · currently {submission.status}
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-lg">×</button>
+          <button onClick={onClose} className="text-muted hover:text-ink text-lg">×</button>
         </div>
         <div className="px-5 py-4 space-y-4">
           {error && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded px-3 py-2 text-sm">
+            <div className="bg-page border border-ink text-ink px-3 py-2 text-sm">
               {error}
             </div>
           )}
 
           {/* Status transition */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Transition to</label>
+            <label className="block text-xs font-medium text-ink mb-1">Transition to</label>
             <select
               value={targetStatus}
               onChange={(e) => setTargetStatus(e.target.value as Status | '')}
-              className="border border-slate-300 rounded px-2 py-1 text-sm w-full"
+              className="border border-rule px-2 py-1 text-sm w-full"
             >
               <option value="">(no status change)</option>
               {allowed.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             {allowed.length === 0 && (
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-muted mt-1">
                 {submission.status === 'ACKNOWLEDGED'
                   ? 'ACKNOWLEDGED is terminal — no further transitions allowed.'
                   : 'No transitions available from this status.'}
@@ -429,49 +461,49 @@ function ManageSubmissionModal({ submission, onClose, onSaved }: ManageProps) {
 
           {/* Reference number (always editable) */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              IRAS / CPF reference number {requiresRef && <span className="text-rose-600">*</span>}
+            <label className="block text-xs font-medium text-ink mb-1">
+              IRAS / CPF reference number {requiresRef && <span className="text-ink">*</span>}
             </label>
             <input
               type="text"
               value={referenceNumber}
               onChange={(e) => setReferenceNumber(e.target.value)}
               placeholder="e.g. CPF-2026-12345"
-              className="border border-slate-300 rounded px-2 py-1 text-sm w-full font-mono"
+              className="border border-rule px-2 py-1 text-sm w-full font-mono"
             />
-            {requiresRef && <p className="text-xs text-slate-500 mt-1">Required when marking SUBMITTED.</p>}
+            {requiresRef && <p className="text-xs text-muted mt-1">Required when marking SUBMITTED.</p>}
           </div>
 
           {/* Rejection reason */}
           {requiresReason && (
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">
-                Rejection reason <span className="text-rose-600">*</span>
+              <label className="block text-xs font-medium text-ink mb-1">
+                Rejection reason <span className="text-ink">*</span>
               </label>
               <textarea
                 rows={3}
                 value={rejectedReason}
                 onChange={(e) => setRejectedReason(e.target.value)}
                 placeholder="Why did IRAS / CPF reject the filing?"
-                className="border border-slate-300 rounded px-2 py-1 text-sm w-full"
+                className="border border-rule px-2 py-1 text-sm w-full"
               />
             </div>
           )}
 
           {/* Notes */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
+            <label className="block text-xs font-medium text-ink mb-1">Notes</label>
             <textarea
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="border border-slate-300 rounded px-2 py-1 text-sm w-full"
+              className="border border-rule px-2 py-1 text-sm w-full"
             />
           </div>
 
           {/* Submission metadata */}
-          <details className="bg-slate-50 rounded px-3 py-2 text-xs text-slate-600">
-            <summary className="cursor-pointer text-slate-800 font-medium">Submission metadata</summary>
+          <details className="bg-page px-3 py-2 text-xs text-ink">
+            <summary className="cursor-pointer text-ink font-medium">Submission metadata</summary>
             <dl className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2">
               <dt>Deadline</dt><dd className="font-mono">{fmtDate(submission.deadline)}</dd>
               <dt>Submitted</dt><dd className="font-mono">{fmtDate(submission.submittedAt)}</dd>
@@ -490,17 +522,17 @@ function ManageSubmissionModal({ submission, onClose, onSaved }: ManageProps) {
             </dl>
           </details>
         </div>
-        <div className="px-5 py-3 border-t border-slate-200 flex justify-end gap-2">
+        <div className="px-5 py-3 border-t border-rule flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 rounded"
+            className="px-3 py-1.5 text-sm text-ink hover:bg-page"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={saving || (requiresRef && !referenceNumber.trim()) || (requiresReason && !rejectedReason.trim())}
-            className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 text-sm bg-accent text-paper hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? 'Saving…' : 'Save'}
           </button>
@@ -553,25 +585,25 @@ function CreateSubmissionModal({ onClose, onCreated }: CreateProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
-        <div className="px-5 py-4 border-b border-slate-200 flex items-start justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">New IRAS / CPF submission</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-lg">×</button>
+    <div className="fixed inset-0 bg-shadow flex items-center justify-center z-50 p-4">
+      <div className="bg-paper max-w-lg w-full">
+        <div className="px-5 py-4 border-b border-rule flex items-start justify-between">
+          <h2 className="text-lg font-semibold text-ink">New IRAS / CPF submission</h2>
+          <button onClick={onClose} className="text-muted hover:text-ink text-lg">×</button>
         </div>
         <div className="px-5 py-4 space-y-4">
           {error && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded px-3 py-2 text-sm">
+            <div className="bg-page border border-ink text-ink px-3 py-2 text-sm">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Kind</label>
+            <label className="block text-xs font-medium text-ink mb-1">Kind</label>
             <select
               value={kind}
               onChange={(e) => setKind(e.target.value as Kind)}
-              className="border border-slate-300 rounded px-2 py-1 text-sm w-full"
+              className="border border-rule px-2 py-1 text-sm w-full"
             >
               {KINDS.map(k => <option key={k} value={k}>{KIND_LABELS[k]}</option>)}
             </select>
@@ -579,70 +611,70 @@ function CreateSubmissionModal({ onClose, onCreated }: CreateProps) {
 
           {needsPeriod && (
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Period (YYYY-MM) <span className="text-rose-600">*</span></label>
+              <label className="block text-xs font-medium text-ink mb-1">Period (YYYY-MM) <span className="text-ink">*</span></label>
               <input
                 type="text" placeholder="2026-05"
                 value={period}
                 onChange={(e) => setPeriod(e.target.value)}
-                className="border border-slate-300 rounded px-2 py-1 text-sm w-full"
+                className="border border-rule px-2 py-1 text-sm w-full"
               />
             </div>
           )}
           {needsYear && (
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Income year <span className="text-rose-600">*</span></label>
+              <label className="block text-xs font-medium text-ink mb-1">Income year <span className="text-ink">*</span></label>
               <input
                 type="number"
                 value={year}
                 onChange={(e) => setYear(e.target.value)}
-                className="border border-slate-300 rounded px-2 py-1 text-sm w-full"
+                className="border border-rule px-2 py-1 text-sm w-full"
               />
             </div>
           )}
           {needsEmployee && (
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Employee ID <span className="text-rose-600">*</span></label>
+              <label className="block text-xs font-medium text-ink mb-1">Employee ID <span className="text-ink">*</span></label>
               <input
                 type="text"
                 value={employeeId}
                 onChange={(e) => setEmployeeId(e.target.value)}
-                className="border border-slate-300 rounded px-2 py-1 text-sm w-full font-mono"
+                className="border border-rule px-2 py-1 text-sm w-full font-mono"
               />
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">File name (optional)</label>
+            <label className="block text-xs font-medium text-ink mb-1">File name (optional)</label>
             <input
               type="text"
               value={fileName}
               onChange={(e) => setFileName(e.target.value)}
-              className="border border-slate-300 rounded px-2 py-1 text-sm w-full"
+              className="border border-rule px-2 py-1 text-sm w-full"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
+            <label className="block text-xs font-medium text-ink mb-1">Notes</label>
             <textarea
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="border border-slate-300 rounded px-2 py-1 text-sm w-full"
+              className="border border-rule px-2 py-1 text-sm w-full"
             />
           </div>
 
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted">
             Tip: generating a CPF or IR8A file from the Payroll page auto-creates a DRAFT row here —
             you only need this dialog for manual entries (e.g. amendments).
           </p>
         </div>
-        <div className="px-5 py-3 border-t border-slate-200 flex justify-end gap-2">
-          <button onClick={onClose} className="px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 rounded">
+        <div className="px-5 py-3 border-t border-rule flex justify-end gap-2">
+          <button onClick={onClose} className="px-3 py-1.5 text-sm text-ink hover:bg-page">
             Cancel
           </button>
           <button
             onClick={handleCreate}
             disabled={saving || (needsPeriod && !period) || (needsYear && !year) || (needsEmployee && !employeeId)}
-            className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 text-sm bg-accent text-paper hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? 'Creating…' : 'Create DRAFT'}
           </button>
