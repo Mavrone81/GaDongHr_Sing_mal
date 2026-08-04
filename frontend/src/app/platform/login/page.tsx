@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 function apiUrl() {
   return process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:4000/api`;
 }
-const INPUT = 'w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2.5 text-sm text-white focus:border-indigo-400 focus:outline-none';
+const INPUT = 'w-full border border-rule bg-shadow px-3 py-2.5 text-sm text-paper focus:border-accent focus:outline-none';
 
 export default function PlatformLogin() {
   const router = useRouter();
@@ -75,35 +75,35 @@ export default function PlatformLogin() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 p-6">
+    <div className="min-h-screen flex items-center justify-center bg-shadow p-6">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          <div className="text-xl font-black tracking-tight text-white">GADONGHR</div>
-          <div className="text-xs font-bold uppercase tracking-[0.3em] text-indigo-400">Platform Operator</div>
+          <div className="text-xl font-black tracking-tight text-paper">GADONGHR</div>
+          <div className="text-xs font-bold uppercase tracking-[0.3em] text-accent">Platform Operator</div>
         </div>
-        {error && <div className="mb-4 rounded-lg bg-rose-950 border border-rose-800 px-4 py-2.5 text-sm text-rose-300">{error}</div>}
+        {error && <div className="mb-4 bg-ink border border-ink px-4 py-2.5 text-sm text-ink">{error}</div>}
 
         {step === 'creds' && (
           <form onSubmit={submitCreds} className="space-y-3">
             <input className={INPUT} type="email" placeholder="Operator email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             <input className={INPUT} type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-            <button disabled={loading} className="w-full rounded-lg bg-indigo-600 py-2.5 font-bold text-white hover:bg-indigo-500 disabled:opacity-60">{loading ? '…' : 'Sign in'}</button>
+            <button disabled={loading} className="w-full bg-accent py-2.5 font-bold text-paper hover:bg-accent disabled:opacity-60">{loading ? '…' : 'Sign in'}</button>
           </form>
         )}
         {step === 'mfa' && (
           <form onSubmit={submitMfa} className="space-y-3">
-            <p className="text-sm text-slate-300">Enter the 6-digit code from your authenticator.</p>
+            <p className="text-sm text-muted">Enter the 6-digit code from your authenticator.</p>
             <input className={INPUT} inputMode="numeric" placeholder="123456" value={mfaCode} onChange={(e) => setMfaCode(e.target.value)} required />
-            <button disabled={loading} className="w-full rounded-lg bg-indigo-600 py-2.5 font-bold text-white hover:bg-indigo-500 disabled:opacity-60">Verify</button>
+            <button disabled={loading} className="w-full bg-accent py-2.5 font-bold text-paper hover:bg-accent disabled:opacity-60">Verify</button>
           </form>
         )}
         {step === 'setup' && (
           <form onSubmit={enableMfa} className="space-y-3">
-            <p className="text-sm text-slate-300">Set up MFA (mandatory). Scan the QR with your authenticator app (or paste the secret), then enter a code:</p>
-            {qr && <img src={qr} alt="MFA QR code" className="mx-auto h-44 w-44 rounded-lg bg-white p-2" />}
-            <div className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 font-mono text-xs text-indigo-300 break-all">{secret}</div>
+            <p className="text-sm text-muted">Set up MFA (mandatory). Scan the QR with your authenticator app (or paste the secret), then enter a code:</p>
+            {qr && <img src={qr} alt="MFA QR code" className="mx-auto h-44 w-44 bg-paper p-2" />}
+            <div className=" bg-shadow border border-shadow px-3 py-2 font-mono text-xs text-accent break-all">{secret}</div>
             <input className={INPUT} inputMode="numeric" placeholder="123456" value={mfaCode} onChange={(e) => setMfaCode(e.target.value)} required />
-            <button disabled={loading} className="w-full rounded-lg bg-indigo-600 py-2.5 font-bold text-white hover:bg-indigo-500 disabled:opacity-60">Enable MFA &amp; continue</button>
+            <button disabled={loading} className="w-full bg-accent py-2.5 font-bold text-paper hover:bg-accent disabled:opacity-60">Enable MFA &amp; continue</button>
           </form>
         )}
       </div>

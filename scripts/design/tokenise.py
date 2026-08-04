@@ -33,6 +33,9 @@ HUES = (r'(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|'
 RULES = [
     # ── shadows: removed entirely ─────────────────────────────────────────
     (r'\bshadow-(?:sm|md|lg|xl|2xl|inner|none)\b', ''),
+    # Custom shadow utilities from tailwind.config. `shadow-(sm|md|lg...)`
+    # does not match these, so eight `shadow-card` survived every wave.
+    (r'\bshadow-(?:card|primary|soft|glow)\b', ''),
     (r'\bshadow-' + HUES + r'-\d{2,3}(?:/\d+)?\b', ''),
     (r'\bshadow-(?:black|white)(?:/\d+)?\b', ''),
     (r'\bdrop-shadow(?:-\w+)?\b', ''),

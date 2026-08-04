@@ -51,8 +51,8 @@ function Donut({
       </svg>
       {(centerLabel || centerSub) && (
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          {centerLabel && <span className="text-xl font-black text-slate-900 tracking-tighter leading-none">{centerLabel}</span>}
-          {centerSub && <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">{centerSub}</span>}
+          {centerLabel && <span className="text-xl font-black text-ink tracking-tighter leading-none">{centerLabel}</span>}
+          {centerSub && <span className="text-[8px] font-black text-muted uppercase tracking-widest mt-1">{centerSub}</span>}
         </div>
       )}
     </div>
@@ -65,9 +65,9 @@ function Legend({ segments }: { segments: { label: string; value: number; color:
     <div className="flex flex-col gap-2.5 flex-1 min-w-0">
       {segments.map((seg) => (
         <div key={seg.label} className="flex items-center gap-2.5">
-          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: seg.color }} />
-          <span className="text-[10px] font-bold text-slate-600 truncate flex-1">{seg.label}</span>
-          <span className="text-[10px] font-black text-slate-900">{Math.round((seg.value / total) * 100)}%</span>
+          <span className="w-2.5 h-2.5 shrink-0" style={{ background: seg.color }} />
+          <span className="text-[10px] font-bold text-ink truncate flex-1">{seg.label}</span>
+          <span className="text-[10px] font-black text-ink">{Math.round((seg.value / total) * 100)}%</span>
         </div>
       ))}
     </div>
@@ -77,7 +77,7 @@ function Legend({ segments }: { segments: { label: string; value: number; color:
 function EmptyState({ label }: { label: string }) {
   return (
     <div className="flex items-center justify-center py-10">
-      <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest text-center">{label}</p>
+      <p className="text-[9px] font-black text-muted uppercase tracking-widest text-center">{label}</p>
     </div>
   );
 }
@@ -90,23 +90,23 @@ function GlanceTile({
   accent: 'navy' | 'gold' | 'emerald' | 'amber'; href?: string; loading?: boolean;
 }) {
   const ring: Record<string, string> = {
-    navy: 'bg-indigo-50 text-indigo-600', gold: 'bg-gold-50 text-gold-600',
-    emerald: 'bg-emerald-50 text-emerald-600', amber: 'bg-amber-50 text-amber-600',
+    navy: 'bg-page text-accent', gold: 'bg-page text-highlight',
+    emerald: 'bg-page text-accent', amber: 'bg-page text-ink',
   };
   const subColor: Record<string, string> = {
-    navy: 'text-indigo-500', gold: 'text-gold-600', emerald: 'text-emerald-600', amber: 'text-amber-600',
+    navy: 'text-accent', gold: 'text-highlight', emerald: 'text-accent', amber: 'text-ink',
   };
   const Wrapper = href ? Link : 'div';
   return (
-    <Wrapper href={href as string} className="bg-white rounded-[1.5rem] border border-slate-100 shadow-card p-5 flex flex-col gap-3 group hover:border-gold-200 transition-all">
+    <Wrapper href={href as string} className="bg-paper border border-rule p-5 flex flex-col gap-3 group hover:border-highlight transition-all">
       <div className="flex items-center justify-between">
-        <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base ${ring[accent]}`}>{icon}</div>
-        <span className="text-[8px] font-black text-slate-300 uppercase tracking-[0.2em]">{label}</span>
+        <div className={`w-9 h-9  flex items-center justify-center text-base ${ring[accent]}`}>{icon}</div>
+        <span className="text-[8px] font-black text-muted uppercase tracking-[0.2em]">{label}</span>
       </div>
       {loading ? (
-        <div className="h-8 w-16 bg-slate-100 rounded-lg animate-pulse" />
+        <div className="h-8 w-16 bg-page animate-pulse" />
       ) : (
-        <h3 className="text-3xl font-black text-slate-900 tracking-tighter leading-none">{value}</h3>
+        <h3 className="text-3xl font-black text-ink tracking-tighter leading-none">{value}</h3>
       )}
       {sub && <p className={`text-[8px] font-black uppercase tracking-widest ${subColor[accent]}`}>{sub}</p>}
     </Wrapper>
@@ -116,18 +116,18 @@ function GlanceTile({
 // ─── Section Header ───────────────────────────────────────────────────────────
 function SectionHeader({ title, badge, href, color = 'navy' }: { title: string; badge?: string; href?: string; color?: string }) {
   const colorMap: Record<string, string> = {
-    navy: 'bg-indigo-600', gold: 'bg-gold-500', emerald: 'bg-emerald-500',
-    amber: 'bg-amber-500', red: 'bg-red-500', slate: 'bg-slate-700',
+    navy: 'bg-accent', gold: 'bg-highlight', emerald: 'bg-accent',
+    amber: 'bg-highlight', red: 'bg-ink', slate: 'bg-muted',
   };
   return (
     <div className="flex items-center justify-between mb-6">
       <div className="flex items-center gap-4">
-        <div className={`w-1.5 h-8 ${colorMap[color] ?? colorMap.navy} rounded-full`}></div>
-        <h3 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.25em]">{title}</h3>
-        {badge && <span className="text-[8px] font-black px-2.5 py-1 bg-gold-50 border border-gold-200 text-gold-600 rounded-full uppercase tracking-widest">{badge}</span>}
+        <div className={`w-1.5 h-8 ${colorMap[color] ?? colorMap.navy} `}></div>
+        <h3 className="text-[11px] font-black text-ink uppercase tracking-[0.25em]">{title}</h3>
+        {badge && <span className="text-[8px] font-black px-2.5 py-1 bg-page border border-highlight text-highlight uppercase tracking-widest">{badge}</span>}
       </div>
       {href && (
-        <Link href={href} className="label-form hover:text-gold-600 transition-colors flex items-center gap-2">
+        <Link href={href} className="label-form hover:text-highlight transition-colors flex items-center gap-2">
           View All <span>→</span>
         </Link>
       )}
@@ -159,16 +159,27 @@ const titleCase = (s: string) =>
   s.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
 
 // Donut palette (navy → gold → neutrals)
-const DONUT = ['#1c3a66', '#b8893d', '#4d6fa3', '#cda64c', '#7d9bc4', '#cbd5e1'];
+// Donut series from the tokens. These were frozen hexes from the retired 2026
+// navy/gold palette, so the chart kept rendering the old brand on a converted
+// page — and being SVG fills, no class-based check could see them. Colour-mix
+// gives the intermediate steps a six-series chart needs from three tokens.
+const DONUT = [
+  'var(--accent)',
+  'var(--highlight)',
+  'color-mix(in srgb, var(--accent) 55%, var(--paper))',
+  'color-mix(in srgb, var(--highlight) 55%, var(--paper))',
+  'var(--muted)',
+  'var(--rule)',
+];
 
 // Map a real IRAS submission status to a badge tone
 function irasTone(status: string, urgency: string) {
-  if (status === 'ACKNOWLEDGED') return { dot: 'bg-emerald-500', txt: 'text-emerald-600', label: 'Acknowledged' };
-  if (status === 'REJECTED')     return { dot: 'bg-red-500',     txt: 'text-red-600',     label: 'Rejected' };
-  if (urgency === 'OVERDUE')     return { dot: 'bg-red-500',     txt: 'text-red-600',     label: 'Overdue' };
-  if (status === 'SUBMITTED')    return { dot: 'bg-indigo-500',  txt: 'text-indigo-600',  label: 'Submitted' };
-  if (urgency === 'DUE_SOON')    return { dot: 'bg-amber-500',   txt: 'text-amber-600',   label: 'Due soon' };
-  return { dot: 'bg-slate-400', txt: 'text-slate-500', label: titleCase(status || 'Draft') };
+  if (status === 'ACKNOWLEDGED') return { dot: 'bg-accent', txt: 'text-accent', label: 'Acknowledged' };
+  if (status === 'REJECTED')     return { dot: 'bg-ink',     txt: 'text-ink',     label: 'Rejected' };
+  if (urgency === 'OVERDUE')     return { dot: 'bg-ink',     txt: 'text-ink',     label: 'Overdue' };
+  if (status === 'SUBMITTED')    return { dot: 'bg-accent',  txt: 'text-accent',  label: 'Submitted' };
+  if (urgency === 'DUE_SOON')    return { dot: 'bg-highlight',   txt: 'text-ink',   label: 'Due soon' };
+  return { dot: 'bg-muted', txt: 'text-muted', label: titleCase(status || 'Draft') };
 }
 
 export default function ManagementDashboard() {
@@ -352,17 +363,17 @@ export default function ManagementDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
 
         {/* Payroll Summary */}
-        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-card p-6 lg:p-8 flex flex-col">
+        <div className="bg-paper border border-rule p-6 lg:p-8 flex flex-col">
           <SectionHeader title="Payroll Summary" badge={payrollBadge} href="/payroll" color="navy" />
           <div className="flex-1 flex flex-col justify-center">
             {loading ? (
-              <div className="h-9 w-40 bg-slate-100 rounded-xl animate-pulse" />
+              <div className="h-9 w-40 bg-page animate-pulse" />
             ) : (
-              <h3 className="text-3xl font-black text-slate-900 tracking-tighter leading-none">
+              <h3 className="text-3xl font-black text-ink tracking-tighter leading-none">
                 {stats?.latestPayrollRun?.amount != null ? SGD(stats.latestPayrollRun.amount) : payrollBadge}
               </h3>
             )}
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-3">
+            <p className="text-[9px] font-black text-muted uppercase tracking-widest mt-3">
               {stats?.latestPayrollRun ? 'Latest run' : 'No payroll run yet'}
             </p>
             {!loading && stats?.latestPayrollRun && (
@@ -373,17 +384,17 @@ export default function ManagementDashboard() {
               </div>
             )}
           </div>
-          <Link href="/payroll" className="mt-6 block w-full py-3 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 shadow-primary transition-all active:scale-95 text-center">
+          <Link href="/payroll" className="mt-6 block w-full py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95 text-center">
             ⚡ Review &amp; Authorise
           </Link>
         </div>
 
         {/* Leave Overview donut */}
-        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-card p-6 lg:p-8">
+        <div className="bg-paper border border-rule p-6 lg:p-8">
           <SectionHeader title="Leave Overview" href="/leave/registry" color="gold" />
           {loading ? (
             <div className="h-[132px] flex items-center justify-center">
-              <div className="w-[132px] h-[132px] rounded-full border-[16px] border-slate-100 animate-pulse" />
+              <div className="w-[132px] h-[132px] border-[16px] border-rule animate-pulse" />
             </div>
           ) : leaveSegments.length ? (
             <div className="flex items-center gap-6">
@@ -396,13 +407,13 @@ export default function ManagementDashboard() {
         </div>
 
         {/* Action Items */}
-        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-card p-6 lg:p-8">
+        <div className="bg-paper border border-rule p-6 lg:p-8">
           <SectionHeader title="Action Items" color="amber" />
           <div className="space-y-3">
             {actionItems.map((it) => (
-              <Link key={it.label} href={it.path} className="flex items-center justify-between p-4 rounded-2xl border bg-slate-50 border-slate-100 hover:border-gold-200 hover:bg-gold-50/40 transition-all group">
-                <span className="text-[10px] font-bold text-slate-700 group-hover:text-slate-900 truncate">{it.label}</span>
-                <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg border ${it.accent ? 'bg-gold-50 text-gold-600 border-gold-200' : 'bg-white text-slate-500 border-slate-200'}`}>
+              <Link key={it.label} href={it.path} className="flex items-center justify-between p-4 border bg-page border-rule hover:border-highlight hover:bg-page/40 transition-all group">
+                <span className="text-[10px] font-bold text-ink group-hover:text-ink truncate">{it.label}</span>
+                <span className={`text-[10px] font-black px-2.5 py-1  border ${it.accent ? 'bg-page text-highlight border-highlight' : 'bg-paper text-muted border-rule'}`}>
                   {loading ? '…' : String(it.count).padStart(2, '0')}
                 </span>
               </Link>
@@ -416,31 +427,31 @@ export default function ManagementDashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
 
         {/* Statutory Compliance — real IRAS/CPF submission status by kind */}
-        <div className="xl:col-span-2 bg-white rounded-[2rem] border border-slate-100 shadow-card overflow-hidden">
-          <div className="p-4 sm:p-6 lg:p-8 border-b border-slate-50">
+        <div className="xl:col-span-2 bg-paper border border-rule overflow-hidden">
+          <div className="p-4 sm:p-6 lg:p-8 border-b border-rule">
             <SectionHeader title="Statutory Compliance" badge={payrollBadge} href="/payroll/iras-submissions" color="navy" />
           </div>
           <div className="p-4 sm:p-6 lg:p-8">
             {loading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {[1, 2, 3, 4].map((i) => <div key={i} className="h-14 bg-slate-50 rounded-2xl animate-pulse" />)}
+                {[1, 2, 3, 4].map((i) => <div key={i} className="h-14 bg-page animate-pulse" />)}
               </div>
             ) : (stats?.iras?.length ?? 0) > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {stats!.iras.map((it) => {
                   const tone = irasTone(it.status, it.urgency);
                   return (
-                    <div key={it.kind} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                    <div key={it.kind} className="flex items-center justify-between p-4 bg-page border border-rule">
                       <div className="min-w-0">
-                        <span className="text-[10px] font-bold text-slate-700 block truncate">{titleCase(it.kind)}</span>
+                        <span className="text-[10px] font-bold text-ink block truncate">{titleCase(it.kind)}</span>
                         {it.daysUntilDeadline != null && (
-                          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                          <span className="text-[8px] font-black text-muted uppercase tracking-widest">
                             {it.daysUntilDeadline < 0 ? `${Math.abs(it.daysUntilDeadline)}d overdue` : `T-${it.daysUntilDeadline} days`}
                           </span>
                         )}
                       </div>
                       <span className="flex items-center gap-2 shrink-0">
-                        <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`} />
+                        <span className={`w-1.5 h-1.5  ${tone.dot}`} />
                         <span className={`text-[9px] font-black uppercase tracking-widest ${tone.txt}`}>{tone.label}</span>
                       </span>
                     </div>
@@ -452,21 +463,21 @@ export default function ManagementDashboard() {
             )}
           </div>
           <div className="px-8 pb-8 flex gap-4">
-            <Link href="/payroll" className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 shadow-primary transition-all active:scale-95 text-center">
+            <Link href="/payroll" className="flex-1 py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95 text-center">
               ⚡ Review &amp; Authorise Payroll
             </Link>
-            <Link href="/payroll/iras-submissions" className="px-6 py-3 bg-white border border-slate-200 rounded-2xl text-[10px] font-black text-slate-500 uppercase tracking-widest hover:border-gold-300 hover:text-gold-600 transition-all">
+            <Link href="/payroll/iras-submissions" className="px-6 py-3 bg-paper border border-rule text-[10px] font-black text-muted uppercase tracking-widest hover:border-highlight hover:text-highlight transition-all">
               Submissions
             </Link>
           </div>
         </div>
 
         {/* Department Load donut (real) */}
-        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-card p-6 lg:p-8">
+        <div className="bg-paper border border-rule p-6 lg:p-8">
           <SectionHeader title="Department Load" href="/employees" color="slate" />
           {loading ? (
             <div className="h-[132px] flex items-center justify-center">
-              <div className="w-[132px] h-[132px] rounded-full border-[16px] border-slate-100 animate-pulse" />
+              <div className="w-[132px] h-[132px] border-[16px] border-rule animate-pulse" />
             </div>
           ) : deptSegments.length ? (
             <div className="flex items-center gap-6">
@@ -481,11 +492,11 @@ export default function ManagementDashboard() {
 
       {/* ── ROW 4: Command Queue (live signals only) ──────────────────────── */}
       {(loading || queue.length > 0) && (
-        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-card p-6 lg:p-8">
+        <div className="bg-paper border border-rule p-6 lg:p-8">
           <SectionHeader title="Command Queue" badge="Actions Due" color="amber" />
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 bg-slate-50 rounded-2xl animate-pulse" />)}
+              {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 bg-page animate-pulse" />)}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -493,16 +504,16 @@ export default function ManagementDashboard() {
                 <Link
                   key={i}
                   href={task.path}
-                  className={`flex items-center gap-4 p-4 rounded-2xl border transition-all group ${
-                    task.urgent ? 'bg-gold-50/50 border-gold-100 hover:bg-gold-50' : 'bg-slate-50 border-slate-100 hover:bg-slate-100'
+                  className={`flex items-center gap-4 p-4  border transition-all group ${
+                    task.urgent ? 'bg-page/50 border-highlight hover:bg-page' : 'bg-page border-rule hover:bg-page'
                   }`}
                 >
-                  <span className={`text-lg ${task.urgent ? 'text-gold-500' : 'text-slate-300'}`}>{task.icon}</span>
+                  <span className={`text-lg ${task.urgent ? 'text-highlight' : 'text-muted'}`}>{task.icon}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight truncate">{task.title}</p>
-                    <p className={`text-[9px] font-black mt-1 uppercase tracking-widest truncate ${task.urgent ? 'text-gold-600' : 'text-slate-400'}`}>{task.sub}</p>
+                    <p className="text-[10px] font-black text-ink uppercase tracking-tight truncate">{task.title}</p>
+                    <p className={`text-[9px] font-black mt-1 uppercase tracking-widest truncate ${task.urgent ? 'text-highlight' : 'text-muted'}`}>{task.sub}</p>
                   </div>
-                  <span className="text-slate-300 group-hover:text-gold-600 transition-colors font-black">→</span>
+                  <span className="text-muted group-hover:text-highlight transition-colors font-black">→</span>
                 </Link>
               ))}
             </div>
@@ -511,32 +522,32 @@ export default function ManagementDashboard() {
       )}
 
       {/* ── ROW 5: Quick Access Module Grid ───────────────────────────────── */}
-      <div className="bg-white rounded-[2rem] border border-slate-100 shadow-card p-6 lg:p-8">
+      <div className="bg-paper border border-rule p-6 lg:p-8">
         <SectionHeader title="All Modules" badge="RBAC Enabled" color="navy" />
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           {[
-            { name: 'Employees',    path: '/employees',     icon: '◈', color: 'hover:border-indigo-400 hover:bg-indigo-50' },
-            { name: 'Payroll',      path: '/payroll',       icon: '◆', color: 'hover:border-indigo-400 hover:bg-indigo-50', highlight: true },
-            { name: 'Leave',        path: '/leave',         icon: '◌', color: 'hover:border-gold-400 hover:bg-gold-50' },
-            { name: 'Claims',       path: '/claims',        icon: '◫', color: 'hover:border-violet-400 hover:bg-violet-50' },
-            { name: 'Attendance',   path: '/attendance',    icon: '◉', color: 'hover:border-sky-400 hover:bg-sky-50' },
-            { name: 'Recruitment',  path: '/recruitment',   icon: '◇', color: 'hover:border-emerald-400 hover:bg-emerald-50' },
-            { name: 'Performance',  path: '/performance',   icon: '▣', color: 'hover:border-violet-400 hover:bg-violet-50' },
-            { name: 'Training',     path: '/training',      icon: '◑', color: 'hover:border-gold-400 hover:bg-gold-50' },
-            { name: 'Reports',      path: '/reports',       icon: '▤', color: 'hover:border-emerald-400 hover:bg-emerald-50' },
-            { name: 'Settings',     path: '/settings',      icon: '◎', color: 'hover:border-slate-400 hover:bg-slate-50' },
+            { name: 'Employees',    path: '/employees',     icon: '◈', color: 'hover:border-accent hover:bg-page' },
+            { name: 'Payroll',      path: '/payroll',       icon: '◆', color: 'hover:border-accent hover:bg-page', highlight: true },
+            { name: 'Leave',        path: '/leave',         icon: '◌', color: 'hover:border-highlight hover:bg-page' },
+            { name: 'Claims',       path: '/claims',        icon: '◫', color: 'hover:border-accent hover:bg-page' },
+            { name: 'Attendance',   path: '/attendance',    icon: '◉', color: 'hover:border-accent hover:bg-page' },
+            { name: 'Recruitment',  path: '/recruitment',   icon: '◇', color: 'hover:border-accent hover:bg-page' },
+            { name: 'Performance',  path: '/performance',   icon: '▣', color: 'hover:border-accent hover:bg-page' },
+            { name: 'Training',     path: '/training',      icon: '◑', color: 'hover:border-highlight hover:bg-page' },
+            { name: 'Reports',      path: '/reports',       icon: '▤', color: 'hover:border-accent hover:bg-page' },
+            { name: 'Settings',     path: '/settings',      icon: '◎', color: 'hover:border-rule hover:bg-page' },
           ].map((mod) => (
             <Link
               key={mod.name}
               href={mod.path}
-              className={`flex flex-col items-center gap-4 p-6 rounded-2xl border transition-all group cursor-pointer active:scale-95 ${
-                mod.highlight ? 'bg-indigo-600 border-indigo-600 text-white shadow-primary' : `bg-white border-slate-100 ${mod.color}`
+              className={`flex flex-col items-center gap-4 p-6  border transition-all group cursor-pointer active:scale-95 ${
+                mod.highlight ? 'bg-accent border-accent text-paper' : `bg-paper border-rule ${mod.color}`
               }`}
             >
-              <span className={`text-2xl transition-transform group-hover:scale-125 duration-300 ${mod.highlight ? 'text-white' : 'text-slate-400 group-hover:text-current'}`}>
+              <span className={`text-2xl transition-transform group-hover:scale-125 duration-300 ${mod.highlight ? 'text-paper' : 'text-muted group-hover:text-current'}`}>
                 {mod.icon}
               </span>
-              <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${mod.highlight ? 'text-white' : 'text-slate-500 group-hover:text-slate-900'} transition-colors`}>
+              <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${mod.highlight ? 'text-paper' : 'text-muted group-hover:text-ink'} transition-colors`}>
                 {mod.name}
               </span>
             </Link>

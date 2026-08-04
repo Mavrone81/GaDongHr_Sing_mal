@@ -3,18 +3,24 @@
 import React from 'react';
 
 /* ─────────────────────────────────────────────────────────────────────
-   GaDongHR brand mark — inline SVG re-creation of the 2026 hexagon logo.
-   Rendered inline (rather than the cream-background JPEG) so it sits
-   cleanly on dark navy chrome. Colours are configurable so the same mark
-   works on light surfaces (navy stroke + gold chevron) and dark surfaces
-   (white stroke + gold chevron). The cream-background JPEG lives at
-   /public/gadonghr-logo.jpg and is used only on light backgrounds.
+   GaDongHR brand mark — inline SVG hexagon logo.
+
+   Rendered inline (rather than the cream-background JPEG) so it sits cleanly
+   on the dark chrome. Colours default to the Official Record tokens rather
+   than frozen hexes: the mark previously hardcoded #ffffff and #cda64c, the
+   latter being gold-400 from the RETIRED 2026 navy/gold palette, and the
+   comment still claimed the chrome was navy — it is --shadow, a dark green.
+   Using the tokens means the mark follows the theme (including dark mode)
+   instead of drifting away from the product around it.
+
+   The shape is unchanged; only the colour source moved. The cream-background
+   JPEG lives at /public/gadonghr-logo.jpg and is used only on light grounds.
    ───────────────────────────────────────────────────────────────────── */
 
 export function GaDongMark({
   size = 36,
-  stroke = '#ffffff',
-  accent = '#cda64c',
+  stroke = 'var(--paper)',
+  accent = 'var(--highlight)',
   className = '',
 }: {
   size?: number;
@@ -66,7 +72,7 @@ export default function GaDongLogo({
   markSize = 36,
   className = '',
 }: {
-  /** 'dark' = on dark navy chrome (white mark) · 'light' = on light/cream (navy mark) */
+  /** 'dark' = on the --shadow chrome (paper mark) · 'light' = on paper (ink mark) */
   variant?: 'dark' | 'light';
   showWordmark?: boolean;
   showTagline?: boolean;
@@ -74,19 +80,19 @@ export default function GaDongLogo({
   className?: string;
 }) {
   const onDark = variant === 'dark';
-  const stroke = onDark ? '#ffffff' : '#112440';
-  const wordColor = onDark ? 'text-white' : 'text-slate-900';
+  const stroke = onDark ? 'var(--paper)' : 'var(--ink)';
+  const wordColor = onDark ? 'text-paper' : 'text-ink';
 
   return (
     <div className={`flex items-center gap-3 ${className}`}>
-      <GaDongMark size={markSize} stroke={stroke} accent="#cda64c" />
+      <GaDongMark size={markSize} stroke={stroke} accent="var(--highlight)" />
       {showWordmark && (
         <div className="flex flex-col min-w-0 leading-none">
           <span className={`font-black tracking-[0.18em] uppercase ${wordColor}`} style={{ fontSize: markSize * 0.46 }}>
             GaDongHR
           </span>
           {showTagline && (
-            <span className="mt-1 text-[8px] font-black tracking-[0.3em] uppercase text-gold-500">
+            <span className="mt-1 text-[8px] font-black tracking-[0.3em] uppercase text-highlight">
               CRM · HR · Payroll
             </span>
           )}

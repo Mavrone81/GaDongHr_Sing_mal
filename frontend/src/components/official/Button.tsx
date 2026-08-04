@@ -19,7 +19,7 @@ export function Button({
   const styles = disabled
     ? 'bg-transparent text-muted border-rule cursor-not-allowed'
     : variant === 'accent'
-      ? 'bg-accent text-white border-accent'
+      ? 'bg-accent text-paper border-accent'
       : variant === 'secondary'
         ? 'bg-transparent text-accent border-accent'
         : 'bg-transparent text-muted border-rule';

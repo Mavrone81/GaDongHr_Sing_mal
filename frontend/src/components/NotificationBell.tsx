@@ -14,15 +14,27 @@ interface Notification {
   createdAt: string;
 }
 
+/**
+ * Eight notification categories, eight distinguishable chips.
+ *
+ * This was eight hues; mapped onto the tokens it became two appearances, so
+ * six of the eight categories stopped being distinguishable in the dropdown.
+ * Varying fill and border restores the distinction without inventing colour.
+ *
+ * COMPLIANCE is the one that is filled: a compliance notice is the only
+ * category here with a statutory deadline behind it, and it should be the
+ * thing the eye lands on first. The category name is printed inside every
+ * chip regardless, so nothing rests on telling the shades apart.
+ */
 const CATEGORY_COLORS: Record<string, string> = {
-  PAYROLL:     'bg-indigo-100 text-indigo-700',
-  LEAVE:       'bg-cyan-100 text-cyan-700',
-  ONBOARDING:  'bg-emerald-100 text-emerald-700',
-  ATTENDANCE:  'bg-amber-100 text-amber-700',
-  COMPLIANCE:  'bg-red-100 text-red-700',
-  PERFORMANCE: 'bg-violet-100 text-violet-700',
-  CLAIMS:      'bg-sky-100 text-sky-700',
-  SYSTEM:      'bg-slate-100 text-slate-600',
+  COMPLIANCE:  'bg-ink text-paper',
+  PAYROLL:     'bg-accent text-paper',
+  LEAVE:       'bg-paper text-accent border border-accent',
+  ATTENDANCE:  'bg-paper text-ink border border-ink',
+  CLAIMS:      'bg-paper text-ink border border-highlight',
+  PERFORMANCE: 'bg-highlight text-ink',
+  ONBOARDING:  'bg-page text-accent',
+  SYSTEM:      'bg-page text-muted border border-rule',
 };
 
 function timeAgo(iso: string): string {
@@ -111,15 +123,15 @@ export default function NotificationBell() {
       {/* Bell button */}
       <button
         onClick={openDropdown}
-        className="relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors"
+        className="relative w-8 h-8 flex items-center justify-center hover:bg-page transition-colors"
         aria-label="Notifications"
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
           <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
         </svg>
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center leading-none">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 bg-ink text-paper text-[9px] font-black flex items-center justify-center leading-none">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
@@ -127,13 +139,13 @@ export default function NotificationBell() {
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 top-10 w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 z-50 overflow-hidden">
+        <div className="absolute right-0 top-10 w-80 bg-paper border border-rule z-50 overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-rule">
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-black text-slate-800 uppercase tracking-widest">Notifications</span>
+              <span className="text-[11px] font-black text-ink uppercase tracking-widest">Notifications</span>
               {unreadCount > 0 && (
-                <span className="text-[9px] font-black px-1.5 py-0.5 bg-red-500 text-white rounded-full">
+                <span className="text-[9px] font-black px-1.5 py-0.5 bg-ink text-paper ">
                   {unreadCount} new
                 </span>
               )}
@@ -142,7 +154,7 @@ export default function NotificationBell() {
               {unreadCount > 0 && (
                 <button
                   onClick={markAllRead}
-                  className="text-[9px] font-bold text-indigo-600 hover:text-indigo-800 uppercase tracking-wide"
+                  className="text-[9px] font-bold text-accent hover:text-accent uppercase tracking-wide"
                 >
                   Mark all read
                 </button>
@@ -154,37 +166,37 @@ export default function NotificationBell() {
           <div className="max-h-80 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-8">
-                <div className="w-5 h-5 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                <div className="w-5 h-5 border-2 border-accent border-t-accent animate-spin rounded-full" />
               </div>
             ) : notifications.length === 0 ? (
               <div className="py-8 text-center">
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">No notifications</p>
+                <p className="text-[11px] font-bold text-muted uppercase tracking-widest">No notifications</p>
               </div>
             ) : (
               notifications.map(notif => (
                 <button
                   key={notif.id}
                   onClick={() => markRead(notif)}
-                  className={`w-full text-left px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors group ${
-                    !notif.isRead ? 'bg-indigo-50/40' : ''
+                  className={`w-full text-left px-4 py-3 border-b border-rule hover:bg-page transition-colors group ${
+                    !notif.isRead ? 'bg-page' : ''
                   }`}
                 >
                   <div className="flex items-start gap-2.5">
                     {/* Unread dot */}
-                    <div className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${!notif.isRead ? 'bg-indigo-500' : 'bg-transparent'}`} />
+                    <div className={`mt-1.5 w-1.5 h-1.5  shrink-0 ${!notif.isRead ? 'bg-accent' : 'bg-transparent'}`} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                         {notif.category && (
-                          <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${CATEGORY_COLORS[notif.category] ?? CATEGORY_COLORS.SYSTEM}`}>
+                          <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5  ${CATEGORY_COLORS[notif.category] ?? CATEGORY_COLORS.SYSTEM}`}>
                             {notif.category}
                           </span>
                         )}
-                        <span className="text-[8px] text-slate-400 ml-auto shrink-0">{timeAgo(notif.createdAt)}</span>
+                        <span className="text-[8px] text-muted ml-auto shrink-0">{timeAgo(notif.createdAt)}</span>
                       </div>
-                      <p className={`text-[11px] font-bold leading-snug truncate ${!notif.isRead ? 'text-slate-800' : 'text-slate-600'}`}>
+                      <p className={`text-[11px] leading-snug truncate ${!notif.isRead ? 'font-black text-ink' : 'font-normal text-muted'}`}>
                         {notif.title}
                       </p>
-                      <p className="text-[10px] text-slate-400 leading-snug mt-0.5 line-clamp-2">
+                      <p className="text-[10px] text-muted leading-snug mt-0.5 line-clamp-2">
                         {notif.body}
                       </p>
                     </div>
@@ -195,10 +207,10 @@ export default function NotificationBell() {
           </div>
 
           {/* Footer */}
-          <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100">
+          <div className="px-4 py-2.5 bg-page border-t border-rule">
             <button
               onClick={() => { setIsOpen(false); router.push('/notifications'); }}
-              className="w-full text-center text-[10px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest py-0.5"
+              className="w-full text-center text-[10px] font-black text-accent hover:text-accent uppercase tracking-widest py-0.5"
             >
               View all notifications →
             </button>
