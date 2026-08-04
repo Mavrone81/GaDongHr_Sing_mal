@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { TONES } from '@/lib/statusTone';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
@@ -11,20 +12,21 @@ const FINANCE_ROLES = ['FINANCE_ADMIN', 'SUPER_ADMIN'];
 const APPROVER_ROLES = [...HR_ROLES, ...FINANCE_ROLES];
 
 const STATUS_COLORS: Record<string, string> = {
-  PENDING:   'bg-amber-100 text-amber-700',
-  APPROVED:  'bg-blue-100 text-blue-700',
-  REJECTED:  'bg-red-100 text-red-700',
-  CANCELLED: 'bg-slate-100 text-slate-600',
-  ACTIVE:    'bg-emerald-100 text-emerald-700',
-  SETTLED:   'bg-emerald-100 text-emerald-700',
-  WRITTEN_OFF: 'bg-rose-100 text-rose-700',
+  PENDING:     TONES.pending,
+  APPROVED:    TONES.approved,
+  ACTIVE:      TONES.active,     // being repaid
+  DEDUCTED:    TONES.active,
+  SETTLED:     TONES.done,
+  REJECTED:    TONES.critical,
+  WRITTEN_OFF: TONES.critical,   // money the company will not see again
+  CANCELLED:   TONES.inert,
 };
 
 const REPAY_COLORS: Record<string, string> = {
-  PENDING: 'bg-slate-100 text-slate-600',
-  PAID:    'bg-emerald-100 text-emerald-700',
-  OVERDUE: 'bg-red-100 text-red-700',
-  WAIVED:  'bg-amber-100 text-amber-700',
+  PENDING: 'bg-page text-ink',
+  PAID:    'bg-page text-accent',
+  OVERDUE: 'bg-page text-ink',
+  WAIVED:  'bg-page text-ink',
 };
 
 export default function LoanDetailPage() {
@@ -107,14 +109,14 @@ export default function LoanDetailPage() {
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-[400px]"><div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" /></div>;
+    return <div className="flex items-center justify-center min-h-[400px]"><div className="w-10 h-10 border-4 border-accent border-t-accent animate-spin rounded-full" /></div>;
   }
   if (error || !loan) {
     return (
       <div className="max-w-2xl mx-auto mt-16 text-center">
-        <h2 className="text-lg font-black text-slate-800 mb-2">Loan Not Found</h2>
-        <p className="text-sm text-slate-500 mb-6">{error}</p>
-        <Link href="/loans" className="text-xs font-bold text-indigo-600 hover:text-indigo-700">← Back to Loans</Link>
+        <h2 className="text-lg font-black text-ink mb-2">Loan Not Found</h2>
+        <p className="text-sm text-muted mb-6">{error}</p>
+        <Link href="/loans" className="text-xs font-bold text-accent hover:text-accent">← Back to Loans</Link>
       </div>
     );
   }
@@ -131,27 +133,27 @@ export default function LoanDetailPage() {
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <Link href="/loans" className="text-xs font-bold text-slate-500 hover:text-indigo-600">← Back to Loans</Link>
-        <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${STATUS_COLORS[loan.status] || 'bg-slate-100 text-slate-600'}`}>
+        <Link href="/loans" className="text-xs font-bold text-muted hover:text-accent">← Back to Loans</Link>
+        <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[loan.status] || 'bg-page text-ink'}`}>
           {loan.status}
         </span>
       </div>
 
       {/* Top card */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6">
-        <p className="text-xs font-mono font-black text-slate-400 mb-1">{loan.loanNumber}</p>
-        <h1 className="text-xl font-black text-slate-900">Staff Loan for {loan.employeeName}</h1>
-        <p className="text-sm text-slate-600 mt-2 italic">"{loan.reason}"</p>
+      <div className="bg-paper border border-rule p-4 sm:p-6">
+        <p className="text-xs font-mono font-black text-muted mb-1">{loan.loanNumber}</p>
+        <h1 className="text-xl font-black text-ink">Staff Loan for {loan.employeeName}</h1>
+        <p className="text-sm text-ink mt-2 italic">"{loan.reason}"</p>
 
         {/* Progress bar */}
         {['ACTIVE','SETTLED','APPROVED'].includes(loan.status) && (
           <div className="mt-5">
-            <div className="flex items-center justify-between text-xs font-bold text-slate-500 mb-2">
+            <div className="flex items-center justify-between text-xs font-bold text-muted mb-2">
               <span className="uppercase tracking-widest">Repayment Progress</span>
               <span>SGD {loan.totalRepaid.toLocaleString()} / SGD {loan.totalRepayable.toLocaleString()} ({progressPct}%)</span>
             </div>
-            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all" style={{ width: `${progressPct}%` }} />
+            <div className="h-2 bg-page overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-accent to-accent transition-all" style={{ width: `${progressPct}%` }} />
             </div>
           </div>
         )}
@@ -170,33 +172,33 @@ export default function LoanDetailPage() {
         </div>
 
         {loan.rejectionReason && (
-          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-xl">
-            <p className="text-xs font-black text-red-700 uppercase tracking-widest mb-1">Rejected</p>
-            <p className="text-sm text-red-700">{loan.rejectionReason}</p>
+          <div className="mt-4 p-3 bg-page border border-ink ">
+            <p className="text-xs font-black text-ink uppercase tracking-widest mb-1">Rejected</p>
+            <p className="text-sm text-ink">{loan.rejectionReason}</p>
           </div>
         )}
 
         {/* Action bar */}
-        <div className="mt-5 flex flex-wrap gap-2 pt-4 border-t border-slate-100">
+        <div className="mt-5 flex flex-wrap gap-2 pt-4 border-t border-rule">
           {canApprove && (
             <>
-              <button onClick={approve} className="px-4 py-2 text-xs font-bold text-emerald-600 border border-emerald-200 rounded-lg hover:bg-emerald-50">Approve</button>
-              <button onClick={reject}  className="px-4 py-2 text-xs font-bold text-red-500 border border-red-200 rounded-lg hover:bg-red-50">Reject</button>
+              <button onClick={approve} className="px-4 py-2 text-xs font-bold text-accent border border-accent hover:bg-page">Approve</button>
+              <button onClick={reject}  className="px-4 py-2 text-xs font-bold text-ink border border-ink hover:bg-page">Reject</button>
             </>
           )}
           {canActivate && (
-            <button onClick={activate} className="px-4 py-2 text-xs font-bold text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50">Activate Loan</button>
+            <button onClick={activate} className="px-4 py-2 text-xs font-bold text-accent border border-accent hover:bg-page">Activate Loan</button>
           )}
           {canCancel && (
-            <button onClick={cancelLoan} className="px-4 py-2 text-xs font-bold text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
+            <button onClick={cancelLoan} className="px-4 py-2 text-xs font-bold text-muted border border-rule hover:bg-page">Cancel</button>
           )}
           {canSettle && (
-            <button onClick={settleEarly} className="px-4 py-2 text-xs font-bold text-emerald-600 border-2 border-emerald-200 rounded-lg hover:bg-emerald-50">
+            <button onClick={settleEarly} className="px-4 py-2 text-xs font-bold text-accent border-2 border-accent hover:bg-page">
               Settle Early (SGD {(loan.earlySettlement?.settlementAmount ?? loan.outstandingBalance).toLocaleString()})
             </button>
           )}
           {['APPROVED','ACTIVE','SETTLED'].includes(loan.status) && (
-            <button onClick={loadAgreement} className="px-4 py-2 text-xs font-bold text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 ml-auto">
+            <button onClick={loadAgreement} className="px-4 py-2 text-xs font-bold text-accent border border-accent hover:bg-page ml-auto">
               {agreement ? 'Agreement loaded ↓' : 'View Loan Agreement'}
             </button>
           )}
@@ -205,41 +207,41 @@ export default function LoanDetailPage() {
 
       {/* Repayment Schedule */}
       {loan.repayments?.length > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <div className="px-4 sm:px-6 py-3 bg-slate-50 border-b border-slate-200">
-            <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest">Repayment Schedule ({loan.repayments.length})</h3>
+        <div className="bg-paper border border-rule overflow-hidden">
+          <div className="px-4 sm:px-6 py-3 bg-page border-b border-rule">
+            <h3 className="text-xs font-black text-ink uppercase tracking-widest">Repayment Schedule ({loan.repayments.length})</h3>
           </div>
 
           {/* Desktop table */}
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-slate-50/50 border-b border-slate-200">
+              <thead className="bg-page border-b border-rule">
                 <tr>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">#</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Scheduled</th>
-                  <th className="px-4 py-2.5 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">Amount</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Paid On</th>
-                  <th className="px-4 py-2.5 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">Paid Amount</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">#</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Scheduled</th>
+                  <th className="px-4 py-2.5 text-right text-[10px] font-black text-muted uppercase tracking-widest">Amount</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Paid On</th>
+                  <th className="px-4 py-2.5 text-right text-[10px] font-black text-muted uppercase tracking-widest">Paid Amount</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Status</th>
                   <th className="px-4 py-2.5 text-right"></th>
                 </tr>
               </thead>
               <tbody>
                 {loan.repayments.map((r: any) => (
-                  <tr key={r.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-4 py-2.5 text-xs font-mono font-bold text-slate-700">#{r.paymentNumber}</td>
-                    <td className="px-4 py-2.5 text-sm text-slate-600">{new Date(r.scheduledDate).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                  <tr key={r.id} className="border-b border-rule last:border-0">
+                    <td className="px-4 py-2.5 text-xs font-mono font-bold text-ink">#{r.paymentNumber}</td>
+                    <td className="px-4 py-2.5 text-sm text-ink">{new Date(r.scheduledDate).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                     <td className="px-4 py-2.5 text-sm font-bold text-right">SGD {r.scheduledAmount.toFixed(2)}</td>
-                    <td className="px-4 py-2.5 text-sm text-slate-600">{r.paidDate ? new Date(r.paidDate).toLocaleDateString('en-SG') : '—'}</td>
+                    <td className="px-4 py-2.5 text-sm text-ink">{r.paidDate ? new Date(r.paidDate).toLocaleDateString('en-SG') : '—'}</td>
                     <td className="px-4 py-2.5 text-sm font-bold text-right">{r.paidAmount ? `SGD ${r.paidAmount.toFixed(2)}` : '—'}</td>
                     <td className="px-4 py-2.5">
-                      <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-full ${REPAY_COLORS[r.status] || 'bg-slate-100 text-slate-600'}`}>
+                      <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest  ${REPAY_COLORS[r.status] || 'bg-page text-ink'}`}>
                         {r.status}
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       {r.status === 'PENDING' && isApprover && loan.status === 'ACTIVE' && (
-                        <button onClick={() => recordRepayment(r.paymentNumber)} className="text-xs font-bold text-indigo-600 hover:text-indigo-700">Mark Paid</button>
+                        <button onClick={() => recordRepayment(r.paymentNumber)} className="text-xs font-bold text-accent hover:text-accent">Mark Paid</button>
                       )}
                     </td>
                   </tr>
@@ -249,24 +251,24 @@ export default function LoanDetailPage() {
           </div>
 
           {/* Mobile cards */}
-          <div className="md:hidden divide-y divide-slate-100">
+          <div className="md:hidden divide-y divide-rule">
             {loan.repayments.map((r: any) => (
               <div key={r.id} className="p-4">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono font-bold text-slate-700">#{r.paymentNumber}</span>
-                    <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-full ${REPAY_COLORS[r.status] || 'bg-slate-100 text-slate-600'}`}>
+                    <span className="text-xs font-mono font-bold text-ink">#{r.paymentNumber}</span>
+                    <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest  ${REPAY_COLORS[r.status] || 'bg-page text-ink'}`}>
                       {r.status}
                     </span>
                   </div>
-                  <p className="text-sm font-black text-slate-900">SGD {(r.paidAmount ?? r.scheduledAmount).toFixed(2)}</p>
+                  <p className="text-sm font-black text-ink">SGD {(r.paidAmount ?? r.scheduledAmount).toFixed(2)}</p>
                 </div>
-                <p className="text-xs text-slate-500">
-                  Scheduled: <span className="font-bold text-slate-700">{new Date(r.scheduledDate).toLocaleDateString('en-SG')}</span>
-                  {r.paidDate && <> · Paid: <span className="font-bold text-slate-700">{new Date(r.paidDate).toLocaleDateString('en-SG')}</span></>}
+                <p className="text-xs text-muted">
+                  Scheduled: <span className="font-bold text-ink">{new Date(r.scheduledDate).toLocaleDateString('en-SG')}</span>
+                  {r.paidDate && <> · Paid: <span className="font-bold text-ink">{new Date(r.paidDate).toLocaleDateString('en-SG')}</span></>}
                 </p>
                 {r.status === 'PENDING' && isApprover && loan.status === 'ACTIVE' && (
-                  <button onClick={() => recordRepayment(r.paymentNumber)} className="mt-2 text-xs font-bold text-indigo-600 hover:text-indigo-700">Mark Paid →</button>
+                  <button onClick={() => recordRepayment(r.paymentNumber)} className="mt-2 text-xs font-bold text-accent hover:text-accent">Mark Paid →</button>
                 )}
               </div>
             ))}
@@ -276,15 +278,15 @@ export default function LoanDetailPage() {
 
       {/* Agreement Preview */}
       {agreement && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6">
-          <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-3">Loan Agreement</h3>
+        <div className="bg-paper border border-rule p-4 sm:p-6">
+          <h3 className="text-xs font-black text-ink uppercase tracking-widest mb-3">Loan Agreement</h3>
           <div className="prose prose-slate max-w-none text-sm" dangerouslySetInnerHTML={{ __html: agreement }} />
           <div className="mt-4 flex gap-3">
-            <button onClick={() => window.print()} className="px-4 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Print</button>
+            <button onClick={() => window.print()} className="px-4 py-2 text-xs font-bold text-ink border border-rule hover:bg-page">Print</button>
           </div>
         </div>
       )}
-      {loadingAg && <p className="text-xs text-slate-500 italic text-center">Loading agreement…</p>}
+      {loadingAg && <p className="text-xs text-muted italic text-center">Loading agreement…</p>}
     </div>
   );
 }
@@ -292,8 +294,8 @@ export default function LoanDetailPage() {
 function Meta({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{label}</p>
-      <p className="text-sm font-bold text-slate-700 mt-0.5">{value}</p>
+      <p className="text-[10px] font-black text-muted uppercase tracking-wider">{label}</p>
+      <p className="text-sm font-bold text-ink mt-0.5">{value}</p>
     </div>
   );
 }

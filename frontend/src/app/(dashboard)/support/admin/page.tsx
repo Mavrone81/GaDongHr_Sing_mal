@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { TONES } from '@/lib/statusTone';
 import { apiFetch } from '@/lib/api';
 
 type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
@@ -29,17 +30,17 @@ interface Ticket {
 }
 
 const STATUS_COLORS: Record<TicketStatus, string> = {
-  OPEN: 'bg-blue-100 text-blue-700',
-  IN_PROGRESS: 'bg-amber-100 text-amber-700',
-  RESOLVED: 'bg-emerald-100 text-emerald-700',
-  CLOSED: 'bg-slate-100 text-slate-500',
+  OPEN:        TONES.warning,   // nobody has picked it up yet
+  IN_PROGRESS: TONES.active,
+  RESOLVED:    TONES.approved,  // fixed, but the reporter has not confirmed
+  CLOSED:      TONES.done,
 };
 
 const PRIORITY_COLORS: Record<TicketPriority, string> = {
-  LOW: 'text-slate-400',
-  NORMAL: 'text-blue-500',
-  HIGH: 'text-amber-500',
-  URGENT: 'text-red-500',
+  LOW:    TONES.neutral,
+  NORMAL: TONES.pending,
+  HIGH:   TONES.warning,
+  URGENT: TONES.critical,
 };
 
 const CATEGORY_LABELS: Record<TicketCategory, string> = {
@@ -84,11 +85,11 @@ function AdminThread({ ticket: initial, onBack, onUpdated }: { ticket: Ticket; o
     <div className="flex flex-col gap-6 max-w-[860px]">
       {/* Back + meta */}
       <div className="flex items-start gap-4">
-        <button onClick={onBack} className="eyebrow-tight hover:text-indigo-600 transition-colors mt-1">← Back</button>
+        <button onClick={onBack} className="eyebrow-tight hover:text-accent transition-colors mt-1">← Back</button>
         <div className="flex-1">
-          <h2 className="text-xl font-black text-slate-900">{ticket.subject}</h2>
+          <h2 className="text-xl font-black text-ink">{ticket.subject}</h2>
           <div className="flex flex-wrap items-center gap-3 mt-2">
-            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${STATUS_COLORS[ticket.status]}`}>{ticket.status.replace('_', ' ')}</span>
+            <span className={`px-2.5 py-0.5  text-[9px] font-black uppercase tracking-widest ${STATUS_COLORS[ticket.status]}`}>{ticket.status.replace('_', ' ')}</span>
             <span className={`text-[9px] font-black uppercase tracking-widest ${PRIORITY_COLORS[ticket.priority]}`}>{ticket.priority}</span>
             <span className="label-form">{CATEGORY_LABELS[ticket.category]}</span>
             <span className="label-form">Emp: {ticket.employeeId.slice(0, 8)}…</span>
@@ -102,7 +103,7 @@ function AdminThread({ ticket: initial, onBack, onUpdated }: { ticket: Ticket; o
             value={ticket.status}
             onChange={e => updateField({ status: e.target.value as TicketStatus })}
             disabled={updating}
-            className="border border-slate-200 rounded-xl px-3 py-2 text-[10px] font-black text-slate-700 outline-none focus:border-indigo-600 disabled:opacity-60"
+            className="border border-rule px-3 py-2 text-[10px] font-black text-ink outline-none focus:border-accent disabled:opacity-60"
           >
             {STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
           </select>
@@ -110,7 +111,7 @@ function AdminThread({ ticket: initial, onBack, onUpdated }: { ticket: Ticket; o
             value={ticket.priority}
             onChange={e => updateField({ priority: e.target.value as TicketPriority })}
             disabled={updating}
-            className="border border-slate-200 rounded-xl px-3 py-2 text-[10px] font-black text-slate-700 outline-none focus:border-indigo-600 disabled:opacity-60"
+            className="border border-rule px-3 py-2 text-[10px] font-black text-ink outline-none focus:border-accent disabled:opacity-60"
           >
             {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
@@ -123,11 +124,11 @@ function AdminThread({ ticket: initial, onBack, onUpdated }: { ticket: Ticket; o
           const isHR = ['SUPER_ADMIN', 'HR_ADMIN'].includes(msg.authorRole);
           return (
             <div key={msg.id} className={`flex ${isHR ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[75%] rounded-2xl px-6 py-4 ${isHR ? 'bg-indigo-600 text-white' : 'bg-slate-50 border border-slate-100'}`}>
-                <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${isHR ? 'text-indigo-200' : 'text-slate-400'}`}>
+              <div className={`max-w-[75%]  px-6 py-4 ${isHR ? 'bg-accent text-paper' : 'bg-page border border-rule'}`}>
+                <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${isHR ? 'text-paper' : 'text-muted'}`}>
                   {msg.authorName} · {msg.authorRole.replace('_', ' ')} · {new Date(msg.createdAt).toLocaleString()}
                 </p>
-                <p className={`text-sm font-bold leading-relaxed whitespace-pre-wrap ${isHR ? 'text-white' : 'text-slate-700'}`}>{msg.body}</p>
+                <p className={`text-sm font-bold leading-relaxed whitespace-pre-wrap ${isHR ? 'text-paper' : 'text-ink'}`}>{msg.body}</p>
               </div>
             </div>
           );
@@ -136,20 +137,20 @@ function AdminThread({ ticket: initial, onBack, onUpdated }: { ticket: Ticket; o
 
       {/* Reply */}
       {ticket.status !== 'CLOSED' && (
-        <div className="bg-white rounded-[2rem] border border-slate-100 p-6 flex flex-col gap-4">
+        <div className="bg-paper border border-rule p-6 flex flex-col gap-4">
           <label className="label-form">Reply to Employee</label>
           <textarea
             value={reply}
             onChange={e => setReply(e.target.value)}
             rows={3}
             placeholder="Type your response…"
-            className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 placeholder:text-slate-300 outline-none focus:border-indigo-600 resize-none"
+            className="w-full border border-rule px-4 py-3 text-sm font-bold text-ink placeholder:text-muted outline-none focus:border-accent resize-none"
           />
-          {error && <p className="text-xs font-black text-red-500">{error}</p>}
+          {error && <p className="text-xs font-black text-ink">{error}</p>}
           <button
             onClick={sendReply}
             disabled={sending || !reply.trim()}
-            className="self-end px-8 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 transition-all"
+            className="self-end px-8 py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50 transition-all"
           >
             {sending ? 'Sending…' : 'Send Reply'}
           </button>
@@ -207,25 +208,25 @@ export default function SupportAdminPage() {
     <div className="flex flex-col gap-8 max-w-[1100px] mx-auto pb-20 animate-in fade-in duration-700">
 
       {/* Header */}
-      <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-violet-500/5 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 rounded-full blur-3xl" />
+      <div className="bg-paper p-10 border border-rule relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-accent " />
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-2 h-2 bg-violet-500 rounded-full" />
-          <span className="text-[10px] font-black text-violet-600 uppercase tracking-[0.4em]">HR Support Inbox</span>
+          <div className="w-2 h-2 bg-accent " />
+          <span className="text-[10px] font-black text-accent uppercase tracking-[0.4em]">HR Support Inbox</span>
         </div>
-        <h1 className="text-4xl font-black text-slate-900 tracking-tighter">Support <span className="text-violet-600">Tickets</span></h1>
-        <p className="text-sm font-bold text-slate-400 mt-2 uppercase tracking-widest">View and respond to employee-raised tickets.</p>
+        <h1 className="text-4xl font-black text-ink tracking-tighter">Support <span className="text-accent">Tickets</span></h1>
+        <p className="text-sm font-bold text-muted mt-2 uppercase tracking-widest">View and respond to employee-raised tickets.</p>
 
         {/* KPI strip */}
         <div className="flex gap-8 mt-8">
           {[
             { label: 'Total', value: total },
-            { label: 'Open', value: openCount, color: 'text-blue-600' },
-            { label: 'In Progress', value: inProgressCount, color: 'text-amber-600' },
-            { label: 'Urgent', value: urgentCount, color: 'text-red-500' },
+            { label: 'Open', value: openCount, color: 'text-accent' },
+            { label: 'In Progress', value: inProgressCount, color: 'text-ink' },
+            { label: 'Urgent', value: urgentCount, color: 'text-ink' },
           ].map(k => (
             <div key={k.label}>
-              <p className={`text-3xl font-black ${k.color ?? 'text-slate-900'}`}>{k.value}</p>
+              <p className={`text-3xl font-black ${k.color ?? 'text-ink'}`}>{k.value}</p>
               <p className="label-form mt-1">{k.label}</p>
             </div>
           ))}
@@ -234,31 +235,31 @@ export default function SupportAdminPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as TicketStatus | '')} className="border border-slate-200 rounded-2xl px-5 py-3 text-[10px] font-black text-slate-700 outline-none focus:border-violet-600 bg-white">
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as TicketStatus | '')} className="border border-rule px-5 py-3 text-[10px] font-black text-ink outline-none focus:border-accent bg-paper">
           <option value="">All Statuses</option>
           {STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
         </select>
-        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value as TicketCategory | '')} className="border border-slate-200 rounded-2xl px-5 py-3 text-[10px] font-black text-slate-700 outline-none focus:border-violet-600 bg-white">
+        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value as TicketCategory | '')} className="border border-rule px-5 py-3 text-[10px] font-black text-ink outline-none focus:border-accent bg-paper">
           <option value="">All Categories</option>
           {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
-        <select value={filterPriority} onChange={e => setFilterPriority(e.target.value as TicketPriority | '')} className="border border-slate-200 rounded-2xl px-5 py-3 text-[10px] font-black text-slate-700 outline-none focus:border-violet-600 bg-white">
+        <select value={filterPriority} onChange={e => setFilterPriority(e.target.value as TicketPriority | '')} className="border border-rule px-5 py-3 text-[10px] font-black text-ink outline-none focus:border-accent bg-paper">
           <option value="">All Priorities</option>
           {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
-        <button onClick={load} className="px-5 py-3 border border-slate-200 rounded-2xl text-[10px] font-black text-slate-500 uppercase tracking-widest hover:bg-slate-50 transition-all">Refresh</button>
+        <button onClick={load} className="px-5 py-3 border border-rule text-[10px] font-black text-muted uppercase tracking-widest hover:bg-page transition-all">Refresh</button>
       </div>
 
       {/* Ticket table */}
-      <div className="bg-white rounded-[2rem] border border-slate-100 shadow-2xl shadow-violet-500/5 overflow-hidden">
+      <div className="bg-paper border border-rule overflow-hidden">
         {loading ? (
-          <div className="p-16 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest animate-pulse">Loading tickets…</div>
+          <div className="p-16 text-center text-[10px] font-black text-muted uppercase tracking-widest animate-pulse">Loading tickets…</div>
         ) : tickets.length === 0 ? (
-          <div className="p-16 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">No tickets found</div>
+          <div className="p-16 text-center text-[10px] font-black text-muted uppercase tracking-widest">No tickets found</div>
         ) : (
-          <div className="divide-y divide-slate-50">
+          <div className="divide-y divide-rule">
             {/* Column header */}
-            <div className="grid grid-cols-[1fr_120px_100px_80px_100px] gap-4 px-7 py-3 bg-slate-50">
+            <div className="grid grid-cols-[1fr_120px_100px_80px_100px] gap-4 px-7 py-3 bg-page">
               {['Subject / Employee', 'Category', 'Priority', 'Status', 'Updated'].map(h => (
                 <span key={h} className="label-form">{h}</span>
               ))}
@@ -267,15 +268,15 @@ export default function SupportAdminPage() {
               <button
                 key={t.id}
                 onClick={() => setActiveTicket(t)}
-                className="w-full grid grid-cols-[1fr_120px_100px_80px_100px] gap-4 px-7 py-4 items-center hover:bg-slate-50 transition-colors text-left"
+                className="w-full grid grid-cols-[1fr_120px_100px_80px_100px] gap-4 px-7 py-4 items-center hover:bg-page transition-colors text-left"
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-black text-slate-900 truncate">{t.subject}</p>
+                  <p className="text-sm font-black text-ink truncate">{t.subject}</p>
                   <p className="label-form mt-0.5">{t.messages.length} msg{t.messages.length !== 1 ? 's' : ''}</p>
                 </div>
-                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{CATEGORY_LABELS[t.category]}</span>
+                <span className="text-[9px] font-black text-muted uppercase tracking-widest">{CATEGORY_LABELS[t.category]}</span>
                 <span className={`text-[9px] font-black uppercase tracking-widest ${PRIORITY_COLORS[t.priority]}`}>{t.priority}</span>
-                <span className={`inline-flex justify-center px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${STATUS_COLORS[t.status]}`}>
+                <span className={`inline-flex justify-center px-2.5 py-1  text-[9px] font-black uppercase tracking-widest ${STATUS_COLORS[t.status]}`}>
                   {t.status.replace('_', ' ')}
                 </span>
                 <span className="label-form">{new Date(t.updatedAt).toLocaleDateString()}</span>

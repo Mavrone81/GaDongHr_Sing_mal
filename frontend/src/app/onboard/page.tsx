@@ -185,7 +185,7 @@ export default function OnboardPage() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="bg-white rounded-[2rem] shadow-2xl p-12 flex flex-col items-center gap-5">
           <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center">
-            <svg className="w-6 h-6 text-indigo-600 animate-spin" fill="none" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 text-indigo-600 animate-spin rounded-full" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
@@ -354,7 +354,7 @@ export default function OnboardPage() {
             ) : (
               <button onClick={submit} disabled={submitting}
                 className="px-6 py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl uppercase tracking-widest shadow-lg shadow-indigo-500/20 disabled:opacity-50 transition-all flex items-center gap-2">
-                {submitting && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                {submitting && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-paper rounded-full animate-spin" />}
                 {submitting ? 'Encrypting & Submitting…' : 'Submit Profile'}
               </button>
             )}

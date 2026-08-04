@@ -88,35 +88,35 @@ export default function TakeSurveyPage() {
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-[400px]"><div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" /></div>;
+    return <div className="flex items-center justify-center min-h-[400px]"><div className="w-10 h-10 border-4 border-accent border-t-accent animate-spin rounded-full" /></div>;
   }
   if (error || !survey) {
     return (
       <div className="max-w-2xl mx-auto mt-16 text-center">
-        <h2 className="text-lg font-black text-slate-800 mb-2">Survey Not Found</h2>
-        <p className="text-sm text-slate-500 mb-6">{error}</p>
-        <Link href="/surveys" className="text-xs font-bold text-indigo-600 hover:text-indigo-700">← Back to Surveys</Link>
+        <h2 className="text-lg font-black text-ink mb-2">Survey Not Found</h2>
+        <p className="text-sm text-muted mb-6">{error}</p>
+        <Link href="/surveys" className="text-xs font-bold text-accent hover:text-accent">← Back to Surveys</Link>
       </div>
     );
   }
   if (submitted) {
     return (
-      <div className="max-w-2xl mx-auto mt-16 text-center bg-white rounded-2xl border border-emerald-200 p-8 sm:p-12">
-        <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+      <div className="max-w-2xl mx-auto mt-16 text-center bg-paper border border-accent p-8 sm:p-12">
+        <div className="w-16 h-16 bg-page flex items-center justify-center mx-auto mb-4">
           <span className="text-3xl">◉</span>
         </div>
-        <h2 className="text-xl font-black text-emerald-700 mb-2">Thank you!</h2>
-        <p className="text-sm text-slate-500">Your response has been recorded {survey.anonymous ? 'anonymously' : ''}.</p>
-        <p className="text-xs text-slate-400 mt-3">Returning to surveys list…</p>
+        <h2 className="text-xl font-black text-accent mb-2">Thank you!</h2>
+        <p className="text-sm text-muted">Your response has been recorded {survey.anonymous ? 'anonymously' : ''}.</p>
+        <p className="text-xs text-muted mt-3">Returning to surveys list…</p>
       </div>
     );
   }
   if (alreadySubmitted) {
     return (
-      <div className="max-w-2xl mx-auto mt-16 text-center bg-white rounded-2xl border border-slate-200 p-8 sm:p-12">
-        <h2 className="text-lg font-black text-slate-800 mb-2">Already Submitted</h2>
-        <p className="text-sm text-slate-500 mb-6">You have already submitted this survey. Thank you!</p>
-        <Link href="/surveys" className="text-xs font-bold text-indigo-600 hover:text-indigo-700">← Back to Surveys</Link>
+      <div className="max-w-2xl mx-auto mt-16 text-center bg-paper border border-rule p-8 sm:p-12">
+        <h2 className="text-lg font-black text-ink mb-2">Already Submitted</h2>
+        <p className="text-sm text-muted mb-6">You have already submitted this survey. Thank you!</p>
+        <Link href="/surveys" className="text-xs font-bold text-accent hover:text-accent">← Back to Surveys</Link>
       </div>
     );
   }
@@ -125,16 +125,16 @@ export default function TakeSurveyPage() {
     <div className="max-w-3xl mx-auto space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <Link href="/surveys" className="text-xs font-bold text-slate-500 hover:text-indigo-600">← Back to Surveys</Link>
-        {survey.anonymous && <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-full bg-violet-50 text-violet-700">◍ Anonymous</span>}
+        <Link href="/surveys" className="text-xs font-bold text-muted hover:text-accent">← Back to Surveys</Link>
+        {survey.anonymous && <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest bg-page text-accent">◍ Anonymous</span>}
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6">
-        <p className="text-xs font-mono font-black text-slate-400 mb-1">{survey.code}</p>
-        <h1 className="text-xl font-black text-slate-900 mb-1">{survey.title}</h1>
-        {survey.description && <p className="text-sm text-slate-600 mt-2">{survey.description}</p>}
+      <div className="bg-paper border border-rule p-4 sm:p-6">
+        <p className="text-xs font-mono font-black text-muted mb-1">{survey.code}</p>
+        <h1 className="text-xl font-black text-ink mb-1">{survey.title}</h1>
+        {survey.description && <p className="text-sm text-ink mt-2">{survey.description}</p>}
         {survey.anonymous && (
-          <div className="mt-3 p-3 bg-violet-50 border border-violet-200 rounded-xl text-xs text-violet-700">
+          <div className="mt-3 p-3 bg-page border border-accent text-xs text-accent">
             <strong>This survey is anonymous.</strong> Your name and ID will not be linked to your responses. Department/tenure may be captured for segmentation only.
           </div>
         )}
@@ -153,15 +153,15 @@ export default function TakeSurveyPage() {
         ))}
       </div>
 
-      {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-bold">{error}</div>}
+      {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
 
       {/* Submit */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
-        <p className="text-xs text-slate-500">Required questions are marked with <span className="text-red-500 font-bold">*</span></p>
+      <div className="bg-paper border border-rule p-4 sm:p-6 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
+        <p className="text-xs text-muted">Required questions are marked with <span className="text-ink font-bold">*</span></p>
         <button
           onClick={submit}
           disabled={submitting}
-          className="px-6 py-3 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all"
+          className="px-6 py-3 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50 transition-all"
         >
           {submitting ? 'Submitting…' : 'Submit Response'}
         </button>
@@ -179,11 +179,11 @@ function QuestionCard({ num, question, value, onChange }: {
   const labels = question.scaleLabels?.length === 5 ? question.scaleLabels : LIKERT_DEFAULT_LABELS;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6">
+    <div className="bg-paper border border-rule p-4 sm:p-6">
       <div className="flex items-start gap-2 mb-3">
-        <span className="text-xs font-mono font-black text-slate-400 mt-0.5">Q{num}</span>
-        <h3 className="text-sm font-black text-slate-800 flex-1">
-          {question.text}{question.required && <span className="text-red-500"> *</span>}
+        <span className="text-xs font-mono font-black text-muted mt-0.5">Q{num}</span>
+        <h3 className="text-sm font-black text-ink flex-1">
+          {question.text}{question.required && <span className="text-ink"> *</span>}
         </h3>
       </div>
 
@@ -193,10 +193,10 @@ function QuestionCard({ num, question, value, onChange }: {
             <button
               key={n}
               onClick={() => onChange({ numericValue: n })}
-              className={`flex flex-col items-center p-2 sm:p-3 rounded-xl border-2 transition-all ${
+              className={`flex flex-col items-center p-2 sm:p-3  border-2 transition-all ${
                 value?.numericValue === n
-                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                  : 'border-slate-200 hover:border-indigo-200 text-slate-600'
+                  ? 'border-accent bg-page text-accent'
+                  : 'border-rule hover:border-accent text-ink'
               }`}
             >
               <span className="text-lg sm:text-2xl font-black">{n}</span>
@@ -213,19 +213,19 @@ function QuestionCard({ num, question, value, onChange }: {
               <button
                 key={n}
                 onClick={() => onChange({ numericValue: n })}
-                className={`py-2 sm:py-3 rounded-lg border-2 text-xs sm:text-sm font-black transition-all ${
+                className={`py-2 sm:py-3  border-2 text-xs sm:text-sm font-black transition-all ${
                   value?.numericValue === n
-                    ? (n >= 9 ? 'border-emerald-500 bg-emerald-50 text-emerald-700' :
-                       n >= 7 ? 'border-amber-500 bg-amber-50 text-amber-700' :
-                                'border-rose-500 bg-rose-50 text-rose-700')
-                    : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                    ? (n >= 9 ? 'border-accent bg-page text-accent' :
+                       n >= 7 ? 'border-highlight bg-page text-ink' :
+                                'border-ink bg-page text-ink')
+                    : 'border-rule hover:border-rule text-ink'
                 }`}
               >
                 {n}
               </button>
             ))}
           </div>
-          <div className="flex justify-between mt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+          <div className="flex justify-between mt-2 text-[10px] font-bold text-muted uppercase tracking-wider">
             <span>Not at all likely</span>
             <span>Extremely likely</span>
           </div>
@@ -235,17 +235,17 @@ function QuestionCard({ num, question, value, onChange }: {
       {question.type === 'MULTI_CHOICE' && (
         <div className="space-y-2">
           {question.choices.map((choice, i) => (
-            <label key={i} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-              value?.numericValue === i ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-indigo-200'
+            <label key={i} className={`flex items-center gap-3 p-3  border-2 cursor-pointer transition-all ${
+              value?.numericValue === i ? 'border-accent bg-page' : 'border-rule hover:border-accent'
             }`}>
               <input
                 type="radio"
                 name={`q-${question.id}`}
                 checked={value?.numericValue === i}
                 onChange={() => onChange({ numericValue: i, textValue: choice })}
-                className="accent-indigo-600"
+                className="accent-accent"
               />
-              <span className="text-sm font-medium text-slate-700">{choice}</span>
+              <span className="text-sm font-medium text-ink">{choice}</span>
             </label>
           ))}
         </div>
@@ -257,7 +257,7 @@ function QuestionCard({ num, question, value, onChange }: {
           value={value?.textValue || ''}
           onChange={e => onChange({ textValue: e.target.value })}
           placeholder="Type your answer here…"
-          className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+          className="w-full border border-rule px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent resize-none"
         />
       )}
     </div>

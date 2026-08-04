@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { TONES } from '@/lib/statusTone';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
@@ -60,28 +61,31 @@ function fmtDate(d?: string) {
 
 function scoreBadge(score?: number) {
   if (!score) return null;
-  const color = score >= 4.5 ? 'emerald' : score >= 3.5 ? 'indigo' : score >= 2.5 ? 'amber' : 'red';
+  // The bands were keyed by hue NAME ('emerald', 'indigo', …), which no palette
+  // check can see — and the top two bands had collapsed onto one appearance.
+  // Named for what they mean, and rendered as a four-step ramp.
+  const band = score >= 4.5 ? 'exceeds' : score >= 3.5 ? 'meets' : score >= 2.5 ? 'partial' : 'below';
   const colorMap: Record<string, string> = {
-    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    indigo:  'bg-indigo-50 text-indigo-700 border-indigo-200',
-    amber:   'bg-amber-50 text-amber-700 border-amber-200',
-    red:     'bg-red-50 text-red-700 border-red-200',
+    exceeds: 'bg-accent text-paper border-accent',
+    meets:   'bg-paper text-accent border-accent',
+    partial: 'bg-paper text-ink border-highlight',
+    below:   'bg-ink text-paper border-ink',
   };
-  return <span className={`inline-block px-2 py-0.5 rounded-lg text-[10px] font-black border ${colorMap[color]}`}>{score.toFixed(1)}</span>;
+  return <span className={`inline-block px-2 py-0.5  text-[10px] font-black border ${colorMap[band]}`}>{score.toFixed(1)}</span>;
 }
 
 const STATUS_COLORS: Record<AppraisalStatus, string> = {
-  PENDING: 'bg-slate-100 text-slate-500',
-  SELF_SUBMITTED: 'bg-amber-50 text-amber-700',
-  MANAGER_SUBMITTED: 'bg-indigo-50 text-indigo-700',
-  FINALISED: 'bg-emerald-50 text-emerald-700',
+  PENDING:           TONES.neutral,
+  SELF_SUBMITTED:    TONES.pending,
+  MANAGER_SUBMITTED: TONES.active,
+  FINALISED:         TONES.done,
 };
 
 const PIP_COLORS: Record<PipStatus, string> = {
-  ACTIVE: 'bg-red-50 text-red-700 border-red-200',
-  COMPLETED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  EXTENDED: 'bg-amber-50 text-amber-700 border-amber-200',
-  TERMINATED: 'bg-slate-50 text-slate-500 border-slate-200',
+  ACTIVE: 'bg-page text-ink border-ink',
+  COMPLETED: 'bg-page text-accent border-accent',
+  EXTENDED: 'bg-page text-ink border-highlight',
+  TERMINATED: 'bg-page text-muted border-rule',
 };
 
 // ── Star rating ───────────────────────────────────────────────────────────────
@@ -97,7 +101,7 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
           {n <= (hovered || value) ? '★' : '☆'}
         </button>
       ))}
-      <span className="ml-2 text-sm font-black text-slate-500 self-center">{value ? `${value}/5` : 'Select'}</span>
+      <span className="ml-2 text-sm font-black text-muted self-center">{value ? `${value}/5` : 'Select'}</span>
     </div>
   );
 }
@@ -106,7 +110,7 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
 function Toast({ msg, onClear }: { msg: string; onClear: () => void }) {
   useEffect(() => { const t = setTimeout(onClear, 3500); return () => clearTimeout(t); }, [msg, onClear]);
   return (
-    <div className="fixed bottom-8 right-8 z-50 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl text-[11px] font-black uppercase tracking-widest max-w-sm animate-in slide-in-from-bottom-2 duration-300">
+    <div className="fixed bottom-8 right-8 z-50 bg-shadow text-paper px-6 py-4 text-[11px] font-black uppercase tracking-widest max-w-sm animate-in slide-in-from-bottom-2 duration-300">
       {msg}
     </div>
   );
@@ -135,7 +139,7 @@ export default function PerformancePage() {
   function notify(msg: string) { setToast(msg); }
 
   if (loading) {
-    return <div className="h-40 bg-white rounded-[2rem] border border-slate-100 animate-pulse max-w-[1400px] mx-auto" />;
+    return <div className="h-40 bg-paper border border-rule animate-pulse max-w-[1400px] mx-auto" />;
   }
 
   // ── Personal "My Appraisal" view (employees always; admins via ?view=me) ────
@@ -143,17 +147,17 @@ export default function PerformancePage() {
     return (
       <div className="flex flex-col gap-8 max-w-[900px] mx-auto pb-20 animate-in fade-in duration-700">
         {/* Header */}
-        <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-violet-500/5 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-violet-600/5 rounded-full blur-3xl" />
+        <div className="bg-paper p-10 border border-rule relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-accent " />
           <div className="relative z-10">
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-2 h-2 bg-violet-600 rounded-full animate-pulse" />
-              <span className="text-[9px] font-black text-violet-600 uppercase tracking-[0.4em]">My Performance</span>
+              <div className="w-2 h-2 bg-accent animate-pulse" />
+              <span className="text-[9px] font-black text-accent uppercase tracking-[0.4em]">My Performance</span>
             </div>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tighter">
+            <h1 className="text-3xl font-black text-ink tracking-tighter">
               {user?.name ? `Hi, ${user.name.split(' ')[0]}` : 'My Performance'}
             </h1>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-2">
+            <p className="text-[11px] font-bold text-muted uppercase tracking-widest mt-2">
               Submit your self-assessment · Track your goals
             </p>
           </div>
@@ -163,7 +167,7 @@ export default function PerformancePage() {
         <div className="flex gap-2">
           {([['myappraisal', 'My Appraisal'], ['goals', 'My Goals']] as [EmployeeTab, string][]).map(([key, label]) => (
             <button key={key} onClick={() => setEmployeeTab(key)}
-              className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${employeeTab === key ? 'bg-violet-600 text-white shadow-lg shadow-violet-500/20' : 'bg-white border border-slate-200 text-slate-400 hover:border-slate-300'}`}>
+              className={`px-6 py-3  text-[10px] font-black uppercase tracking-widest transition-all ${employeeTab === key ? 'bg-accent text-paper ' : 'bg-paper border border-rule text-muted hover:border-rule'}`}>
               {label}
             </button>
           ))}
@@ -190,15 +194,15 @@ export default function PerformancePage() {
   return (
     <div className="flex flex-col gap-8 max-w-[1400px] mx-auto pb-20 animate-in fade-in duration-700">
       {/* Header */}
-      <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6 bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-violet-600/5 rounded-full blur-3xl" />
+      <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6 bg-paper p-10 border border-rule relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-accent " />
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-2 h-2 bg-violet-600 rounded-full" />
-            <span className="text-[10px] font-black text-violet-600 uppercase tracking-[0.4em]">Talent Intelligence</span>
+            <div className="w-2 h-2 bg-accent " />
+            <span className="text-[10px] font-black text-accent uppercase tracking-[0.4em]">Talent Intelligence</span>
           </div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tighter">Performance <span className="text-violet-600">Management</span></h1>
-          <p className="text-sm font-bold text-slate-400 mt-2 uppercase tracking-widest">
+          <h1 className="text-4xl font-black text-ink tracking-tighter">Performance <span className="text-accent">Management</span></h1>
+          <p className="text-sm font-bold text-muted mt-2 uppercase tracking-widest">
             Appraisal cycles · Goals · 360° feedback · PIP governance
           </p>
         </div>
@@ -208,7 +212,7 @@ export default function PerformancePage() {
       <div className="flex gap-2 flex-wrap">
         {adminTabs.map(([key, label]) => (
           <button key={key} onClick={() => setAdminTab(key)}
-            className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${adminTab === key ? 'bg-violet-600 text-white shadow-lg shadow-violet-500/20' : 'bg-white border border-slate-200 text-slate-400 hover:border-slate-300'}`}>
+            className={`px-6 py-3  text-[10px] font-black uppercase tracking-widest transition-all ${adminTab === key ? 'bg-accent text-paper ' : 'bg-paper border border-rule text-muted hover:border-rule'}`}>
             {label}
           </button>
         ))}
@@ -265,7 +269,7 @@ function OverviewTab({ notify }: { notify: (m: string) => void }) {
   ] : [];
 
   const colorMap: Record<string, string> = {
-    violet: 'text-violet-600', indigo: 'text-indigo-600', emerald: 'text-emerald-600', amber: 'text-amber-600',
+    violet: 'text-accent', indigo: 'text-accent', emerald: 'text-accent', amber: 'text-ink',
   };
 
   return (
@@ -273,33 +277,33 @@ function OverviewTab({ notify }: { notify: (m: string) => void }) {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
         {kpis.map(k => (
-          <div key={k.label} className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5">
+          <div key={k.label} className="bg-paper p-8 border border-rule ">
             <p className="label-form mb-4">{k.label}</p>
             <h3 className={`text-3xl font-black tracking-tighter ${colorMap[k.color]}`}>{k.value}</h3>
-            <p className="text-[9px] font-black text-slate-400 uppercase mt-6">{k.sub}</p>
+            <p className="text-[9px] font-black text-muted uppercase mt-6">{k.sub}</p>
           </div>
         ))}
         {!summary && Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="bg-white p-8 rounded-[2rem] border border-slate-100 h-36 animate-pulse" />
+          <div key={i} className="bg-paper p-8 border border-rule h-36 animate-pulse" />
         ))}
       </div>
 
       {/* Active Cycles */}
-      <section className="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 overflow-hidden">
-        <div className="p-8 border-b border-slate-50">
+      <section className="bg-paper border border-rule overflow-hidden">
+        <div className="p-8 border-b border-rule">
           <div className="flex items-center gap-4">
-            <div className="w-2 h-8 bg-violet-600 rounded-full" />
-            <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest">Active Appraisal Cycles</h3>
+            <div className="w-2 h-8 bg-accent " />
+            <h3 className="text-lg font-black text-ink uppercase tracking-widest">Active Appraisal Cycles</h3>
           </div>
         </div>
         {cycles.length === 0 ? (
-          <div className="p-12 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">
+          <div className="p-12 text-center text-[10px] font-black text-muted uppercase tracking-widest">
             No active cycles — go to Cycles tab to create one
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left">
-              <thead className="eyebrow-tight border-b border-slate-50">
+              <thead className="eyebrow-tight border-b border-rule">
                 <tr>
                   {([
                     { col: 'name',     label: 'Cycle' },
@@ -310,31 +314,31 @@ function OverviewTab({ notify }: { notify: (m: string) => void }) {
                     { col: 'enrolled', label: 'Enrolled' },
                   ] as const).map((h, i) => (
                     <th key={i} className="px-8 py-5">
-                      <button onClick={() => toggleCycSort(h.col)} className="flex items-center hover:text-slate-600 transition-colors">
+                      <button onClick={() => toggleCycSort(h.col)} className="flex items-center hover:text-ink transition-colors">
                         {h.label}<CycSortIcon col={h.col} />
                       </button>
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="divide-y divide-rule">
                 {sortedCycles.map(c => {
                   const pct = Math.round((phaseIndex(c.currentPhase) / (PHASE_ORDER.length - 1)) * 100);
                   return (
-                    <tr key={c.id} className="hover:bg-slate-50/50 transition-all">
-                      <td className="px-8 py-5 font-black text-slate-900 text-sm">{c.name}</td>
-                      <td className="px-8 py-5"><span className="text-[10px] font-black text-violet-600 bg-violet-50 px-3 py-1 rounded-lg uppercase">{c.type}</span></td>
-                      <td className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase">{fmtDate(c.startDate)} – {fmtDate(c.endDate)}</td>
-                      <td className="px-8 py-5"><span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg uppercase">{PHASE_LABELS[c.currentPhase]}</span></td>
+                    <tr key={c.id} className="hover:bg-page transition-all">
+                      <td className="px-8 py-5 font-black text-ink text-sm">{c.name}</td>
+                      <td className="px-8 py-5"><span className="text-[10px] font-black text-accent bg-page px-3 py-1 uppercase">{c.type}</span></td>
+                      <td className="px-8 py-5 text-[10px] font-black text-muted uppercase">{fmtDate(c.startDate)} – {fmtDate(c.endDate)}</td>
+                      <td className="px-8 py-5"><span className="text-[10px] font-black text-accent bg-page px-3 py-1 uppercase">{PHASE_LABELS[c.currentPhase]}</span></td>
                       <td className="px-8 py-5">
                         <div className="flex items-center gap-3">
-                          <div className="w-28 h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-violet-600 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                          <div className="w-28 h-2 bg-page overflow-hidden">
+                            <div className="h-full bg-accent transition-all" style={{ width: `${pct}%` }} />
                           </div>
-                          <span className="text-[10px] font-black text-slate-500">{pct}%</span>
+                          <span className="text-[10px] font-black text-muted">{pct}%</span>
                         </div>
                       </td>
-                      <td className="px-8 py-5 text-[10px] font-black text-slate-500">{c._count?.appraisals ?? 0}</td>
+                      <td className="px-8 py-5 text-[10px] font-black text-muted">{c._count?.appraisals ?? 0}</td>
                     </tr>
                   );
                 })}
@@ -432,25 +436,25 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex justify-end">
-        <button onClick={() => setShowCreate(true)} className="px-8 py-4 bg-violet-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-700 shadow-xl shadow-violet-500/20 transition-all active:scale-95">
+        <button onClick={() => setShowCreate(true)} className="px-8 py-4 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95">
           + New Appraisal Cycle
         </button>
       </div>
 
       {/* Create modal */}
       {showCreate && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-6" onClick={() => setShowCreate(false)}>
-          <div className="bg-white rounded-[2rem] p-10 w-full max-w-lg shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-xl font-black text-slate-900 mb-6 uppercase tracking-tight">New Appraisal Cycle</h3>
+        <div className="fixed inset-0 bg-shadow/40 backdrop- z-50 flex items-center justify-center p-6" onClick={() => setShowCreate(false)}>
+          <div className="bg-paper p-10 w-full max-w-lg " onClick={e => e.stopPropagation()}>
+            <h3 className="text-xl font-black text-ink mb-6 uppercase tracking-tight">New Appraisal Cycle</h3>
             <div className="flex flex-col gap-4">
               <div>
                 <label className="label-form mb-1 block">Cycle Name *</label>
-                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Annual Review 2026" className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600" />
+                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Annual Review 2026" className="w-full border border-rule px-4 py-3 text-sm font-bold outline-none focus:border-accent" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label-form mb-1 block">Type *</label>
-                  <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value as CycleType }))} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600">
+                  <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value as CycleType }))} className="w-full border border-rule px-4 py-3 text-sm font-bold outline-none focus:border-accent">
                     <option value="ANNUAL">Annual</option>
                     <option value="MID_YEAR">Mid-Year</option>
                     <option value="PROBATION">Probation</option>
@@ -462,21 +466,21 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label-form mb-1 block">Start Date *</label>
-                  <input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600" />
+                  <input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className="w-full border border-rule px-4 py-3 text-sm font-bold outline-none focus:border-accent" />
                 </div>
                 <div>
                   <label className="label-form mb-1 block">End Date *</label>
-                  <input type="date" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600" />
+                  <input type="date" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} className="w-full border border-rule px-4 py-3 text-sm font-bold outline-none focus:border-accent" />
                 </div>
               </div>
               <div>
                 <label className="label-form mb-1 block">Description</label>
-                <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600 resize-none" />
+                <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} className="w-full border border-rule px-4 py-3 text-sm font-bold outline-none focus:border-accent resize-none" />
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-8">
-              <button onClick={() => setShowCreate(false)} className="px-6 py-3 border border-slate-200 rounded-xl text-[10px] font-black text-slate-500 uppercase tracking-widest hover:bg-slate-50">Cancel</button>
-              <button onClick={createCycle} disabled={saving} className="px-8 py-3 bg-violet-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-700 disabled:opacity-60">
+              <button onClick={() => setShowCreate(false)} className="px-6 py-3 border border-rule text-[10px] font-black text-muted uppercase tracking-widest hover:bg-page">Cancel</button>
+              <button onClick={createCycle} disabled={saving} className="px-8 py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent disabled:opacity-60">
                 {saving ? 'Creating…' : 'Create Cycle'}
               </button>
             </div>
@@ -492,9 +496,9 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
         });
         const allFilteredSelected = filtered.length > 0 && filtered.every(e => selectedIds.has(e.id));
         return (
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-6" onClick={() => setEnrollModal(null)}>
-            <div className="bg-white rounded-[2rem] p-8 w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
-              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Enroll Employees</h3>
+          <div className="fixed inset-0 bg-shadow/40 backdrop- z-50 flex items-center justify-center p-6" onClick={() => setEnrollModal(null)}>
+            <div className="bg-paper p-8 w-full max-w-lg flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-black text-ink uppercase tracking-tight">Enroll Employees</h3>
               <p className="eyebrow-tight mt-1 mb-5">{enrollModal.name}</p>
 
               {/* Search */}
@@ -502,7 +506,7 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
                 value={enrollSearch}
                 onChange={e => setEnrollSearch(e.target.value)}
                 placeholder="Search by name, code, or department…"
-                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600 mb-3"
+                className="w-full border border-rule px-4 py-3 text-sm font-bold outline-none focus:border-accent mb-3"
               />
 
               {/* Select all row */}
@@ -516,7 +520,7 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
                       setSelectedIds(prev => { const next = new Set(prev); filtered.forEach(e => next.add(e.id)); return next; });
                     }
                   }}
-                  className="text-[10px] font-black text-violet-600 uppercase tracking-widest hover:underline"
+                  className="text-[10px] font-black text-accent uppercase tracking-widest hover:underline"
                 >
                   {allFilteredSelected ? 'Deselect All' : 'Select All'}
                 </button>
@@ -526,15 +530,15 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
               </div>
 
               {/* Employee list */}
-              <div className="flex-1 overflow-y-auto border border-slate-100 rounded-2xl divide-y divide-slate-50 min-h-0">
+              <div className="flex-1 overflow-y-auto border border-rule divide-y divide-rule min-h-0">
                 {employeesLoading ? (
-                  <div className="p-8 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest animate-pulse">Loading employees…</div>
+                  <div className="p-8 text-center text-[10px] font-black text-muted uppercase tracking-widest animate-pulse">Loading employees…</div>
                 ) : filtered.length === 0 ? (
-                  <div className="p-8 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">No employees found</div>
+                  <div className="p-8 text-center text-[10px] font-black text-muted uppercase tracking-widest">No employees found</div>
                 ) : filtered.map(emp => {
                   const checked = selectedIds.has(emp.id);
                   return (
-                    <label key={emp.id} className={`flex items-center gap-4 px-5 py-3 cursor-pointer transition-colors ${checked ? 'bg-violet-50' : 'hover:bg-slate-50'}`}>
+                    <label key={emp.id} className={`flex items-center gap-4 px-5 py-3 cursor-pointer transition-colors ${checked ? 'bg-page' : 'hover:bg-page'}`}>
                       <input
                         type="checkbox"
                         checked={checked}
@@ -545,21 +549,21 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
                             return next;
                           });
                         }}
-                        className="w-4 h-4 rounded accent-violet-600"
+                        className="w-4 h-4 accent-accent"
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-black text-slate-900 truncate">{emp.fullName}</p>
+                        <p className="text-sm font-black text-ink truncate">{emp.fullName}</p>
                         <p className="label-form">{emp.employeeCode}{emp.department ? ` · ${emp.department}` : ''}</p>
                       </div>
-                      {emp.designation && <span className="text-[9px] font-bold text-slate-400 truncate max-w-28">{emp.designation}</span>}
+                      {emp.designation && <span className="text-[9px] font-bold text-muted truncate max-w-28">{emp.designation}</span>}
                     </label>
                   );
                 })}
               </div>
 
-              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-50">
-                <button onClick={() => setEnrollModal(null)} className="px-6 py-3 border border-slate-200 rounded-xl text-[10px] font-black text-slate-500 uppercase tracking-widest hover:bg-slate-50">Cancel</button>
-                <button onClick={enrollEmployees} disabled={enrolling || selectedIds.size === 0} className="px-8 py-3 bg-violet-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-700 disabled:opacity-50">
+              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-rule">
+                <button onClick={() => setEnrollModal(null)} className="px-6 py-3 border border-rule text-[10px] font-black text-muted uppercase tracking-widest hover:bg-page">Cancel</button>
+                <button onClick={enrollEmployees} disabled={enrolling || selectedIds.size === 0} className="px-8 py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
                   {enrolling ? 'Enrolling…' : `Enroll ${selectedIds.size > 0 ? `(${selectedIds.size})` : ''}`}
                 </button>
               </div>
@@ -571,10 +575,10 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
       {/* Cycle cards */}
       {loading ? (
         <div className="grid gap-4">
-          {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-32 bg-white rounded-[2rem] border border-slate-100 animate-pulse" />)}
+          {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-32 bg-paper border border-rule animate-pulse" />)}
         </div>
       ) : cycles.length === 0 ? (
-        <div className="bg-white rounded-[2.5rem] border border-slate-100 p-16 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">
+        <div className="bg-paper border border-rule p-16 text-center text-[10px] font-black text-muted uppercase tracking-widest">
           No cycles yet — create one above
         </div>
       ) : (
@@ -582,15 +586,15 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
           {cycles.map(c => {
             const pct = Math.round((phaseIndex(c.currentPhase) / (PHASE_ORDER.length - 1)) * 100);
             return (
-              <div key={c.id} className="bg-white rounded-[2rem] border border-slate-100 shadow-lg shadow-indigo-500/3 p-8">
+              <div key={c.id} className="bg-paper border border-rule p-8">
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <span className={`text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest border ${c.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : c.status === 'COMPLETED' ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>{c.status}</span>
-                      <span className="text-[9px] font-black text-slate-400 uppercase">{c.type}</span>
+                      <span className={`text-[9px] font-black px-3 py-1  uppercase tracking-widest border ${c.status === 'ACTIVE' ? 'bg-page text-accent border-accent' : c.status === 'COMPLETED' ? 'bg-page text-muted border-rule' : 'bg-page text-ink border-highlight'}`}>{c.status}</span>
+                      <span className="text-[9px] font-black text-muted uppercase">{c.type}</span>
                     </div>
-                    <h4 className="text-lg font-black text-slate-900">{c.name}</h4>
-                    {c.description && <p className="text-[11px] text-slate-400 mt-1">{c.description}</p>}
+                    <h4 className="text-lg font-black text-ink">{c.name}</h4>
+                    {c.description && <p className="text-[11px] text-muted mt-1">{c.description}</p>}
                     <p className="eyebrow-tight mt-3">{fmtDate(c.startDate)} – {fmtDate(c.endDate)}</p>
                   </div>
 
@@ -598,30 +602,30 @@ function CyclesTab({ notify }: { notify: (m: string) => void }) {
                     <div className="flex items-center gap-2">
                       {PHASE_ORDER.map((ph, i) => (
                         <div key={ph} className="flex-1 flex flex-col items-center gap-1">
-                          <div className={`w-full h-1.5 rounded-full ${i <= phaseIndex(c.currentPhase) ? 'bg-violet-600' : 'bg-slate-100'}`} />
-                          {ph === c.currentPhase && <div className="w-1.5 h-1.5 bg-violet-600 rounded-full" />}
+                          <div className={`w-full h-1.5  ${i <= phaseIndex(c.currentPhase) ? 'bg-accent' : 'bg-page'}`} />
+                          {ph === c.currentPhase && <div className="w-1.5 h-1.5 bg-accent " />}
                         </div>
                       ))}
                     </div>
-                    <p className="text-[9px] font-black text-violet-600 uppercase tracking-widest text-center">{PHASE_LABELS[c.currentPhase]}</p>
-                    <p className="text-[9px] font-black text-slate-400 text-center">{c._count?.appraisals ?? 0} enrolled</p>
+                    <p className="text-[9px] font-black text-accent uppercase tracking-widest text-center">{PHASE_LABELS[c.currentPhase]}</p>
+                    <p className="text-[9px] font-black text-muted text-center">{c._count?.appraisals ?? 0} enrolled</p>
                   </div>
 
                   <div className="flex gap-2 flex-wrap lg:flex-col">
                     {c.status === 'DRAFT' && (
-                      <button onClick={() => activate(c.id)} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all">
+                      <button onClick={() => activate(c.id)} className="px-4 py-2 bg-accent text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent transition-all">
                         Activate
                       </button>
                     )}
                     {c.status === 'ACTIVE' && c.currentPhase !== 'COMPLETED' && (
-                      <button onClick={() => advancePhase(c.id)} className="px-4 py-2 bg-violet-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-violet-700 transition-all">
+                      <button onClick={() => advancePhase(c.id)} className="px-4 py-2 bg-accent text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent transition-all">
                         Advance Phase
                       </button>
                     )}
-                    <button onClick={() => openEnrollModal(c)} className="px-4 py-2 border border-slate-200 rounded-xl text-[9px] font-black text-slate-500 uppercase tracking-widest hover:border-violet-600 hover:text-violet-600 transition-all">
+                    <button onClick={() => openEnrollModal(c)} className="px-4 py-2 border border-rule text-[9px] font-black text-muted uppercase tracking-widest hover:border-accent hover:text-accent transition-all">
                       Enroll
                     </button>
-                    <button onClick={() => deleteCycle(c.id)} className="px-4 py-2 border border-red-200 rounded-xl text-[9px] font-black text-red-500 uppercase tracking-widest hover:bg-red-50 transition-all">
+                    <button onClick={() => deleteCycle(c.id)} className="px-4 py-2 border border-ink text-[9px] font-black text-ink uppercase tracking-widest hover:bg-page transition-all">
                       Delete
                     </button>
                   </div>
@@ -689,14 +693,14 @@ function MyAppraisalTab({ notify }: { notify: (m: string) => void }) {
     finally { setSubmitting(false); }
   }
 
-  if (loading) return <div className="h-40 bg-white rounded-[2rem] border border-slate-100 animate-pulse" />;
+  if (loading) return <div className="h-40 bg-paper border border-rule animate-pulse" />;
 
   if (appraisals.length === 0) {
     return (
-      <div className="bg-white rounded-[2.5rem] border border-slate-100 p-16 text-center flex flex-col items-center gap-4">
-        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-3xl">📋</div>
+      <div className="bg-paper border border-rule p-16 text-center flex flex-col items-center gap-4">
+        <div className="w-16 h-16 bg-page flex items-center justify-center text-3xl">📋</div>
         <p className="eyebrow-tight">No appraisals yet</p>
-        <p className="text-[11px] text-slate-300 font-medium">You have not been enrolled in any review cycle yet.<br />Contact your HR admin to get enrolled.</p>
+        <p className="text-[11px] text-muted font-medium">You have not been enrolled in any review cycle yet.<br />Contact your HR admin to get enrolled.</p>
       </div>
     );
   }
@@ -711,21 +715,21 @@ function MyAppraisalTab({ notify }: { notify: (m: string) => void }) {
           const isActive = a.status === 'PENDING' || a.status === 'SELF_SUBMITTED';
           return (
             <button key={a.id} onClick={() => select(a)}
-              className={`w-full text-left bg-white p-5 rounded-2xl border transition-all ${selected?.id === a.id ? 'border-violet-500 shadow-lg shadow-violet-500/10 ring-1 ring-violet-500/20' : 'border-slate-100 hover:border-slate-200'}`}>
+              className={`w-full text-left bg-paper p-5  border transition-all ${selected?.id === a.id ? 'border-accent ring-1 ring-accent' : 'border-rule hover:border-rule'}`}>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="text-sm font-black text-slate-900 leading-tight">{a.cycle?.name ?? a.cycleId}</p>
+                  <p className="text-sm font-black text-ink leading-tight">{a.cycle?.name ?? a.cycleId}</p>
                   <p className="label-form mt-1">{a.cycle?.type ?? ''}</p>
                 </div>
-                {isActive && <span className="w-2 h-2 bg-violet-500 rounded-full mt-1 animate-pulse shrink-0" />}
+                {isActive && <span className="w-2 h-2 bg-accent mt-1 animate-pulse shrink-0" />}
               </div>
               {/* Mini progress dots */}
               <div className="flex items-center gap-1.5 mt-3">
                 {STEP_ORDER.map((_, i) => (
-                  <div key={i} className={`h-1.5 flex-1 rounded-full ${i <= done ? 'bg-violet-500' : 'bg-slate-100'}`} />
+                  <div key={i} className={`h-1.5 flex-1  ${i <= done ? 'bg-accent' : 'bg-page'}`} />
                 ))}
               </div>
-              <p className="text-[9px] font-bold text-slate-400 mt-1.5">{STEP_LABELS[a.status]}</p>
+              <p className="text-[9px] font-bold text-muted mt-1.5">{STEP_LABELS[a.status]}</p>
             </button>
           );
         })}
@@ -734,13 +738,13 @@ function MyAppraisalTab({ notify }: { notify: (m: string) => void }) {
       {/* Detail panel */}
       <div className="lg:col-span-2">
         {!selected ? (
-          <div className="bg-white rounded-[2rem] border border-slate-100 p-12 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">
+          <div className="bg-paper border border-rule p-12 text-center text-[10px] font-black text-muted uppercase tracking-widest">
             Select a cycle to view your appraisal
           </div>
         ) : (
-          <div className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden">
+          <div className="bg-paper border border-rule overflow-hidden">
             {/* Cycle banner */}
-            <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-8 text-white">
+            <div className="bg-gradient-to-r from-accent to-accent p-8 text-paper">
               <p className="text-[9px] font-black uppercase tracking-widest opacity-70 mb-1">{selected.cycle?.type ?? 'Review'}</p>
               <h3 className="text-xl font-black">{selected.cycle?.name}</h3>
               <p className="text-[10px] font-bold opacity-70 mt-1 uppercase tracking-wide">
@@ -761,17 +765,17 @@ function MyAppraisalTab({ notify }: { notify: (m: string) => void }) {
                     return (
                       <div key={step} className="flex flex-col items-center flex-1">
                         <div className="flex items-center w-full">
-                          {i > 0 && <div className={`flex-1 h-0.5 ${isPast || isCurrent ? 'bg-violet-500' : 'bg-slate-100'}`} />}
-                          <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-[11px] font-black shrink-0 transition-all
-                            ${isPast    ? 'bg-violet-500 border-violet-500 text-white'
-                            : isCurrent ? 'bg-white border-violet-500 text-violet-600 shadow-md shadow-violet-500/20'
-                            : 'bg-white border-slate-200 text-slate-300'}`}>
+                          {i > 0 && <div className={`flex-1 h-0.5 ${isPast || isCurrent ? 'bg-accent' : 'bg-page'}`} />}
+                          <div className={`w-8 h-8  border-2 flex items-center justify-center text-[11px] font-black shrink-0 transition-all
+                            ${isPast    ? 'bg-accent border-accent text-paper'
+                            : isCurrent ? 'bg-paper border-accent text-accent '
+                            : 'bg-paper border-rule text-muted'}`}>
                             {isPast ? '✓' : i + 1}
                           </div>
-                          {i < 3 && <div className={`flex-1 h-0.5 ${isPast ? 'bg-violet-500' : 'bg-slate-100'}`} />}
+                          {i < 3 && <div className={`flex-1 h-0.5 ${isPast ? 'bg-accent' : 'bg-page'}`} />}
                         </div>
                         <p className={`text-[8px] font-black uppercase tracking-wide mt-2 text-center max-w-16 leading-tight
-                          ${isCurrent ? 'text-violet-600' : isPast ? 'text-slate-500' : 'text-slate-300'}`}>
+                          ${isCurrent ? 'text-accent' : isPast ? 'text-muted' : 'text-muted'}`}>
                           {step.replace('_', ' ')}
                         </p>
                       </div>
@@ -783,49 +787,49 @@ function MyAppraisalTab({ notify }: { notify: (m: string) => void }) {
               {/* Scores (visible once something has been submitted) */}
               {selected.status !== 'PENDING' && (
                 <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-violet-50 rounded-2xl p-5 text-center border border-violet-100">
-                    <p className="text-[9px] font-black text-violet-400 uppercase tracking-widest mb-2">Your Score</p>
-                    <p className="text-3xl font-black text-violet-700">{selected.selfScore?.toFixed(1) ?? '—'}</p>
-                    <p className="text-[8px] font-bold text-violet-400 mt-1">out of 5.0</p>
+                  <div className="bg-page p-5 text-center border border-accent">
+                    <p className="text-[9px] font-black text-accent uppercase tracking-widest mb-2">Your Score</p>
+                    <p className="text-3xl font-black text-accent">{selected.selfScore?.toFixed(1) ?? '—'}</p>
+                    <p className="text-[8px] font-bold text-accent mt-1">out of 5.0</p>
                   </div>
-                  <div className={`rounded-2xl p-5 text-center border ${selected.managerScore ? 'bg-indigo-50 border-indigo-100' : 'bg-slate-50 border-slate-100'}`}>
+                  <div className={` p-5 text-center border ${selected.managerScore ? 'bg-page border-accent' : 'bg-page border-rule'}`}>
                     <p className="label-form mb-2">Manager Score</p>
-                    <p className={`text-3xl font-black ${selected.managerScore ? 'text-indigo-700' : 'text-slate-300'}`}>
+                    <p className={`text-3xl font-black ${selected.managerScore ? 'text-accent' : 'text-muted'}`}>
                       {selected.managerScore?.toFixed(1) ?? '—'}
                     </p>
-                    {!selected.managerScore && <p className="text-[8px] font-bold text-slate-300 mt-1">Pending review</p>}
+                    {!selected.managerScore && <p className="text-[8px] font-bold text-muted mt-1">Pending review</p>}
                   </div>
-                  <div className={`rounded-2xl p-5 text-center border ${selected.overallScore ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
+                  <div className={` p-5 text-center border ${selected.overallScore ? 'bg-page border-accent' : 'bg-page border-rule'}`}>
                     <p className="label-form mb-2">Final Score</p>
-                    <p className={`text-3xl font-black ${selected.overallScore ? 'text-emerald-700' : 'text-slate-300'}`}>
+                    <p className={`text-3xl font-black ${selected.overallScore ? 'text-accent' : 'text-muted'}`}>
                       {selected.overallScore?.toFixed(1) ?? '—'}
                     </p>
-                    {!selected.overallScore && <p className="text-[8px] font-bold text-slate-300 mt-1">Not yet finalised</p>}
+                    {!selected.overallScore && <p className="text-[8px] font-bold text-muted mt-1">Not yet finalised</p>}
                   </div>
                 </div>
               )}
 
               {/* ── Self-assessment form (PENDING or SELF_SUBMITTED = can update) ── */}
               {(selected.status === 'PENDING' || selected.status === 'SELF_SUBMITTED') && (
-                <div className="flex flex-col gap-5 border-t border-slate-50 pt-6">
+                <div className="flex flex-col gap-5 border-t border-rule pt-6">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Self-Assessment</h4>
+                    <h4 className="text-[10px] font-black text-ink uppercase tracking-widest">Self-Assessment</h4>
                     {selected.status === 'SELF_SUBMITTED' && (
-                      <span className="text-[8px] font-black px-2 py-1 bg-amber-50 text-amber-600 border border-amber-200 rounded-lg uppercase tracking-widest">Submitted — you can update until manager reviews</span>
+                      <span className="text-[8px] font-black px-2 py-1 bg-page text-ink border border-highlight uppercase tracking-widest">Submitted — you can update until manager reviews</span>
                     )}
                   </div>
 
                   <div>
                     <p className="label-form mb-3">Your Overall Rating *</p>
                     <StarRating value={form.selfScore} onChange={v => setForm(f => ({ ...f, selfScore: v }))} />
-                    <p className="text-[8px] font-bold text-slate-300 mt-2">1 = Needs improvement · 3 = Meets expectations · 5 = Exceptional</p>
+                    <p className="text-[8px] font-bold text-muted mt-2">1 = Needs improvement · 3 = Meets expectations · 5 = Exceptional</p>
                   </div>
 
                   <div>
                     <label className="label-form mb-1 block">Key Achievements & Highlights</label>
                     <textarea value={form.selfComments} onChange={e => setForm(f => ({ ...f, selfComments: e.target.value }))}
                       rows={4} placeholder="Describe your key contributions, wins, and achievements this period…"
-                      className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-500 resize-none placeholder:text-slate-300" />
+                      className="w-full border border-rule px-4 py-3 text-sm outline-none focus:border-accent resize-none placeholder:text-muted" />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -833,19 +837,19 @@ function MyAppraisalTab({ notify }: { notify: (m: string) => void }) {
                       <label className="label-form mb-1 block">Strengths</label>
                       <textarea value={form.strengths} onChange={e => setForm(f => ({ ...f, strengths: e.target.value }))}
                         rows={3} placeholder="What did you do really well?"
-                        className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-500 resize-none placeholder:text-slate-300" />
+                        className="w-full border border-rule px-4 py-3 text-sm outline-none focus:border-accent resize-none placeholder:text-muted" />
                     </div>
                     <div>
                       <label className="label-form mb-1 block">Development Areas</label>
                       <textarea value={form.improvements} onChange={e => setForm(f => ({ ...f, improvements: e.target.value }))}
                         rows={3} placeholder="What would you like to develop or improve?"
-                        className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-500 resize-none placeholder:text-slate-300" />
+                        className="w-full border border-rule px-4 py-3 text-sm outline-none focus:border-accent resize-none placeholder:text-muted" />
                     </div>
                   </div>
 
                   <div className="flex justify-end">
                     <button onClick={submitSelf} disabled={submitting || !form.selfScore}
-                      className="px-10 py-4 bg-violet-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-700 shadow-xl shadow-violet-500/20 disabled:opacity-40 transition-all active:scale-95">
+                      className="px-10 py-4 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent disabled:opacity-40 transition-all active:scale-95">
                       {submitting ? 'Submitting…' : selected.status === 'SELF_SUBMITTED' ? 'Update Submission' : 'Submit Self-Assessment'}
                     </button>
                   </div>
@@ -854,20 +858,20 @@ function MyAppraisalTab({ notify }: { notify: (m: string) => void }) {
 
               {/* ── Read-only view of own submission after manager has reviewed ── */}
               {selected.status !== 'PENDING' && selected.selfComments && (
-                <div className="border-t border-slate-50 pt-6 flex flex-col gap-4">
+                <div className="border-t border-rule pt-6 flex flex-col gap-4">
                   <h4 className="label-form">Your Submission</h4>
-                  <div className="bg-slate-50 rounded-2xl p-5 flex flex-col gap-3">
-                    <p className="text-sm text-slate-700 leading-relaxed">{selected.selfComments}</p>
+                  <div className="bg-page p-5 flex flex-col gap-3">
+                    <p className="text-sm text-ink leading-relaxed">{selected.selfComments}</p>
                     {selected.strengths && (
                       <div>
                         <p className="label-form mb-1">Strengths</p>
-                        <p className="text-sm text-slate-600">{selected.strengths}</p>
+                        <p className="text-sm text-ink">{selected.strengths}</p>
                       </div>
                     )}
                     {selected.improvements && (
                       <div>
                         <p className="label-form mb-1">Development Areas</p>
-                        <p className="text-sm text-slate-600">{selected.improvements}</p>
+                        <p className="text-sm text-ink">{selected.improvements}</p>
                       </div>
                     )}
                   </div>
@@ -876,24 +880,24 @@ function MyAppraisalTab({ notify }: { notify: (m: string) => void }) {
 
               {/* ── Manager feedback (only shown once manager has submitted) ── */}
               {selected.managerComments && (
-                <div className="border-t border-slate-50 pt-6">
+                <div className="border-t border-rule pt-6">
                   <div className="flex items-center gap-2 mb-3">
-                    <div className="w-5 h-5 bg-indigo-100 rounded-full flex items-center justify-center text-[10px]">👤</div>
-                    <h4 className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Manager Feedback</h4>
+                    <div className="w-5 h-5 bg-page flex items-center justify-center text-[10px]">👤</div>
+                    <h4 className="text-[9px] font-black text-accent uppercase tracking-widest">Manager Feedback</h4>
                   </div>
-                  <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5">
-                    <p className="text-sm text-slate-700 leading-relaxed">{selected.managerComments}</p>
+                  <div className="bg-page border border-accent p-5">
+                    <p className="text-sm text-ink leading-relaxed">{selected.managerComments}</p>
                   </div>
                 </div>
               )}
 
               {/* ── Waiting message when self-submitted, no manager review yet ── */}
               {selected.status === 'SELF_SUBMITTED' && !selected.managerScore && (
-                <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 flex items-center gap-4">
-                  <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center text-base shrink-0">⏳</div>
+                <div className="bg-page border border-highlight p-5 flex items-center gap-4">
+                  <div className="w-8 h-8 bg-page flex items-center justify-center text-base shrink-0">⏳</div>
                   <div>
-                    <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest">Waiting for manager review</p>
-                    <p className="text-[11px] text-amber-600 mt-0.5">Your self-assessment has been submitted. Your manager will review it shortly.</p>
+                    <p className="text-[10px] font-black text-ink uppercase tracking-widest">Waiting for manager review</p>
+                    <p className="text-[11px] text-ink mt-0.5">Your self-assessment has been submitted. Your manager will review it shortly.</p>
                   </div>
                 </div>
               )}
@@ -941,22 +945,22 @@ function TeamTab({ notify }: { notify: (m: string) => void }) {
     catch (e: any) { notify(e.message || 'Failed'); }
   }
 
-  if (loading) return <div className="h-40 bg-white rounded-[2rem] border border-slate-100 animate-pulse" />;
+  if (loading) return <div className="h-40 bg-paper border border-rule animate-pulse" />;
 
   return (
     <div className="grid lg:grid-cols-3 gap-6">
       <div className="flex flex-col gap-3">
         {appraisals.length === 0 ? (
-          <div className="bg-white rounded-[2rem] border border-slate-100 p-10 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">
+          <div className="bg-paper border border-rule p-10 text-center text-[10px] font-black text-muted uppercase tracking-widest">
             No team appraisals assigned
           </div>
         ) : appraisals.map(a => (
           <button key={a.id} onClick={() => { setSelected(a); setForm({ managerScore: a.managerScore ?? 0, managerComments: a.managerComments ?? '' }); }}
-            className={`w-full text-left bg-white p-6 rounded-2xl border transition-all ${selected?.id === a.id ? 'border-violet-600 shadow-lg shadow-violet-500/10' : 'border-slate-100 hover:border-slate-200'}`}>
+            className={`w-full text-left bg-paper p-6  border transition-all ${selected?.id === a.id ? 'border-accent ' : 'border-rule hover:border-rule'}`}>
             <p className="label-form">EMP: {a.employeeId.slice(0, 8)}…</p>
-            <p className="text-sm font-black text-slate-900 mt-1">{a.cycle?.name ?? a.cycleId}</p>
+            <p className="text-sm font-black text-ink mt-1">{a.cycle?.name ?? a.cycleId}</p>
             <div className="mt-3 flex items-center justify-between">
-              <span className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase ${STATUS_COLORS[a.status]}`}>{a.status.replace('_', ' ')}</span>
+              <span className={`text-[9px] font-black px-2 py-1  uppercase ${STATUS_COLORS[a.status]}`}>{a.status.replace('_', ' ')}</span>
               {a.selfScore && scoreBadge(a.selfScore)}
             </div>
           </button>
@@ -965,53 +969,53 @@ function TeamTab({ notify }: { notify: (m: string) => void }) {
 
       <div className="lg:col-span-2">
         {!selected ? (
-          <div className="bg-white rounded-[2rem] border border-slate-100 p-12 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">
+          <div className="bg-paper border border-rule p-12 text-center text-[10px] font-black text-muted uppercase tracking-widest">
             Select an appraisal to review
           </div>
         ) : (
-          <div className="bg-white rounded-[2rem] border border-slate-100 p-8 flex flex-col gap-6">
+          <div className="bg-paper border border-rule p-8 flex flex-col gap-6">
             <div>
               <p className="label-form">Employee: {selected.employeeId}</p>
-              <h3 className="text-xl font-black text-slate-900 mt-1">{selected.cycle?.name}</h3>
+              <h3 className="text-xl font-black text-ink mt-1">{selected.cycle?.name}</h3>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
-              <div className="bg-slate-50 rounded-2xl p-4 text-center">
+              <div className="bg-page p-4 text-center">
                 <p className="label-form mb-2">Self Score</p>
-                <p className="text-2xl font-black text-indigo-600">{selected.selfScore?.toFixed(1) ?? '—'}</p>
+                <p className="text-2xl font-black text-accent">{selected.selfScore?.toFixed(1) ?? '—'}</p>
               </div>
-              <div className="bg-slate-50 rounded-2xl p-4 text-center">
+              <div className="bg-page p-4 text-center">
                 <p className="label-form mb-2">Mgr Score</p>
-                <p className="text-2xl font-black text-violet-600">{selected.managerScore?.toFixed(1) ?? '—'}</p>
+                <p className="text-2xl font-black text-accent">{selected.managerScore?.toFixed(1) ?? '—'}</p>
               </div>
-              <div className="bg-slate-50 rounded-2xl p-4 text-center">
+              <div className="bg-page p-4 text-center">
                 <p className="label-form mb-2">Overall</p>
-                <p className="text-2xl font-black text-emerald-600">{selected.overallScore?.toFixed(1) ?? '—'}</p>
+                <p className="text-2xl font-black text-accent">{selected.overallScore?.toFixed(1) ?? '—'}</p>
               </div>
             </div>
 
             {selected.selfComments && (
               <div>
                 <h4 className="label-form mb-2">Employee&apos;s Self-Assessment</h4>
-                <p className="text-sm text-slate-600 bg-slate-50 rounded-xl p-4">{selected.selfComments}</p>
-                {selected.strengths && <p className="text-sm text-slate-500 mt-2"><strong className="text-[9px] uppercase tracking-widest">Strengths:</strong> {selected.strengths}</p>}
-                {selected.improvements && <p className="text-sm text-slate-500 mt-1"><strong className="text-[9px] uppercase tracking-widest">Improvements:</strong> {selected.improvements}</p>}
+                <p className="text-sm text-ink bg-page p-4">{selected.selfComments}</p>
+                {selected.strengths && <p className="text-sm text-muted mt-2"><strong className="text-[9px] uppercase tracking-widest">Strengths:</strong> {selected.strengths}</p>}
+                {selected.improvements && <p className="text-sm text-muted mt-1"><strong className="text-[9px] uppercase tracking-widest">Improvements:</strong> {selected.improvements}</p>}
               </div>
             )}
 
             {selected.status === 'SELF_SUBMITTED' && (
-              <div className="flex flex-col gap-4 border-t border-slate-50 pt-6">
-                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Manager Review</h4>
+              <div className="flex flex-col gap-4 border-t border-rule pt-6">
+                <h4 className="text-[10px] font-black text-muted uppercase tracking-widest">Manager Review</h4>
                 <div>
                   <p className="label-form mb-2">Manager Rating *</p>
                   <StarRating value={form.managerScore} onChange={v => setForm(f => ({ ...f, managerScore: v }))} />
                 </div>
                 <div>
                   <label className="label-form mb-1 block">Manager Feedback</label>
-                  <textarea value={form.managerComments} onChange={e => setForm(f => ({ ...f, managerComments: e.target.value }))} rows={4} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-600 resize-none" />
+                  <textarea value={form.managerComments} onChange={e => setForm(f => ({ ...f, managerComments: e.target.value }))} rows={4} className="w-full border border-rule px-4 py-3 text-sm outline-none focus:border-accent resize-none" />
                 </div>
                 <div className="flex justify-end">
-                  <button onClick={submitManager} disabled={submitting || !form.managerScore} className="px-8 py-3 bg-violet-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-700 shadow-lg shadow-violet-500/20 disabled:opacity-50">
+                  <button onClick={submitManager} disabled={submitting || !form.managerScore} className="px-8 py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
                     {submitting ? 'Submitting…' : 'Submit Manager Review'}
                   </button>
                 </div>
@@ -1019,8 +1023,8 @@ function TeamTab({ notify }: { notify: (m: string) => void }) {
             )}
 
             {selected.status === 'MANAGER_SUBMITTED' && (
-              <div className="flex justify-end border-t border-slate-50 pt-6">
-                <button onClick={() => finalise(selected.id)} className="px-8 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 shadow-lg shadow-emerald-500/20">
+              <div className="flex justify-end border-t border-rule pt-6">
+                <button onClick={() => finalise(selected.id)} className="px-8 py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent ">
                   Finalise Appraisal
                 </button>
               </div>
@@ -1081,34 +1085,34 @@ function GoalsTab({ notify }: { notify: (m: string) => void }) {
   }
 
   const CAT_COLORS: Record<GoalCategory, string> = {
-    PERFORMANCE: 'bg-indigo-50 text-indigo-700', DEVELOPMENT: 'bg-violet-50 text-violet-700', ORGANIZATIONAL: 'bg-emerald-50 text-emerald-700',
+    PERFORMANCE: 'bg-page text-accent', DEVELOPMENT: 'bg-page text-accent', ORGANIZATIONAL: 'bg-page text-accent',
   };
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex justify-end">
-        <button onClick={() => setShowCreate(true)} className="px-8 py-4 bg-violet-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-700 shadow-xl shadow-violet-500/20 transition-all active:scale-95">
+        <button onClick={() => setShowCreate(true)} className="px-8 py-4 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95">
           + Add Goal
         </button>
       </div>
 
       {showCreate && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-6" onClick={() => setShowCreate(false)}>
-          <div className="bg-white rounded-[2rem] p-10 w-full max-w-lg shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-xl font-black text-slate-900 mb-6 uppercase tracking-tight">New Goal</h3>
+        <div className="fixed inset-0 bg-shadow/40 backdrop- z-50 flex items-center justify-center p-6" onClick={() => setShowCreate(false)}>
+          <div className="bg-paper p-10 w-full max-w-lg " onClick={e => e.stopPropagation()}>
+            <h3 className="text-xl font-black text-ink mb-6 uppercase tracking-tight">New Goal</h3>
             <div className="flex flex-col gap-4">
               <div>
                 <label className="label-form mb-1 block">Title *</label>
-                <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Goal title" className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600" />
+                <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Goal title" className="w-full border border-rule px-4 py-3 text-sm font-bold outline-none focus:border-accent" />
               </div>
               <div>
                 <label className="label-form mb-1 block">Description</label>
-                <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600 resize-none" />
+                <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} className="w-full border border-rule px-4 py-3 text-sm font-bold outline-none focus:border-accent resize-none" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label-form mb-1 block">Category</label>
-                  <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value as GoalCategory }))} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600">
+                  <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value as GoalCategory }))} className="w-full border border-rule px-4 py-3 text-sm font-bold outline-none focus:border-accent">
                     <option value="PERFORMANCE">Performance</option>
                     <option value="DEVELOPMENT">Development</option>
                     <option value="ORGANIZATIONAL">Organizational</option>
@@ -1116,13 +1120,13 @@ function GoalsTab({ notify }: { notify: (m: string) => void }) {
                 </div>
                 <div>
                   <label className="label-form mb-1 block">Target Date</label>
-                  <input type="date" value={form.targetDate} onChange={e => setForm(f => ({ ...f, targetDate: e.target.value }))} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600" />
+                  <input type="date" value={form.targetDate} onChange={e => setForm(f => ({ ...f, targetDate: e.target.value }))} className="w-full border border-rule px-4 py-3 text-sm font-bold outline-none focus:border-accent" />
                 </div>
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-8">
-              <button onClick={() => setShowCreate(false)} className="px-6 py-3 border border-slate-200 rounded-xl text-[10px] font-black text-slate-500 uppercase tracking-widest hover:bg-slate-50">Cancel</button>
-              <button onClick={createGoal} disabled={saving} className="px-8 py-3 bg-violet-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-700 disabled:opacity-60">
+              <button onClick={() => setShowCreate(false)} className="px-6 py-3 border border-rule text-[10px] font-black text-muted uppercase tracking-widest hover:bg-page">Cancel</button>
+              <button onClick={createGoal} disabled={saving} className="px-8 py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent disabled:opacity-60">
                 {saving ? 'Saving…' : 'Create Goal'}
               </button>
             </div>
@@ -1131,21 +1135,21 @@ function GoalsTab({ notify }: { notify: (m: string) => void }) {
       )}
 
       {loading ? (
-        <div className="grid gap-4">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-24 bg-white rounded-2xl border border-slate-100 animate-pulse" />)}</div>
+        <div className="grid gap-4">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-24 bg-paper border border-rule animate-pulse" />)}</div>
       ) : goals.length === 0 ? (
-        <div className="bg-white rounded-[2.5rem] border border-slate-100 p-16 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">No goals yet</div>
+        <div className="bg-paper border border-rule p-16 text-center text-[10px] font-black text-muted uppercase tracking-widest">No goals yet</div>
       ) : (
         <div className="grid gap-4">
           {goals.map(g => (
-            <div key={g.id} className="bg-white rounded-[2rem] border border-slate-100 p-6">
+            <div key={g.id} className="bg-paper border border-rule p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-lg uppercase tracking-widest ${CAT_COLORS[g.category]}`}>{g.category}</span>
-                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-lg uppercase tracking-widest ${g.status === 'ACHIEVED' ? 'bg-emerald-50 text-emerald-700' : g.status === 'MISSED' ? 'bg-red-50 text-red-700' : g.status === 'CANCELLED' ? 'bg-slate-100 text-slate-400' : 'bg-amber-50 text-amber-700'}`}>{g.status}</span>
+                    <span className={`text-[9px] font-black px-2 py-0.5  uppercase tracking-widest ${CAT_COLORS[g.category]}`}>{g.category}</span>
+                    <span className={`text-[9px] font-black px-2 py-0.5  uppercase tracking-widest ${g.status === 'ACHIEVED' ? 'bg-page text-accent' : g.status === 'MISSED' ? 'bg-page text-ink' : g.status === 'CANCELLED' ? 'bg-page text-muted' : 'bg-page text-ink'}`}>{g.status}</span>
                   </div>
-                  <h4 className="text-base font-black text-slate-900">{g.title}</h4>
-                  {g.description && <p className="text-[11px] text-slate-400 mt-1">{g.description}</p>}
+                  <h4 className="text-base font-black text-ink">{g.title}</h4>
+                  {g.description && <p className="text-[11px] text-muted mt-1">{g.description}</p>}
                   {g.targetDate && <p className="label-form mt-2">Target: {fmtDate(g.targetDate)}</p>}
 
                   {/* Progress bar */}
@@ -1153,18 +1157,18 @@ function GoalsTab({ notify }: { notify: (m: string) => void }) {
                     {editGoal?.id === g.id ? (
                       <div className="flex items-center gap-3 flex-1">
                         <input type="range" min={0} max={100} value={editProgress} onChange={e => setEditProgress(Number(e.target.value))} className="flex-1" />
-                        <span className="text-[10px] font-black text-slate-600 w-10">{editProgress}%</span>
-                        <button onClick={() => updateProgress(g)} className="px-4 py-1.5 bg-violet-600 text-white rounded-lg text-[9px] font-black uppercase">Save</button>
-                        <button onClick={() => setEditGoal(null)} className="px-4 py-1.5 border border-slate-200 rounded-lg text-[9px] font-black text-slate-400 uppercase">Cancel</button>
+                        <span className="text-[10px] font-black text-ink w-10">{editProgress}%</span>
+                        <button onClick={() => updateProgress(g)} className="px-4 py-1.5 bg-accent text-paper text-[9px] font-black uppercase">Save</button>
+                        <button onClick={() => setEditGoal(null)} className="px-4 py-1.5 border border-rule text-[9px] font-black text-muted uppercase">Cancel</button>
                       </div>
                     ) : (
                       <>
-                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden max-w-48">
-                          <div className={`h-full rounded-full transition-all ${g.progress === 100 ? 'bg-emerald-500' : 'bg-violet-600'}`} style={{ width: `${g.progress}%` }} />
+                        <div className="flex-1 h-2 bg-page overflow-hidden max-w-48">
+                          <div className={`h-full  transition-all ${g.progress === 100 ? 'bg-accent' : 'bg-accent'}`} style={{ width: `${g.progress}%` }} />
                         </div>
-                        <span className="text-[10px] font-black text-slate-500">{g.progress}%</span>
+                        <span className="text-[10px] font-black text-muted">{g.progress}%</span>
                         {g.status === 'ACTIVE' && (
-                          <button onClick={() => { setEditGoal(g); setEditProgress(g.progress); }} className="text-[9px] font-black text-violet-600 hover:underline">Update</button>
+                          <button onClick={() => { setEditGoal(g); setEditProgress(g.progress); }} className="text-[9px] font-black text-accent hover:underline">Update</button>
                         )}
                       </>
                     )}
@@ -1174,11 +1178,11 @@ function GoalsTab({ notify }: { notify: (m: string) => void }) {
                 <div className="flex gap-2">
                   {g.status === 'ACTIVE' && (
                     <>
-                      <button onClick={() => updateStatus(g.id, 'ACHIEVED')} className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-[9px] font-black uppercase hover:bg-emerald-100">Done</button>
-                      <button onClick={() => updateStatus(g.id, 'CANCELLED')} className="px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-400 rounded-lg text-[9px] font-black uppercase hover:bg-slate-100">Cancel</button>
+                      <button onClick={() => updateStatus(g.id, 'ACHIEVED')} className="px-3 py-1.5 bg-page border border-accent text-accent text-[9px] font-black uppercase hover:bg-page">Done</button>
+                      <button onClick={() => updateStatus(g.id, 'CANCELLED')} className="px-3 py-1.5 bg-page border border-rule text-muted text-[9px] font-black uppercase hover:bg-page">Cancel</button>
                     </>
                   )}
-                  <button onClick={() => deleteGoal(g.id)} className="px-3 py-1.5 bg-red-50 border border-red-200 text-red-600 rounded-lg text-[9px] font-black uppercase hover:bg-red-100">Del</button>
+                  <button onClick={() => deleteGoal(g.id)} className="px-3 py-1.5 bg-page border border-ink text-ink text-[9px] font-black uppercase hover:bg-page">Del</button>
                 </div>
               </div>
             </div>
@@ -1233,21 +1237,21 @@ function PipTab({ notify }: { notify: (m: string) => void }) {
     <div className="grid lg:grid-cols-3 gap-6">
       {/* Create + list */}
       <div className="flex flex-col gap-4">
-        <button onClick={() => setShowCreate(true)} className="px-6 py-4 bg-violet-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-700 shadow-xl shadow-violet-500/20 transition-all active:scale-95">
+        <button onClick={() => setShowCreate(true)} className="px-6 py-4 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95">
           + New PIP
         </button>
 
         {loading ? (
-          <div className="h-32 bg-white rounded-2xl border border-slate-100 animate-pulse" />
+          <div className="h-32 bg-paper border border-rule animate-pulse" />
         ) : pips.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">No PIPs</div>
+          <div className="bg-paper border border-rule p-8 text-center text-[10px] font-black text-muted uppercase tracking-widest">No PIPs</div>
         ) : pips.map(p => (
           <button key={p.id} onClick={() => { setSelected(p); setNotes(p.progressNotes ?? ''); }}
-            className={`w-full text-left bg-white p-5 rounded-2xl border transition-all ${selected?.id === p.id ? 'border-violet-600 shadow-lg shadow-violet-500/10' : 'border-slate-100 hover:border-slate-200'}`}>
+            className={`w-full text-left bg-paper p-5  border transition-all ${selected?.id === p.id ? 'border-accent ' : 'border-rule hover:border-rule'}`}>
             <p className="label-form">EMP: {p.employeeId.slice(0, 12)}…</p>
             <div className="flex items-center justify-between mt-2">
-              <p className="text-[10px] font-black text-slate-600 uppercase">{fmtDate(p.startDate)} – {fmtDate(p.endDate)}</p>
-              <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border uppercase ${PIP_COLORS[p.status]}`}>{p.status}</span>
+              <p className="text-[10px] font-black text-ink uppercase">{fmtDate(p.startDate)} – {fmtDate(p.endDate)}</p>
+              <span className={`text-[8px] font-black px-2 py-0.5  border uppercase ${PIP_COLORS[p.status]}`}>{p.status}</span>
             </div>
           </button>
         ))}
@@ -1256,39 +1260,39 @@ function PipTab({ notify }: { notify: (m: string) => void }) {
       {/* Detail */}
       <div className="lg:col-span-2">
         {!selected ? (
-          <div className="bg-white rounded-[2rem] border border-slate-100 p-12 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">
+          <div className="bg-paper border border-rule p-12 text-center text-[10px] font-black text-muted uppercase tracking-widest">
             Select a PIP to view
           </div>
         ) : (
-          <div className="bg-white rounded-[2rem] border border-slate-100 p-8 flex flex-col gap-6">
+          <div className="bg-paper border border-rule p-8 flex flex-col gap-6">
             <div className="flex items-start justify-between">
               <div>
                 <p className="label-form">Employee ID: {selected.employeeId}</p>
                 <p className="label-form mt-1">Period: {fmtDate(selected.startDate)} – {fmtDate(selected.endDate)}</p>
               </div>
-              <span className={`text-[9px] font-black px-3 py-1.5 rounded-xl border ${PIP_COLORS[selected.status]}`}>{selected.status}</span>
+              <span className={`text-[9px] font-black px-3 py-1.5  border ${PIP_COLORS[selected.status]}`}>{selected.status}</span>
             </div>
 
             <div>
               <h4 className="label-form mb-2">Objectives</h4>
-              <p className="text-sm text-slate-700 bg-slate-50 rounded-xl p-4 leading-relaxed">{selected.objectives}</p>
+              <p className="text-sm text-ink bg-page p-4 leading-relaxed">{selected.objectives}</p>
             </div>
 
             <div>
               <h4 className="label-form mb-2">Progress Notes</h4>
-              <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={4} placeholder="Add progress notes…" className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-600 resize-none" />
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={4} placeholder="Add progress notes…" className="w-full border border-rule px-4 py-3 text-sm outline-none focus:border-accent resize-none" />
               <div className="flex justify-end mt-2">
-                <button onClick={() => updatePip(selected.id, { progressNotes: notes })} disabled={updatingStatus} className="px-6 py-2 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all disabled:opacity-50">
+                <button onClick={() => updatePip(selected.id, { progressNotes: notes })} disabled={updatingStatus} className="px-6 py-2 bg-shadow text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent transition-all disabled:opacity-50">
                   Save Notes
                 </button>
               </div>
             </div>
 
             {selected.status === 'ACTIVE' && (
-              <div className="flex gap-3 border-t border-slate-50 pt-6 flex-wrap">
-                <button onClick={() => updatePip(selected.id, { status: 'COMPLETED' })} className="px-6 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 shadow-lg shadow-emerald-500/20">Mark Completed</button>
-                <button onClick={() => updatePip(selected.id, { status: 'EXTENDED' })} className="px-6 py-3 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 shadow-lg shadow-amber-500/20">Extend</button>
-                <button onClick={() => updatePip(selected.id, { status: 'TERMINATED' })} className="px-6 py-3 border border-red-200 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-50">Terminate</button>
+              <div className="flex gap-3 border-t border-rule pt-6 flex-wrap">
+                <button onClick={() => updatePip(selected.id, { status: 'COMPLETED' })} className="px-6 py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent ">Mark Completed</button>
+                <button onClick={() => updatePip(selected.id, { status: 'EXTENDED' })} className="px-6 py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight ">Extend</button>
+                <button onClick={() => updatePip(selected.id, { status: 'TERMINATED' })} className="px-6 py-3 border border-ink text-ink text-[10px] font-black uppercase tracking-widest hover:bg-page">Terminate</button>
               </div>
             )}
           </div>
@@ -1297,32 +1301,32 @@ function PipTab({ notify }: { notify: (m: string) => void }) {
 
       {/* Create modal */}
       {showCreate && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-6" onClick={() => setShowCreate(false)}>
-          <div className="bg-white rounded-[2rem] p-10 w-full max-w-lg shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-xl font-black text-slate-900 mb-6 uppercase tracking-tight">New PIP</h3>
+        <div className="fixed inset-0 bg-shadow/40 backdrop- z-50 flex items-center justify-center p-6" onClick={() => setShowCreate(false)}>
+          <div className="bg-paper p-10 w-full max-w-lg " onClick={e => e.stopPropagation()}>
+            <h3 className="text-xl font-black text-ink mb-6 uppercase tracking-tight">New PIP</h3>
             <div className="flex flex-col gap-4">
               <div>
                 <label className="label-form mb-1 block">Employee ID *</label>
-                <input value={form.employeeId} onChange={e => setForm(f => ({ ...f, employeeId: e.target.value }))} placeholder="emp-..." className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600" />
+                <input value={form.employeeId} onChange={e => setForm(f => ({ ...f, employeeId: e.target.value }))} placeholder="emp-..." className="w-full border border-rule px-4 py-3 text-sm font-bold outline-none focus:border-accent" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label-form mb-1 block">Start Date *</label>
-                  <input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600" />
+                  <input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className="w-full border border-rule px-4 py-3 text-sm font-bold outline-none focus:border-accent" />
                 </div>
                 <div>
                   <label className="label-form mb-1 block">End Date *</label>
-                  <input type="date" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600" />
+                  <input type="date" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} className="w-full border border-rule px-4 py-3 text-sm font-bold outline-none focus:border-accent" />
                 </div>
               </div>
               <div>
                 <label className="label-form mb-1 block">Objectives *</label>
-                <textarea value={form.objectives} onChange={e => setForm(f => ({ ...f, objectives: e.target.value }))} rows={4} placeholder="Describe measurable objectives and expectations…" className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-600 resize-none" />
+                <textarea value={form.objectives} onChange={e => setForm(f => ({ ...f, objectives: e.target.value }))} rows={4} placeholder="Describe measurable objectives and expectations…" className="w-full border border-rule px-4 py-3 text-sm font-bold outline-none focus:border-accent resize-none" />
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-8">
-              <button onClick={() => setShowCreate(false)} className="px-6 py-3 border border-slate-200 rounded-xl text-[10px] font-black text-slate-500 uppercase tracking-widest hover:bg-slate-50">Cancel</button>
-              <button onClick={createPip} disabled={saving} className="px-8 py-3 bg-violet-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-700 disabled:opacity-60">
+              <button onClick={() => setShowCreate(false)} className="px-6 py-3 border border-rule text-[10px] font-black text-muted uppercase tracking-widest hover:bg-page">Cancel</button>
+              <button onClick={createPip} disabled={saving} className="px-8 py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent disabled:opacity-60">
                 {saving ? 'Creating…' : 'Create PIP'}
               </button>
             </div>

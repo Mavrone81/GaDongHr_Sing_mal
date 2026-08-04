@@ -367,7 +367,7 @@ export default function LoginPage() {
                 </div>
                 <button type="submit" disabled={loading}
                   className={`w-full flex justify-center py-5 px-4 rounded-xl shadow-xl shadow-indigo-600/20 text-[11px] font-black text-white bg-indigo-600 hover:bg-indigo-700 transition-all uppercase tracking-[0.3em] active:scale-95 ${loading ? 'opacity-70 pointer-events-none' : ''}`}>
-                  {loading ? <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3" />Verifying…</> : 'Initialize Session'}
+                  {loading ? <><div className="w-3 h-3 border-2 border-white/30 border-t-paper rounded-full animate-spin mr-3" />Verifying…</> : 'Initialize Session'}
                 </button>
               </form>
               <p className="mt-6 text-center text-xs text-slate-500">

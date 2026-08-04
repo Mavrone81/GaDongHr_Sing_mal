@@ -98,7 +98,7 @@ export default function MovementDetailPage() {
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-[400px]"><div className="w-10 h-10 border-4 border-accent border-accent animate-spin" /></div>;
+    return <div className="flex items-center justify-center min-h-[400px]"><div className="w-10 h-10 border-4 border-t-accent border-accent animate-spin rounded-full" /></div>;
   }
   if (error || !m) {
     return (

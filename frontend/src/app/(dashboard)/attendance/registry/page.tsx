@@ -62,8 +62,17 @@ async function geocodePostal(postal: string): Promise<{ lat: number; lng: number
 // business-timezone helpers so date keys stay consistent and TZ-independent.
 function fmtShortDate(d: Date) { return formatCivil(d, { weekday: 'short', day: 'numeric', month: 'short' }); }
 
+/**
+ * The shift-colour PICKER — user-chosen, not design tokens.
+ *
+ * These hexes are persisted on every existing shift, so the list cannot be
+ * swapped for tokens without orphaning the colour on rosters already saved.
+ * A roster genuinely needs many distinguishable colours, which eight tokens
+ * cannot supply. Only the default (first entry) moves off the retired brand
+ * indigo onto the accent, so new shifts start on-brand.
+ */
 const SHIFT_COLORS = [
-  '#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#14b8a6','#f97316','#6b7280',
+  '#1B4A3C','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#14b8a6','#f97316','#6b7280',
 ];
 
 // New types for shift management
@@ -100,7 +109,7 @@ function LiveClock() {
 export default function AttendanceRegistryPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-10 h-10 border-4 border-accent border-accent animate-spin" /></div>;
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-10 h-10 border-4 border-t-accent border-accent animate-spin rounded-full" /></div>;
   const role = user?.role?.toUpperCase() ?? '';
   if (!ALLOWED_ROLES.includes(role)) { router.replace('/attendance'); return null; }
   return <AdminAttendanceView userRole={role} />;
@@ -397,7 +406,7 @@ function AdminAttendanceView({ userRole }: { userRole: string }) {
             </div>
             <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-2 ml-6">Geofence zones — employees must clock in within the configured radius</p>
           </div>
-          {locLoading ? <div className="p-12 text-center"><div className="w-8 h-8 border-4 border-accent border-accent animate-spin mx-auto" /></div>
+          {locLoading ? <div className="p-12 text-center"><div className="w-8 h-8 border-4 border-t-accent border-accent animate-spin mx-auto rounded-full" /></div>
           : locations.length === 0 ? <div className="p-16 text-center"><p className="text-sm font-black text-muted uppercase tracking-widest mb-2">No work locations configured</p></div>
           : (
             <div className="divide-y divide-rule">
@@ -843,7 +852,7 @@ const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: 
           </div>
 
           {loading ? (
-            <div className="p-16 text-center"><div className="w-8 h-8 border-4 border-accent border-accent animate-spin mx-auto" /></div>
+            <div className="p-16 text-center"><div className="w-8 h-8 border-4 border-t-accent border-accent animate-spin mx-auto rounded-full" /></div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full border-collapse" style={{ minWidth: viewMode === 'monthly' ? `${44 * viewDays.length + 240}px` : viewMode === 'biweekly' ? `${80 * 14 + 240}px` : '900px' }}>
@@ -898,7 +907,7 @@ const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: 
                               className="opacity-0 group-hover/emprow:opacity-100 transition-opacity w-6 h-6 flex items-center justify-center border border-ink text-ink hover:bg-page hover:text-ink shrink-0 disabled:opacity-30"
                             >
                               {resettingEmpId === emp.id
-                                ? <div className="w-3 h-3 border-2 border-ink border-ink animate-spin" />
+                                ? <div className="w-3 h-3 border-2 border-t-ink border-ink animate-spin rounded-full" />
                                 : <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
                               }
                             </button>
@@ -922,10 +931,10 @@ const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: 
                                 disabled={isSaving}
                                 title={shift ? `${shift.name} · ${shift.startTime}–${shift.endTime}` : dateStr}
                                 className={`w-full  border transition-all group relative ${isCompact ? 'min-h-[32px]' : 'min-h-[52px]'} ${isToday && !shift ? 'border-accent bg-page' : ''}`}
-                                style={shift ? { backgroundColor: shift.color + '22', borderColor: shift.color + '55' } : { backgroundColor: 'transparent', borderColor: isToday ? undefined : '#e2e8f0' }}
+                                style={shift ? { backgroundColor: shift.color + '22', borderColor: shift.color + '55' } : { backgroundColor: 'transparent', borderColor: isToday ? undefined : 'var(--rule)' }}
                               >
                                 {isSaving ? (
-                                  <div className="flex items-center justify-center h-full"><div className="w-3 h-3 border-2 border-rule border-rule animate-spin" /></div>
+                                  <div className="flex items-center justify-center h-full"><div className="w-3 h-3 border-2 border-t-rule border-rule animate-spin rounded-full" /></div>
                                 ) : shift ? (
                                   isCompact ? (
                                     <div className="flex items-center justify-center h-full py-1">
@@ -1082,7 +1091,7 @@ const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: 
                 disabled={resettingEmpId === resetConfirm.empId}
                 className="flex-1 py-3 bg-ink hover:bg-ink disabled:opacity-50 text-paper text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
               >
-                {resettingEmpId === resetConfirm.empId && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white animate-spin" />}
+                {resettingEmpId === resetConfirm.empId && <span className="w-3.5 h-3.5 border-2 border-paper/30 border-t-paper animate-spin rounded-full" />}
                 Reset
               </button>
             </div>
@@ -1394,7 +1403,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
           <button onClick={openAddProject} className="px-6 py-2.5 bg-accent hover:bg-accent text-paper text-[10px] font-black uppercase tracking-widest transition-all">+ New Project</button>
         </div>
         {projLoading ? (
-          <div className="p-16 text-center"><div className="w-8 h-8 border-4 border-accent border-accent animate-spin mx-auto" /></div>
+          <div className="p-16 text-center"><div className="w-8 h-8 border-4 border-t-accent border-accent animate-spin mx-auto rounded-full" /></div>
         ) : projects.length === 0 ? (
           <div className="bg-paper border border-dashed border-rule p-16 text-center">
             <p className="text-sm font-black text-muted uppercase tracking-widest mb-2">No projects yet</p>
@@ -1483,7 +1492,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
             <p className="eyebrow-tight">Define specific working days and hours for this project</p>
             <button onClick={openAddWs} className="px-5 py-2 bg-accent hover:bg-accent text-paper text-[9px] font-black uppercase tracking-widest transition-all">+ New Working Shift</button>
           </div>
-          {wsLoading ? <div className="p-12 text-center"><div className="w-7 h-7 border-4 border-accent border-accent animate-spin mx-auto" /></div>
+          {wsLoading ? <div className="p-12 text-center"><div className="w-7 h-7 border-4 border-t-accent border-accent animate-spin mx-auto rounded-full" /></div>
           : workingShifts.length === 0 ? (
             <div className="bg-paper border border-dashed border-rule p-12 text-center">
               <p className="text-sm font-black text-muted uppercase tracking-widest">No working shifts yet</p>
@@ -1531,7 +1540,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
             <p className="eyebrow-tight">Cyclical rotation patterns — define work days and off days</p>
             <button onClick={openAddPat} className="px-5 py-2 bg-accent hover:bg-accent text-paper text-[9px] font-black uppercase tracking-widest transition-all">+ New Pattern</button>
           </div>
-          {patLoading ? <div className="p-12 text-center"><div className="w-7 h-7 border-4 border-accent border-accent animate-spin mx-auto" /></div>
+          {patLoading ? <div className="p-12 text-center"><div className="w-7 h-7 border-4 border-t-accent border-accent animate-spin mx-auto rounded-full" /></div>
           : patterns.length === 0 ? (
             <div className="bg-paper border border-dashed border-rule p-12 text-center">
               <p className="text-sm font-black text-muted uppercase tracking-widest">No patterns yet</p>
@@ -1575,7 +1584,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
             <button onClick={() => { setMemberForm({ employeeId: '', shiftId: '', shiftType: '', startDate: todayISO(), autoPopulate: true }); setMemberModal(true); }}
               className="px-5 py-2 bg-accent hover:bg-accent text-paper text-[9px] font-black uppercase tracking-widest transition-all">+ Add Member</button>
           </div>
-          {membersLoading ? <div className="p-12 text-center"><div className="w-7 h-7 border-4 border-accent border-accent animate-spin mx-auto" /></div>
+          {membersLoading ? <div className="p-12 text-center"><div className="w-7 h-7 border-4 border-t-accent border-accent animate-spin mx-auto rounded-full" /></div>
           : members.length === 0 ? (
             <div className="bg-paper border border-dashed border-rule p-12 text-center">
               <p className="text-sm font-black text-muted uppercase tracking-widest">No members yet</p>

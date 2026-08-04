@@ -9,6 +9,7 @@
  */
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { CARD, withoutSpinners } from './helpers/vocabulary';
 
 const LAYOUT = readFileSync(
   join(__dirname, '..', 'src', 'app', '(dashboard)', 'layout.tsx'),
@@ -18,7 +19,7 @@ const LAYOUT = readFileSync(
 describe('dashboard chrome speaks the document vocabulary', () => {
   // It is a document, not a dashboard.
   it('uses no rounded containers', () => {
-    expect(LAYOUT).not.toMatch(/rounded-(lg|xl|2xl|full)/);
+    expect(withoutSpinners(LAYOUT)).not.toMatch(/rounded-(lg|xl|2xl|full)/);
   });
 
   it('uses no drop shadows', () => {

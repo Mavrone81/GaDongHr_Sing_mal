@@ -88,7 +88,7 @@ export default function MovementsPage() {
   useEffect(() => { if (user) loadData(); }, [user]);
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-[400px]"><div className="w-10 h-10 border-4 border-accent border-accent animate-spin" /></div>;
+    return <div className="flex items-center justify-center min-h-[400px]"><div className="w-10 h-10 border-4 border-t-accent border-accent animate-spin rounded-full" /></div>;
   }
 
   const now = new Date();
@@ -267,7 +267,7 @@ function InitiateModal({ isHr, defaultEmployeeId, onClose, onSuccess }: { isHr: 
   const showCo   = ['INTER_COMPANY_TRANSFER'].includes(form.type);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow backdrop- p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow/40 backdrop- p-4">
       <div className="bg-paper w-full max-w-xl border border-rule max-h-[90vh] overflow-y-auto">
         <div className="px-6 py-4 border-b border-rule sticky top-0 bg-paper flex items-center justify-between">
           <h3 className="text-sm font-black text-ink">{isHr ? 'New Staff Movement' : 'Request a Transfer'}</h3>
@@ -359,11 +359,11 @@ function InitiateModal({ isHr, defaultEmployeeId, onClose, onSuccess }: { isHr: 
       </div>
       <style jsx>{`
         :global(.input) {
-          width: 100%; border: 1px solid rgb(226 232 240); border-radius: 0.75rem;
+          width: 100%; border: 1px solid var(--rule);
           padding: 0.6rem 0.9rem; font-size: 0.875rem; outline: none;
           transition: all 0.15s;
         }
-        :global(.input:focus) { border-color: rgb(99 102 241); box-shadow: 0 0 0 2px rgba(99,102,241,0.15); }
+        :global(.input:focus) { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent); }
       `}</style>
     </div>
   );

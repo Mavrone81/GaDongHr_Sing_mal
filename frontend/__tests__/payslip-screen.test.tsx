@@ -14,6 +14,7 @@
  */
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { CARD, withoutSpinners } from './helpers/vocabulary';
 
 const SCREEN = readFileSync(
   join(__dirname, '..', 'src', 'app', '(dashboard)', 'payroll', 'EmployeePayslipsView.tsx'),
@@ -41,7 +42,7 @@ describe('payslip screen', () => {
   });
 
   it('uses no card vocabulary', () => {
-    expect(SCREEN).not.toMatch(/rounded-(lg|xl|2xl|full|\[)|shadow-(sm|md|lg|xl|2xl)|bg-white/);
+    expect(withoutSpinners(SCREEN)).not.toMatch(CARD);
   });
 
   it('uses no legacy palette', () => {

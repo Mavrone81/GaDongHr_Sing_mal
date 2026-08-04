@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { TONES } from '@/lib/statusTone';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -35,24 +36,31 @@ const HR_ROLES = ['HR_ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'];
 const SEVERITIES = ['MINOR', 'MODERATE', 'SERIOUS', 'GROSS_MISCONDUCT'];
 
 const STATUS_COLORS: Record<string, string> = {
-  OPEN:                'bg-blue-100 text-blue-700',
-  UNDER_INVESTIGATION: 'bg-violet-100 text-violet-700',
-  PENDING_DECISION:    'bg-amber-100 text-amber-700',
-  RESOLVED:            'bg-emerald-100 text-emerald-700',
-  CLOSED:              'bg-slate-100 text-slate-600',
-  WITHDRAWN:           'bg-slate-100 text-slate-500',
+  OPEN: TONES.active,
+  UNDER_INVESTIGATION: TONES.critical,
+  PENDING_DECISION: TONES.pending,
+  RESOLVED: TONES.warning,
+  CLOSED: TONES.done,
+  WITHDRAWN: TONES.inert,
 };
 
-const SEVERITY_COLORS: Record<string, { bg: string; text: string }> = {
-  MINOR:            { bg: 'bg-slate-100', text: 'text-slate-700' },
-  MODERATE:         { bg: 'bg-amber-100', text: 'text-amber-700' },
-  SERIOUS:          { bg: 'bg-orange-100',text: 'text-orange-700' },
-  GROSS_MISCONDUCT: { bg: 'bg-red-100',   text: 'text-red-700' },
+/**
+ * Disciplinary severity, escalating. The nested {bg,text} shape meant the
+ * automatic tone reassignment skipped this map, so all four severities — from
+ * MINOR to GROSS_MISCONDUCT — were rendering as the same grey chip on the case
+ * list. On a disciplinary register that is the most consequential column there
+ * is.
+ */
+const SEVERITY_COLORS: Record<string, string> = {
+  MINOR:            TONES.neutral,
+  MODERATE:         TONES.pending,
+  SERIOUS:          TONES.warning,
+  GROSS_MISCONDUCT: TONES.critical,
 };
 
 const TYPE_COLORS: Record<string, string> = {
-  DISCIPLINARY: 'bg-rose-50 text-rose-700',
-  GRIEVANCE:    'bg-indigo-50 text-indigo-700',
+  DISCIPLINARY: 'bg-page text-ink',
+  GRIEVANCE:    'bg-page text-accent',
 };
 
 export default function HrCasesPage() {
@@ -92,7 +100,7 @@ export default function HrCasesPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+        <div className="w-10 h-10 border-4 border-accent border-t-accent animate-spin rounded-full" />
       </div>
     );
   }
@@ -110,14 +118,14 @@ export default function HrCasesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-black text-slate-900">{isHr ? 'HR Case Management' : 'My Cases'}</h1>
-          <p className="text-xs text-slate-500 mt-0.5 uppercase tracking-widest font-bold">
+          <h1 className="text-xl font-black text-ink">{isHr ? 'HR Case Management' : 'My Cases'}</h1>
+          <p className="text-xs text-muted mt-0.5 uppercase tracking-widest font-bold">
             {isHr ? 'Disciplinary · Grievances · Investigations' : 'Grievances & Personal Cases'}
           </p>
         </div>
         <button
           onClick={() => setShowFileModal(true)}
-          className="px-4 py-2 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all"
+          className="px-4 py-2 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent transition-all"
         >
           {isHr ? '+ Open Case' : '+ File Grievance'}
         </button>
@@ -136,20 +144,20 @@ export default function HrCasesPage() {
 
       {/* Overdue alert banner */}
       {isHr && dashboard?.overdueEscalation?.length > 0 && (
-        <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-4 flex items-start gap-3">
+        <div className="bg-page border-2 border-ink p-4 flex items-start gap-3">
           <span className="text-2xl">⚠</span>
           <div className="flex-1">
-            <p className="text-sm font-black text-red-700 uppercase tracking-wider">
+            <p className="text-sm font-black text-ink uppercase tracking-wider">
               {dashboard.overdueEscalation.length} case{dashboard.overdueEscalation.length > 1 ? 's' : ''} past SLA
             </p>
-            <p className="text-xs text-red-600 mt-1">
+            <p className="text-xs text-ink mt-1">
               {dashboard.overdueEscalation.slice(0, 3).map((c: any) => c.caseNumber).join(', ')}
               {dashboard.overdueEscalation.length > 3 && ` + ${dashboard.overdueEscalation.length - 3} more`}
             </p>
           </div>
           <button
             onClick={() => setTab('overdue')}
-            className="text-xs font-black text-red-700 hover:text-red-800 uppercase tracking-widest px-3 py-1.5 border border-red-300 rounded-lg hover:bg-red-100 transition-all"
+            className="text-xs font-black text-ink hover:text-ink uppercase tracking-widest px-3 py-1.5 border border-ink hover:bg-page transition-all"
           >
             View →
           </button>
@@ -158,13 +166,13 @@ export default function HrCasesPage() {
 
       {/* Filters & Tabs */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1 border-b border-slate-200">
+        <div className="flex gap-1 border-b border-rule">
           {(['all','open','overdue'] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-all border-b-2 -mb-px ${
-                tab === t ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+                tab === t ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'
               }`}
             >
               {t}
@@ -172,12 +180,12 @@ export default function HrCasesPage() {
           ))}
         </div>
         <div className="ml-auto flex gap-2">
-          <select value={filterType} onChange={e => setFilterType(e.target.value)} className="text-xs px-3 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-700">
+          <select value={filterType} onChange={e => setFilterType(e.target.value)} className="text-xs px-3 py-1.5 border border-rule font-bold text-ink">
             <option value="">All types</option>
             <option value="DISCIPLINARY">Disciplinary</option>
             <option value="GRIEVANCE">Grievance</option>
           </select>
-          <select value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)} className="text-xs px-3 py-1.5 border border-slate-200 rounded-lg font-bold text-slate-700">
+          <select value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)} className="text-xs px-3 py-1.5 border border-rule font-bold text-ink">
             <option value="">All severities</option>
             {SEVERITIES.map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
           </select>
@@ -186,58 +194,57 @@ export default function HrCasesPage() {
 
       {/* Case List */}
       {filteredCases.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center">
-          <p className="text-sm text-slate-500">No cases in this view.</p>
+        <div className="bg-paper border border-rule p-12 text-center">
+          <p className="text-sm text-muted">No cases in this view.</p>
         </div>
       ) : (
         <div className="space-y-3">
           {filteredCases.map(c => {
-            const sv = SEVERITY_COLORS[c.severity];
             return (
-              <Link key={c.id} href={`/hr-cases/${c.id}`} className="block bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-md hover:border-indigo-200 transition-all">
+              <Link key={c.id} href={`/hr-cases/${c.id}`} className="block bg-paper border border-rule p-5 hover: hover:border-accent transition-all">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                      <span className="text-xs font-mono font-black text-slate-500">{c.caseNumber}</span>
-                      <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-full ${TYPE_COLORS[c.type]}`}>
+                      <span className="text-xs font-mono font-black text-muted">{c.caseNumber}</span>
+                      <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest  ${TYPE_COLORS[c.type]}`}>
                         {c.type}
                       </span>
-                      <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-full ${sv.bg} ${sv.text}`}>
+                      <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest ${SEVERITY_COLORS[c.severity] ?? TONES.neutral}`}>
                         {c.severity.replace(/_/g, ' ')}
                       </span>
-                      <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-full ${STATUS_COLORS[c.status] || 'bg-slate-100 text-slate-600'}`}>
+                      <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[c.status] || 'bg-page text-ink'}`}>
                         {c.status.replace(/_/g, ' ')}
                       </span>
                       {c.isTafepReportable && (
-                        <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-full bg-orange-100 text-orange-700">
+                        <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-widest bg-page text-ink">
                           TAFEP
                         </span>
                       )}
                       {c.escalation?.shouldEscalate && (
-                        <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-full bg-red-100 text-red-700 animate-pulse">
+                        <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-widest bg-page text-ink animate-pulse">
                           ⚠ Past SLA
                         </span>
                       )}
                     </div>
-                    <h3 className="text-base font-black text-slate-900 mb-1">{c.title}</h3>
-                    <p className="text-sm text-slate-500 truncate">{c.summary}</p>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
-                      <span>Subject: <span className="font-bold text-slate-700">{c.subjectEmployeeName}</span></span>
-                      <span>Opened: <span className="font-bold text-slate-700">{new Date(c.openedAt).toLocaleDateString('en-SG')}</span></span>
+                    <h3 className="text-base font-black text-ink mb-1">{c.title}</h3>
+                    <p className="text-sm text-muted truncate">{c.summary}</p>
+                    <div className="flex items-center gap-4 mt-2 text-xs text-muted">
+                      <span>Subject: <span className="font-bold text-ink">{c.subjectEmployeeName}</span></span>
+                      <span>Opened: <span className="font-bold text-ink">{new Date(c.openedAt).toLocaleDateString('en-SG')}</span></span>
                       {c.escalation && (
                         <span>{c.escalation.daysOpen}d open · SLA {c.escalation.slaDays}d</span>
                       )}
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Stage</div>
-                    <div className="text-xs font-black text-slate-700 mt-1">{c.currentStage}</div>
+                    <div className="text-[10px] font-black text-muted uppercase tracking-widest">Stage</div>
+                    <div className="text-xs font-black text-ink mt-1">{c.currentStage}</div>
                     {c.progress && (
-                      <div className="mt-2 w-24 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-indigo-500 transition-all" style={{ width: `${c.progress.percent}%` }} />
+                      <div className="mt-2 w-24 h-1.5 bg-rule overflow-hidden">
+                        <div className="h-full bg-accent transition-all" style={{ width: `${c.progress.percent}%` }} />
                       </div>
                     )}
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">
+                    <div className="text-[10px] font-black text-muted uppercase tracking-widest mt-2">
                       {c.escalationLevel.replace(/_/g, ' ')}
                     </div>
                   </div>
@@ -262,13 +269,13 @@ export default function HrCasesPage() {
 // ─── StatCard ────────────────────────────────────────────────────────────────
 function StatCard({ label, value, accent }: { label: string; value: number | string; accent: string }) {
   const colorMap: Record<string, string> = {
-    slate:   'text-slate-700', blue: 'text-blue-700',
-    red:     'text-red-700',   emerald: 'text-emerald-700', violet: 'text-violet-700',
+    slate:   'text-ink', blue: 'text-accent',
+    red:     'text-ink',   emerald: 'text-accent', violet: 'text-accent',
   };
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4">
-      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{label}</p>
-      <p className={`text-2xl font-black ${colorMap[accent] || 'text-slate-700'}`}>{value}</p>
+    <div className="bg-paper border border-rule p-4">
+      <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-2">{label}</p>
+      <p className={`text-2xl font-black ${colorMap[accent] || 'text-ink'}`}>{value}</p>
     </div>
   );
 }
@@ -300,13 +307,13 @@ function FileCaseModal({ isHr, onClose, onSuccess }: { isHr: boolean; onClose: (
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-slate-100 sticky top-0 bg-white">
-          <h3 className="text-sm font-black text-slate-900">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow/40 backdrop- p-4">
+      <div className="bg-paper w-full max-w-lg border border-rule max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-rule sticky top-0 bg-paper">
+          <h3 className="text-sm font-black text-ink">
             {isHr ? 'Open New Case' : 'File a Grievance'}
           </h3>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-muted mt-0.5">
             {!isHr && 'Your grievance will be handled confidentially by HR.'}
           </p>
         </div>
@@ -365,27 +372,27 @@ function FileCaseModal({ isHr, onClose, onSuccess }: { isHr: boolean; onClose: (
             Subject is a union member
           </label>
           {form.category === 'discrimination' && (
-            <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl text-xs text-orange-700">
+            <div className="p-3 bg-page border border-highlight text-xs text-ink">
               <strong>Note:</strong> Discrimination cases are auto-flagged for TAFEP referral.
             </div>
           )}
-          {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-bold">{error}</div>}
+          {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
           <div className="flex gap-3 pt-1">
-            <button onClick={save} disabled={saving || !form.title.trim() || !form.summary.trim()} className="flex-1 py-2.5 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 disabled:opacity-50">
+            <button onClick={save} disabled={saving || !form.title.trim() || !form.summary.trim()} className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
               {saving ? 'Filing…' : 'Submit'}
             </button>
-            <button onClick={onClose} className="px-5 py-2.5 border border-slate-200 text-slate-600 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-slate-50">Cancel</button>
+            <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
           </div>
         </div>
       </div>
       <style jsx>{`
         :global(.input) {
-          width: 100%; border: 1px solid rgb(226 232 240); border-radius: 0.75rem;
+          width: 100%; border: 1px solid var(--rule);
           padding: 0.6rem 0.9rem; font-size: 0.875rem; outline: none;
           transition: all 0.15s;
         }
         :global(.input:focus) {
-          border-color: rgb(99 102 241); box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
+          border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
         }
       `}</style>
     </div>
@@ -395,8 +402,8 @@ function FileCaseModal({ isHr, onClose, onSuccess }: { isHr: boolean; onClose: (
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1.5">
-        {label}{required && <span className="text-red-500"> *</span>}
+      <label className="block text-xs font-black text-ink uppercase tracking-wider mb-1.5">
+        {label}{required && <span className="text-ink"> *</span>}
       </label>
       {children}
     </div>
