@@ -67,7 +67,7 @@ interface EmployeeDocument {
 }
 
 // ─── Shared input styles ───────────────────────────────────────────────────────
-const IX = 'w-full bg-white border border-indigo-300 rounded-lg px-4 py-2.5 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-400 placeholder:font-normal';
+const IX = 'w-full bg-paper border border-accent px-4 py-2.5 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all placeholder:text-muted placeholder:font-normal';
 const SX = IX + ' cursor-pointer appearance-none pr-9';
 
 // Format Prisma enum values into readable labels for display
@@ -110,8 +110,8 @@ function Field({
     <div className={`flex flex-col gap-1.5 ${spanCls}`}>
       <label className="label-form">{label}</label>
       {editing && children ? children : (
-        <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-bold text-slate-900 min-h-[42px] flex items-center">
-          {value != null && value !== '' ? value : <span className="text-slate-400 italic text-xs font-normal">Not provided</span>}
+        <div className="bg-page border border-rule px-4 py-2.5 text-sm font-bold text-ink min-h-[42px] flex items-center">
+          {value != null && value !== '' ? value : <span className="text-muted italic text-xs font-normal">Not provided</span>}
         </div>
       )}
     </div>
@@ -119,11 +119,11 @@ function Field({
 }
 
 // ─── Section wrapper ───────────────────────────────────────────────────────────
-function Section({ title, accent = 'bg-indigo-600', children }: { title: string; accent?: string; children: React.ReactNode }) {
+function Section({ title, accent = 'bg-accent', children }: { title: string; accent?: string; children: React.ReactNode }) {
   return (
     <section>
-      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-5 flex items-center gap-3">
-        <div className={`w-1.5 h-4 ${accent} rounded-full shrink-0`} />
+      <h4 className="text-[10px] font-black text-muted uppercase tracking-[0.2em] mb-5 flex items-center gap-3">
+        <div className={`w-1.5 h-4 ${accent}  shrink-0`} />
         {title}
       </h4>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-start">
@@ -146,7 +146,7 @@ function Sel({ value, onChange, options }: { value: string; onChange: (v: string
           return <option key={v} value={v}>{l}</option>;
         })}
       </select>
-      <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
       </svg>
     </div>
@@ -154,18 +154,18 @@ function Sel({ value, onChange, options }: { value: string; onChange: (v: string
 }
 
 // ─── Entitlement bar ───────────────────────────────────────────────────────────
-function EntitlementRow({ label, total, used, color = 'bg-indigo-600' }: { label: string; total: number; used: number; color?: string }) {
+function EntitlementRow({ label, total, used, color = 'bg-accent' }: { label: string; total: number; used: number; color?: string }) {
   const pct = total > 0 ? Math.round((used / total) * 100) : 0;
   return (
-    <div className="flex flex-col gap-2 p-4 bg-slate-50 rounded-xl border border-slate-200">
+    <div className="flex flex-col gap-2 p-4 bg-page border border-rule">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">{label}</span>
-        <span className="text-[10px] font-black text-slate-400">{total - used} / {total} days left</span>
+        <span className="text-[10px] font-black text-ink uppercase tracking-wider">{label}</span>
+        <span className="text-[10px] font-black text-muted">{total - used} / {total} days left</span>
       </div>
-      <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+      <div className="w-full h-2 bg-rule overflow-hidden">
+        <div className={`h-full  ${color}`} style={{ width: `${pct}%` }} />
       </div>
-      <div className="flex justify-between text-[8px] font-black text-slate-400 uppercase tracking-widest">
+      <div className="flex justify-between text-[8px] font-black text-muted uppercase tracking-widest">
         <span>Used: {used} days</span>
         <span>{pct}% consumed</span>
       </div>
@@ -351,11 +351,11 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
   // ── Derived values ─────────────────────────────────────────────────────────
   if (loading) return (
     <div className="p-20 text-center flex flex-col items-center gap-4">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600" />
-      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Syncing Employee Records…</p>
+      <div className="animate-spin h-12 w-12 border-t-2 border-b-2 border-accent" />
+      <p className="text-xs font-bold text-muted uppercase tracking-widest animate-pulse">Syncing Employee Records…</p>
     </div>
   );
-  if (!employee) return <div className="p-20 text-center text-red-600">Employee record not found.</div>;
+  if (!employee) return <div className="p-20 text-center text-ink">Employee record not found.</div>;
 
   const emp = isEditing ? { ...employee, ...editData } : employee;
   const initials = emp.fullName.split(' ').map(n => n[0]).join('').toUpperCase();
@@ -373,46 +373,46 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
 
       {/* Editing mode banner */}
       {isEditing && (
-        <div className="flex items-center justify-between bg-indigo-600 px-6 py-3 rounded-xl shadow-lg shadow-indigo-500/20">
+        <div className="flex items-center justify-between bg-accent px-6 py-3">
           <div className="flex items-center gap-3">
-            <svg className="w-4 h-4 text-indigo-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-4 h-4 text-paper" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
-            <span className="text-xs font-black text-white uppercase tracking-widest">Editing Mode — unsaved changes will be lost if you navigate away</span>
+            <span className="text-xs font-black text-paper uppercase tracking-widest">Editing Mode — unsaved changes will be lost if you navigate away</span>
           </div>
           {saveError && (
-            <span className="text-xs font-black text-red-200 bg-red-500/30 px-3 py-1 rounded-lg">{saveError}</span>
+            <span className="text-xs font-black text-ink bg-ink px-3 py-1">{saveError}</span>
           )}
         </div>
       )}
 
       {/* Breadcrumb bar */}
-      <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+      <div className="flex items-center justify-between bg-paper p-4 border border-rule">
         <div className="flex items-center gap-3">
-          <Link href="/employees" className="text-[10px] font-black text-slate-500 hover:text-indigo-600 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded uppercase tracking-widest transition-all">
+          <Link href="/employees" className="text-[10px] font-black text-muted hover:text-accent bg-page border border-rule px-3 py-1.5 uppercase tracking-widest transition-all">
             ← Directory
           </Link>
-          <span className="text-slate-300">/</span>
-          <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest">
+          <span className="text-muted">/</span>
+          <h2 className="text-sm font-black text-ink uppercase tracking-widest">
             {emp.fullName}
-            <span className="text-slate-400 font-bold ml-2">[{emp.employeeCode}]</span>
+            <span className="text-muted font-bold ml-2">[{emp.employeeCode}]</span>
           </h2>
         </div>
         <div className="flex gap-3 items-center">
           {hasPermission('employee:manage') && (
             !isEditing ? (
-              <button onClick={startEditing} className="px-5 py-2 rounded-lg border border-slate-200 text-[10px] font-black text-slate-600 hover:bg-slate-50 shadow-sm transition-all uppercase tracking-widest">
+              <button onClick={startEditing} className="px-5 py-2 border border-rule text-[10px] font-black text-ink hover:bg-page transition-all uppercase tracking-widest">
                 Edit Record
               </button>
             ) : (
               <div className="flex gap-2">
-                <button onClick={cancelEditing} className="px-4 py-2 rounded-lg border border-slate-200 text-[10px] font-black text-slate-600 hover:bg-slate-50 transition-all uppercase tracking-widest">
+                <button onClick={cancelEditing} className="px-4 py-2 border border-rule text-[10px] font-black text-ink hover:bg-page transition-all uppercase tracking-widest">
                   Cancel
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="px-5 py-2 rounded-lg text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 transition-all uppercase tracking-widest disabled:opacity-60 flex items-center gap-2"
+                  className="px-5 py-2 text-[10px] font-black text-paper bg-accent hover:bg-accent transition-all uppercase tracking-widest disabled:opacity-60 flex items-center gap-2"
                 >
                   {saving && <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>}
                   {saving ? 'Saving…' : 'Save Changes'}
@@ -429,25 +429,25 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
         <div className="xl:col-span-3 flex flex-col gap-6">
 
           {/* Hero card */}
-          <section className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm flex items-start gap-8 relative overflow-hidden">
-            <div className={`absolute top-0 left-0 w-1 h-full ${isEditing ? 'bg-amber-400' : 'bg-indigo-600'} transition-colors`} />
-            <div className="h-28 w-28 rounded-3xl bg-slate-900 border-4 border-slate-800 shadow-2xl flex items-center justify-center shrink-0 relative overflow-hidden">
+          <section className="bg-paper p-8 border border-rule flex items-start gap-8 relative overflow-hidden">
+            <div className={`absolute top-0 left-0 w-1 h-full ${isEditing ? 'bg-highlight' : 'bg-accent'} transition-colors`} />
+            <div className="h-28 w-28 bg-shadow border-4 border-shadow flex items-center justify-center shrink-0 relative overflow-hidden">
               {emp.profilePhotoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={emp.profilePhotoUrl} alt={emp.fullName} className="absolute inset-0 w-full h-full object-cover" />
               ) : (
-                <span className="text-3xl font-black text-white">{initials}</span>
+                <span className="text-3xl font-black text-paper">{initials}</span>
               )}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-3">
-                <h3 className="text-2xl font-black text-slate-900">{emp.fullName}</h3>
-                {emp.preferredName && <span className="text-slate-400 font-bold text-sm">&quot;{emp.preferredName}&quot;</span>}
-                <span className={`px-3 py-1 rounded-full text-[9px] font-black border uppercase tracking-widest ${emp.isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                <h3 className="text-2xl font-black text-ink">{emp.fullName}</h3>
+                {emp.preferredName && <span className="text-muted font-bold text-sm">&quot;{emp.preferredName}&quot;</span>}
+                <span className={`px-3 py-1  text-[9px] font-black border uppercase tracking-widest ${emp.isActive ? 'bg-page text-accent border-accent' : 'bg-page text-ink border-ink'}`}>
                   {emp.isActive ? 'Active' : 'Inactive'}
                 </span>
               </div>
-              <p className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-widest">
+              <p className="text-sm font-bold text-muted mt-1 uppercase tracking-widest">
                 {emp.designation}<span className="mx-2 opacity-30">|</span>{emp.department}
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mt-6">
@@ -459,7 +459,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                 ].map(({ label, val }) => (
                   <div key={label}>
                     <p className="label-form mb-1">{label}</p>
-                    <p className="text-xs font-bold text-slate-900 truncate">{val}</p>
+                    <p className="text-xs font-bold text-ink truncate">{val}</p>
                   </div>
                 ))}
               </div>
@@ -467,15 +467,15 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
           </section>
 
           {/* Tab panel */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-paper border border-rule overflow-hidden">
             {/* Tab bar */}
-            <div className="border-b border-slate-100 flex px-6 bg-slate-50/50 overflow-x-auto">
+            <div className="border-b border-rule flex px-6 bg-page overflow-x-auto">
               {TABS.map(tab => (
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
                   className={`py-4 px-4 text-[10px] font-black uppercase tracking-[0.18em] border-b-2 whitespace-nowrap transition-all mr-2 ${
-                    activeTab === tab.key ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'
+                    activeTab === tab.key ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'
                   }`}
                 >
                   {tab.label}
@@ -632,15 +632,15 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                   </Section>
 
 
-                  <Section title="Compensation" accent="bg-violet-500">
+                  <Section title="Compensation" accent="bg-accent">
                     <div className="flex flex-col gap-1.5">
                       <label className="label-form">Basic Salary (SGD)</label>
                       {isEditing ? (
                         <input type="text" value={editData.basicSalaryEncrypted ?? ''} onChange={e => set('basicSalaryEncrypted', e.target.value)} className={IX} placeholder="e.g. 5000" />
                       ) : (
-                        <div className="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2.5 text-sm font-bold text-indigo-400 flex items-center justify-between min-h-[42px]">
+                        <div className="bg-shadow border border-shadow px-4 py-2.5 text-sm font-bold text-accent flex items-center justify-between min-h-[42px]">
                           <span className="font-mono">{showSensitive ? `SGD ${emp.basicSalaryEncrypted ?? '—'}` : 'SGD ••••••'}</span>
-                          <button onClick={() => setShowSensitive(s => !s)} className="text-[9px] font-black text-indigo-400/60 hover:text-indigo-400 uppercase ml-4 shrink-0">{showSensitive ? 'Hide' : 'Reveal'}</button>
+                          <button onClick={() => setShowSensitive(s => !s)} className="text-[9px] font-black text-accent hover:text-accent uppercase ml-4 shrink-0">{showSensitive ? 'Hide' : 'Reveal'}</button>
                         </div>
                       )}
                     </div>
@@ -658,15 +658,15 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
               {/* ══ STATUTORY & COMPLIANCE ═══════════════════════════════════════ */}
               {activeTab === 'statutory' && (
                 <div className="flex flex-col gap-8">
-                  <section className="bg-slate-50 p-8 rounded-2xl border border-dashed border-slate-300">
+                  <section className="bg-page p-8 border border-dashed border-rule">
                     <div className="flex items-center justify-between mb-8">
                       <div>
-                        <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-widest">CPF Contribution Configuration</h4>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Central Provident Fund Board statutory rates</p>
+                        <h4 className="text-[11px] font-black text-ink uppercase tracking-widest">CPF Contribution Configuration</h4>
+                        <p className="text-[10px] text-muted font-bold uppercase mt-1">Central Provident Fund Board statutory rates</p>
                       </div>
-                      <div className="flex items-center gap-2 px-3 py-1 bg-white border border-slate-200 rounded-full">
-                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                        <span className="text-[9px] font-black text-emerald-600 uppercase">Computed Active</span>
+                      <div className="flex items-center gap-2 px-3 py-1 bg-paper border border-rule">
+                        <span className="w-1.5 h-1.5 bg-accent" />
+                        <span className="text-[9px] font-black text-accent uppercase">Computed Active</span>
                       </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -675,16 +675,16 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                           { label: 'Enable Ordinary Wages (OW) Calc', sub: 'Subject to $6,000 ceiling' },
                           { label: 'Enable Additional Wages (AW) Calc', sub: 'Annual ceiling formula protection' },
                         ].map(opt => (
-                          <label key={opt.label} className="flex items-center gap-4 cursor-pointer p-4 bg-white rounded-xl border border-slate-200 hover:border-indigo-600 transition-all">
-                            <input type="checkbox" defaultChecked className="w-5 h-5 text-indigo-600 rounded-md border-slate-300" />
+                          <label key={opt.label} className="flex items-center gap-4 cursor-pointer p-4 bg-paper border border-rule hover:border-accent transition-all">
+                            <input type="checkbox" defaultChecked className="w-5 h-5 text-accent border-rule" />
                             <div>
-                              <p className="text-xs font-black text-slate-900 uppercase">{opt.label}</p>
-                              <p className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">{opt.sub}</p>
+                              <p className="text-xs font-black text-ink uppercase">{opt.label}</p>
+                              <p className="text-[9px] text-muted font-bold uppercase mt-0.5">{opt.sub}</p>
                             </div>
                           </label>
                         ))}
                       </div>
-                      <div className="bg-white p-6 rounded-xl border border-slate-200">
+                      <div className="bg-paper p-6 border border-rule">
                         <label className="label-form block mb-4">Citizenship Category</label>
                         <div className="flex flex-col gap-3">
                           {[
@@ -692,7 +692,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                             { label: 'SPR Year 1 / 2', note: 'Graduated rates', active: false },
                             { label: 'Foreigner', note: 'No CPF', active: false },
                           ].map(opt => (
-                            <button key={opt.label} className={`flex justify-between px-4 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${opt.active ? 'bg-indigo-600 text-white' : 'border border-slate-200 text-slate-400 hover:border-indigo-600 hover:text-indigo-600'}`}>
+                            <button key={opt.label} className={`flex justify-between px-4 py-2.5  text-[10px] font-black uppercase tracking-widest transition-all ${opt.active ? 'bg-accent text-paper' : 'border border-rule text-muted hover:border-accent hover:text-accent'}`}>
                               <span>{opt.label}</span>
                               <span className="opacity-70">{opt.note}</span>
                             </button>
@@ -702,20 +702,20 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                     </div>
                   </section>
                   <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100">
-                      <h4 className="text-[10px] font-black text-indigo-700 uppercase tracking-widest mb-4">SDL Management</h4>
+                    <div className="bg-page p-6 border border-accent">
+                      <h4 className="text-[10px] font-black text-accent uppercase tracking-widest mb-4">SDL Management</h4>
                       <label className="flex items-center gap-3 cursor-pointer">
-                        <input type="checkbox" defaultChecked className="w-5 h-5 text-indigo-600 rounded-md" />
-                        <span className="text-[11px] font-black text-slate-700 uppercase">Apply Skills Development Levy (0.25%)</span>
+                        <input type="checkbox" defaultChecked className="w-5 h-5 text-accent" />
+                        <span className="text-[11px] font-black text-ink uppercase">Apply Skills Development Levy (0.25%)</span>
                       </label>
-                      <p className="text-[9px] text-indigo-400 font-bold uppercase mt-3 leading-relaxed">Capped at SGD 11.25 per month.</p>
+                      <p className="text-[9px] text-accent font-bold uppercase mt-3 leading-relaxed">Capped at SGD 11.25 per month.</p>
                     </div>
-                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-                      <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-4">Tax & IR8A AIS Integration</h4>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase leading-relaxed mb-4">Auto-include in AIS reporting for IRAS.</p>
+                    <div className="bg-shadow p-6 border border-shadow">
+                      <h4 className="text-[10px] font-black text-accent uppercase tracking-widest mb-4">Tax & IR8A AIS Integration</h4>
+                      <p className="text-[10px] text-muted font-bold uppercase leading-relaxed mb-4">Auto-include in AIS reporting for IRAS.</p>
                       <div className="flex gap-2">
-                        <span className="text-[9px] font-black px-2 py-0.5 bg-indigo-600 text-white rounded">IRAS-READY</span>
-                        <span className="text-[9px] font-black px-2 py-0.5 bg-slate-800 text-slate-400 rounded">AIS-2026</span>
+                        <span className="text-[9px] font-black px-2 py-0.5 bg-accent text-paper">IRAS-READY</span>
+                        <span className="text-[9px] font-black px-2 py-0.5 bg-shadow text-muted">AIS-2026</span>
                       </div>
                     </div>
                   </section>
@@ -726,20 +726,20 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
               {activeTab === 'assets' && (
                 <div className="flex flex-col gap-6">
                   {assetToast && (
-                    <div className="px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-xl">{assetToast}</div>
+                    <div className="px-4 py-3 bg-page border border-accent text-accent text-xs font-bold">{assetToast}</div>
                   )}
 
                   {/* Assign new asset */}
                   <section>
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-3">
-                      <div className="w-1.5 h-4 bg-teal-500 rounded-full shrink-0" />
+                    <h4 className="text-[10px] font-black text-muted uppercase tracking-[0.2em] mb-4 flex items-center gap-3">
+                      <div className="w-1.5 h-4 bg-accent shrink-0" />
                       Assign Asset
                     </h4>
                     <div className="flex gap-3">
                       <select
                         value={assignAssetId}
                         onChange={e => setAssignAssetId(e.target.value)}
-                        className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-teal-500"
+                        className="flex-1 px-4 py-2.5 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent"
                       >
                         <option value="">— Select an available asset —</option>
                         {allAssets.map(a => (
@@ -770,33 +770,33 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                             setTimeout(() => setAssetToast(''), 3000);
                           } finally { setAssigningAsset(false); }
                         }}
-                        className="px-5 py-2.5 text-[10px] font-black text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-xl uppercase tracking-widest transition-all"
+                        className="px-5 py-2.5 text-[10px] font-black text-paper bg-accent hover:bg-accent disabled:opacity-50 uppercase tracking-widest transition-all"
                       >
                         {assigningAsset ? 'Assigning…' : 'Assign'}
                       </button>
                     </div>
                     {allAssets.length === 0 && !loadingAssets && (
-                      <p className="text-xs text-slate-400 font-bold mt-2">No available assets. <a href="/assets" className="text-teal-600 hover:underline">Register assets first →</a></p>
+                      <p className="text-xs text-muted font-bold mt-2">No available assets. <a href="/assets" className="text-accent hover:underline">Register assets first →</a></p>
                     )}
                   </section>
 
                   {/* Assigned assets list */}
                   <section>
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-3">
-                      <div className="w-1.5 h-4 bg-teal-500 rounded-full shrink-0" />
+                    <h4 className="text-[10px] font-black text-muted uppercase tracking-[0.2em] mb-4 flex items-center gap-3">
+                      <div className="w-1.5 h-4 bg-accent shrink-0" />
                       Currently Assigned ({empAssets.length})
                     </h4>
                     {loadingAssets ? (
-                      <div className="flex flex-col gap-2">{[1,2].map(i => <div key={i} className="h-14 bg-slate-100 rounded-xl animate-pulse" />)}</div>
+                      <div className="flex flex-col gap-2">{[1,2].map(i => <div key={i} className="h-14 bg-page animate-pulse" />)}</div>
                     ) : empAssets.length === 0 ? (
-                      <div className="py-10 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No assets assigned to this employee</p>
+                      <div className="py-10 text-center bg-page border border-dashed border-rule">
+                        <p className="text-xs font-black text-muted uppercase tracking-widest">No assets assigned to this employee</p>
                       </div>
                     ) : (
-                      <div className="overflow-hidden border border-slate-200 rounded-xl">
+                      <div className="overflow-hidden border border-rule">
                         <table className="w-full text-left">
                           <thead>
-                            <tr className="bg-slate-50 border-b border-slate-200 label-form">
+                            <tr className="bg-page border-b border-rule label-form">
                               <th className="px-5 py-3">Asset</th>
                               <th className="px-5 py-3">Category</th>
                               <th className="px-5 py-3">Assigned</th>
@@ -804,17 +804,17 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                               <th className="px-5 py-3 text-right">Action</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
+                          <tbody className="divide-y divide-rule text-xs font-bold text-ink">
                             {empAssets.map(a => (
-                              <tr key={a.id} className="hover:bg-slate-50 transition-all">
+                              <tr key={a.id} className="hover:bg-page transition-all">
                                 <td className="px-5 py-3">
                                   <div className="flex flex-col">
-                                    <span className="font-black text-slate-800">{a.name}</span>
-                                    <span className="text-[9px] font-black text-slate-400 uppercase">{a.assetCode}</span>
+                                    <span className="font-black text-ink">{a.name}</span>
+                                    <span className="text-[9px] font-black text-muted uppercase">{a.assetCode}</span>
                                   </div>
                                 </td>
-                                <td className="px-5 py-3 text-slate-500 uppercase text-[10px]">{a.category}</td>
-                                <td className="px-5 py-3 text-slate-400 text-[10px]">
+                                <td className="px-5 py-3 text-muted uppercase text-[10px]">{a.category}</td>
+                                <td className="px-5 py-3 text-muted text-[10px]">
                                   {a.assignedAt ? new Date(a.assignedAt).toLocaleDateString('en-SG') : '—'}
                                 </td>
                                 <td className="px-5 py-3">${(a.currentValue ?? 0).toLocaleString()}</td>
@@ -838,7 +838,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                                         setTimeout(() => setAssetToast(''), 3000);
                                       } finally { setReturningAsset(null); }
                                     }}
-                                    className="px-3 py-1.5 text-[9px] font-black text-red-600 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 uppercase tracking-widest disabled:opacity-50 transition-all"
+                                    className="px-3 py-1.5 text-[9px] font-black text-ink bg-page border border-ink hover:bg-page uppercase tracking-widest disabled:opacity-50 transition-all"
                                   >
                                     {returningAsset === a.id ? 'Returning…' : 'Return'}
                                   </button>
@@ -858,23 +858,23 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                 <div className="flex flex-col gap-6">
                   {/* Upload modal */}
                   {uploadOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-                      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 flex flex-col gap-5">
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
+                      <div className="w-full max-w-md bg-paper p-8 flex flex-col gap-5">
                         <div className="flex items-center justify-between">
-                          <h3 className="text-sm font-black text-slate-900">Upload Document</h3>
-                          <button onClick={() => { setUploadOpen(false); setUploadFile(null); setUploadError(''); }} className="text-slate-400 hover:text-slate-700 text-lg font-black">✕</button>
+                          <h3 className="text-sm font-black text-ink">Upload Document</h3>
+                          <button onClick={() => { setUploadOpen(false); setUploadFile(null); setUploadError(''); }} className="text-muted hover:text-ink text-lg font-black">✕</button>
                         </div>
                         <div>
                           <label className="label-form block mb-2">File</label>
-                          <label className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl py-6 cursor-pointer transition-all ${uploadFile ? 'border-indigo-300 bg-indigo-50/40' : 'border-slate-200 hover:border-indigo-300'}`}>
-                            <svg className={`w-6 h-6 ${uploadFile ? 'text-indigo-500' : 'text-slate-300'}`} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
-                            <span className="text-[10px] font-bold text-slate-500">{uploadFile ? uploadFile.name : 'Click to select file (max 10 MB)'}</span>
+                          <label className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed  py-6 cursor-pointer transition-all ${uploadFile ? 'border-accent bg-page' : 'border-rule hover:border-accent'}`}>
+                            <svg className={`w-6 h-6 ${uploadFile ? 'text-accent' : 'text-muted'}`} fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                            <span className="text-[10px] font-bold text-muted">{uploadFile ? uploadFile.name : 'Click to select file (max 10 MB)'}</span>
                             <input type="file" className="hidden" onChange={e => setUploadFile(e.target.files?.[0] ?? null)} />
                           </label>
                         </div>
                         <div>
                           <label className="label-form block mb-2">Document Type</label>
-                          <select value={uploadDocType} onChange={e => setUploadDocType(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-indigo-500 appearance-none">
+                          <select value={uploadDocType} onChange={e => setUploadDocType(e.target.value)} className="w-full px-3 py-2.5 border border-rule text-sm font-bold text-ink bg-page outline-none focus:border-accent appearance-none">
                             <option value="CONTRACT">Employment Contract</option>
                             <option value="NRIC_COPY">NRIC / FIN Copy</option>
                             <option value="EMPLOYMENT_PASS">Employment / Work Pass</option>
@@ -884,11 +884,11 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                         </div>
                         <div>
                           <label className="label-form block mb-2">Expiry Date <span className="normal-case font-bold">(optional)</span></label>
-                          <input type="date" value={uploadExpiry} onChange={e => setUploadExpiry(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-indigo-500" />
+                          <input type="date" value={uploadExpiry} onChange={e => setUploadExpiry(e.target.value)} className="w-full px-3 py-2.5 border border-rule text-sm font-bold text-ink bg-page outline-none focus:border-accent" />
                         </div>
-                        {uploadError && <p className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-lg">{uploadError}</p>}
+                        {uploadError && <p className="text-[11px] font-bold text-ink bg-page border border-ink px-3 py-2">{uploadError}</p>}
                         <div className="flex gap-3">
-                          <button onClick={() => { setUploadOpen(false); setUploadFile(null); setUploadError(''); }} className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 uppercase tracking-widest hover:bg-slate-50">Cancel</button>
+                          <button onClick={() => { setUploadOpen(false); setUploadFile(null); setUploadError(''); }} className="flex-1 px-4 py-2.5 border border-rule text-[10px] font-black text-ink uppercase tracking-widest hover:bg-page">Cancel</button>
                           <button
                             disabled={!uploadFile || uploading}
                             onClick={async () => {
@@ -908,9 +908,9 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                               } catch (e: any) { setUploadError(e.message); }
                               finally { setUploading(false); }
                             }}
-                            className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"
+                            className="flex-1 px-4 py-2.5 bg-accent hover:bg-accent disabled:opacity-50 text-paper text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"
                           >
-                            {uploading && <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+                            {uploading && <span className="w-3 h-3 border-2 border-white/40 border-t-white animate-spin" />}
                             {uploading ? 'Uploading…' : 'Upload'}
                           </button>
                         </div>
@@ -920,23 +920,23 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
 
                   <div className="flex justify-between items-center">
                     <h4 className="eyebrow-tight">Secure Document Archive</h4>
-                    <button onClick={() => { setUploadOpen(true); setUploadError(''); }} className="text-[10px] font-black uppercase text-indigo-600 bg-indigo-50 px-4 py-2 rounded-lg hover:bg-indigo-100 transition-all">+ Upload Document</button>
+                    <button onClick={() => { setUploadOpen(true); setUploadError(''); }} className="text-[10px] font-black uppercase text-accent bg-page px-4 py-2 hover:bg-page transition-all">+ Upload Document</button>
                   </div>
 
                   {docsLoading ? (
-                    <div className="py-12 flex items-center justify-center gap-3 text-slate-400 text-xs font-bold">
-                      <span className="w-4 h-4 border-2 border-slate-200 border-t-slate-400 rounded-full animate-spin" /> Loading documents…
+                    <div className="py-12 flex items-center justify-center gap-3 text-muted text-xs font-bold">
+                      <span className="w-4 h-4 border-2 border-rule border-rule animate-spin" /> Loading documents…
                     </div>
                   ) : documents.length === 0 ? (
                     <div className="py-14 flex flex-col items-center gap-3 text-center opacity-40">
                       <span className="text-3xl">📄</span>
-                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">No documents uploaded yet</p>
+                      <p className="text-[10px] font-black text-muted uppercase tracking-widest">No documents uploaded yet</p>
                     </div>
                   ) : (
-                    <div className="overflow-hidden border border-slate-200 rounded-2xl shadow-sm">
+                    <div className="overflow-hidden border border-rule">
                       <table className="w-full text-left">
                         <thead>
-                          <tr className="bg-slate-50 label-form border-b border-slate-200">
+                          <tr className="bg-page label-form border-b border-rule">
                             <th className="px-6 py-4">Document</th>
                             <th className="px-6 py-4">Type</th>
                             <th className="px-6 py-4">Uploaded</th>
@@ -944,34 +944,34 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                             <th className="px-6 py-4 text-right">Actions</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100 text-xs">
+                        <tbody className="divide-y divide-rule text-xs">
                           {documents.map(doc => {
                             const ext = doc.fileName.split('.').pop()?.toUpperCase() ?? 'FILE';
                             const isImg = doc.mimeType?.startsWith('image/');
                             const isPdf = doc.mimeType === 'application/pdf';
-                            const extColor = isPdf ? 'bg-red-50 text-red-500' : isImg ? 'bg-blue-50 text-blue-500' : 'bg-slate-50 text-slate-500';
+                            const extColor = isPdf ? 'bg-page text-ink' : isImg ? 'bg-page text-accent' : 'bg-page text-muted';
                             return (
-                              <tr key={doc.id} className="hover:bg-slate-50/50 transition-all">
+                              <tr key={doc.id} className="hover:bg-page transition-all">
                                 <td className="px-6 py-4">
                                   <div className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded flex items-center justify-center font-black text-[9px] ${extColor}`}>{ext}</div>
-                                    <span className="font-bold text-slate-900 truncate max-w-[200px]">{doc.fileName}</span>
+                                    <div className={`w-8 h-8  flex items-center justify-center font-black text-[9px] ${extColor}`}>{ext}</div>
+                                    <span className="font-bold text-ink truncate max-w-[200px]">{doc.fileName}</span>
                                   </div>
                                 </td>
                                 <td className="px-6 py-4">
-                                  <span className="text-[9px] font-black uppercase text-slate-500 border border-slate-200 px-2 py-0.5 rounded">
+                                  <span className="text-[9px] font-black uppercase text-muted border border-rule px-2 py-0.5">
                                     {doc.docType.replace(/_/g, ' ')}
                                   </span>
                                 </td>
-                                <td className="px-6 py-4 text-slate-400 font-bold text-[10px]">
+                                <td className="px-6 py-4 text-muted font-bold text-[10px]">
                                   {new Date(doc.createdAt).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' })}
                                 </td>
                                 <td className="px-6 py-4 text-[10px] font-bold">
                                   {doc.expiryDate ? (
-                                    <span className={new Date(doc.expiryDate) < new Date() ? 'text-red-500' : 'text-slate-400'}>
+                                    <span className={new Date(doc.expiryDate) < new Date() ? 'text-ink' : 'text-muted'}>
                                       {new Date(doc.expiryDate).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' })}
                                     </span>
-                                  ) : <span className="text-slate-300">Permanent</span>}
+                                  ) : <span className="text-muted">Permanent</span>}
                                 </td>
                                 <td className="px-6 py-4 text-right flex items-center justify-end gap-3">
                                   <button
@@ -985,7 +985,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                                         setTimeout(() => URL.revokeObjectURL(url), 60000);
                                       } catch { alert('Could not load document.'); }
                                     }}
-                                    className="text-indigo-600 hover:underline font-black uppercase text-[9px]"
+                                    className="text-accent hover:underline font-black uppercase text-[9px]"
                                   >
                                     View
                                   </button>
@@ -997,7 +997,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                                         loadDocuments();
                                       } catch {}
                                     }}
-                                    className="text-red-400 hover:text-red-600 hover:underline font-black uppercase text-[9px]"
+                                    className="text-ink hover:text-ink hover:underline font-black uppercase text-[9px]"
                                   >
                                     Delete
                                   </button>
@@ -1017,15 +1017,15 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                 <div className="flex flex-col gap-6">
                   {loadingSupervisors ? (
                     <div className="flex items-center justify-center py-16">
-                      <div className="w-8 h-8 border-[3px] border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                      <div className="w-8 h-8 border-[3px] border-accent border-accent animate-spin" />
                     </div>
                   ) : (
                     <>
                       {/* Header row */}
                       <div className="flex items-center justify-between">
                         <div>
-                          <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Leave Approval Supervisors</h3>
-                          <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">Supervisors assigned for this employee&apos;s leave requests</p>
+                          <h3 className="text-sm font-black text-ink uppercase tracking-tight">Leave Approval Supervisors</h3>
+                          <p className="text-[10px] font-bold text-muted mt-1 uppercase tracking-widest">Supervisors assigned for this employee&apos;s leave requests</p>
                         </div>
                         {hasPermission('employee:manage') && !editingSupervisors && (
                           <button
@@ -1038,7 +1038,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                               setDraftFlowType(supervisorData?.flowType ?? 'ANY_ONE');
                               setEditingSupervisors(true);
                             }}
-                            className="px-5 py-2.5 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl uppercase tracking-widest transition-all"
+                            className="px-5 py-2.5 text-[10px] font-black text-paper bg-accent hover:bg-accent uppercase tracking-widest transition-all"
                           >
                             Edit Supervisors
                           </button>
@@ -1050,7 +1050,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                           {/* Flow type badge */}
                           <div className="flex items-center gap-3">
                             <span className="eyebrow-tight">Approval Flow:</span>
-                            <span className={`text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-widest ${supervisorData?.flowType === 'SEQUENTIAL' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'}`}>
+                            <span className={`text-[10px] font-black px-3 py-1  uppercase tracking-widest ${supervisorData?.flowType === 'SEQUENTIAL' ? 'bg-page text-ink border border-highlight' : 'bg-page text-accent border border-accent'}`}>
                               {supervisorData?.flowType === 'SEQUENTIAL' ? 'Sequential — Must approve in order' : 'Any One — Any supervisor can approve'}
                             </span>
                           </div>
@@ -1059,64 +1059,64 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                           {supervisorData?.supervisors && supervisorData.supervisors.length > 0 ? (
                             <div className="flex flex-col gap-3">
                               {supervisorData.supervisors.map((s: any, idx: number) => (
-                                <div key={s.id} className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                <div key={s.id} className="flex items-center gap-4 p-4 bg-page border border-rule">
                                   {supervisorData.flowType === 'SEQUENTIAL' && (
-                                    <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center text-white text-xs font-black shrink-0">{s.order ?? idx + 1}</div>
+                                    <div className="w-8 h-8 bg-accent flex items-center justify-center text-paper text-xs font-black shrink-0">{s.order ?? idx + 1}</div>
                                   )}
-                                  <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-[10px] font-black text-indigo-400 shrink-0">
+                                  <div className="w-10 h-10 bg-shadow flex items-center justify-center text-[10px] font-black text-accent shrink-0">
                                     {s.fullName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{s.fullName}</p>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{s.designation || '—'} · {s.department || '—'}</p>
+                                    <p className="text-sm font-black text-ink uppercase tracking-tight">{s.fullName}</p>
+                                    <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-0.5">{s.designation || '—'} · {s.department || '—'}</p>
                                   </div>
                                   <span className="label-form">{s.employeeCode}</span>
                                 </div>
                               ))}
                             </div>
                           ) : (
-                            <div className="py-12 flex flex-col items-center gap-3 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                              <div className="w-12 h-12 bg-white border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center text-slate-300 text-xl">👤</div>
+                            <div className="py-12 flex flex-col items-center gap-3 bg-page border border-dashed border-rule">
+                              <div className="w-12 h-12 bg-paper border-2 border-dashed border-rule flex items-center justify-center text-muted text-xl">👤</div>
                               <p className="eyebrow-tight">No supervisors assigned</p>
-                              <p className="text-[9px] font-bold text-slate-300 text-center max-w-xs">Only HR Admin / Super Admin can approve this employee&apos;s leave requests</p>
+                              <p className="text-[9px] font-bold text-muted text-center max-w-xs">Only HR Admin / Super Admin can approve this employee&apos;s leave requests</p>
                             </div>
                           )}
                         </>
                       ) : (
                         /* ── Edit mode ─────────────────────────────────────── */
-                        <div className="flex flex-col gap-5 bg-slate-50 rounded-2xl border border-slate-200 p-6">
+                        <div className="flex flex-col gap-5 bg-page border border-rule p-6">
                           {supervisorToast && (
-                            <div className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${supervisorToast.startsWith('Error') ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
+                            <div className={`px-4 py-3  text-[10px] font-black uppercase tracking-widest ${supervisorToast.startsWith('Error') ? 'bg-page text-ink border border-ink' : 'bg-page text-accent border border-accent'}`}>
                               {supervisorToast}
                             </div>
                           )}
 
                           {/* Flow type selector */}
                           <div className="flex flex-col gap-2">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Approval Flow Type</label>
+                            <label className="text-[10px] font-black text-muted uppercase tracking-widest">Approval Flow Type</label>
                             <div className="flex gap-3">
                               {(['ANY_ONE', 'SEQUENTIAL'] as const).map(ft => (
                                 <button
                                   key={ft}
                                   onClick={() => setDraftFlowType(ft)}
-                                  className={`flex-1 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${draftFlowType === ft ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-200'}`}
+                                  className={`flex-1 py-3 px-4  text-[10px] font-black uppercase tracking-widest border transition-all ${draftFlowType === ft ? 'bg-accent text-paper border-accent' : 'bg-paper text-muted border-rule hover:border-accent'}`}
                                 >
                                   {ft === 'ANY_ONE' ? 'Any One' : 'Sequential'}
                                 </button>
                               ))}
                             </div>
-                            <p className="text-[9px] font-bold text-slate-400">
+                            <p className="text-[9px] font-bold text-muted">
                               {draftFlowType === 'SEQUENTIAL' ? 'Supervisors must approve in listed order. Each step unlocks after the previous.' : 'Any single supervisor can approve the leave request.'}
                             </p>
                           </div>
 
                           {/* Supervisor entries */}
                           <div className="flex flex-col gap-2">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Supervisors</label>
+                            <label className="text-[10px] font-black text-muted uppercase tracking-widest">Supervisors</label>
                             {draftSupervisors.map((s: any, idx: number) => (
-                              <div key={idx} className="flex items-center gap-3 bg-white rounded-xl border border-slate-200 p-3">
+                              <div key={idx} className="flex items-center gap-3 bg-paper border border-rule p-3">
                                 {draftFlowType === 'SEQUENTIAL' && (
-                                  <span className="w-7 h-7 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-xs font-black shrink-0">{idx + 1}</span>
+                                  <span className="w-7 h-7 bg-page text-accent flex items-center justify-center text-xs font-black shrink-0">{idx + 1}</span>
                                 )}
                                 <select
                                   value={s.employeeId}
@@ -1124,7 +1124,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                                     const chosen = allEmployees.find((em: any) => em.id === e.target.value);
                                     setDraftSupervisors(prev => prev.map((x, i) => i === idx ? { ...x, employeeId: e.target.value, fullName: chosen?.fullName, designation: chosen?.designation, department: chosen?.department, employeeCode: chosen?.employeeCode } : x));
                                   }}
-                                  className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-indigo-500"
+                                  className="flex-1 bg-page border border-rule px-3 py-2 text-xs font-bold text-ink outline-none focus:border-accent"
                                 >
                                   <option value="">— Select employee —</option>
                                   {allEmployees.map((em: any) => (
@@ -1133,13 +1133,13 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                                 </select>
                                 <button
                                   onClick={() => setDraftSupervisors(prev => prev.filter((_, i) => i !== idx))}
-                                  className="w-7 h-7 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                  className="w-7 h-7 flex items-center justify-center text-ink hover:text-ink hover:bg-page transition-all"
                                 >✕</button>
                               </div>
                             ))}
                             <button
                               onClick={() => setDraftSupervisors(prev => [...prev, { employeeId: '', fullName: '', order: prev.length + 1 }])}
-                              className="mt-1 py-2.5 bg-white border border-dashed border-slate-300 text-[10px] font-black text-slate-400 rounded-xl hover:border-indigo-300 hover:text-indigo-600 uppercase tracking-widest transition-all"
+                              className="mt-1 py-2.5 bg-paper border border-dashed border-rule text-[10px] font-black text-muted hover:border-accent hover:text-accent uppercase tracking-widest transition-all"
                             >+ Add Supervisor</button>
                           </div>
 
@@ -1147,7 +1147,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                           <div className="flex gap-3 pt-2">
                             <button
                               onClick={() => { setEditingSupervisors(false); setSupervisorToast(''); }}
-                              className="flex-1 py-3 text-[10px] font-black text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-100 uppercase tracking-widest transition-all"
+                              className="flex-1 py-3 text-[10px] font-black text-muted border border-rule hover:bg-page uppercase tracking-widest transition-all"
                             >Cancel</button>
                             <button
                               onClick={async () => {
@@ -1174,7 +1174,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                                 }
                               }}
                               disabled={savingSupervisors}
-                              className="flex-1 py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl uppercase tracking-widest transition-all"
+                              className="flex-1 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent disabled:opacity-50 uppercase tracking-widest transition-all"
                             >{savingSupervisors ? 'Saving…' : 'Save Supervisors'}</button>
                           </div>
                         </div>
@@ -1190,14 +1190,14 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
 
                   {/* Revision request modal */}
                   {showRevisionForm && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-                      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl p-8 flex flex-col gap-5">
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
+                      <div className="w-full max-w-lg bg-paper p-8 flex flex-col gap-5">
                         <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Request Salary Revision</h3>
-                            <p className="text-[10px] font-bold text-slate-400 mt-1">Creates a PENDING revision for HR Manager approval</p>
+                            <h3 className="text-sm font-black text-ink uppercase tracking-tight">Request Salary Revision</h3>
+                            <p className="text-[10px] font-bold text-muted mt-1">Creates a PENDING revision for HR Manager approval</p>
                           </div>
-                          <button onClick={() => { setShowRevisionForm(false); setRevisionToast(''); }} className="text-slate-400 hover:text-slate-700 text-lg font-black">✕</button>
+                          <button onClick={() => { setShowRevisionForm(false); setRevisionToast(''); }} className="text-muted hover:text-ink text-lg font-black">✕</button>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -1232,7 +1232,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                                   { value: 'OTHER',             label: 'Other' },
                                 ].map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                               </select>
-                              <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                              <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                             </div>
                           </div>
                           <div className="flex flex-col gap-1.5">
@@ -1256,7 +1256,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                         </div>
 
                         {revisionToast && (
-                          <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${revisionToast.startsWith('Error') ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
+                          <div className={`px-4 py-2  text-[10px] font-black uppercase tracking-widest ${revisionToast.startsWith('Error') ? 'bg-page text-ink border border-ink' : 'bg-page text-accent border border-accent'}`}>
                             {revisionToast}
                           </div>
                         )}
@@ -1264,7 +1264,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                         <div className="flex gap-3 pt-1">
                           <button
                             onClick={() => { setShowRevisionForm(false); setRevisionToast(''); }}
-                            className="flex-1 py-3 text-[10px] font-black text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-50 uppercase tracking-widest"
+                            className="flex-1 py-3 text-[10px] font-black text-muted border border-rule hover:bg-page uppercase tracking-widest"
                           >Cancel</button>
                           <button
                             disabled={submittingRevision || !revForm.newSalary || !revForm.effectiveDate}
@@ -1283,9 +1283,9 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                                 setRevisionToast(`Error: ${e.message}`);
                               } finally { setSubmittingRevision(false); }
                             }}
-                            className="flex-1 py-3 text-[10px] font-black text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 rounded-xl uppercase tracking-widest flex items-center justify-center gap-2"
+                            className="flex-1 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent disabled:opacity-50 uppercase tracking-widest flex items-center justify-center gap-2"
                           >
-                            {submittingRevision && <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+                            {submittingRevision && <span className="w-3 h-3 border-2 border-white/40 border-t-white animate-spin" />}
                             {submittingRevision ? 'Submitting…' : 'Submit for Approval'}
                           </button>
                         </div>
@@ -1296,13 +1296,13 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                   {/* Header row */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-1.5 h-4 bg-violet-500 rounded-full shrink-0" />
-                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Salary Revision History</h4>
+                      <div className="w-1.5 h-4 bg-accent shrink-0" />
+                      <h4 className="text-[10px] font-black text-muted uppercase tracking-[0.2em]">Salary Revision History</h4>
                     </div>
                     {hasPermission('employee:manage') && (
                       <button
                         onClick={() => { setShowRevisionForm(true); setRevisionToast(''); }}
-                        className="px-4 py-2 text-[10px] font-black text-white bg-violet-600 hover:bg-violet-700 rounded-xl uppercase tracking-widest transition-all"
+                        className="px-4 py-2 text-[10px] font-black text-paper bg-accent hover:bg-accent uppercase tracking-widest transition-all"
                       >+ Request Revision</button>
                     )}
                   </div>
@@ -1311,12 +1311,12 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                   {budgetEnvelope && budgetEnvelope.totalRevisions > 0 && (
                     <div className="grid grid-cols-3 gap-4">
                       {[
-                        { label: `${budgetEnvelope.year} Revisions`, value: String(budgetEnvelope.totalRevisions), accent: 'text-violet-700', bg: 'bg-violet-50 border-violet-100' },
-                        { label: 'Total Annual Cost Delta', value: `SGD ${Number(budgetEnvelope.totalAnnualDelta).toLocaleString('en-SG', { minimumFractionDigits: 2 })}`, accent: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-100' },
-                        { label: 'Monthly Impact', value: `SGD ${(budgetEnvelope.totalAnnualDelta / 12).toLocaleString('en-SG', { minimumFractionDigits: 2 })}`, accent: 'text-slate-800', bg: 'bg-slate-50 border-slate-200' },
+                        { label: `${budgetEnvelope.year} Revisions`, value: String(budgetEnvelope.totalRevisions), accent: 'text-accent', bg: 'bg-page border-accent' },
+                        { label: 'Total Annual Cost Delta', value: `SGD ${Number(budgetEnvelope.totalAnnualDelta).toLocaleString('en-SG', { minimumFractionDigits: 2 })}`, accent: 'text-accent', bg: 'bg-page border-accent' },
+                        { label: 'Monthly Impact', value: `SGD ${(budgetEnvelope.totalAnnualDelta / 12).toLocaleString('en-SG', { minimumFractionDigits: 2 })}`, accent: 'text-ink', bg: 'bg-page border-rule' },
                       ].map(kpi => (
-                        <div key={kpi.label} className={`p-4 rounded-xl border ${kpi.bg} flex flex-col gap-1`}>
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{kpi.label}</span>
+                        <div key={kpi.label} className={`p-4  border ${kpi.bg} flex flex-col gap-1`}>
+                          <span className="text-[9px] font-black text-muted uppercase tracking-widest">{kpi.label}</span>
                           <span className={`text-lg font-black font-mono ${kpi.accent}`}>{kpi.value}</span>
                         </div>
                       ))}
@@ -1325,7 +1325,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
 
                   {/* Revision toast */}
                   {revisionToast && !showRevisionForm && (
-                    <div className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${revisionToast.startsWith('Error') ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
+                    <div className={`px-4 py-3  text-[10px] font-black uppercase tracking-widest ${revisionToast.startsWith('Error') ? 'bg-page text-ink border border-ink' : 'bg-page text-accent border border-accent'}`}>
                       {revisionToast}
                     </div>
                   )}
@@ -1333,18 +1333,18 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                   {/* History table */}
                   {loadingSalaryHistory ? (
                     <div className="flex flex-col gap-3">
-                      {[1,2,3].map(i => <div key={i} className="h-16 bg-slate-100 rounded-xl animate-pulse" />)}
+                      {[1,2,3].map(i => <div key={i} className="h-16 bg-page animate-pulse" />)}
                     </div>
                   ) : salaryHistory.length === 0 ? (
-                    <div className="py-16 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No salary revision history</p>
-                      <p className="text-[10px] text-slate-300 font-bold mt-1">Use &quot;Request Revision&quot; to create the first record</p>
+                    <div className="py-16 text-center bg-page border border-dashed border-rule">
+                      <p className="text-xs font-black text-muted uppercase tracking-widest">No salary revision history</p>
+                      <p className="text-[10px] text-muted font-bold mt-1">Use &quot;Request Revision&quot; to create the first record</p>
                     </div>
                   ) : (
-                    <div className="overflow-hidden border border-slate-200 rounded-xl">
+                    <div className="overflow-hidden border border-rule">
                       <table className="w-full text-left">
                         <thead>
-                          <tr className="bg-slate-50 border-b border-slate-200 label-form">
+                          <tr className="bg-page border-b border-rule label-form">
                             <th className="px-5 py-3">Effective Date</th>
                             <th className="px-5 py-3">Previous (SGD)</th>
                             <th className="px-5 py-3">New (SGD)</th>
@@ -1355,15 +1355,15 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                             {hasPermission('employee:manage') && <th className="px-5 py-3 text-right">Actions</th>}
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
+                        <tbody className="divide-y divide-rule text-xs font-bold text-ink">
                           {salaryHistory.map((h: any, i: number) => {
                             const isPending = h.status === 'PENDING';
                             const isApproved = h.status === 'APPROVED';
                             const statusCls = isPending
-                              ? 'bg-amber-50 text-amber-700 border-amber-100'
+                              ? 'bg-page text-ink border-highlight'
                               : isApproved
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                              : 'bg-red-50 text-red-600 border-red-100';
+                              ? 'bg-page text-accent border-accent'
+                              : 'bg-page text-ink border-ink';
                             const reasonLabel: Record<string,string> = {
                               PROMOTION: 'Promotion', ANNUAL_INCREMENT: 'Annual Increment',
                               MARKET_ADJUSTMENT: 'Market Adj.', ROLE_CHANGE: 'Role Change',
@@ -1373,22 +1373,22 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                             const pct = h.incrementPct;
                             const pctLabel = pct != null ? `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%` : null;
                             return (
-                              <tr key={h.id ?? i} className="hover:bg-slate-50/50 transition-all">
-                                <td className="px-5 py-3 font-black text-slate-800 whitespace-nowrap">{fmtDate(h.effectiveDate)}</td>
-                                <td className="px-5 py-3 font-mono text-slate-500">{fmt(h.previousSalary ?? h.basicSalary)}</td>
-                                <td className="px-5 py-3 font-mono font-black text-violet-700">{fmt(h.newSalary)}</td>
+                              <tr key={h.id ?? i} className="hover:bg-page transition-all">
+                                <td className="px-5 py-3 font-black text-ink whitespace-nowrap">{fmtDate(h.effectiveDate)}</td>
+                                <td className="px-5 py-3 font-mono text-muted">{fmt(h.previousSalary ?? h.basicSalary)}</td>
+                                <td className="px-5 py-3 font-mono font-black text-accent">{fmt(h.newSalary)}</td>
                                 <td className="px-5 py-3">
                                   {pctLabel ? (
-                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded ${(pct ?? 0) >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>{pctLabel}</span>
+                                    <span className={`text-[10px] font-black px-2 py-0.5  ${(pct ?? 0) >= 0 ? 'bg-page text-accent' : 'bg-page text-ink'}`}>{pctLabel}</span>
                                   ) : '—'}
                                 </td>
-                                <td className="px-5 py-3 text-slate-500">{reasonLabel[h.reasonCode] || h.changeReason || '—'}</td>
-                                <td className="px-5 py-3 text-slate-400 truncate max-w-[120px]">{h.recommendedBy || '—'}</td>
+                                <td className="px-5 py-3 text-muted">{reasonLabel[h.reasonCode] || h.changeReason || '—'}</td>
+                                <td className="px-5 py-3 text-muted truncate max-w-[120px]">{h.recommendedBy || '—'}</td>
                                 <td className="px-5 py-3">
                                   <div className="flex flex-col gap-1">
-                                    <span className={`text-[9px] font-black px-2 py-0.5 rounded border uppercase tracking-widest ${statusCls}`}>{h.status}</span>
+                                    <span className={`text-[9px] font-black px-2 py-0.5  border uppercase tracking-widest ${statusCls}`}>{h.status}</span>
                                     {h.catchUpAmount != null && h.catchUpAmount > 0 && (
-                                      <span className="text-[8px] font-black text-amber-600 uppercase">Catch-up: SGD {Number(h.catchUpAmount).toLocaleString('en-SG', { minimumFractionDigits: 2 })}</span>
+                                      <span className="text-[8px] font-black text-ink uppercase">Catch-up: SGD {Number(h.catchUpAmount).toLocaleString('en-SG', { minimumFractionDigits: 2 })}</span>
                                     )}
                                   </div>
                                 </td>
@@ -1408,7 +1408,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                                               setRevisionToast(`Error: ${e.message}`);
                                             }
                                           }}
-                                          className="px-3 py-1.5 text-[9px] font-black text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg hover:bg-emerald-100 uppercase tracking-widest transition-all"
+                                          className="px-3 py-1.5 text-[9px] font-black text-accent bg-page border border-accent hover:bg-page uppercase tracking-widest transition-all"
                                         >Approve</button>
                                         <button
                                           onClick={async () => {
@@ -1421,12 +1421,12 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                                               setRevisionToast(`Error: ${e.message}`);
                                             }
                                           }}
-                                          className="px-3 py-1.5 text-[9px] font-black text-red-600 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 uppercase tracking-widest transition-all"
+                                          className="px-3 py-1.5 text-[9px] font-black text-ink bg-page border border-ink hover:bg-page uppercase tracking-widest transition-all"
                                         >Reject</button>
                                       </div>
                                     )}
                                     {h.notes && (
-                                      <p className="text-[9px] text-slate-400 mt-1 text-right truncate max-w-[160px]" title={h.notes}>{h.notes}</p>
+                                      <p className="text-[9px] text-muted mt-1 text-right truncate max-w-[160px]" title={h.notes}>{h.notes}</p>
                                     )}
                                   </td>
                                 )}
@@ -1448,37 +1448,37 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
         <div className="flex flex-col gap-6">
 
           {/* Financial nexus */}
-          <section className="bg-slate-900 rounded-2xl border border-slate-800 shadow-xl p-6">
-            <h3 className="mb-5 text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] border-b border-slate-800 pb-3">Financial Nexus</h3>
+          <section className="bg-shadow border border-shadow p-6">
+            <h3 className="mb-5 text-[10px] font-black text-accent uppercase tracking-[0.2em] border-b border-shadow pb-3">Financial Nexus</h3>
             {(hasPermission('payroll:view') || hasPermission('employee:sensitive')) ? (
               <div className="flex flex-col gap-5">
-                <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+                <div className="bg-shadow p-4 border border-shadow">
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Base Compensation</span>
-                    <span className="text-[8px] font-black text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded">Encrypted</span>
+                    <span className="text-[9px] font-black text-muted uppercase tracking-widest">Base Compensation</span>
+                    <span className="text-[8px] font-black text-accent bg-accent px-2 py-0.5">Encrypted</span>
                   </div>
-                  <p className="text-xl font-black text-white font-mono">
+                  <p className="text-xl font-black text-paper font-mono">
                     {showSensitive ? `SGD ${emp.basicSalaryEncrypted ?? '—'}` : 'SGD ••••••'}
                   </p>
                 </div>
                 <div className="space-y-3">
-                  <div className="flex justify-between text-[10px] font-bold uppercase border-b border-slate-800 pb-2">
-                    <span className="text-slate-500">Bank</span>
-                    <span className="text-slate-300">{emp.bankName ?? 'Not set'}</span>
+                  <div className="flex justify-between text-[10px] font-bold uppercase border-b border-shadow pb-2">
+                    <span className="text-muted">Bank</span>
+                    <span className="text-muted">{emp.bankName ?? 'Not set'}</span>
                   </div>
                   <div className="flex justify-between text-[10px] font-bold uppercase">
-                    <span className="text-slate-500">Account</span>
-                    <span className="text-slate-300 font-mono">{showSensitive ? emp.bankAccountEncrypted : '•••• ••'}</span>
+                    <span className="text-muted">Account</span>
+                    <span className="text-muted font-mono">{showSensitive ? emp.bankAccountEncrypted : '•••• ••'}</span>
                   </div>
                 </div>
-                <button onClick={() => setShowSensitive(s => !s)} className="w-full py-2.5 bg-slate-800 text-white text-[9px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-slate-700 transition-all border border-slate-700">
+                <button onClick={() => setShowSensitive(s => !s)} className="w-full py-2.5 bg-shadow text-paper text-[9px] font-black uppercase tracking-[0.2em] hover:bg-muted transition-all border border-shadow">
                   {showSensitive ? 'Hide Sensitive Data' : 'Reveal Sensitive Data'}
                 </button>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-6 text-center">
-                <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center text-2xl mb-4 opacity-30">🔒</div>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-relaxed">Insufficient clearance<br />for financial data.</p>
+                <div className="w-12 h-12 bg-shadow flex items-center justify-center text-2xl mb-4 opacity-30">🔒</div>
+                <p className="text-[10px] font-black text-muted uppercase tracking-widest leading-relaxed">Insufficient clearance<br />for financial data.</p>
               </div>
             )}
           </section>

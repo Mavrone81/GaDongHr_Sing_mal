@@ -18,12 +18,21 @@ const TYPE_LABELS: Record<string, string> = {
   COST_CENTRE_REALLOC:     'Cost Centre Realloc',
 };
 
+/**
+ * Weighted by what still needs someone's attention, since the palette has no
+ * five-way hue vocabulary: rejection is filled ink and therefore loudest,
+ * an applied movement is filled accent because it is now in force, approval is
+ * an outline, pending carries the highlight, and a cancellation recedes.
+ *
+ * Straight token mapping had rendered PENDING, REJECTED and CANCELLED
+ * identically — three states with very different consequences.
+ */
 const STATUS_COLORS: Record<string, string> = {
-  PENDING:   'bg-amber-100 text-amber-700',
-  APPROVED:  'bg-blue-100 text-blue-700',
-  REJECTED:  'bg-red-100 text-red-700',
-  CANCELLED: 'bg-slate-100 text-slate-600',
-  APPLIED:   'bg-emerald-100 text-emerald-700',
+  PENDING:   'bg-paper text-ink border border-highlight',
+  APPROVED:  'bg-paper text-accent border border-accent',
+  APPLIED:   'bg-accent text-paper border border-accent',
+  REJECTED:  'bg-ink text-paper border border-ink',
+  CANCELLED: 'bg-page text-muted border border-rule line-through',
 };
 
 export default function MovementDetailPage() {
@@ -89,14 +98,14 @@ export default function MovementDetailPage() {
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-[400px]"><div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" /></div>;
+    return <div className="flex items-center justify-center min-h-[400px]"><div className="w-10 h-10 border-4 border-accent border-accent animate-spin" /></div>;
   }
   if (error || !m) {
     return (
       <div className="max-w-2xl mx-auto mt-16 text-center">
-        <h2 className="text-lg font-black text-slate-800 mb-2">Movement Not Found</h2>
-        <p className="text-sm text-slate-500 mb-6">{error}</p>
-        <Link href="/movements" className="text-xs font-bold text-indigo-600 hover:text-indigo-700">← Back to Movements</Link>
+        <h2 className="text-lg font-black text-ink mb-2">Movement Not Found</h2>
+        <p className="text-sm text-muted mb-6">{error}</p>
+        <Link href="/movements" className="text-xs font-bold text-accent hover:text-accent">← Back to Movements</Link>
       </div>
     );
   }
@@ -111,28 +120,28 @@ export default function MovementDetailPage() {
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <Link href="/movements" className="text-xs font-bold text-slate-500 hover:text-indigo-600">← Back to Movements</Link>
+        <Link href="/movements" className="text-xs font-bold text-muted hover:text-accent">← Back to Movements</Link>
         <div className="flex items-center gap-2 flex-wrap">
           {m.additionalApproval?.required && m.status === 'PENDING' && (
-            <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-full bg-orange-100 text-orange-700">
+            <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest bg-page text-ink">
               Needs HR_MANAGER
             </span>
           )}
-          <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${STATUS_COLORS[m.status] || 'bg-slate-100 text-slate-600'}`}>
+          <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[m.status] || 'bg-page text-ink'}`}>
             {m.status}
           </span>
         </div>
       </div>
 
       {/* Top Card */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6">
-        <p className="text-xs font-mono font-black text-slate-400 mb-1">{m.movementNumber}</p>
-        <h1 className="text-xl font-black text-slate-900 mb-1">
+      <div className="bg-paper border border-rule p-4 sm:p-6">
+        <p className="text-xs font-mono font-black text-muted mb-1">{m.movementNumber}</p>
+        <h1 className="text-xl font-black text-ink mb-1">
           {TYPE_LABELS[m.type] || m.type}
         </h1>
-        <p className="text-sm text-slate-500 mb-4">for <span className="font-bold text-slate-700">{m.employeeName}</span></p>
+        <p className="text-sm text-muted mb-4">for <span className="font-bold text-ink">{m.employeeName}</span></p>
 
-        <p className="text-sm text-slate-700 mb-5 p-3 bg-slate-50 rounded-xl italic">"{m.reason}"</p>
+        <p className="text-sm text-ink mb-5 p-3 bg-page italic">"{m.reason}"</p>
 
         {/* Before / After grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -146,13 +155,13 @@ export default function MovementDetailPage() {
         </div>
 
         {m.hasSalaryRevision && (
-          <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
-            <p className="text-xs font-black text-emerald-700 uppercase tracking-widest mb-1">Salary Revision</p>
-            <p className="text-sm text-emerald-900">Reason: {m.salaryReasonCode || '—'} · {isHr ? '(salary visible to HR via approved record)' : 'New salary applied on effective date'}</p>
+          <div className="mt-4 p-4 bg-page border border-accent">
+            <p className="text-xs font-black text-accent uppercase tracking-widest mb-1">Salary Revision</p>
+            <p className="text-sm text-accent">Reason: {m.salaryReasonCode || '—'} · {isHr ? '(salary visible to HR via approved record)' : 'New salary applied on effective date'}</p>
           </div>
         )}
 
-        <div className="mt-6 pt-4 border-t border-slate-100 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+        <div className="mt-6 pt-4 border-t border-rule grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
           <Meta label="Effective" value={new Date(m.effectiveDate).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })} />
           <Meta label="Initiated" value={`${new Date(m.createdAt).toLocaleDateString('en-SG')} by ${m.initiatedByName || '—'}`} />
           {m.approvedAt && <Meta label="Approved"  value={`${new Date(m.approvedAt).toLocaleDateString('en-SG')} by ${m.approvedByName || '—'}`} />}
@@ -162,28 +171,28 @@ export default function MovementDetailPage() {
         </div>
 
         {m.rejectionReason && (
-          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-xl">
-            <p className="text-xs font-black text-red-700 uppercase tracking-widest mb-1">Rejection Reason</p>
-            <p className="text-sm text-red-700">{m.rejectionReason}</p>
+          <div className="mt-4 p-3 bg-page border border-ink">
+            <p className="text-xs font-black text-ink uppercase tracking-widest mb-1">Rejection Reason</p>
+            <p className="text-sm text-ink">{m.rejectionReason}</p>
           </div>
         )}
 
         {/* Action bar */}
-        <div className="mt-6 pt-4 border-t border-slate-100 flex flex-wrap gap-2">
+        <div className="mt-6 pt-4 border-t border-rule flex flex-wrap gap-2">
           {canApprove && (
             <>
-              <button onClick={approve} className="px-4 py-2 text-xs font-bold text-emerald-600 border border-emerald-200 rounded-lg hover:bg-emerald-50">Approve</button>
-              <button onClick={reject}  className="px-4 py-2 text-xs font-bold text-red-500 border border-red-200 rounded-lg hover:bg-red-50">Reject</button>
+              <button onClick={approve} className="px-4 py-2 text-xs font-bold text-accent border border-accent hover:bg-page">Approve</button>
+              <button onClick={reject}  className="px-4 py-2 text-xs font-bold text-ink border border-ink hover:bg-page">Reject</button>
             </>
           )}
           {canApply && (
-            <button onClick={apply} className="px-4 py-2 text-xs font-bold text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50">Apply Now</button>
+            <button onClick={apply} className="px-4 py-2 text-xs font-bold text-accent border border-accent hover:bg-page">Apply Now</button>
           )}
           {canCancel && (
-            <button onClick={cancelMov} className="px-4 py-2 text-xs font-bold text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50">Cancel Movement</button>
+            <button onClick={cancelMov} className="px-4 py-2 text-xs font-bold text-muted border border-rule hover:bg-page">Cancel Movement</button>
           )}
           {['APPROVED','APPLIED'].includes(m.status) && (
-            <button onClick={() => { if (!letter) loadLetter(); }} className="px-4 py-2 text-xs font-bold text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 ml-auto">
+            <button onClick={() => { if (!letter) loadLetter(); }} className="px-4 py-2 text-xs font-bold text-accent border border-accent hover:bg-page ml-auto">
               {letter ? 'Letter loaded ↓' : 'View Transfer Letter'}
             </button>
           )}
@@ -192,15 +201,15 @@ export default function MovementDetailPage() {
 
       {/* Letter Preview */}
       {letter && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6">
-          <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-3">Transfer Letter</h3>
+        <div className="bg-paper border border-rule p-4 sm:p-6">
+          <h3 className="text-xs font-black text-ink uppercase tracking-widest mb-3">Transfer Letter</h3>
           <div className="prose prose-slate max-w-none text-sm" dangerouslySetInnerHTML={{ __html: letter }} />
           <div className="mt-4 flex gap-3">
-            <button onClick={() => window.print()} className="px-4 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Print</button>
+            <button onClick={() => window.print()} className="px-4 py-2 text-xs font-bold text-ink border border-rule hover:bg-page">Print</button>
           </div>
         </div>
       )}
-      {loadingLetter && <p className="text-xs text-slate-500 italic text-center">Loading letter…</p>}
+      {loadingLetter && <p className="text-xs text-muted italic text-center">Loading letter…</p>}
     </div>
   );
 }
@@ -208,12 +217,12 @@ export default function MovementDetailPage() {
 function ChangeCard({ label, from, to }: { label: string; from: any; to: any }) {
   const changed = (from || '') !== (to || '');
   return (
-    <div className={`p-3 rounded-xl border ${changed ? 'border-indigo-200 bg-indigo-50' : 'border-slate-200 bg-slate-50'}`}>
-      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">{label}</p>
+    <div className={`p-3  border ${changed ? 'border-accent bg-page' : 'border-rule bg-page'}`}>
+      <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-1.5">{label}</p>
       <div className="flex items-center gap-2">
-        <p className="text-sm font-bold text-slate-500 line-through">{from || '—'}</p>
-        <span className="text-slate-400">→</span>
-        <p className="text-sm font-black text-slate-900">{to || '—'}</p>
+        <p className="text-sm font-bold text-muted line-through">{from || '—'}</p>
+        <span className="text-muted">→</span>
+        <p className="text-sm font-black text-ink">{to || '—'}</p>
       </div>
     </div>
   );
@@ -222,8 +231,8 @@ function ChangeCard({ label, from, to }: { label: string; from: any; to: any }) 
 function Meta({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{label}</p>
-      <p className="text-xs font-bold text-slate-700 mt-0.5">{value}</p>
+      <p className="text-[10px] font-black text-muted uppercase tracking-wider">{label}</p>
+      <p className="text-xs font-bold text-ink mt-0.5">{value}</p>
     </div>
   );
 }

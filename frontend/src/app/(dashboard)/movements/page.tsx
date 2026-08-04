@@ -44,12 +44,21 @@ const TYPE_LABELS: Record<string, string> = {
   COST_CENTRE_REALLOC:     'Cost Centre Realloc',
 };
 
+/**
+ * Weighted by what still needs someone's attention, since the palette has no
+ * five-way hue vocabulary: rejection is filled ink and therefore loudest,
+ * an applied movement is filled accent because it is now in force, approval is
+ * an outline, pending carries the highlight, and a cancellation recedes.
+ *
+ * Straight token mapping had rendered PENDING, REJECTED and CANCELLED
+ * identically — three states with very different consequences.
+ */
 const STATUS_COLORS: Record<string, string> = {
-  PENDING:   'bg-amber-100 text-amber-700',
-  APPROVED:  'bg-blue-100 text-blue-700',
-  REJECTED:  'bg-red-100 text-red-700',
-  CANCELLED: 'bg-slate-100 text-slate-600',
-  APPLIED:   'bg-emerald-100 text-emerald-700',
+  PENDING:   'bg-paper text-ink border border-highlight',
+  APPROVED:  'bg-paper text-accent border border-accent',
+  APPLIED:   'bg-accent text-paper border border-accent',
+  REJECTED:  'bg-ink text-paper border border-ink',
+  CANCELLED: 'bg-page text-muted border border-rule line-through',
 };
 
 export default function MovementsPage() {
@@ -79,7 +88,7 @@ export default function MovementsPage() {
   useEffect(() => { if (user) loadData(); }, [user]);
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-[400px]"><div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" /></div>;
+    return <div className="flex items-center justify-center min-h-[400px]"><div className="w-10 h-10 border-4 border-accent border-accent animate-spin" /></div>;
   }
 
   const now = new Date();
@@ -95,14 +104,14 @@ export default function MovementsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-black text-slate-900">{isHr ? 'Staff Movements' : 'My Transfers'}</h1>
-          <p className="text-xs text-slate-500 mt-0.5 uppercase tracking-widest font-bold">
+          <h1 className="text-xl font-black text-ink">{isHr ? 'Staff Movements' : 'My Transfers'}</h1>
+          <p className="text-xs text-muted mt-0.5 uppercase tracking-widest font-bold">
             Internal transfers · Role changes · Promotions
           </p>
         </div>
         <button
           onClick={() => setShowInitiateModal(true)}
-          className="px-4 py-2 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all"
+          className="px-4 py-2 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent transition-all"
         >
           + {isHr ? 'New Movement' : 'Request Transfer'}
         </button>
@@ -120,13 +129,13 @@ export default function MovementsPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-slate-200">
+      <div className="flex items-center gap-1 border-b border-rule">
         {(['all', 'pending', 'upcoming', 'history'] as const).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-all border-b-2 -mb-px ${
-              tab === t ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+              tab === t ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'
             }`}
           >
             {t}
@@ -136,49 +145,49 @@ export default function MovementsPage() {
 
       {/* List */}
       {filteredMovements.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center">
-          <p className="text-sm text-slate-500">No movements in this view.</p>
+        <div className="bg-paper border border-rule p-12 text-center">
+          <p className="text-sm text-muted">No movements in this view.</p>
         </div>
       ) : (
         <div className="space-y-3">
           {filteredMovements.map(m => (
-            <Link key={m.id} href={`/movements/${m.id}`} className="block bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-md hover:border-indigo-200 transition-all">
+            <Link key={m.id} href={`/movements/${m.id}`} className="block bg-paper border border-rule p-5 hover: hover:border-accent transition-all">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                    <span className="text-xs font-mono font-black text-slate-500">{m.movementNumber}</span>
-                    <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-full bg-indigo-50 text-indigo-700">
+                    <span className="text-xs font-mono font-black text-muted">{m.movementNumber}</span>
+                    <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-widest bg-page text-accent">
                       {TYPE_LABELS[m.type] || m.type}
                     </span>
-                    <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-full ${STATUS_COLORS[m.status] || 'bg-slate-100 text-slate-600'}`}>
+                    <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[m.status] || 'bg-page text-ink'}`}>
                       {m.status}
                     </span>
                     {m.hasSalaryRevision && (
-                      <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-full bg-emerald-50 text-emerald-700">
+                      <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-widest bg-page text-accent">
                         $ Salary Revision
                       </span>
                     )}
                   </div>
-                  <h3 className="text-base font-black text-slate-900 mb-1">{m.employeeName}</h3>
-                  <div className="text-sm text-slate-600 space-y-0.5">
+                  <h3 className="text-base font-black text-ink mb-1">{m.employeeName}</h3>
+                  <div className="text-sm text-ink space-y-0.5">
                     {m.fromDepartment !== m.toDepartment && (
-                      <p><span className="text-slate-400 font-bold">Dept:</span> {m.fromDepartment} → <span className="font-bold text-slate-700">{m.toDepartment}</span></p>
+                      <p><span className="text-muted font-bold">Dept:</span> {m.fromDepartment} → <span className="font-bold text-ink">{m.toDepartment}</span></p>
                     )}
                     {m.fromDesignation !== m.toDesignation && (
-                      <p><span className="text-slate-400 font-bold">Role:</span> {m.fromDesignation} → <span className="font-bold text-slate-700">{m.toDesignation}</span></p>
+                      <p><span className="text-muted font-bold">Role:</span> {m.fromDesignation} → <span className="font-bold text-ink">{m.toDesignation}</span></p>
                     )}
                     {(m.fromCostCentre || '') !== (m.toCostCentre || '') && (
-                      <p><span className="text-slate-400 font-bold">CC:</span> {m.fromCostCentre || '—'} → <span className="font-bold text-slate-700">{m.toCostCentre || '—'}</span></p>
+                      <p><span className="text-muted font-bold">CC:</span> {m.fromCostCentre || '—'} → <span className="font-bold text-ink">{m.toCostCentre || '—'}</span></p>
                     )}
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Effective</div>
-                  <div className="text-sm font-black text-slate-700 mt-1">
+                  <div className="text-[10px] font-black text-muted uppercase tracking-widest">Effective</div>
+                  <div className="text-sm font-black text-ink mt-1">
                     {new Date(m.effectiveDate).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </div>
                   {m.initiatedByName && (
-                    <div className="text-[10px] font-bold text-slate-500 mt-1">by {m.initiatedByName}</div>
+                    <div className="text-[10px] font-bold text-muted mt-1">by {m.initiatedByName}</div>
                   )}
                 </div>
               </div>
@@ -201,13 +210,13 @@ export default function MovementsPage() {
 
 function StatCard({ label, value, accent }: { label: string; value: number | string; accent: string }) {
   const colorMap: Record<string, string> = {
-    amber:   'text-amber-700', blue: 'text-blue-700',
-    violet:  'text-violet-700', indigo: 'text-indigo-700', emerald: 'text-emerald-700',
+    amber:   'text-ink', blue: 'text-accent',
+    violet:  'text-accent', indigo: 'text-accent', emerald: 'text-accent',
   };
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4">
-      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{label}</p>
-      <p className={`text-2xl font-black ${colorMap[accent] || 'text-slate-700'}`}>{value}</p>
+    <div className="bg-paper border border-rule p-4">
+      <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-2">{label}</p>
+      <p className={`text-2xl font-black ${colorMap[accent] || 'text-ink'}`}>{value}</p>
     </div>
   );
 }
@@ -258,11 +267,11 @@ function InitiateModal({ isHr, defaultEmployeeId, onClose, onSuccess }: { isHr: 
   const showCo   = ['INTER_COMPANY_TRANSFER'].includes(form.type);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl border border-slate-200 max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-slate-100 sticky top-0 bg-white flex items-center justify-between">
-          <h3 className="text-sm font-black text-slate-900">{isHr ? 'New Staff Movement' : 'Request a Transfer'}</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 text-lg">×</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow backdrop- p-4">
+      <div className="bg-paper w-full max-w-xl border border-rule max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-rule sticky top-0 bg-paper flex items-center justify-between">
+          <h3 className="text-sm font-black text-ink">{isHr ? 'New Staff Movement' : 'Request a Transfer'}</h3>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center hover:bg-page text-muted text-lg">×</button>
         </div>
         <div className="p-4 sm:p-6 space-y-4">
           {isHr && (
@@ -339,12 +348,12 @@ function InitiateModal({ isHr, defaultEmployeeId, onClose, onSuccess }: { isHr: 
             </>
           )}
 
-          {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-bold">{error}</div>}
+          {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
           <div className="flex gap-3 pt-1">
-            <button onClick={save} disabled={saving || !form.reason.trim() || !form.effectiveDate} className="flex-1 py-2.5 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 disabled:opacity-50">
+            <button onClick={save} disabled={saving || !form.reason.trim() || !form.effectiveDate} className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
               {saving ? 'Submitting…' : 'Submit'}
             </button>
-            <button onClick={onClose} className="px-5 py-2.5 border border-slate-200 text-slate-600 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-slate-50">Cancel</button>
+            <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
           </div>
         </div>
       </div>
@@ -363,8 +372,8 @@ function InitiateModal({ isHr, defaultEmployeeId, onClose, onSuccess }: { isHr: 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1.5">
-        {label}{required && <span className="text-red-500"> *</span>}
+      <label className="block text-xs font-black text-ink uppercase tracking-wider mb-1.5">
+        {label}{required && <span className="text-ink"> *</span>}
       </label>
       {children}
     </div>
