@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { EmployeePayslipsView } from './EmployeePayslipsView';
 import { fmtSGD, fmtPeriod } from './format';
+import { Seal, Notice } from '@/components/official';
 import { apiFetch, apiFetchRaw } from '@/lib/api';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -458,67 +459,82 @@ function AdminPayrollDashboard() {
   return (
     <div className="flex flex-col gap-10 max-w-[1600px] mx-auto pb-20 animate-in fade-in duration-700">
 
-      {/* DRC Quota Alert Banner */}
+      {/* Dependency Ratio Ceiling — MOM work-pass quota */}
       {drcLoaded && drcAlerts.length > 0 && (
-        <div className={`px-6 py-4 rounded-2xl border flex flex-col gap-2 ${drcAlerts.some(r => r.status === 'EXCEEDED') ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
-          <div className="flex items-center gap-3">
-            <span className={`text-sm font-black uppercase tracking-widest ${drcAlerts.some(r => r.status === 'EXCEEDED') ? 'text-red-700' : 'text-amber-700'}`}>
-              {drcAlerts.some(r => r.status === 'EXCEEDED') ? '⚠ DRC Ceiling Exceeded' : '⚠ DRC Quota Warning'}
-            </span>
-            <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border ${drcAlerts.some(r => r.status === 'EXCEEDED') ? 'bg-red-100 text-red-700 border-red-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>MOM Compliance</span>
+        <Notice
+          heading={drcAlerts.some(r => r.status === 'EXCEEDED')
+            ? 'Dependency Ratio Ceiling exceeded'
+            : 'Approaching the Dependency Ratio Ceiling'}
+          seal={<Seal cite="EFMA · work-pass quota by sector" />}
+        >
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2">
+              {drcAlerts.map(r => (
+                <span
+                  key={`${r.sector}-${r.passType}`}
+                  // EXCEEDED is filled, WARNING outlined: the state that needs
+                  // action today should be the heavier one on the page. The old
+                  // screen distinguished these by red vs amber alone.
+                  className={`flex items-center gap-2 px-3 py-1.5 border text-[10px] font-black ${
+                    r.status === 'EXCEEDED'
+                      ? 'bg-ink text-paper border-ink'
+                      : 'bg-paper text-ink border-highlight'
+                  }`}
+                >
+                  <span>{r.status === 'EXCEEDED' ? 'Exceeded' : 'Warning'}</span>
+                  <span className="opacity-60">·</span>
+                  <span>{r.sector} — {r.passType.replace('_', ' ')}</span>
+                  <span className="opacity-60">·</span>
+                  <span className="tabular-nums">{r.currentRatioPct}% of {r.maxRatioPct}% ceiling</span>
+                  {r.status === 'WARNING' && (
+                    <span className="text-[9px] tabular-nums">({r.usagePct.toFixed(0)}% used)</span>
+                  )}
+                </span>
+              ))}
+            </div>
+            <p className="text-[10px] font-bold">
+              Review foreign worker headcount at Settings → Statutory Rates.
+            </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {drcAlerts.map(r => (
-              <div key={`${r.sector}-${r.passType}`} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black ${r.status === 'EXCEEDED' ? 'bg-white border-red-200 text-red-700' : 'bg-white border-amber-200 text-amber-700'}`}>
-                <span>{r.sector} — {r.passType.replace('_', ' ')}</span>
-                <span className="opacity-60">·</span>
-                <span>{r.currentRatioPct}% of {r.maxRatioPct}% ceiling</span>
-                {r.status === 'WARNING' && <span className="text-[9px]">({r.usagePct.toFixed(0)}% used)</span>}
-              </div>
-            ))}
-          </div>
-          <p className={`text-[10px] font-bold ${drcAlerts.some(r => r.status === 'EXCEEDED') ? 'text-red-600' : 'text-amber-600'}`}>
-            Review foreign worker headcount at Settings → Statutory Rates.
-          </p>
-        </div>
+        </Notice>
       )}
 
       {/* Period Conflict — Supplemental Run Confirmation Modal */}
       {periodConflictRuns.length > 0 && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/50 backdrop-blur-md animate-in fade-in duration-300 p-4">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-100 animate-in slide-in-from-bottom-10">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-shadow backdrop- animate-in fade-in duration-300 p-4">
+          <div className="bg-paper w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden border border-rule animate-in slide-in-from-bottom-10">
 
             {/* Header */}
-            <div className="bg-amber-50 border-b border-amber-200 px-8 py-6 flex justify-between items-center shrink-0">
+            <div className="bg-page border-b border-highlight px-8 py-6 flex justify-between items-center shrink-0">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-amber-600 text-base">⚠</span>
-                  <h3 className="text-base font-black text-amber-900 tracking-tighter uppercase">Supplemental Run — {fmtPeriod(selectedPeriod)}</h3>
+                  <span className="text-ink text-base">⚠</span>
+                  <h3 className="text-base font-black text-ink tracking-tighter uppercase">Supplemental Run — {fmtPeriod(selectedPeriod)}</h3>
                 </div>
-                <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest">
+                <p className="text-[9px] font-black text-ink uppercase tracking-widest">
                   {periodConflictRuns.length} existing run{periodConflictRuns.length !== 1 ? 's' : ''} found · Review differences before proceeding
                 </p>
               </div>
-              <button onClick={() => { setPeriodConflictRuns([]); setConflictPayslips([]); }} className="w-10 h-10 flex items-center justify-center bg-white border border-amber-200 rounded-2xl text-amber-600 hover:bg-amber-100 transition-all font-black">&times;</button>
+              <button onClick={() => { setPeriodConflictRuns([]); setConflictPayslips([]); }} className="w-10 h-10 flex items-center justify-center bg-paper border border-highlight text-ink hover:bg-page transition-all font-black">&times;</button>
             </div>
 
             {/* Existing Runs Summary */}
-            <div className="px-8 py-4 border-b border-slate-100 shrink-0">
+            <div className="px-8 py-4 border-b border-rule shrink-0">
               <p className="label-form mb-3">Existing Runs for This Period</p>
               <div className="flex flex-wrap gap-3">
                 {periodConflictRuns.map(r => (
-                  <div key={r.id} className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl">
-                    <span className="text-[10px] font-black text-slate-700 uppercase">{r.runType}</span>
-                    <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest border ${
-                      r.status === 'FINALISED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                      r.status === 'APPROVED' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
-                      'bg-amber-50 text-amber-600 border-amber-100'
+                  <div key={r.id} className="flex items-center gap-2 px-4 py-2 bg-page border border-rule">
+                    <span className="text-[10px] font-black text-ink uppercase">{r.runType}</span>
+                    <span className={`text-[8px] font-black px-2 py-0.5  uppercase tracking-widest border ${
+                      r.status === 'FINALISED' ? 'bg-page text-accent border-accent' :
+                      r.status === 'APPROVED' ? 'bg-page text-accent border-accent' :
+                      'bg-page text-ink border-highlight'
                     }`}>{fmtRunStatus(r.status)}</span>
                   </div>
                 ))}
-                <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-xl">
-                  <span className="text-[10px] font-black text-indigo-700 uppercase">+ New: {selectedRunType}</span>
-                  <span className="text-[8px] font-black px-2 py-0.5 bg-indigo-100 text-indigo-600 rounded-full uppercase">Draft</span>
+                <div className="flex items-center gap-2 px-4 py-2 bg-page border border-accent">
+                  <span className="text-[10px] font-black text-accent uppercase">+ New: {selectedRunType}</span>
+                  <span className="text-[8px] font-black px-2 py-0.5 bg-page text-accent uppercase">Draft</span>
                 </div>
               </div>
             </div>
@@ -529,56 +545,56 @@ function AdminPayrollDashboard() {
                 <p className="label-form">
                   Existing Payslips — Computed Values at Time of Run
                 </p>
-                <span className="shrink-0 text-[8px] font-black px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full uppercase tracking-widest">Stale salaries possible</span>
+                <span className="shrink-0 text-[8px] font-black px-2 py-0.5 bg-page text-ink uppercase tracking-widest">Stale salaries possible</span>
               </div>
-              <p className="text-[9px] font-bold text-slate-400 mb-3 normal-case">
+              <p className="text-[9px] font-bold text-muted mb-3 normal-case">
                 The new supplemental run will re-fetch each employee&apos;s <strong>current salary</strong> from their profile — salary changes made since the prior run will be picked up automatically.
               </p>
               {conflictLoading ? (
                 <div className="flex items-center gap-3 py-8">
-                  <div className="w-4 h-4 border-2 border-slate-300 border-t-indigo-600 rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-rule border-t-accent animate-spin" />
                   <span className="eyebrow-tight">Loading employee payslip data…</span>
                 </div>
               ) : conflictPayslips.length === 0 ? (
-                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest py-6">No computed payslips yet for this period — new run will be the first.</p>
+                <p className="text-[10px] font-black text-muted uppercase tracking-widest py-6">No computed payslips yet for this period — new run will be the first.</p>
               ) : (
-                <div className="overflow-hidden border border-slate-100 rounded-2xl">
+                <div className="overflow-hidden border border-rule">
                   <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-slate-50 label-form">
+                    <thead className="bg-page label-form">
                       <tr>
                         <th className="px-5 py-3">Employee</th>
                         {periodConflictRuns.map(r => (
-                          <th key={r.id} className="px-5 py-3 text-right">{r.runType} Net <span className="font-normal text-slate-300">(historical)</span></th>
+                          <th key={r.id} className="px-5 py-3 text-right">{r.runType} Net <span className="font-normal text-muted">(historical)</span></th>
                         ))}
-                        <th className="px-5 py-3 text-right text-indigo-600">Historical Total Net</th>
-                        <th className="px-5 py-3 text-right text-amber-600">Supplemental Note</th>
+                        <th className="px-5 py-3 text-right text-accent">Historical Total Net</th>
+                        <th className="px-5 py-3 text-right text-ink">Supplemental Note</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50">
+                    <tbody className="divide-y divide-rule">
                       {conflictPayslips.map((emp: any) => {
                         const totalNet = emp.runs.reduce((s: number, r: any) => s + (r.netPay ?? 0), 0);
                         const hasZero = emp.runs.some((r: any) => (r.netPay ?? 0) === 0);
                         const currentOw = conflictSalaryMap[emp.employeeId] ?? null;
                         const salaryMissing = hasZero && currentOw === 0;
                         return (
-                          <tr key={emp.employeeId} className={`hover:bg-slate-50/50 transition-colors ${salaryMissing ? 'bg-red-50/50' : ''}`}>
-                            <td className="px-5 py-3 font-black text-slate-800">{emp.name}</td>
+                          <tr key={emp.employeeId} className={`hover:bg-page transition-colors ${salaryMissing ? 'bg-page' : ''}`}>
+                            <td className="px-5 py-3 font-black text-ink">{emp.name}</td>
                             {periodConflictRuns.map(r => {
                               const ps = emp.runs.find((x: any) => x.runId === r.id);
                               return (
-                                <td key={r.id} className={`px-5 py-3 text-right font-bold ${(ps?.netPay ?? 0) === 0 ? 'text-red-400' : 'text-slate-500'}`}>
+                                <td key={r.id} className={`px-5 py-3 text-right font-bold ${(ps?.netPay ?? 0) === 0 ? 'text-ink' : 'text-muted'}`}>
                                   {ps ? `SGD ${fmtSGD(ps.netPay ?? 0)}` : '—'}
                                 </td>
                               );
                             })}
-                            <td className="px-5 py-3 text-right font-black text-indigo-700">SGD {fmtSGD(totalNet)}</td>
+                            <td className="px-5 py-3 text-right font-black text-accent">SGD {fmtSGD(totalNet)}</td>
                             <td className="px-5 py-3 text-right text-[9px] font-black">
                               {hasZero ? (
                                 salaryMissing
-                                  ? <span className="text-red-600">⛔ No salary in profile — update employee record first</span>
-                                  : <span className="text-emerald-600">✓ Profile salary SGD {fmtSGD(currentOw ?? 0)} — will pro-rate by start date</span>
+                                  ? <span className="text-ink">⛔ No salary in profile — update employee record first</span>
+                                  : <span className="text-accent">✓ Profile salary SGD {fmtSGD(currentOw ?? 0)} — will pro-rate by start date</span>
                               ) : (
-                                <span className="text-slate-400 italic">Will add delta only</span>
+                                <span className="text-muted italic">Will add delta only</span>
                               )}
                             </td>
                           </tr>
@@ -602,10 +618,10 @@ function AdminPayrollDashboard() {
                 r => r.runType === selectedRunType && r.status === 'FINALISED'
               );
               return (
-            <div className="shrink-0 border-t border-slate-100">
+            <div className="shrink-0 border-t border-rule">
               {conflictingRun && (
-                <div className="px-8 py-4 bg-red-50 border-b border-red-200">
-                  <p className="text-[9px] font-black text-red-700 uppercase tracking-widest leading-relaxed">
+                <div className="px-8 py-4 bg-page border-b border-ink">
+                  <p className="text-[9px] font-black text-ink uppercase tracking-widest leading-relaxed">
                     ⛔ A <strong>{conflictingRun.runType}</strong> run for {fmtPeriod(selectedPeriod)} is already DISBURSED.
                     You cannot create another {selectedRunType} run until the existing one is voided.
                     Use &quot;Void &amp; Replace&quot; to delete the old run and create a corrected one — or choose a different run type.
@@ -613,21 +629,21 @@ function AdminPayrollDashboard() {
                 </div>
               )}
               {blockedEmps.length > 0 && (
-                <div className="px-8 py-4 bg-red-50 border-b border-red-200">
-                  <p className="text-[9px] font-black text-red-700 uppercase tracking-widest leading-relaxed">
+                <div className="px-8 py-4 bg-page border-b border-ink">
+                  <p className="text-[9px] font-black text-ink uppercase tracking-widest leading-relaxed">
                     ⛔ {blockedEmps.length} employee{blockedEmps.length !== 1 ? 's have' : ' has'} no salary configured:{' '}
                     <strong>{blockedEmps.map((e: any) => e.name).join(', ')}</strong>.
                     Go to their employee profile and set a Basic Salary before running payroll.
                   </p>
                 </div>
               )}
-              <div className="px-8 py-4 bg-amber-50/50 border-b border-amber-100">
-                <p className="text-[9px] font-black text-amber-800 uppercase tracking-widest leading-relaxed">
-                  A new <strong className="text-amber-900">{selectedRunType}</strong> run will compute additional pay items. Upon finalization, all runs for <strong>{fmtPeriod(selectedPeriod)}</strong> will be automatically consolidated — employees will see only one payslip per month.
+              <div className="px-8 py-4 bg-page border-b border-highlight">
+                <p className="text-[9px] font-black text-ink uppercase tracking-widest leading-relaxed">
+                  A new <strong className="text-ink">{selectedRunType}</strong> run will compute additional pay items. Upon finalization, all runs for <strong>{fmtPeriod(selectedPeriod)}</strong> will be automatically consolidated — employees will see only one payslip per month.
                 </p>
               </div>
-              <div className="px-8 py-5 flex justify-end gap-4 bg-slate-50/50">
-                <button onClick={() => { setPeriodConflictRuns([]); setConflictPayslips([]); setConflictSalaryMap({}); }} className="px-6 py-3 bg-white border border-slate-200 text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-100 transition-all">Cancel</button>
+              <div className="px-8 py-5 flex justify-end gap-4 bg-page">
+                <button onClick={() => { setPeriodConflictRuns([]); setConflictPayslips([]); setConflictSalaryMap({}); }} className="px-6 py-3 bg-paper border border-rule text-muted text-[10px] font-black uppercase tracking-widest hover:bg-page transition-all">Cancel</button>
                 {conflictingRun ? (
                   <button
                     onClick={async () => {
@@ -641,10 +657,10 @@ function AdminPayrollDashboard() {
                       }
                     }}
                     disabled={isProcessing}
-                    className="px-8 py-3 bg-red-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-red-700 transition-all shadow-lg shadow-red-500/20 disabled:opacity-60 flex items-center gap-2"
+                    className="px-8 py-3 bg-ink text-paper text-[10px] font-black uppercase tracking-widest hover:bg-ink transition-all disabled:opacity-60 flex items-center gap-2"
                   >
                     {isProcessing ? (
-                      <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing…</>
+                      <><div className="w-3 h-3 border-2 border-white/30 border-t-white animate-spin" /> Processing…</>
                     ) : (
                       <>⚡ Void & Replace — {selectedRunType}</>
                     )}
@@ -653,10 +669,10 @@ function AdminPayrollDashboard() {
                   <button
                     onClick={actuallyCreateRun}
                     disabled={isProcessing}
-                    className="px-8 py-3 bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-amber-600 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-60 flex items-center gap-2"
+                    className="px-8 py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all disabled:opacity-60 flex items-center gap-2"
                   >
                     {isProcessing ? (
-                      <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Creating…</>
+                      <><div className="w-3 h-3 border-2 border-white/30 border-t-white animate-spin" /> Creating…</>
                     ) : (
                       <>⚡ Confirm — Create Supplemental Run</>
                     )}
@@ -671,35 +687,35 @@ function AdminPayrollDashboard() {
       )}
 
       {/* Header */}
-      <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-8 bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 relative overflow-hidden group">
+      <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-8 bg-paper p-10 border border-rule relative overflow-hidden group">
         <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-           <div className="w-32 h-32 bg-indigo-600 rounded-full blur-3xl"></div>
+           <div className="w-32 h-32 bg-accent"></div>
         </div>
         <div className="flex flex-col gap-2 relative z-10">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-2 h-2 bg-indigo-600 rounded-full"></div>
-            <span className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.4em]">Financial Settlement Layer</span>
+            <div className="w-2 h-2 bg-accent"></div>
+            <span className="text-[10px] font-black text-accent uppercase tracking-[0.4em]">Financial Settlement Layer</span>
           </div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tighter">Payroll <span className="text-indigo-600">Nexus</span></h1>
-          <p className="text-sm font-bold text-slate-400 mt-2 uppercase tracking-widest leading-relaxed max-w-xl">
-            Sovereign salary disbursement, CPF/SDL statutory tracking, and automated GIRO bank generations.
+          <h1 className="text-4xl font-black text-ink tracking-tighter">Payroll <span className="text-accent">Nexus</span></h1>
+          <p className="text-sm font-bold text-muted mt-2 uppercase tracking-widest leading-relaxed max-w-xl">
+            Salary disbursement, CPF/SDL statutory tracking, and automated GIRO bank generations.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-6 relative z-10">
-           <div className="hidden lg:flex flex-col items-end justify-center px-6 border-r border-slate-100">
+           <div className="hidden lg:flex flex-col items-end justify-center px-6 border-r border-rule">
               <span className="label-form">Active Engine</span>
-              <span className="text-[10px] font-black text-indigo-600 uppercase mt-1">SG-CPF-STABLE-2026</span>
+              <span className="text-[10px] font-black text-accent uppercase mt-1">SG-CPF-STABLE-2026</span>
            </div>
            <a
              href="/payroll/iras-submissions"
-             className="px-6 py-5 bg-white border border-slate-200 text-slate-700 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:border-indigo-400 hover:text-indigo-700 transition-all flex items-center gap-2"
+             className="px-6 py-5 bg-paper border border-rule text-ink text-[10px] font-black uppercase tracking-[0.2em] hover:border-accent hover:text-accent transition-all flex items-center gap-2"
              title="CPF e-Submit, IR8A, Appendix 8A/8B, IR21 submission tracking"
            >
               <span>◉</span> IRAS & CPF Submissions
            </a>
            <button
              onClick={() => setIsRunModalOpen(true)}
-             className="px-10 py-5 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-indigo-700 shadow-2xl shadow-indigo-500/20 transition-all active:scale-95 flex items-center gap-3"
+             className="px-10 py-5 bg-accent text-paper text-[10px] font-black uppercase tracking-[0.2em] hover:bg-accent transition-all active:scale-95 flex items-center gap-3"
            >
               <span>⚡</span> Initiate Calculation Engine
            </button>
@@ -708,35 +724,35 @@ function AdminPayrollDashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 group hover:border-indigo-600/20 transition-all">
+        <div className="bg-paper p-8 border border-rule group hover:border-accent transition-all">
           <p className="eyebrow-tight mb-4">Pending Disbursement</p>
           <div className="flex items-end gap-3">
-            <h3 className="text-4xl font-black text-slate-900 tracking-tighter">$245,600.00</h3>
-            <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded uppercase mb-1.5">Live</span>
+            <h3 className="text-4xl font-black text-ink tracking-tighter">$245,600.00</h3>
+            <span className="text-[10px] font-black text-accent bg-page px-2 py-0.5 uppercase mb-1.5">Live</span>
           </div>
-          <div className="mt-8 flex items-center gap-4 pt-6 border-t border-slate-50">
+          <div className="mt-8 flex items-center gap-4 pt-6 border-t border-rule">
             <div className="flex flex-col gap-1">
-              <span className="text-[9px] font-black text-slate-400 uppercase">Net Pay</span>
-              <span className="text-xs font-black text-slate-900">$201,400</span>
+              <span className="text-[9px] font-black text-muted uppercase">Net Pay</span>
+              <span className="text-xs font-black text-ink">$201,400</span>
             </div>
-            <div className="h-4 w-[1px] bg-slate-100"></div>
+            <div className="h-4 w-[1px] bg-page"></div>
             <div className="flex flex-col gap-1">
-              <span className="text-[9px] font-black text-slate-400 uppercase">Total CPF</span>
-              <span className="text-xs font-black text-indigo-600">$44,200</span>
+              <span className="text-[9px] font-black text-muted uppercase">Total CPF</span>
+              <span className="text-xs font-black text-accent">$44,200</span>
             </div>
           </div>
         </div>
-        <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-bl-full"></div>
-          <p className="eyebrow-tight mb-4">Metric: YTD Disbursed</p>
-          <h3 className="text-4xl font-black text-indigo-600 tracking-tighter">$1.2M</h3>
-          <p className="text-[9px] font-black text-emerald-600 uppercase mt-8 flex items-center gap-2">
-            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-            Performance: ↑ 4.2% vs Prev Yr
+        <div className="bg-paper p-8 border border-rule relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-accent"></div>
+          <p className="eyebrow-tight mb-4">YTD Disbursed</p>
+          <h3 className="text-4xl font-black text-accent tracking-tighter">$1.2M</h3>
+          <p className="text-[9px] font-black text-accent uppercase mt-8 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 bg-accent"></span>
+            ↑ 4.2% vs Prev Yr
           </p>
         </div>
-        <div className="bg-slate-950 p-8 rounded-[2rem] border border-slate-800 shadow-2xl shadow-slate-900/10">
-          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-6">Statutory Protocol Queue</p>
+        <div className="bg-shadow p-8 border border-shadow">
+          <p className="text-[10px] font-black text-accent uppercase tracking-widest mb-6">Statutory Protocol Queue</p>
           <div className="flex flex-col gap-3">
             {(() => {
               // Finalised MONTHLY runs that are pending CPF action (no submission or still DRAFT)
@@ -749,48 +765,48 @@ function AdminPayrollDashboard() {
               }).filter(x => x.needsAction).slice(0, 3);
 
               if (cpfItems.length === 0) return (
-                <div className="flex items-center justify-between p-4 bg-slate-900/50 border border-slate-800 rounded-2xl">
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight italic">No pending CPF submissions</span>
-                  <span className="text-emerald-500 text-xs">✓</span>
+                <div className="flex items-center justify-between p-4 bg-shadow border border-shadow">
+                  <span className="text-[10px] font-black text-muted uppercase tracking-tight italic">No pending CPF submissions</span>
+                  <span className="text-accent text-xs">✓</span>
                 </div>
               );
 
               return cpfItems.map(({ run, subStatus }) => (
                 <button key={run.id}
                   onClick={() => setCpfActionRun({ runId: run.id, period: run.period, submissionStatus: subStatus })}
-                  className="flex items-center justify-between p-4 bg-slate-900 border border-slate-800 rounded-2xl hover:border-amber-500/60 transition-all group">
-                  <span className="text-[10px] font-black text-slate-300 uppercase tracking-tight">
+                  className="flex items-center justify-between p-4 bg-shadow border border-shadow hover:border-highlight transition-all group">
+                  <span className="text-[10px] font-black text-muted uppercase tracking-tight">
                     CPF Submissions ({fmtPeriod(run.period)})
                   </span>
-                  <span className="text-[9px] font-black px-2 py-0.5 bg-amber-500 text-slate-950 rounded">
+                  <span className="text-[9px] font-black px-2 py-0.5 bg-highlight text-ink">
                     {subStatus === 'DRAFT' ? 'Upload Pending' : 'Action Needed'}
                   </span>
                 </button>
               ));
             })()}
-            <button className="flex items-center justify-between p-4 bg-slate-900/50 border border-slate-800 rounded-2xl opacity-50 grayscale">
-               <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight italic">Bank GIRO (Draft Saved)</span>
-               <span className="text-slate-700">→</span>
+            <button className="flex items-center justify-between p-4 bg-shadow border border-shadow opacity-50 grayscale">
+               <span className="text-[10px] font-black text-muted uppercase tracking-tight italic">Bank GIRO (Draft Saved)</span>
+               <span className="text-ink">→</span>
             </button>
           </div>
         </div>
       </div>
 
       {/* Run History */}
-      <section className="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 overflow-hidden">
-        <div className="p-8 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-6">
+      <section className="bg-paper border border-rule overflow-hidden">
+        <div className="p-8 border-b border-rule bg-page flex flex-col sm:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-4">
-             <div className="w-2 h-8 bg-indigo-600 rounded-full"></div>
-             <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest">Historical Run Archive</h3>
+             <div className="w-2 h-8 bg-accent"></div>
+             <h3 className="text-lg font-black text-ink uppercase tracking-widest">Historical Run Archive</h3>
           </div>
           <div className="flex gap-4">
-            <button className="px-6 py-3 bg-white border border-slate-200 text-[10px] font-black text-slate-500 uppercase tracking-widest rounded-xl hover:bg-slate-50 transition-all">Refine Archive</button>
-            <button className="px-6 py-3 bg-white border border-slate-200 text-[10px] font-black text-indigo-600 uppercase tracking-widest rounded-xl hover:bg-indigo-50 transition-all">Consolidated Export (CSV)</button>
+            <button className="px-6 py-3 bg-paper border border-rule text-[10px] font-black text-muted uppercase tracking-widest hover:bg-page transition-all">Refine Archive</button>
+            <button className="px-6 py-3 bg-paper border border-rule text-[10px] font-black text-accent uppercase tracking-widest hover:bg-page transition-all">Consolidated Export (CSV)</button>
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
-            <thead className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] border-b border-slate-100">
+            <thead className="text-[10px] text-muted font-black uppercase tracking-[0.2em] border-b border-rule">
               <tr>
                 {([
                   { col: 'period', label: 'Accounting Period', cls: 'px-8 py-8' },
@@ -798,7 +814,7 @@ function AdminPayrollDashboard() {
                   { col: 'type',   label: 'Population',        cls: 'px-8 py-8' },
                 ] as const).map(h => (
                   <th key={h.col} className={h.cls}>
-                    <button onClick={() => toggleRunSort(h.col)} className="flex items-center hover:text-slate-600 transition-colors">
+                    <button onClick={() => toggleRunSort(h.col)} className="flex items-center hover:text-ink transition-colors">
                       {h.label}<RunSortIcon col={h.col} />
                     </button>
                   </th>
@@ -808,26 +824,26 @@ function AdminPayrollDashboard() {
                 <th className="px-8 py-8 text-center">Governance Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-rule">
               {runsLoading ? (
                 [1,2,3].map(i => (
-                  <tr key={i}><td colSpan={6} className="px-8 py-5"><div className="h-8 bg-slate-50 rounded-xl animate-pulse" /></td></tr>
+                  <tr key={i}><td colSpan={6} className="px-8 py-5"><div className="h-8 bg-page animate-pulse" /></td></tr>
                 ))
               ) : runs.length === 0 ? (
                 <tr><td colSpan={6} className="px-8 py-16 text-center">
-                  <span className="text-sm font-black text-slate-300 uppercase tracking-widest">No payroll runs yet</span>
+                  <span className="text-sm font-black text-muted uppercase tracking-widest">No payroll runs yet</span>
                 </td></tr>
               ) : sortedRuns.map((run) => (
-                <tr key={run.id} className="group hover:bg-slate-50/50 transition-all duration-300">
+                <tr key={run.id} className="group hover:bg-page transition-all duration-300">
                   <td className="px-8 py-6">
-                     <span className="text-sm font-black text-slate-900 uppercase tracking-tighter group-hover:text-indigo-600 transition-colors">{fmtPeriod(run.period)}</span>
+                     <span className="text-sm font-black text-ink uppercase tracking-tighter group-hover:text-accent transition-colors">{fmtPeriod(run.period)}</span>
                   </td>
                   <td className="px-8 py-6">
-                    <span className={`text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest border shadow-sm ${
-                      run.status === 'PENDING_APPROVAL' || run.status === 'DRAFT' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                      run.status === 'APPROVED' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
-                      run.status === 'REJECTED' ? 'bg-red-50 text-red-600 border-red-100' :
-                      'bg-emerald-50 text-emerald-600 border-emerald-100'
+                    <span className={`text-[9px] font-black px-4 py-1.5  uppercase tracking-widest border  ${
+                      run.status === 'PENDING_APPROVAL' || run.status === 'DRAFT' ? 'bg-page text-ink border-highlight' :
+                      run.status === 'APPROVED' ? 'bg-page text-accent border-accent' :
+                      run.status === 'REJECTED' ? 'bg-page text-ink border-ink' :
+                      'bg-page text-accent border-accent'
                     }`}>
                       {fmtRunStatus(run.status)}
                     </span>
@@ -836,7 +852,7 @@ function AdminPayrollDashboard() {
                      <span className="eyebrow-tight">{run.runType}</span>
                   </td>
                   <td className="px-8 py-6 text-right">
-                     <span className="text-sm font-black text-slate-400 tracking-tighter italic">—</span>
+                     <span className="text-sm font-black text-muted tracking-tighter italic">—</span>
                   </td>
                   <td className="px-8 py-6 text-right">
                      <span className="eyebrow-tight italic">—</span>
@@ -846,23 +862,23 @@ function AdminPayrollDashboard() {
                       {(run.status === 'PENDING_APPROVAL' || run.status === 'APPROVED' || run.status === 'DRAFT') ? (
                         <button
                           onClick={() => setReviewRunData(run)}
-                          className="px-8 py-3 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 shadow-xl shadow-indigo-500/10 transition-all active:scale-95"
+                          className="px-8 py-3 bg-accent text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95"
                         >
                            Review Protocol
                         </button>
                       ) : run.status === 'REJECTED' ? (
-                        <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest italic opacity-50">Locked for Archive</span>
+                        <span className="text-[9px] font-black text-muted uppercase tracking-widest italic opacity-50">Locked for Archive</span>
                       ) : (
                         <div className="flex items-center gap-3">
-                          <button onClick={() => { const ref = generateGiroRef(run.period); setGiroRunId(run.id); setGiroBank('uob'); setGiroFields({ acct: '', companyName: 'GADONGHR PTE LTD', valueDate: new Date().toISOString().slice(0,10), ref, batchNo: '001', payDesc: `SALARY ${run.period}` }); }} className="px-4 py-2 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-slate-800 transition-all">GIRO</button>
+                          <button onClick={() => { const ref = generateGiroRef(run.period); setGiroRunId(run.id); setGiroBank('uob'); setGiroFields({ acct: '', companyName: 'GADONGHR PTE LTD', valueDate: new Date().toISOString().slice(0,10), ref, batchNo: '001', payDesc: `SALARY ${run.period}` }); }} className="px-4 py-2 bg-shadow text-paper text-[9px] font-black uppercase tracking-widest hover:bg-shadow transition-all">GIRO</button>
                           <button
                             onClick={() => downloadCpfFile(run.id, run.period)}
                             title="Download CPF e-Submit flat file (creates a tracked DRAFT submission)"
-                            className="px-4 py-2 bg-emerald-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-emerald-700 transition-all"
+                            className="px-4 py-2 bg-accent text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent transition-all"
                           >
                             CPF File
                           </button>
-                          <button onClick={() => { setPayslipRunId(run.id); setPayslipRows([]); }} className="px-4 py-2 bg-white border border-slate-200 label-form rounded-lg hover:text-indigo-600 hover:border-indigo-600 transition-all">Payslips</button>
+                          <button onClick={() => { setPayslipRunId(run.id); setPayslipRows([]); }} className="px-4 py-2 bg-paper border border-rule label-form hover:text-accent hover:border-accent transition-all">Payslips</button>
                           {runs.filter(r => r.period === run.period && r.id !== run.id && r.status === 'FINALISED').length > 0 && (
                             <button onClick={async () => {
                               try {
@@ -870,9 +886,9 @@ function AdminPayrollDashboard() {
                                 handleActionToast(`Payslips consolidated for ${fmtPeriod(run.period)}.`);
                                 await loadRuns();
                               } catch (e: any) { handleActionToast(e.message || 'Consolidation failed'); }
-                            }} className="px-4 py-2 bg-amber-50 border border-amber-300 text-[9px] font-black text-amber-700 uppercase tracking-widest rounded-lg hover:bg-amber-500 hover:text-white hover:border-amber-500 transition-all">Merge</button>
+                            }} className="px-4 py-2 bg-page border border-highlight text-[9px] font-black text-ink uppercase tracking-widest hover:bg-highlight hover:text-paper hover:border-highlight transition-all">Merge</button>
                           )}
-                          <button onClick={() => { setConfirmCancelRun(false); setReviewRunData(run); }} className="px-4 py-2 bg-white border border-red-200 text-[9px] font-black text-red-400 uppercase tracking-widest rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-400 transition-all">Void</button>
+                          <button onClick={() => { setConfirmCancelRun(false); setReviewRunData(run); }} className="px-4 py-2 bg-paper border border-ink text-[9px] font-black text-ink uppercase tracking-widest hover:bg-page hover:text-ink hover:border-ink transition-all">Void</button>
                         </div>
                       )}
                     </div>
@@ -886,26 +902,26 @@ function AdminPayrollDashboard() {
 
       {/* CPF Statutory Action Modal */}
       {cpfActionRun && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-8 animate-in fade-in duration-200">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md border border-slate-100 animate-in slide-in-from-bottom-4 duration-200">
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-shadow backdrop- p-8 animate-in fade-in duration-200">
+          <div className="bg-paper w-full max-w-md border border-rule animate-in slide-in-from-bottom-4 duration-200">
             {/* Header */}
-            <div className="p-8 border-b border-slate-100 flex justify-between items-start">
+            <div className="p-8 border-b border-rule flex justify-between items-start">
               <div>
-                <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-1">Statutory Protocol</p>
-                <h3 className="text-xl font-black text-slate-900 tracking-tighter uppercase">CPF e-Submit</h3>
-                <p className="text-[10px] font-black text-slate-400 uppercase mt-1">{fmtPeriod(cpfActionRun.period)}</p>
+                <p className="text-[9px] font-black text-accent uppercase tracking-widest mb-1">Statutory Protocol</p>
+                <h3 className="text-xl font-black text-ink tracking-tighter uppercase">CPF e-Submit</h3>
+                <p className="text-[10px] font-black text-muted uppercase mt-1">{fmtPeriod(cpfActionRun.period)}</p>
               </div>
-              <button onClick={() => setCpfActionRun(null)} className="w-9 h-9 flex items-center justify-center bg-slate-100 rounded-2xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all font-black text-sm">&times;</button>
+              <button onClick={() => setCpfActionRun(null)} className="w-9 h-9 flex items-center justify-center bg-page text-muted hover:text-ink hover:bg-page transition-all font-black text-sm">&times;</button>
             </div>
 
             {/* Status pill */}
             <div className="px-8 pt-6">
-              <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
+              <div className={`inline-flex items-center gap-2 px-3 py-1.5  text-[9px] font-black uppercase tracking-widest ${
                 cpfActionRun.submissionStatus === 'DRAFT'
-                  ? 'bg-amber-50 text-amber-600 border border-amber-100'
-                  : 'bg-slate-100 text-slate-500 border border-slate-200'
+                  ? 'bg-page text-ink border border-highlight'
+                  : 'bg-page text-muted border border-rule'
               }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${cpfActionRun.submissionStatus === 'DRAFT' ? 'bg-amber-500' : 'bg-slate-400'}`}></span>
+                <span className={`w-1.5 h-1.5  ${cpfActionRun.submissionStatus === 'DRAFT' ? 'bg-highlight' : 'bg-muted'}`}></span>
                 {cpfActionRun.submissionStatus === 'DRAFT' ? 'File generated — awaiting upload to CPF EZPay' : 'No file generated yet'}
               </div>
             </div>
@@ -918,37 +934,37 @@ function AdminPayrollDashboard() {
                 onClick={() => downloadCpfFile(cpfActionRun.runId, cpfActionRun.period, () => {
                   setCpfActionRun(prev => prev ? { ...prev, submissionStatus: 'DRAFT' } : null);
                 })}
-                className="w-full flex items-center gap-4 p-5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white rounded-2xl transition-all active:scale-[0.98] shadow-lg shadow-indigo-500/20"
+                className="w-full flex items-center gap-4 p-5 bg-accent hover:bg-accent disabled:opacity-60 text-paper transition-all active:scale-[0.98]"
               >
-                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                <div className="w-10 h-10 bg-paper flex items-center justify-center flex-shrink-0">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
                 </div>
                 <div className="text-left">
                   <p className="text-[11px] font-black uppercase tracking-widest">{cpfDownloading ? 'Generating…' : 'Download CPF e-Submit File'}</p>
-                  <p className="text-[9px] font-black text-indigo-200 mt-0.5">Upload via CPF EZPay portal after download</p>
+                  <p className="text-[9px] font-black text-paper mt-0.5">Upload via CPF EZPay portal after download</p>
                 </div>
               </button>
 
               {/* FTP Upload — future */}
-              <div className="w-full flex items-center gap-4 p-5 bg-slate-50 border border-slate-200 rounded-2xl opacity-60 cursor-not-allowed select-none">
-                <div className="w-10 h-10 bg-slate-200 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <div className="w-full flex items-center gap-4 p-5 bg-page border border-rule opacity-60 cursor-not-allowed select-none">
+                <div className="w-10 h-10 bg-rule flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                   </svg>
                 </div>
                 <div className="text-left">
-                  <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">FTP Direct Upload</p>
-                  <p className="text-[9px] font-black text-slate-400 mt-0.5">Coming soon — configure SFTP credentials in Settings</p>
+                  <p className="text-[11px] font-black text-muted uppercase tracking-widest">FTP Direct Upload</p>
+                  <p className="text-[9px] font-black text-muted mt-0.5">Coming soon — configure SFTP credentials in Settings</p>
                 </div>
-                <span className="ml-auto text-[8px] font-black bg-slate-200 text-slate-500 px-2 py-0.5 rounded uppercase tracking-widest">Soon</span>
+                <span className="ml-auto text-[8px] font-black bg-rule text-muted px-2 py-0.5 uppercase tracking-widest">Soon</span>
               </div>
 
               {/* Track on submissions page */}
               <a href="/payroll/iras-submissions"
                 onClick={() => setCpfActionRun(null)}
-                className="w-full flex items-center justify-center gap-2 p-4 border border-slate-200 rounded-2xl text-[10px] font-black text-slate-500 hover:text-indigo-600 hover:border-indigo-200 transition-all uppercase tracking-widest">
+                className="w-full flex items-center justify-center gap-2 p-4 border border-rule text-[10px] font-black text-muted hover:text-accent hover:border-accent transition-all uppercase tracking-widest">
                 View IRAS Submissions Ledger →
               </a>
             </div>
@@ -959,26 +975,26 @@ function AdminPayrollDashboard() {
       {/* GIRO Generation Modal */}
       {giroRunId && (() => {
         const run = runs.find(r => r.id === giroRunId);
-        const inputCls = 'w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-[11px] font-black text-slate-900 outline-none focus:border-indigo-600 focus:bg-white transition-all placeholder:text-slate-300 placeholder:font-bold';
-        const labelCls = 'text-[9px] font-black text-slate-500 uppercase tracking-widest';
+        const inputCls = 'w-full bg-page border border-rule px-4 py-3 text-[11px] font-black text-ink outline-none focus:border-accent focus:bg-paper transition-all placeholder:text-muted placeholder:font-bold';
+        const labelCls = 'text-[9px] font-black text-muted uppercase tracking-widest';
         const banks = [
-          { id: 'uob' as const, label: 'UOB', sub: 'UOB Infinity · 615-char', dot: 'bg-blue-500' },
-          { id: 'ocbc' as const, label: 'OCBC', sub: 'GIRO/FAST · 1000-char', dot: 'bg-red-500' },
-          { id: 'dbs' as const, label: 'DBS', sub: 'IDEAL · 200-char', dot: 'bg-slate-800' },
+          { id: 'uob' as const, label: 'UOB', sub: 'UOB Infinity · 615-char', dot: 'bg-accent' },
+          { id: 'ocbc' as const, label: 'OCBC', sub: 'GIRO/FAST · 1000-char', dot: 'bg-ink' },
+          { id: 'dbs' as const, label: 'DBS', sub: 'IDEAL · 200-char', dot: 'bg-shadow' },
         ];
         return (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 backdrop-blur-md animate-in fade-in duration-300">
-            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100 animate-in slide-in-from-bottom-10 max-h-[90vh] flex flex-col">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-shadow backdrop- animate-in fade-in duration-300">
+            <div className="bg-paper w-full max-w-lg overflow-hidden border border-rule animate-in slide-in-from-bottom-10 max-h-[90vh] flex flex-col">
 
               {/* Header */}
-              <div className="bg-slate-50 border-b border-slate-100 px-8 py-6 flex justify-between items-center shrink-0">
+              <div className="bg-page border-b border-rule px-8 py-6 flex justify-between items-center shrink-0">
                 <div>
-                  <h3 className="text-xl font-black text-slate-900 tracking-tighter uppercase">Generate GIRO File</h3>
+                  <h3 className="text-xl font-black text-ink tracking-tighter uppercase">Generate GIRO File</h3>
                   <p className="label-form mt-1">
                     {run ? `Period: ${fmtPeriod(run.period)}` : ''} · Fill in your company&apos;s bank details
                   </p>
                 </div>
-                <button onClick={() => setGiroRunId(null)} className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-2xl text-slate-400 hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-all font-black">&times;</button>
+                <button onClick={() => setGiroRunId(null)} className="w-10 h-10 flex items-center justify-center bg-paper border border-rule text-muted hover:bg-page hover:text-ink hover:border-ink transition-all font-black">&times;</button>
               </div>
 
               <div className="overflow-y-auto flex-1 p-8 flex flex-col gap-6">
@@ -989,11 +1005,11 @@ function AdminPayrollDashboard() {
                   <div className="grid grid-cols-3 gap-2">
                     {banks.map(b => (
                       <button key={b.id} onClick={() => setGiroBank(b.id)}
-                        className={`flex flex-col items-center gap-1.5 py-4 px-3 rounded-2xl border-2 transition-all ${giroBank === b.id ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-slate-50 hover:border-slate-200'}`}
+                        className={`flex flex-col items-center gap-1.5 py-4 px-3  border-2 transition-all ${giroBank === b.id ? 'border-accent bg-page' : 'border-rule bg-page hover:border-rule'}`}
                       >
-                        <div className={`w-2.5 h-2.5 rounded-full ${b.dot}`} />
-                        <span className={`text-[11px] font-black uppercase ${giroBank === b.id ? 'text-indigo-600' : 'text-slate-700'}`}>{b.label}</span>
-                        <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide text-center leading-tight">{b.sub}</span>
+                        <div className={`w-2.5 h-2.5  ${b.dot}`} />
+                        <span className={`text-[11px] font-black uppercase ${giroBank === b.id ? 'text-accent' : 'text-ink'}`}>{b.label}</span>
+                        <span className="text-[8px] font-bold text-muted uppercase tracking-wide text-center leading-tight">{b.sub}</span>
                       </button>
                     ))}
                   </div>
@@ -1003,7 +1019,7 @@ function AdminPayrollDashboard() {
                 <div className="flex flex-col gap-1.5">
                   <label className={labelCls}>
                     {giroBank === 'uob' ? 'UOB Account No (10-digit)' : giroBank === 'ocbc' ? 'OCBC Account No (no dashes)' : 'DBS Account No'}
-                    <span className="text-red-500 ml-1">*</span>
+                    <span className="text-ink ml-1">*</span>
                   </label>
                   <input
                     type="text"
@@ -1013,7 +1029,7 @@ function AdminPayrollDashboard() {
                     maxLength={giroBank === 'uob' ? 10 : 34}
                     className={inputCls}
                   />
-                  <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                  <p className="text-[8px] font-bold text-muted uppercase tracking-widest">
                     {giroBank === 'uob' ? 'Your 10-digit UOB account number (debit source)' : giroBank === 'ocbc' ? 'Your OCBC Current Account number, digits only' : 'Your DBS IDEAL account number'}
                   </p>
                 </div>
@@ -1021,24 +1037,24 @@ function AdminPayrollDashboard() {
                 {/* Company Name — UOB only */}
                 {giroBank === 'uob' && (
                   <div className="flex flex-col gap-1.5">
-                    <label className={labelCls}>Account / Company Name <span className="text-red-500">*</span></label>
+                    <label className={labelCls}>Account / Company Name <span className="text-ink">*</span></label>
                     <input type="text" value={giroFields.companyName} onChange={e => gf('companyName', e.target.value.toUpperCase())} placeholder="ACME PTE LTD" maxLength={35} className={inputCls} />
-                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Printed on UOB account statement · max 35 chars</p>
+                    <p className="text-[8px] font-bold text-muted uppercase tracking-widest">Printed on UOB account statement · max 35 chars</p>
                   </div>
                 )}
 
                 {/* Value Date */}
                 <div className="flex flex-col gap-1.5">
-                  <label className={labelCls}>Value Date <span className="text-red-500">*</span></label>
+                  <label className={labelCls}>Value Date <span className="text-ink">*</span></label>
                   <input type="date" value={giroFields.valueDate} onChange={e => gf('valueDate', e.target.value)} className={inputCls} />
-                  <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Date funds are credited to employees&apos; accounts</p>
+                  <p className="text-[8px] font-bold text-muted uppercase tracking-widest">Date funds are credited to employees&apos; accounts</p>
                 </div>
 
                 {/* Payment Description */}
                 <div className="flex flex-col gap-1.5">
                   <label className={labelCls}>Payment Description</label>
                   <input type="text" value={giroFields.payDesc} onChange={e => gf('payDesc', e.target.value.toUpperCase())} placeholder={`SALARY ${run?.period ?? ''}`} maxLength={35} className={inputCls} />
-                  <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Shown on employee&apos;s bank statement · max 35 chars</p>
+                  <p className="text-[8px] font-bold text-muted uppercase tracking-widest">Shown on employee&apos;s bank statement · max 35 chars</p>
                 </div>
 
                 {/* Reference / Batch */}
@@ -1050,7 +1066,7 @@ function AdminPayrollDashboard() {
                         type="button"
                         onClick={() => gf('ref', generateGiroRef(run?.period ?? ''))}
                         title="Generate new unique reference"
-                        className="flex items-center gap-1.5 text-[8px] font-black text-indigo-500 uppercase tracking-widest hover:text-indigo-700 transition-colors"
+                        className="flex items-center gap-1.5 text-[8px] font-black text-accent uppercase tracking-widest hover:text-accent transition-colors"
                       >
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1059,35 +1075,35 @@ function AdminPayrollDashboard() {
                       </button>
                     </div>
                     <input type="text" value={giroFields.ref} onChange={e => gf('ref', e.target.value.toUpperCase())} placeholder={`PAYROLL${run?.period?.replace('-','') ?? ''}`} maxLength={16} className={inputCls} />
-                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Auto-generated unique per period · editable · max 16 chars</p>
+                    <p className="text-[8px] font-bold text-muted uppercase tracking-widest">Auto-generated unique per period · editable · max 16 chars</p>
                   </div>
                   {giroBank === 'ocbc' && (
                     <div className="flex flex-col gap-1.5">
                       <label className={labelCls}>Batch Number</label>
                       <input type="text" value={giroFields.batchNo} onChange={e => gf('batchNo', e.target.value.replace(/[^0-9]/g, '').padStart(0,'').slice(0,3))} placeholder="001" maxLength={3} className={inputCls} />
-                      <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">3-digit batch identifier</p>
+                      <p className="text-[8px] font-bold text-muted uppercase tracking-widest">3-digit batch identifier</p>
                     </div>
                   )}
                 </div>
 
                 {/* Info banner */}
-                <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4">
-                  <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest">
+                <div className="bg-page border border-highlight px-5 py-4">
+                  <p className="text-[9px] font-black text-ink uppercase tracking-widest">
                     {giroBank === 'dbs' ? 'DBS format is based on IDEAL payroll spec — verify against your DBS IDEAL format document before uploading' : `${giroBank.toUpperCase()} format generated to spec — upload via ${giroBank === 'uob' ? 'UOB Infinity' : 'OCBC Velocity'}`}
                   </p>
                 </div>
               </div>
 
               {/* Footer */}
-              <div className="border-t border-slate-100 px-8 py-5 shrink-0 flex items-center justify-between gap-4 bg-slate-50/50">
-                <button onClick={() => setGiroRunId(null)} className="px-6 py-3 rounded-xl eyebrow-tight hover:text-slate-600 transition-colors">Cancel</button>
+              <div className="border-t border-rule px-8 py-5 shrink-0 flex items-center justify-between gap-4 bg-page">
+                <button onClick={() => setGiroRunId(null)} className="px-6 py-3 eyebrow-tight hover:text-ink transition-colors">Cancel</button>
                 <button
                   onClick={downloadGiro}
                   disabled={giroDownloading || !giroFields.acct}
-                  className="flex items-center gap-3 px-8 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-slate-900/20"
+                  className="flex items-center gap-3 px-8 py-3 bg-shadow text-paper text-[10px] font-black uppercase tracking-widest hover:bg-shadow transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {giroDownloading ? (
-                    <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /><span>Generating…</span></>
+                    <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white animate-spin" /><span>Generating…</span></>
                   ) : (
                     <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg><span>Generate {giroBank.toUpperCase()} File</span></>
                   )}
@@ -1100,23 +1116,23 @@ function AdminPayrollDashboard() {
 
       {/* Initiation Modal */}
       {isRunModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-100 animate-in slide-in-from-bottom-10">
-            <div className="bg-slate-50 border-b border-slate-100 p-10 flex justify-between items-center shrink-0">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-shadow backdrop- animate-in fade-in duration-300">
+          <div className="bg-paper w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden border border-rule animate-in slide-in-from-bottom-10">
+            <div className="bg-page border-b border-rule p-10 flex justify-between items-center shrink-0">
               <div>
-                <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">Initiate Engine</h3>
+                <h3 className="text-2xl font-black text-ink tracking-tighter uppercase">Initiate Engine</h3>
                 <p className="eyebrow-tight mt-2">Fiscal Cycle Alignment v2.4</p>
               </div>
-              <button onClick={() => setIsRunModalOpen(false)} className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-2xl text-slate-400 hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-all font-black">&times;</button>
+              <button onClick={() => setIsRunModalOpen(false)} className="w-10 h-10 flex items-center justify-center bg-paper border border-rule text-muted hover:bg-page hover:text-ink hover:border-ink transition-all font-black">&times;</button>
             </div>
             <div className="p-10 flex flex-col gap-8 flex-1 overflow-y-auto">
               <div className="flex flex-col gap-3">
                 <label className="eyebrow-tight">Accounting Period (YYYY-MM)</label>
-                <input type="month" value={selectedPeriod} onChange={e => setSelectedPeriod(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-sm font-black text-slate-900 outline-none focus:border-indigo-600 transition-all" />
+                <input type="month" value={selectedPeriod} onChange={e => setSelectedPeriod(e.target.value)} className="w-full bg-page border border-rule px-6 py-4 text-sm font-black text-ink outline-none focus:border-accent transition-all" />
               </div>
               <div className="flex flex-col gap-3">
                 <label className="eyebrow-tight">Run Type</label>
-                <select value={selectedRunType} onChange={e => setSelectedRunType(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-sm font-black text-slate-900 outline-none focus:border-indigo-600 appearance-none cursor-pointer">
+                <select value={selectedRunType} onChange={e => setSelectedRunType(e.target.value)} className="w-full bg-page border border-rule px-6 py-4 text-sm font-black text-ink outline-none focus:border-accent appearance-none cursor-pointer">
                   <option value="MONTHLY">Monthly Payroll</option>
                   <option value="ADHOC">Ad-hoc / Supplemental</option>
                   <option value="BONUS">Bonus</option>
@@ -1126,7 +1142,7 @@ function AdminPayrollDashboard() {
               </div>
               <div className="flex flex-col gap-3">
                 <label className="eyebrow-tight">Workforce Partition</label>
-                <select value={processingGroup} onChange={e => setProcessingGroup(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-sm font-black text-slate-900 outline-none focus:border-indigo-600 appearance-none cursor-pointer">
+                <select value={processingGroup} onChange={e => setProcessingGroup(e.target.value)} className="w-full bg-page border border-rule px-6 py-4 text-sm font-black text-ink outline-none focus:border-accent appearance-none cursor-pointer">
                   <option value="all">Global Workforce (All Sectors)</option>
                   <option value="full_time">Personnel: Full-Time</option>
                   <option value="contractors">Personnel: Contractors</option>
@@ -1134,28 +1150,29 @@ function AdminPayrollDashboard() {
                 </select>
               </div>
               {/* ── Period Working-Day Config (MOM EA s.20) ─────────────────── */}
-              <div className="pt-4 border-t border-slate-50 flex flex-col gap-3">
+              <div className="pt-4 border-t border-rule flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="eyebrow-tight">Working Days — {fmtPeriod(selectedPeriod)}</p>
-                    <p className="text-[8px] font-bold text-slate-300 uppercase tracking-wide mt-0.5">MOM EA s.20 · Pro-ration basis for new joiners &amp; leavers</p>
+                    <p className="text-[8px] font-bold text-muted uppercase tracking-wide mt-0.5">Pro-ration basis for new joiners &amp; leavers</p>
+                    <span className="inline-block mt-1"><Seal cite="EA s.20 · incomplete month" /></span>
                   </div>
                   {periodCfg && (
-                    <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${periodCfg.isOverridden ? 'bg-amber-50 text-amber-600 border border-amber-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
+                    <span className={`text-[8px] font-black px-2 py-0.5  uppercase tracking-widest ${periodCfg.isOverridden ? 'bg-page text-ink border border-highlight' : 'bg-page text-accent border border-accent'}`}>
                       {periodCfg.isOverridden ? 'Overridden' : 'Auto (MOM)'}
                     </span>
                   )}
                 </div>
 
                 {periodCfgLoading ? (
-                  <div className="h-16 bg-slate-50 rounded-2xl animate-pulse" />
+                  <div className="h-16 bg-page animate-pulse" />
                 ) : periodCfg ? (
-                  <div className="bg-slate-50 rounded-2xl p-4 flex flex-col gap-3">
+                  <div className="bg-page p-4 flex flex-col gap-3">
                     {/* Work week selector */}
                     <div className="flex gap-2">
                       {(['FIVE_DAY', 'SIX_DAY'] as const).map(t => (
                         <button key={t} onClick={() => setPeriodCfgWorkDayType(t)}
-                          className={`flex-1 py-2 px-3 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${periodCfgWorkDayType === t ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'}`}>
+                          className={`flex-1 py-2 px-3  text-[9px] font-black uppercase tracking-widest border transition-all ${periodCfgWorkDayType === t ? 'bg-accent text-paper border-accent' : 'bg-paper text-muted border-rule hover:border-rule'}`}>
                           {t === 'FIVE_DAY' ? '5-Day (Mon–Fri)' : '6-Day (Mon–Sat)'}
                         </button>
                       ))}
@@ -1164,74 +1181,77 @@ function AdminPayrollDashboard() {
                     {/* Recommended vs override */}
                     <div className="flex items-center gap-3">
                       <div className="flex-1">
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">MOM Recommended</p>
+                        <p className="text-[8px] font-black text-muted uppercase tracking-widest mb-1">MOM Recommended</p>
                         <div className="flex items-baseline gap-1">
-                          <span className="text-2xl font-black text-indigo-600">{periodCfg.recommendedWorkingDays}</span>
-                          <span className="text-[9px] font-black text-slate-400 uppercase">days</span>
+                          <span className="text-2xl font-black text-accent">{periodCfg.recommendedWorkingDays}</span>
+                          <span className="text-[9px] font-black text-muted uppercase">days</span>
                         </div>
                         {periodCfg.publicHolidays.length > 0 && (
-                          <p className="text-[8px] font-bold text-slate-400 mt-1">
+                          <p className="text-[8px] font-bold text-muted mt-1">
                             {periodCfg.publicHolidays.length} public holiday{periodCfg.publicHolidays.length !== 1 ? 's' : ''} deducted
                             {' ('}{periodCfg.publicHolidays.map(h => h.name).join(', ')}{')'}
                           </p>
                         )}
                       </div>
-                      <div className="w-px h-10 bg-slate-200" />
+                      <div className="w-px h-10 bg-rule" />
                       <div className="flex-1">
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Override (optional)</p>
+                        <p className="text-[8px] font-black text-muted uppercase tracking-widest mb-1">Override (optional)</p>
                         <input
                           type="number" min="1" max="31"
                           value={periodCfgOverride}
                           onChange={e => setPeriodCfgOverride(e.target.value)}
                           placeholder={String(periodCfg.recommendedWorkingDays)}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-black text-slate-900 outline-none focus:border-indigo-600 transition-all placeholder:text-slate-300"
+                          className="w-full bg-paper border border-rule px-3 py-2 text-sm font-black text-ink outline-none focus:border-accent transition-all placeholder:text-muted"
                         />
                       </div>
                     </div>
 
                     <button onClick={savePeriodConfig} disabled={periodCfgSaving}
-                      className="self-end px-5 py-2 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-600 transition-all disabled:opacity-50">
+                      className="self-end px-5 py-2 bg-shadow text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent transition-all disabled:opacity-50">
                       {periodCfgSaving ? 'Saving…' : 'Save Config'}
                     </button>
                   </div>
                 ) : (
-                  <div className="bg-slate-50 rounded-2xl p-4 label-form text-center">
+                  <div className="bg-page p-4 label-form text-center">
                     Could not load period config
                   </div>
                 )}
               </div>
 
-              <div className="space-y-4 pt-4 border-t border-slate-50">
+              <div className="space-y-4 pt-4 border-t border-rule">
                 <label className="flex items-center gap-4 cursor-pointer group">
                   <div className="relative">
                     <input type="checkbox" defaultChecked className="peer opacity-0 absolute inset-0 w-6 h-6 cursor-pointer" />
-                    <div className="w-6 h-6 bg-slate-100 border border-slate-200 rounded-lg peer-checked:bg-indigo-600 peer-checked:border-indigo-600 transition-all flex items-center justify-center">
-                       <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7"></path></svg>
+                    <div className="w-6 h-6 bg-page border border-rule peer-checked:bg-accent peer-checked:border-accent transition-all flex items-center justify-center">
+                       <svg className="w-3 h-3 text-paper" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7"></path></svg>
                     </div>
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-[11px] font-black text-slate-900 uppercase group-hover:text-indigo-600 transition-colors">Apply Central Provident Fund (CPF)</span>
-                    <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5 tracking-tight">Age-Band Compliance v2026.01</span>
+                    <span className="text-[11px] font-black text-ink uppercase group-hover:text-accent transition-colors">Apply Central Provident Fund (CPF)</span>
+                    <span className="text-[9px] font-bold text-muted uppercase mt-0.5 tracking-tight">Age-Band Compliance v2026.01</span>
                   </div>
                 </label>
                 <label className="flex items-center gap-4 cursor-pointer group">
                   <div className="relative">
                     <input type="checkbox" defaultChecked className="peer opacity-0 absolute inset-0 w-6 h-6 cursor-pointer" />
-                    <div className="w-6 h-6 bg-slate-100 border border-slate-200 rounded-lg peer-checked:bg-indigo-600 peer-checked:border-indigo-600 transition-all flex items-center justify-center">
-                       <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7"></path></svg>
+                    <div className="w-6 h-6 bg-page border border-rule peer-checked:bg-accent peer-checked:border-accent transition-all flex items-center justify-center">
+                       <svg className="w-3 h-3 text-paper" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7"></path></svg>
                     </div>
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-[11px] font-black text-slate-900 uppercase group-hover:text-indigo-600 transition-colors">Apply Skills Development Levy (SDL)</span>
-                    <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5 tracking-tight">Cap Protection: SGD 11.25</span>
+                    <span className="text-[11px] font-black text-ink uppercase group-hover:text-accent transition-colors">Apply Skills Development Levy (SDL)</span>
+                    <span className="text-[9px] font-bold text-muted uppercase mt-0.5 tracking-tight">Cap Protection: SGD 11.25</span>
+                    {/* The cap above is a statutory figure, not a house setting —
+                        0.25% of the first 4,500 of monthly remuneration. */}
+                    <span className="mt-1"><Seal cite="SDL Act · 0.25%, cap 4,500" /></span>
                   </div>
                 </label>
               </div>
             </div>
-            <div className="bg-slate-50 border-t border-slate-100 p-10 flex justify-end gap-5 shrink-0">
-               <button onClick={() => setIsRunModalOpen(false)} className="px-8 py-4 bg-white border border-slate-200 text-slate-500 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-slate-100 transition-all">Abort</button>
-               <button onClick={handleExecute} disabled={isProcessing} className={`px-10 py-4 bg-indigo-600 text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all shadow-2xl shadow-indigo-500/20 flex items-center gap-3 active:scale-95 ${isProcessing ? 'opacity-70 pointer-events-none' : 'hover:bg-indigo-700'}`}>
-                {isProcessing ? (<><svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Simulating Compute…</>) : (<><span>⚡</span>Execute Nexus Pipeline</>)}
+            <div className="bg-page border-t border-rule p-10 flex justify-end gap-5 shrink-0">
+               <button onClick={() => setIsRunModalOpen(false)} className="px-8 py-4 bg-paper border border-rule text-muted font-black text-[10px] uppercase tracking-widest hover:bg-page transition-all">Abort</button>
+               <button onClick={handleExecute} disabled={isProcessing} className={`px-10 py-4 bg-accent text-paper font-black text-[10px] uppercase tracking-[0.2em]  transition-all   flex items-center gap-3 active:scale-95 ${isProcessing ? 'opacity-70 pointer-events-none' : 'hover:bg-accent'}`}>
+                {isProcessing ? (<><svg className="animate-spin h-4 w-4 text-paper" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Simulating Compute…</>) : (<><span>⚡</span>Execute Nexus Pipeline</>)}
               </button>
             </div>
           </div>
@@ -1240,57 +1260,57 @@ function AdminPayrollDashboard() {
 
       {/* Review Run Modal */}
       {reviewRunData && (
-        <div className={`fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/60 backdrop-blur-xl animate-in fade-in duration-300 ${reviewFullscreen ? 'p-0' : 'p-8'}`}>
-          <div className={`bg-white shadow-2xl w-full border border-slate-100 flex flex-col animate-in slide-in-from-top-10 overflow-hidden transition-all duration-300 ${reviewFullscreen ? 'h-full rounded-none max-w-none' : 'rounded-[3rem] max-w-4xl max-h-[90vh]'}`}>
-            <div className="bg-slate-900 border-b border-slate-800 p-10 flex justify-between items-center shrink-0">
+        <div className={`fixed inset-0 z-[110] flex items-center justify-center bg-shadow backdrop- animate-in fade-in duration-300 ${reviewFullscreen ? 'p-0' : 'p-8'}`}>
+          <div className={`bg-paper w-full border border-rule flex flex-col animate-in slide-in-from-top-10 overflow-hidden transition-all duration-300 ${reviewFullscreen ? 'h-full max-w-none' : 'max-w-4xl max-h-[90vh]'}`}>
+            <div className="bg-shadow border-b border-shadow p-10 flex justify-between items-center shrink-0">
               <div className="flex gap-6 items-center">
-                 <div className="w-14 h-14 bg-indigo-600 rounded-3xl flex items-center justify-center text-2xl font-black text-white shadow-2xl shadow-indigo-500/20 shadow-inner">R</div>
+                 <div className="w-14 h-14 bg-accent flex items-center justify-center text-2xl font-black text-paper">R</div>
                  <div>
-                    <h3 className="text-3xl font-black text-white tracking-tighter uppercase whitespace-nowrap">Review Protocol</h3>
-                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mt-2">Fiscal Deployment: {fmtPeriod(reviewRunData.period)}</p>
+                    <h3 className="text-3xl font-black text-paper tracking-tighter uppercase whitespace-nowrap">Review Protocol</h3>
+                    <p className="text-[10px] font-black text-accent uppercase tracking-[0.3em] mt-2">Fiscal Deployment: {fmtPeriod(reviewRunData.period)}</p>
                  </div>
               </div>
               <div className="flex items-center gap-3">
-                <button onClick={() => setReviewFullscreen(f => !f)} className="w-12 h-12 flex items-center justify-center bg-slate-800 border border-slate-700 rounded-2xl text-slate-400 hover:text-white transition-all" title={reviewFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+                <button onClick={() => setReviewFullscreen(f => !f)} className="w-12 h-12 flex items-center justify-center bg-shadow border border-shadow text-muted hover:text-paper transition-all" title={reviewFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
                   {reviewFullscreen ? (
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 9L4 4m0 0h5m-5 0v5M15 9l5-5m0 0h-5m5 0v5M9 15l-5 5m0 0h5m-5 0v-5M15 15l5 5m0 0h-5m5 0v-5" /></svg>
                   ) : (
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5M20 8V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5M20 16v4m0 0h-4m4 0l-5-5" /></svg>
                   )}
                 </button>
-                <button onClick={() => { setReviewRunData(null); setReviewFullscreen(false); }} className="w-12 h-12 flex items-center justify-center bg-slate-800 border border-slate-700 rounded-2xl text-slate-400 hover:text-white transition-all text-2xl">&times;</button>
+                <button onClick={() => { setReviewRunData(null); setReviewFullscreen(false); }} className="w-12 h-12 flex items-center justify-center bg-shadow border border-shadow text-muted hover:text-paper transition-all text-2xl">&times;</button>
               </div>
             </div>
             <div className="p-10 overflow-y-auto space-y-12">
               <div className="grid grid-cols-3 gap-8">
-                <div className="bg-indigo-50/50 p-8 rounded-[2rem] border border-indigo-100/50"><p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest mb-3">Run Type</p><h4 className="text-3xl font-black text-slate-900 tracking-tighter">{reviewRunData.runType}</h4></div>
-                <div className="bg-emerald-50/50 p-8 rounded-[2rem] border border-emerald-100/50"><p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-3">Status</p><h4 className="text-2xl font-black text-slate-900 tracking-tighter">{fmtRunStatus(reviewRunData.status)}</h4></div>
-                <div className="bg-slate-50/50 p-8 rounded-[2rem] border border-slate-100"><p className="label-form mb-3">Initiated</p><h4 className="text-sm font-black text-slate-700 tracking-tighter">{new Date(reviewRunData.createdAt).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}</h4></div>
+                <div className="bg-page p-8 border border-accent"><p className="text-[9px] font-black text-accent uppercase tracking-widest mb-3">Run Type</p><h4 className="text-3xl font-black text-ink tracking-tighter">{reviewRunData.runType}</h4></div>
+                <div className="bg-page p-8 border border-accent"><p className="text-[9px] font-black text-accent uppercase tracking-widest mb-3">Status</p><h4 className="text-2xl font-black text-ink tracking-tighter">{fmtRunStatus(reviewRunData.status)}</h4></div>
+                <div className="bg-page p-8 border border-rule"><p className="label-form mb-3">Initiated</p><h4 className="text-sm font-black text-ink tracking-tighter">{new Date(reviewRunData.createdAt).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}</h4></div>
               </div>
 
               {/* Variance warning — shown when other finalised runs exist for same period */}
               {varianceLoading && (
-                <div className="bg-amber-50 border border-amber-200 rounded-2xl px-6 py-4 flex items-center gap-3">
-                  <div className="w-4 h-4 border-2 border-amber-400/30 border-t-amber-500 rounded-full animate-spin" />
-                  <span className="text-[9px] font-black text-amber-700 uppercase tracking-widest">Checking for period conflicts…</span>
+                <div className="bg-page border border-highlight px-6 py-4 flex items-center gap-3">
+                  <div className="w-4 h-4 border-2 border-highlight border-t-highlight animate-spin" />
+                  <span className="text-[9px] font-black text-ink uppercase tracking-widest">Checking for period conflicts…</span>
                 </div>
               )}
               {!varianceLoading && variance?.hasConflicts && (
-                <div className="bg-amber-50 border border-amber-300 rounded-[2rem] overflow-hidden">
-                  <div className="px-8 py-5 border-b border-amber-200 flex items-center gap-3">
-                    <span className="text-amber-600 text-lg">&#9888;</span>
+                <div className="bg-page border border-highlight overflow-hidden">
+                  <div className="px-8 py-5 border-b border-highlight flex items-center gap-3">
+                    <span className="text-ink text-lg">&#9888;</span>
                     <div>
-                      <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest">
+                      <p className="text-[10px] font-black text-ink uppercase tracking-widest">
                         Period Conflict — {variance.otherRunCount} other run{variance.otherRunCount !== 1 ? 's' : ''} for {fmtPeriod(variance.period)} already finalised
                       </p>
-                      <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest mt-0.5">
+                      <p className="text-[9px] font-bold text-ink uppercase tracking-widest mt-0.5">
                         Upon finalization, these will be consolidated into one payslip per employee.
                       </p>
                     </div>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs border-collapse">
-                      <thead className="bg-amber-100/50 text-[9px] font-black text-amber-700 uppercase tracking-widest">
+                      <thead className="bg-page text-[9px] font-black text-ink uppercase tracking-widest">
                         <tr>
                           <th className="px-6 py-3">Employee</th>
                           <th className="px-6 py-3 text-right">Existing Net</th>
@@ -1298,13 +1318,13 @@ function AdminPayrollDashboard() {
                           <th className="px-6 py-3 text-right">Combined Net</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-amber-100">
+                      <tbody className="divide-y divide-rule">
                         {variance.rows.filter((r: any) => r.hasExisting).map((r: any, i: number) => (
-                          <tr key={i} className="hover:bg-amber-50/50">
-                            <td className="px-6 py-3 font-black text-slate-700 uppercase">{empNameMap.get(r.employeeId) ?? r.employeeId.slice(0, 8)}</td>
-                            <td className="px-6 py-3 text-right font-bold text-slate-500">SGD {fmtSGD(r.existingNet)}</td>
-                            <td className="px-6 py-3 text-right font-black text-amber-700">+ SGD {fmtSGD(r.delta)}</td>
-                            <td className="px-6 py-3 text-right font-black text-indigo-700">SGD {fmtSGD(r.combinedNet)}</td>
+                          <tr key={i} className="hover:bg-page">
+                            <td className="px-6 py-3 font-black text-ink uppercase">{empNameMap.get(r.employeeId) ?? r.employeeId.slice(0, 8)}</td>
+                            <td className="px-6 py-3 text-right font-bold text-muted">SGD {fmtSGD(r.existingNet)}</td>
+                            <td className="px-6 py-3 text-right font-black text-ink">+ SGD {fmtSGD(r.delta)}</td>
+                            <td className="px-6 py-3 text-right font-black text-accent">SGD {fmtSGD(r.combinedNet)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1313,14 +1333,14 @@ function AdminPayrollDashboard() {
                 </div>
               )}
               <div className="space-y-8 pb-10">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-4">
-                   <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em] flex items-center gap-4"><div className="w-8 h-1 bg-emerald-500 rounded-full"></div>Resource Verification Matrix</h4>
-                   <input type="text" placeholder="Search focal point…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="bg-slate-50 border border-slate-100 rounded-xl px-5 py-2.5 text-[10px] font-black text-slate-900 outline-none focus:border-indigo-600 w-64" />
+                <div className="flex justify-between items-center border-b border-rule pb-4">
+                   <h4 className="text-[11px] font-black text-ink uppercase tracking-[0.2em] flex items-center gap-4"><div className="w-8 h-1 bg-accent"></div>Resource Verification Matrix</h4>
+                   <input type="text" placeholder="Search focal point…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="bg-page border border-rule px-5 py-2.5 text-[10px] font-black text-ink outline-none focus:border-accent w-64" />
                 </div>
-                <div className="overflow-hidden border border-slate-100 rounded-[2rem] shadow-2xl shadow-indigo-500/5">
+                <div className="overflow-hidden border border-rule">
                   <div className="max-h-72 overflow-y-auto">
                     <table className="w-full text-left text-xs border-collapse">
-                      <thead className="bg-slate-50/50 border-b border-slate-100 font-black text-slate-400 uppercase tracking-widest sticky top-0 z-10 backdrop-blur-md">
+                      <thead className="bg-page border-b border-rule font-black text-muted uppercase tracking-widest sticky top-0 z-10 backdrop-">
                         <tr>
                           {([
                             { col: 'name',    label: 'Entity',         cls: 'px-8 py-5',            align: 'start' },
@@ -1330,16 +1350,16 @@ function AdminPayrollDashboard() {
                             { col: 'net',     label: 'Liquid Net',     cls: 'px-8 py-5 text-right', align: 'end' },
                           ] as const).map(h => (
                             <th key={h.col} className={h.cls}>
-                              <button onClick={() => toggleReviewSort(h.col)} className={`flex items-center hover:text-slate-600 transition-colors ${h.align === 'end' ? 'ml-auto justify-end' : ''}`}>
+                              <button onClick={() => toggleReviewSort(h.col)} className={`flex items-center hover:text-ink transition-colors ${h.align === 'end' ? 'ml-auto justify-end' : ''}`}>
                                 {h.label}<ReviewSortIcon col={h.col} />
                               </button>
                             </th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-50">
+                      <tbody className="divide-y divide-rule">
                         {filteredEmployees.length === 0 && reviewPayslips.length === 0 ? (
-                          <tr><td colSpan={5} className="px-8 py-10 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                          <tr><td colSpan={5} className="px-8 py-10 text-center text-[10px] font-black text-muted uppercase tracking-widest">
                             {reviewRunData?.status === 'DRAFT' ? 'Compute payroll first to see employee breakdown' : 'No payslips found for this run'}
                           </td></tr>
                         ) : filteredEmployees.map((ps, i) => {
@@ -1349,47 +1369,47 @@ function AdminPayrollDashboard() {
                           const isAddingHere = addingPaycodeFor === ps.employeeId;
                           return (
                             <React.Fragment key={i}>
-                              <tr className="hover:bg-slate-50 transition-all">
+                              <tr className="hover:bg-page transition-all">
                                 <td className="px-8 py-4">
                                   <div className="flex flex-col gap-1">
-                                    <span className="font-black text-slate-900 uppercase tracking-tight">{name}</span>
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase">{ps.employeeId.slice(0, 8)}</span>
-                                    {canEdit && <button onClick={() => { setAddingPaycodeFor(isAddingHere ? null : ps.employeeId); setNewPcAmount(''); setNewPcDesc(''); if (payComponents.length > 0 && !newPcComponentId) setNewPcComponentId(payComponents[0].id); }} className="text-[9px] font-black text-indigo-500 uppercase tracking-widest hover:text-indigo-700 text-left mt-1">+ Add Paycode</button>}
+                                    <span className="font-black text-ink uppercase tracking-tight">{name}</span>
+                                    <span className="text-[10px] font-bold text-muted uppercase">{ps.employeeId.slice(0, 8)}</span>
+                                    {canEdit && <button onClick={() => { setAddingPaycodeFor(isAddingHere ? null : ps.employeeId); setNewPcAmount(''); setNewPcDesc(''); if (payComponents.length > 0 && !newPcComponentId) setNewPcComponentId(payComponents[0].id); }} className="text-[9px] font-black text-accent uppercase tracking-widest hover:text-accent text-left mt-1">+ Add Paycode</button>}
                                   </div>
                                 </td>
-                                <td className="px-8 py-4 text-right text-slate-600">SGD {fmtSGD(ps.grossPay)}</td>
-                                <td className="px-8 py-4 text-right text-red-500 italic">-SGD {fmtSGD(ps.employeeCpf)}</td>
-                                <td className="px-8 py-4 text-right text-slate-400">SGD {fmtSGD(ps.employerCpf)}</td>
-                                <td className="px-8 py-4 text-right font-black text-indigo-600 tracking-tight">SGD {fmtSGD(ps.netPay)}</td>
+                                <td className="px-8 py-4 text-right text-ink">SGD {fmtSGD(ps.grossPay)}</td>
+                                <td className="px-8 py-4 text-right text-ink italic">-SGD {fmtSGD(ps.employeeCpf)}</td>
+                                <td className="px-8 py-4 text-right text-muted">SGD {fmtSGD(ps.employerCpf)}</td>
+                                <td className="px-8 py-4 text-right font-black text-accent tracking-tight">SGD {fmtSGD(ps.netPay)}</td>
                               </tr>
                               {(empCodes.length > 0 || isAddingHere) && (
-                                <tr className="bg-indigo-50/30">
+                                <tr className="bg-page">
                                   <td colSpan={5} className="px-8 pb-4 pt-1">
                                     <div className="flex flex-col gap-2">
                                       {empCodes.map((pc: any) => (
-                                        <div key={pc.id} className="flex items-center justify-between bg-white border border-slate-100 rounded-xl px-4 py-2">
-                                          <span className="text-[10px] font-black text-slate-600 uppercase tracking-wide">{pc.description}</span>
+                                        <div key={pc.id} className="flex items-center justify-between bg-paper border border-rule px-4 py-2">
+                                          <span className="text-[10px] font-black text-ink uppercase tracking-wide">{pc.description}</span>
                                           <div className="flex items-center gap-3">
-                                            <span className={`text-[10px] font-black ${pc.amount >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{pc.amount >= 0 ? '+' : ''}SGD {fmtSGD(Math.abs(pc.amount))}</span>
-                                            <span className="text-[9px] text-slate-300 uppercase">{pc.wageType}</span>
-                                            {canEdit && <button onClick={async () => { await apiFetch(`/payroll/runs/${reviewRunData.id}/paycodes/${pc.id}`, { method: 'DELETE' }); setRunPaycodes(p => { const n = { ...p }; n[ps.employeeId] = (n[ps.employeeId] || []).filter((x: any) => x.id !== pc.id); return n; }); setPaycodesDirty(true); }} className="text-red-400 hover:text-red-600 text-xs font-black">×</button>}
+                                            <span className={`text-[10px] font-black ${pc.amount >= 0 ? 'text-accent' : 'text-ink'}`}>{pc.amount >= 0 ? '+' : ''}SGD {fmtSGD(Math.abs(pc.amount))}</span>
+                                            <span className="text-[9px] text-muted uppercase">{pc.wageType}</span>
+                                            {canEdit && <button onClick={async () => { await apiFetch(`/payroll/runs/${reviewRunData.id}/paycodes/${pc.id}`, { method: 'DELETE' }); setRunPaycodes(p => { const n = { ...p }; n[ps.employeeId] = (n[ps.employeeId] || []).filter((x: any) => x.id !== pc.id); return n; }); setPaycodesDirty(true); }} className="text-ink hover:text-ink text-xs font-black">×</button>}
                                           </div>
                                         </div>
                                       ))}
                                       {isAddingHere && (
-                                        <div className="flex items-center gap-3 bg-white border border-indigo-200 rounded-xl px-4 py-3 mt-1">
-                                          <select value={newPcComponentId} onChange={e => setNewPcComponentId(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-900 outline-none focus:border-indigo-500 flex-1">
+                                        <div className="flex items-center gap-3 bg-paper border border-accent px-4 py-3 mt-1">
+                                          <select value={newPcComponentId} onChange={e => setNewPcComponentId(e.target.value)} className="bg-page border border-rule px-3 py-1.5 text-[10px] font-black text-ink outline-none focus:border-accent flex-1">
                                             {payComponents.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                                           </select>
-                                          <input type="number" placeholder="Amount (neg = deduction)" value={newPcAmount} onChange={e => setNewPcAmount(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-900 outline-none focus:border-indigo-500 w-44" />
+                                          <input type="number" placeholder="Amount (neg = deduction)" value={newPcAmount} onChange={e => setNewPcAmount(e.target.value)} className="bg-page border border-rule px-3 py-1.5 text-[10px] font-black text-ink outline-none focus:border-accent w-44" />
                                           <button onClick={async () => {
                                             if (!newPcAmount) return;
                                             const comp = payComponents.find((c: any) => c.id === newPcComponentId);
                                             const item = await apiFetch(`/payroll/runs/${reviewRunData.id}/paycodes`, { method: 'POST', body: JSON.stringify({ employeeId: ps.employeeId, componentId: newPcComponentId, description: newPcDesc || comp?.name, amount: parseFloat(newPcAmount) }) });
                                             setRunPaycodes(p => { const n = { ...p }; n[ps.employeeId] = [...(n[ps.employeeId] || []), item]; return n; });
                                             setAddingPaycodeFor(null); setNewPcAmount(''); setNewPcDesc(''); setPaycodesDirty(true);
-                                          }} className="px-4 py-1.5 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-indigo-700 transition-all whitespace-nowrap">Add</button>
-                                          <button onClick={() => setAddingPaycodeFor(null)} className="text-slate-400 hover:text-slate-600 text-xs font-black">×</button>
+                                          }} className="px-4 py-1.5 bg-accent text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent transition-all whitespace-nowrap">Add</button>
+                                          <button onClick={() => setAddingPaycodeFor(null)} className="text-muted hover:text-ink text-xs font-black">×</button>
                                         </div>
                                       )}
                                     </div>
@@ -1405,9 +1425,9 @@ function AdminPayrollDashboard() {
                 </div>
               </div>
             </div>
-            <div className="bg-slate-50 border-t border-slate-100 p-10 flex justify-between items-center rounded-b-[3rem]">
+            <div className="bg-page border-t border-rule p-10 flex justify-between items-center">
                <div className="flex gap-3">
-                 <button onClick={() => { setReviewRunData(null); setConfirmCancelRun(false); setReviewFullscreen(false); }} className="px-10 py-5 bg-white border border-slate-200 text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-slate-100 transition-all">Close</button>
+                 <button onClick={() => { setReviewRunData(null); setConfirmCancelRun(false); setReviewFullscreen(false); }} className="px-10 py-5 bg-paper border border-rule text-muted text-[10px] font-black uppercase tracking-widest hover:bg-page transition-all">Close</button>
                  {!confirmCancelRun ? (
                    <button onClick={() => {
                      if (reviewRunData?.status === 'FINALISED') { setConfirmCancelRun(true); } else {
@@ -1417,12 +1437,12 @@ function AdminPayrollDashboard() {
                          .then(() => { handleActionToast(`Payroll run for ${period} cancelled.`); loadRuns(); })
                          .catch((e: any) => handleActionToast(e.message || 'Failed to cancel run'));
                      }
-                   }} className="px-10 py-5 bg-white border border-red-200 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-red-50 transition-all">
+                   }} className="px-10 py-5 bg-paper border border-ink text-ink text-[10px] font-black uppercase tracking-widest hover:bg-page transition-all">
                      Cancel Run
                    </button>
                  ) : (
-                   <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-2xl px-5 py-3">
-                     <span className="text-[9px] font-black text-red-600 uppercase tracking-widest">This will void all published payslips. Confirm?</span>
+                   <div className="flex items-center gap-3 bg-page border border-ink px-5 py-3">
+                     <span className="text-[9px] font-black text-ink uppercase tracking-widest">This will void all published payslips. Confirm?</span>
                      <button onClick={async () => {
                        const id = reviewRunData.id; const period = reviewRunData.period;
                        setConfirmCancelRun(false); setReviewRunData(null);
@@ -1430,24 +1450,24 @@ function AdminPayrollDashboard() {
                          await apiFetch(`/payroll/runs/${id}/cancel`, { method: 'POST' });
                          handleActionToast(`Payroll run for ${period} voided.`); loadRuns();
                        } catch (e: any) { handleActionToast(e.message || 'Failed to void run'); }
-                     }} className="px-5 py-2 bg-red-600 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-red-700 transition-all">Void</button>
-                     <button onClick={() => setConfirmCancelRun(false)} className="px-5 py-2 bg-white border border-slate-200 text-slate-500 text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-100 transition-all">Back</button>
+                     }} className="px-5 py-2 bg-ink text-paper text-[9px] font-black uppercase tracking-widest hover:bg-ink transition-all">Void</button>
+                     <button onClick={() => setConfirmCancelRun(false)} className="px-5 py-2 bg-paper border border-rule text-muted text-[9px] font-black uppercase tracking-widest hover:bg-page transition-all">Back</button>
                    </div>
                  )}
                </div>
                <div className="flex gap-4 items-center">
                  {reviewRunData?.status === 'DRAFT' && (
-                   <div className="text-[9px] font-black text-amber-600 uppercase tracking-widest bg-amber-50 border border-amber-100 px-4 py-2 rounded-xl">
+                   <div className="text-[9px] font-black text-ink uppercase tracking-widest bg-page border border-highlight px-4 py-2">
                      Step 1 of 3 · Compute payroll to proceed
                    </div>
                  )}
                  {reviewRunData?.status === 'PENDING_APPROVAL' && paycodesDirty && (
-                   <div className="text-[9px] font-black text-amber-600 uppercase tracking-widest bg-amber-50 border border-amber-200 px-4 py-2 rounded-xl">
+                   <div className="text-[9px] font-black text-ink uppercase tracking-widest bg-page border border-highlight px-4 py-2">
                      ⚠ Paycodes changed · Recompute to apply
                    </div>
                  )}
                  {reviewRunData?.status === 'PENDING_APPROVAL' && !paycodesDirty && (
-                   <div className="text-[9px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 border border-indigo-100 px-4 py-2 rounded-xl">
+                   <div className="text-[9px] font-black text-accent uppercase tracking-widest bg-page border border-accent px-4 py-2">
                      Step 2 of 3 · Awaiting authorisation
                    </div>
                  )}
@@ -1473,7 +1493,7 @@ function AdminPayrollDashboard() {
                          ? `Recomputed. NOTE: ${notes.join('; ')}.`
                          : 'Recomputed with updated paycodes.');
                      } catch (e: any) { handleActionToast(e.message || 'Recompute failed'); }
-                   }} className="px-10 py-5 bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-amber-600 shadow-xl shadow-amber-500/20 active:scale-95 transition-all">
+                   }} className="px-10 py-5 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight active:scale-95 transition-all">
                      Recompute
                    </button>
                  )}
@@ -1507,7 +1527,7 @@ function AdminPayrollDashboard() {
                        }
                        loadRuns();
                      } catch (e: any) { handleActionToast(e.message || 'Action failed'); }
-                   }} className="px-12 py-5 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-indigo-700 shadow-2xl shadow-indigo-500/20 active:scale-95 transition-all">
+                   }} className="px-12 py-5 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent active:scale-95 transition-all">
                      {reviewRunData?.status === 'APPROVED' ? 'Finalise & Publish' : reviewRunData?.status === 'PENDING_APPROVAL' ? 'Authorize Disbursement' : 'Compute Payroll'}
                    </button>
                  )}
@@ -1519,29 +1539,29 @@ function AdminPayrollDashboard() {
 
       {/* Payslip overlay */}
       {payslipRunId && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/40 backdrop-blur-md p-8 animate-in fade-in duration-300">
-           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-100 animate-in slide-in-from-bottom-5">
-              <div className="p-10 border-b border-slate-100 flex justify-between items-center shrink-0">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-shadow backdrop- p-8 animate-in fade-in duration-300">
+           <div className="bg-paper w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden border border-rule animate-in slide-in-from-bottom-5">
+              <div className="p-10 border-b border-rule flex justify-between items-center shrink-0">
                  <div>
-                   <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase leading-none">Payslips</h3>
+                   <h3 className="text-2xl font-black text-ink tracking-tighter uppercase leading-none">Payslips</h3>
                    <p className="eyebrow-tight mt-3">{payslipRunPeriod ? fmtPeriod(payslipRunPeriod) : 'Loading…'} · {payslipRows.length} records</p>
                  </div>
-                 <button onClick={() => setPayslipRunId(null)} className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-red-500 transition-all font-black">&times;</button>
+                 <button onClick={() => setPayslipRunId(null)} className="w-10 h-10 flex items-center justify-center bg-paper border border-rule text-muted hover:text-ink transition-all font-black">&times;</button>
               </div>
               <div className="flex-1 overflow-y-auto">
                  {payslipLoading ? (
                    <div className="py-16 flex items-center justify-center gap-3">
-                     <div className="w-6 h-6 border-2 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin" />
+                     <div className="w-6 h-6 border-2 border-accent border-t-accent animate-spin" />
                      <span className="eyebrow-tight">Loading payslips…</span>
                    </div>
                  ) : payslipRows.length === 0 ? (
                    <div className="py-16 text-center">
-                     <p className="text-sm font-black text-slate-300 uppercase tracking-widest">No payslips for this run</p>
-                     <p className="text-[10px] font-bold text-slate-400 mt-2">Run must be finalised for payslips to be visible</p>
+                     <p className="text-sm font-black text-muted uppercase tracking-widest">No payslips for this run</p>
+                     <p className="text-[10px] font-bold text-muted mt-2">Run must be finalised for payslips to be visible</p>
                    </div>
                  ) : (
                  <table className="w-full text-left text-sm border-collapse">
-                    <thead className="bg-slate-50/50 eyebrow-tight sticky top-0 z-10 backdrop-blur-md">
+                    <thead className="bg-page eyebrow-tight sticky top-0 z-10 backdrop-">
                        <tr>
                          {([
                            { col: 'name',  label: 'Employee', cls: 'px-10 py-5',            align: 'start' },
@@ -1549,7 +1569,7 @@ function AdminPayrollDashboard() {
                            { col: 'net',   label: 'Net Pay',  cls: 'px-10 py-5 text-right', align: 'end' },
                          ] as const).map(h => (
                            <th key={h.col} className={h.cls}>
-                             <button onClick={() => togglePayslipSort(h.col)} className={`flex items-center hover:text-slate-600 transition-colors ${h.align === 'end' ? 'ml-auto justify-end' : ''}`}>
+                             <button onClick={() => togglePayslipSort(h.col)} className={`flex items-center hover:text-ink transition-colors ${h.align === 'end' ? 'ml-auto justify-end' : ''}`}>
                                {h.label}<PayslipSortIcon col={h.col} />
                              </button>
                            </th>
@@ -1557,19 +1577,19 @@ function AdminPayrollDashboard() {
                          <th className="px-10 py-5 text-center">PDF</th>
                        </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50">
+                    <tbody className="divide-y divide-rule">
                        {sortedPayslipRows.map((ps, i) => {
                          const name = empNameMap.get(ps.employeeId) ?? `Employee ${ps.employeeId.slice(0, 8)}`;
                          return (
-                           <tr key={i} className="hover:bg-slate-50 transition-all group">
-                              <td className="px-10 py-4 text-xs font-black text-slate-900 group-hover:text-indigo-600 uppercase tracking-tight">{name}</td>
-                              <td className="px-10 py-4 text-xs font-bold text-slate-500 text-right">SGD {fmtSGD(ps.grossPay)}</td>
-                              <td className="px-10 py-4 text-xs font-black text-indigo-600 text-right">SGD {fmtSGD(ps.netPay)}</td>
+                           <tr key={i} className="hover:bg-page transition-all group">
+                              <td className="px-10 py-4 text-xs font-black text-ink group-hover:text-accent uppercase tracking-tight">{name}</td>
+                              <td className="px-10 py-4 text-xs font-bold text-muted text-right">SGD {fmtSGD(ps.grossPay)}</td>
+                              <td className="px-10 py-4 text-xs font-black text-accent text-right">SGD {fmtSGD(ps.netPay)}</td>
                               <td className="px-10 py-4 text-center">
                                 <button
                                   onClick={() => downloadPayslipPdf(ps.employeeId, ps.period, name)}
                                   disabled={!ps.isPublished}
-                                  className="px-4 py-1.5 bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase rounded-lg hover:bg-indigo-600 hover:text-white transition-all disabled:opacity-40 disabled:pointer-events-none"
+                                  className="px-4 py-1.5 bg-page text-accent text-[9px] font-black uppercase hover:bg-accent hover:text-paper transition-all disabled:opacity-40 disabled:pointer-events-none"
                                 >
                                   {ps.isPublished ? 'Download' : 'Not published'}
                                 </button>
@@ -1581,7 +1601,7 @@ function AdminPayrollDashboard() {
                  </table>
                  )}
               </div>
-              <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center shrink-0">
+              <div className="p-8 bg-page border-t border-rule flex justify-between items-center shrink-0">
                  <p className="label-form">{payslipRows.filter(p => p.isPublished).length} published · {payslipRows.filter(p => !p.isPublished).length} pending</p>
                  <button
                    onClick={async () => {
@@ -1592,7 +1612,7 @@ function AdminPayrollDashboard() {
                      }
                    }}
                    disabled={payslipRows.filter(p => p.isPublished).length === 0}
-                   className="px-6 py-3 bg-slate-950 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-600 transition-all shadow-xl shadow-slate-950/10 disabled:opacity-40 disabled:pointer-events-none"
+                   className="px-6 py-3 bg-shadow text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent transition-all disabled:opacity-40 disabled:pointer-events-none"
                  >
                    Download All PDFs
                  </button>
@@ -1604,51 +1624,59 @@ function AdminPayrollDashboard() {
       {/* Success toasts */}
       {showSuccessToast && (
         <div className="fixed bottom-10 right-10 z-[200] max-w-md animate-in slide-in-from-right-10 duration-500">
-           <div className="bg-emerald-950 border border-emerald-500/30 p-6 rounded-[2rem] shadow-2xl flex items-center gap-6 overflow-hidden relative group">
-              <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
-              <div className="w-14 h-14 bg-emerald-500/20 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform duration-500">⚡</div>
+           <div className="bg-accent border border-accent p-6 flex items-center gap-6 overflow-hidden relative group">
+              <div className="absolute top-0 left-0 w-1 h-full bg-accent"></div>
+              <div className="w-14 h-14 bg-accent flex items-center justify-center text-2xl group-hover:scale-110 transition-transform duration-500">⚡</div>
               <div className="flex flex-col">
-                 <h4 className="text-sm font-black text-white uppercase tracking-widest">Pipeline Synchronized</h4>
-                 <p className="text-[10px] font-bold text-emerald-400/70 uppercase mt-1">Payroll run initiated for {fmtPeriod(selectedPeriod)}.</p>
+                 <h4 className="text-sm font-black text-paper uppercase tracking-widest">Pipeline Synchronized</h4>
+                 <p className="text-[10px] font-bold text-accent uppercase mt-1">Payroll run initiated for {fmtPeriod(selectedPeriod)}.</p>
               </div>
            </div>
         </div>
       )}
       {(actionToast || dlProgress) && (
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-10 duration-500">
-           <div className="bg-slate-900 border border-slate-800 px-8 py-5 rounded-[2rem] shadow-2xl flex items-center gap-6">
-              <div className={`w-2 h-2 rounded-full ${dlProgress ? 'bg-emerald-500 animate-pulse' : 'bg-indigo-500 animate-pulse'}`}></div>
-              <span className="text-[10px] font-black text-slate-100 uppercase tracking-[0.2em]">{dlProgress ?? actionToast}</span>
+           <div className="bg-shadow border border-shadow px-8 py-5 flex items-center gap-6">
+              {/* Only the in-progress state pulses; a finished toast holding a
+                  live animation reads as still working. */}
+              <div className={`w-2 h-2 bg-accent ${dlProgress ? 'animate-pulse' : ''}`}></div>
+              <span className="text-[10px] font-black text-paper uppercase tracking-[0.2em]">{dlProgress ?? actionToast}</span>
            </div>
         </div>
       )}
 
       {/* Employee detail drawer */}
       {selectedEmployee && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-500">
-          <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-500">
-            <div className="bg-slate-900 px-10 py-8 flex justify-between items-start text-white relative shrink-0">
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-shadow backdrop- animate-in fade-in duration-500">
+          <div className="bg-paper w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden border border-rule animate-in zoom-in-95 duration-500">
+            <div className="bg-shadow px-10 py-8 flex justify-between items-start text-paper relative shrink-0">
               <div className="flex flex-col gap-1 relative z-10">
                 <h3 className="text-3xl font-black tracking-tighter uppercase whitespace-nowrap">{selectedEmployee.name}</h3>
-                <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mt-2">{selectedEmployee.role} · {selectedEmployee.department}</p>
+                <p className="text-[10px] font-black text-accent uppercase tracking-[0.3em] mt-2">{selectedEmployee.role} · {selectedEmployee.department}</p>
               </div>
-              <button onClick={() => setSelectedEmployee(null)} className="w-10 h-10 flex items-center justify-center bg-slate-800 border border-slate-700 rounded-2xl text-slate-400 hover:text-white transition-all text-2xl font-black">&times;</button>
+              <button onClick={() => setSelectedEmployee(null)} className="w-10 h-10 flex items-center justify-center bg-shadow border border-shadow text-muted hover:text-paper transition-all text-2xl font-black">&times;</button>
             </div>
             <div className="p-10 space-y-6 flex-1 overflow-y-auto">
               <div className="space-y-3">
-                <div className="flex justify-between items-center bg-slate-50 px-6 py-4 rounded-2xl border border-slate-100"><span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Contractual Base</span><span className="text-sm font-black text-slate-900">${selectedEmployee.base.toFixed(2)}</span></div>
-                <div className="flex justify-between items-center bg-slate-50 px-6 py-4 rounded-2xl border border-slate-100"><span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Allowance</span><span className="text-sm font-black text-slate-900">${selectedEmployee.allowance.toFixed(2)}</span></div>
-                <div className="flex justify-between items-center pt-4 px-6"><span className="text-[11px] font-black text-slate-900 uppercase tracking-widest">Gross Pay</span><span className="text-2xl font-black text-slate-900 tracking-tighter">${selectedEmployee.gross.toFixed(2)}</span></div>
+                <div className="flex justify-between items-center bg-page px-6 py-4 border border-rule"><span className="text-[10px] font-black text-muted uppercase tracking-widest">Contractual Base</span><span className="text-sm font-black text-ink">${selectedEmployee.base.toFixed(2)}</span></div>
+                <div className="flex justify-between items-center bg-page px-6 py-4 border border-rule"><span className="text-[10px] font-black text-muted uppercase tracking-widest">Allowance</span><span className="text-sm font-black text-ink">${selectedEmployee.allowance.toFixed(2)}</span></div>
+                <div className="flex justify-between items-center pt-4 px-6"><span className="text-[11px] font-black text-ink uppercase tracking-widest">Gross Pay</span><span className="text-2xl font-black text-ink tracking-tighter">${selectedEmployee.gross.toFixed(2)}</span></div>
               </div>
-              <div className="space-y-3 bg-slate-50/50 p-6 rounded-[2rem] border border-slate-100">
-                <div className="flex justify-between items-center px-4"><span className="text-xs font-bold text-slate-600 uppercase">Employee CPF (20%)</span><span className="text-sm font-black text-red-600 italic">-${selectedEmployee.empCpf.toFixed(2)}</span></div>
-                <div className="flex justify-between items-center px-4"><span className="text-xs font-bold text-slate-400 uppercase">Employer CPF (17%)</span><span className="text-xs font-black text-slate-500">${selectedEmployee.emprCpf.toFixed(2)}</span></div>
-                <div className="flex justify-between items-center px-4"><span className="text-xs font-bold text-slate-400 uppercase">SDL</span><span className="text-xs font-black text-slate-500">${selectedEmployee.sdl.toFixed(2)}</span></div>
+              <div className="space-y-3 bg-page p-6 border border-rule">
+                {/* Statutory block — every figure below is set by statute, not
+                    by the employer, so each carries the rule that produced it. */}
+                <div className="flex items-center justify-between px-4 pb-2 border-b border-rule">
+                  <span className="text-[10px] font-black text-muted uppercase tracking-widest">Statutory</span>
+                  <Seal cite="CPF Act s.7 · Jan 2026 table" />
+                </div>
+                <div className="flex justify-between items-center px-4"><span className="text-xs font-bold text-ink uppercase">Employee CPF (20%)</span><span className="text-sm font-black text-ink italic">-${selectedEmployee.empCpf.toFixed(2)}</span></div>
+                <div className="flex justify-between items-center px-4"><span className="text-xs font-bold text-muted uppercase">Employer CPF (17%)</span><span className="text-xs font-black text-muted">${selectedEmployee.emprCpf.toFixed(2)}</span></div>
+                <div className="flex justify-between items-center px-4"><span className="text-xs font-bold text-muted uppercase">SDL</span><span className="flex items-center gap-2"><Seal cite="SDL Act · 0.25%, cap 4,500" /><span className="text-xs font-black text-muted tabular-nums">${selectedEmployee.sdl.toFixed(2)}</span></span></div>
               </div>
             </div>
-            <div className="bg-indigo-600 px-10 py-10 flex justify-between items-center shrink-0">
-              <span className="text-[10px] font-black text-indigo-100 uppercase tracking-[0.3em] italic">Net Liquidity Transfer</span>
-              <span className="text-5xl font-black text-white tracking-tighter italic">${selectedEmployee.net.toFixed(2)}</span>
+            <div className="bg-accent px-10 py-10 flex justify-between items-center shrink-0">
+              <span className="text-[10px] font-black text-paper uppercase tracking-[0.3em] italic">Net Pay</span>
+              <span className="text-5xl font-black text-paper tracking-tighter italic">${selectedEmployee.net.toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -1665,7 +1693,7 @@ export default function PayrollPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-10 h-10 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin" />
+        <div className="w-10 h-10 border-4 border-accent border-t-accent animate-spin" />
       </div>
     );
   }
