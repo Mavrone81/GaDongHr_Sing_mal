@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { TONES } from '@/lib/statusTone';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
@@ -44,25 +45,25 @@ const CATEGORY_LABELS: Record<ProgramCategory, string> = {
 };
 
 const CATEGORY_COLORS: Record<ProgramCategory, string> = {
-  COMPLIANCE: 'bg-red-50 text-red-700 border-red-200',
-  TECHNICAL:  'bg-indigo-50 text-indigo-700 border-indigo-200',
-  SOFT_SKILLS:'bg-pink-50 text-pink-700 border-pink-200',
-  LEADERSHIP: 'bg-purple-50 text-purple-700 border-purple-200',
-  ONBOARDING: 'bg-amber-50 text-amber-700 border-amber-200',
-  SAFETY:     'bg-emerald-50 text-emerald-700 border-emerald-200',
+  COMPLIANCE: 'bg-page text-ink border-ink',
+  TECHNICAL:  'bg-page text-accent border-accent',
+  SOFT_SKILLS:'bg-page text-ink border-ink',
+  LEADERSHIP: 'bg-page text-accent border-accent',
+  ONBOARDING: 'bg-page text-ink border-highlight',
+  SAFETY:     'bg-page text-accent border-accent',
 };
 
 const STATUS_COLORS: Record<ProgramStatus, string> = {
-  DRAFT:     'bg-slate-100 text-slate-500',
-  PUBLISHED: 'bg-emerald-50 text-emerald-700',
-  ARCHIVED:  'bg-slate-50 text-slate-400',
+  DRAFT: TONES.neutral,
+  PUBLISHED: TONES.done,
+  ARCHIVED: TONES.inert,
 };
 
 const ENR_COLORS: Record<EnrollmentStatus, string> = {
-  ENROLLED:    'bg-slate-100 text-slate-600',
-  IN_PROGRESS: 'bg-amber-50 text-amber-700',
-  COMPLETED:   'bg-emerald-50 text-emerald-700',
-  DROPPED:     'bg-red-50 text-red-600',
+  ENROLLED:    'bg-page text-ink',
+  IN_PROGRESS: 'bg-page text-ink',
+  COMPLETED:   'bg-page text-accent',
+  DROPPED:     'bg-page text-ink',
 };
 
 const MATERIAL_ICONS: Record<MaterialType, string> = {
@@ -80,10 +81,10 @@ function fmtDate(d?: string) {
   return new Date(d).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function ProgressBar({ pct, color = 'bg-amber-500' }: { pct: number; color?: string }) {
+function ProgressBar({ pct, color = 'bg-highlight' }: { pct: number; color?: string }) {
   return (
-    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-      <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+    <div className="w-full h-2 bg-page overflow-hidden">
+      <div className={`h-full ${color}  transition-all`} style={{ width: `${pct}%` }} />
     </div>
   );
 }
@@ -100,47 +101,47 @@ function ProgramCard({ prog, onEnroll, onStartCourse }: { prog: TrainingProgram;
   }
 
   return (
-    <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 p-6 flex flex-col gap-4 hover:shadow-2xl transition-all">
+    <div className="bg-paper border border-rule p-6 flex flex-col gap-4 hover: transition-all">
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-sm font-black text-slate-900 leading-tight">{prog.title}</h3>
-          {prog.description && <p className="text-[10px] text-slate-400 leading-relaxed line-clamp-2">{prog.description}</p>}
+          <h3 className="text-sm font-black text-ink leading-tight">{prog.title}</h3>
+          {prog.description && <p className="text-[10px] text-muted leading-relaxed line-clamp-2">{prog.description}</p>}
         </div>
         {prog.isMandatory && (
-          <span className="shrink-0 text-[8px] font-black px-2 py-0.5 bg-red-50 text-red-600 border border-red-200 rounded-full uppercase tracking-widest">Required</span>
+          <span className="shrink-0 text-[8px] font-black px-2 py-0.5 bg-page text-ink border border-ink uppercase tracking-widest">Required</span>
         )}
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${CATEGORY_COLORS[prog.category]}`}>
+        <span className={`text-[9px] font-black px-2 py-0.5  border ${CATEGORY_COLORS[prog.category]}`}>
           {CATEGORY_LABELS[prog.category]}
         </span>
         {prog.durationMins && (
-          <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-slate-50 text-slate-500 border border-slate-200">
+          <span className="text-[9px] font-black px-2 py-0.5 bg-page text-muted border border-rule">
             {fmtDuration(prog.durationMins)}
           </span>
         )}
         {prog.passingScore && (
-          <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-slate-50 text-slate-500 border border-slate-200">
+          <span className="text-[9px] font-black px-2 py-0.5 bg-page text-muted border border-rule">
             Pass: {prog.passingScore}%
           </span>
         )}
       </div>
 
-      <div className="text-[9px] text-slate-400 uppercase tracking-widest font-black">
+      <div className="text-[9px] text-muted uppercase tracking-widest font-black">
         {prog._count?.materials ?? 0} materials · {prog._count?.enrollments ?? 0} enrolled
       </div>
 
       {enrolled ? (
         <div className="flex flex-col gap-2 mt-auto">
           <div className="flex justify-between items-center">
-            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${ENR_COLORS[enrolled.status]}`}>{enrolled.status.replace('_', ' ')}</span>
-            <span className="text-[9px] font-black text-slate-400">{enrolled.progress}%</span>
+            <span className={`text-[9px] font-black px-2 py-0.5  ${ENR_COLORS[enrolled.status]}`}>{enrolled.status.replace('_', ' ')}</span>
+            <span className="text-[9px] font-black text-muted">{enrolled.progress}%</span>
           </div>
-          <ProgressBar pct={enrolled.progress} color={enrolled.status === 'COMPLETED' ? 'bg-emerald-500' : 'bg-amber-500'} />
+          <ProgressBar pct={enrolled.progress} color={enrolled.status === 'COMPLETED' ? 'bg-accent' : 'bg-highlight'} />
           <button
             onClick={onStartCourse}
-            className="mt-1 w-full py-3 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all active:scale-95"
+            className="mt-1 w-full py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all active:scale-95"
           >
             {enrolled.status === 'COMPLETED' ? '✓ Review Course' : enrolled.status === 'IN_PROGRESS' ? '▶ Continue' : '▶ Start Course'}
           </button>
@@ -149,7 +150,7 @@ function ProgramCard({ prog, onEnroll, onStartCourse }: { prog: TrainingProgram;
         <button
           onClick={handleEnroll}
           disabled={enrolling}
-          className="mt-auto w-full py-3 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all active:scale-95 disabled:opacity-50"
+          className="mt-auto w-full py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all active:scale-95 disabled:opacity-50"
         >
           {enrolling ? 'Enrolling…' : 'Enroll Now'}
         </button>
@@ -160,44 +161,44 @@ function ProgramCard({ prog, onEnroll, onStartCourse }: { prog: TrainingProgram;
 
 // ── Admin: Stats Tab ──────────────────────────────────────────────────────────
 function StatsTab({ stats }: { stats: Stats | null }) {
-  if (!stats) return <p className="text-sm text-slate-400 p-8">Loading stats…</p>;
+  if (!stats) return <p className="text-sm text-muted p-8">Loading stats…</p>;
 
   const kpis = [
-    { label: 'Total Programs', value: stats.totalPrograms, color: 'text-slate-900' },
-    { label: 'Published', value: stats.published, color: 'text-emerald-600' },
-    { label: 'Mandatory', value: stats.mandatory, color: 'text-red-600' },
-    { label: 'Total Enrollments', value: stats.totalEnrollments, color: 'text-amber-600' },
-    { label: 'Completed', value: stats.completed, color: 'text-emerald-600' },
-    { label: 'In Progress', value: stats.inProgress, color: 'text-indigo-600' },
-    { label: 'Completion Rate', value: `${stats.completionRate}%`, color: stats.completionRate >= 70 ? 'text-emerald-600' : 'text-amber-600' },
+    { label: 'Total Programs', value: stats.totalPrograms, color: 'text-ink' },
+    { label: 'Published', value: stats.published, color: 'text-accent' },
+    { label: 'Mandatory', value: stats.mandatory, color: 'text-ink' },
+    { label: 'Total Enrollments', value: stats.totalEnrollments, color: 'text-ink' },
+    { label: 'Completed', value: stats.completed, color: 'text-accent' },
+    { label: 'In Progress', value: stats.inProgress, color: 'text-accent' },
+    { label: 'Completion Rate', value: `${stats.completionRate}%`, color: stats.completionRate >= 70 ? 'text-accent' : 'text-ink' },
   ];
 
   return (
     <div className="flex flex-col gap-8">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map(k => (
-          <div key={k.label} className="bg-white rounded-2xl border border-slate-100 p-6 shadow-lg shadow-indigo-500/5">
+          <div key={k.label} className="bg-paper border border-rule p-6 ">
             <p className="label-form mb-3">{k.label}</p>
             <p className={`text-3xl font-black tracking-tighter ${k.color}`}>{k.value}</p>
           </div>
         ))}
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-lg shadow-indigo-500/5">
+      <div className="bg-paper border border-rule p-6 ">
         <p className="eyebrow-tight mb-5">Programs by Category</p>
         <div className="flex flex-col gap-4">
           {stats.byCategory.map(b => (
             <div key={b.category} className="flex items-center gap-4">
-              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border w-28 text-center ${CATEGORY_COLORS[b.category as ProgramCategory]}`}>
+              <span className={`text-[9px] font-black px-2 py-0.5  border w-28 text-center ${CATEGORY_COLORS[b.category as ProgramCategory]}`}>
                 {CATEGORY_LABELS[b.category as ProgramCategory]}
               </span>
-              <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
+              <div className="flex-1 h-3 bg-page overflow-hidden">
                 <div
-                  className="h-full bg-amber-500 rounded-full"
+                  className="h-full bg-highlight "
                   style={{ width: `${Math.min(100, (b._count.id / stats.totalPrograms) * 100)}%` }}
                 />
               </div>
-              <span className="text-[10px] font-black text-slate-500 w-8 text-right">{b._count.id}</span>
+              <span className="text-[10px] font-black text-muted w-8 text-right">{b._count.id}</span>
             </div>
           ))}
         </div>
@@ -314,46 +315,46 @@ function MaterialsModal({ program, onClose }: { program: TrainingProgram; onClos
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-[2rem] w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
-        <div className="p-8 border-b border-slate-100 flex justify-between items-start">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
+      <div className="bg-paper w-full max-w-2xl max-h-[90vh] overflow-y-auto ">
+        <div className="p-8 border-b border-rule flex justify-between items-start">
           <div>
-            <h2 className="text-lg font-black text-slate-900">Lessons</h2>
-            <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-1 font-black">{program.title}</p>
+            <h2 className="text-lg font-black text-ink">Lessons</h2>
+            <p className="text-[10px] text-muted uppercase tracking-widest mt-1 font-black">{program.title}</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900 text-xl font-black">✕</button>
+          <button onClick={onClose} className="text-muted hover:text-ink text-xl font-black">✕</button>
         </div>
 
         <div className="p-8 flex flex-col gap-6">
           {/* Existing lessons list */}
-          {loading ? <p className="text-sm text-slate-400">Loading…</p> : (
+          {loading ? <p className="text-sm text-muted">Loading…</p> : (
             <div className="flex flex-col gap-3">
-              {materials.length === 0 && <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black">No lessons yet. Add the first one below.</p>}
+              {materials.length === 0 && <p className="text-[10px] text-muted uppercase tracking-widest font-black">No lessons yet. Add the first one below.</p>}
               {materials.map((m, i) => (
-                <div key={m.id} className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <div key={m.id} className="flex items-center gap-4 p-4 bg-page border border-rule">
                   <span className="text-base">{MATERIAL_ICONS[m.type]}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-black text-slate-900">{m.title}</p>
-                    <p className="text-[9px] font-black text-slate-400 uppercase">{m.type}{m.durationMins ? ` · ${fmtDuration(m.durationMins)}` : ''}</p>
-                    {m.url && <a href={m.url} target="_blank" rel="noopener noreferrer" className="text-[9px] text-indigo-500 hover:underline truncate block">{m.url}</a>}
+                    <p className="text-xs font-black text-ink">{m.title}</p>
+                    <p className="text-[9px] font-black text-muted uppercase">{m.type}{m.durationMins ? ` · ${fmtDuration(m.durationMins)}` : ''}</p>
+                    {m.url && <a href={m.url} target="_blank" rel="noopener noreferrer" className="text-[9px] text-accent hover:underline truncate block">{m.url}</a>}
                     {m.type === 'QUIZ' && m.content && (() => {
-                      try { const qs = JSON.parse(m.content); return <p className="text-[9px] text-slate-400 font-black">{Array.isArray(qs) ? qs.length : 0} question{qs.length !== 1 ? 's' : ''}</p>; } catch { return null; }
+                      try { const qs = JSON.parse(m.content); return <p className="text-[9px] text-muted font-black">{Array.isArray(qs) ? qs.length : 0} question{qs.length !== 1 ? 's' : ''}</p>; } catch { return null; }
                     })()}
-                    {m.type !== 'QUIZ' && m.content && <p className="text-[9px] text-slate-400 truncate">{m.content.slice(0, 60)}{m.content.length > 60 ? '…' : ''}</p>}
+                    {m.type !== 'QUIZ' && m.content && <p className="text-[9px] text-muted truncate">{m.content.slice(0, 60)}{m.content.length > 60 ? '…' : ''}</p>}
                   </div>
-                  <span className="text-[9px] font-black text-slate-400 shrink-0">#{i + 1}</span>
-                  <button onClick={() => deleteMaterial(m.id)} className="text-red-400 hover:text-red-600 text-[10px] font-black shrink-0">Remove</button>
+                  <span className="text-[9px] font-black text-muted shrink-0">#{i + 1}</span>
+                  <button onClick={() => deleteMaterial(m.id)} className="text-ink hover:text-ink text-[10px] font-black shrink-0">Remove</button>
                 </div>
               ))}
             </div>
           )}
 
           {/* Add lesson form */}
-          <div className="border-t border-slate-100 pt-6 flex flex-col gap-4">
-            <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">+ Add Lesson</p>
+          <div className="border-t border-rule pt-6 flex flex-col gap-4">
+            <p className="text-[10px] font-black text-ink uppercase tracking-widest">+ Add Lesson</p>
 
             <input
-              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-xs font-black text-slate-700 focus:outline-none focus:border-amber-400"
+              className="w-full border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight"
               placeholder="Lesson title *"
               value={form.title}
               onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
@@ -361,7 +362,7 @@ function MaterialsModal({ program, onClose }: { program: TrainingProgram; onClos
 
             <div className="grid grid-cols-2 gap-3">
               <select
-                className="border border-slate-200 rounded-xl px-4 py-3 text-xs font-black text-slate-700 focus:outline-none focus:border-amber-400"
+                className="border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight"
                 value={form.type}
                 onChange={e => changeType(e.target.value as MaterialType)}
               >
@@ -371,7 +372,7 @@ function MaterialsModal({ program, onClose }: { program: TrainingProgram; onClos
                 <option value="LINK">🔗 Link</option>
               </select>
               <input
-                className="border border-slate-200 rounded-xl px-4 py-3 text-xs font-black text-slate-700 focus:outline-none focus:border-amber-400"
+                className="border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight"
                 placeholder="Duration (mins)"
                 type="number" min={1}
                 value={form.durationMins}
@@ -382,7 +383,7 @@ function MaterialsModal({ program, onClose }: { program: TrainingProgram; onClos
             {/* URL — VIDEO / LINK / DOCUMENT */}
             {(form.type === 'VIDEO' || form.type === 'LINK' || form.type === 'DOCUMENT') && (
               <input
-                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-xs font-black text-slate-700 focus:outline-none focus:border-amber-400"
+                className="w-full border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight"
                 placeholder={form.type === 'VIDEO' ? 'YouTube or Vimeo URL' : form.type === 'LINK' ? 'External URL' : 'Document URL (optional)'}
                 value={form.url}
                 onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
@@ -392,7 +393,7 @@ function MaterialsModal({ program, onClose }: { program: TrainingProgram; onClos
             {/* Text content — DOCUMENT / VIDEO / LINK */}
             {form.type !== 'QUIZ' && (
               <textarea
-                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-xs font-black text-slate-700 focus:outline-none focus:border-amber-400 resize-none"
+                className="w-full border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight resize-none"
                 placeholder={form.type === 'DOCUMENT' ? 'Reading material / lesson content…' : 'Description or notes (optional)…'}
                 rows={4}
                 value={form.content}
@@ -404,16 +405,16 @@ function MaterialsModal({ program, onClose }: { program: TrainingProgram; onClos
             {form.type === 'QUIZ' && (
               <div className="flex flex-col gap-5">
                 {quizQuestions.map((q, qi) => (
-                  <div key={q.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col gap-4">
+                  <div key={q.id} className="bg-page border border-rule p-5 flex flex-col gap-4">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Question {qi + 1}</span>
+                      <span className="text-[10px] font-black text-ink uppercase tracking-widest">Question {qi + 1}</span>
                       {quizQuestions.length > 1 && (
-                        <button onClick={() => removeQuestion(qi)} className="text-[9px] font-black text-red-400 hover:text-red-600 uppercase tracking-widest">Remove</button>
+                        <button onClick={() => removeQuestion(qi)} className="text-[9px] font-black text-ink hover:text-ink uppercase tracking-widest">Remove</button>
                       )}
                     </div>
 
                     <input
-                      className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-700 focus:outline-none focus:border-amber-400 bg-white"
+                      className="w-full border border-rule px-4 py-3 text-sm text-ink focus:outline-none focus:border-highlight bg-paper"
                       placeholder={`Type question ${qi + 1} here…`}
                       value={q.text}
                       onChange={e => setQuestion(qi, e.target.value)}
@@ -426,24 +427,24 @@ function MaterialsModal({ program, onClose }: { program: TrainingProgram; onClos
                           <button
                             type="button"
                             onClick={() => setCorrect(qi, oi)}
-                            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${q.correct === oi ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300 hover:border-amber-400'}`}
+                            className={`w-6 h-6  border-2 flex items-center justify-center shrink-0 transition-all ${q.correct === oi ? 'border-accent bg-accent' : 'border-rule hover:border-highlight'}`}
                             title="Mark as correct answer"
                           >
-                            {q.correct === oi && <span className="text-white text-xs font-black">✓</span>}
+                            {q.correct === oi && <span className="text-paper text-xs font-black">✓</span>}
                           </button>
                           <input
-                            className="flex-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:border-amber-400 bg-white"
+                            className="flex-1 border border-rule px-4 py-2.5 text-sm text-ink focus:outline-none focus:border-highlight bg-paper"
                             placeholder={`Option ${oi + 1}`}
                             value={opt}
                             onChange={e => setOption(qi, oi, e.target.value)}
                           />
                           {q.options.length > 2 && (
-                            <button onClick={() => removeOption(qi, oi)} className="text-slate-300 hover:text-red-400 font-black text-sm shrink-0 transition-colors">✕</button>
+                            <button onClick={() => removeOption(qi, oi)} className="text-muted hover:text-ink font-black text-sm shrink-0 transition-colors">✕</button>
                           )}
                         </div>
                       ))}
                       {q.correct < q.options.length && (
-                        <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">
+                        <p className="text-[9px] font-black text-accent uppercase tracking-widest">
                           Correct answer: Option {q.correct + 1}{q.options[q.correct] ? ` — "${q.options[q.correct]}"` : ''}
                         </p>
                       )}
@@ -453,7 +454,7 @@ function MaterialsModal({ program, onClose }: { program: TrainingProgram; onClos
                       <button
                         type="button"
                         onClick={() => addOption(qi)}
-                        className="self-start label-form hover:text-amber-600 transition-colors"
+                        className="self-start label-form hover:text-ink transition-colors"
                       >
                         + Add option
                       </button>
@@ -464,7 +465,7 @@ function MaterialsModal({ program, onClose }: { program: TrainingProgram; onClos
                 <button
                   type="button"
                   onClick={addQuestion}
-                  className="self-start px-5 py-2.5 border-2 border-dashed border-amber-300 text-amber-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-50 transition-all"
+                  className="self-start px-5 py-2.5 border-2 border-dashed border-highlight text-ink text-[10px] font-black uppercase tracking-widest hover:bg-page transition-all"
                 >
                   + Add Another Question
                 </button>
@@ -472,13 +473,13 @@ function MaterialsModal({ program, onClose }: { program: TrainingProgram; onClos
             )}
 
             {formError && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-[10px] font-black text-red-700">{formError}</div>
+              <div className="bg-page border border-ink p-3 text-[10px] font-black text-ink">{formError}</div>
             )}
 
             <button
               onClick={addMaterial}
               disabled={saving || !form.title.trim()}
-              className="w-full py-3 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all disabled:opacity-50 active:scale-95"
+              className="w-full py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all disabled:opacity-50 active:scale-95"
             >
               {saving ? 'Saving…' : '+ Add Lesson'}
             </button>
@@ -531,18 +532,18 @@ function EnrollModal({ program, onClose, onDone }: { program: TrainingProgram; o
   const allFilteredSelected = filtered.length > 0 && filtered.every(e => selectedIds.has(e.id));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-[2rem] w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh]">
-        <div className="p-8 border-b border-slate-100 flex justify-between items-start shrink-0">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
+      <div className="bg-paper w-full max-w-lg flex flex-col max-h-[85vh]">
+        <div className="p-8 border-b border-rule flex justify-between items-start shrink-0">
           <div>
-            <h2 className="text-lg font-black text-slate-900">Enroll Employees</h2>
-            <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-1 font-black">{program.title}</p>
+            <h2 className="text-lg font-black text-ink">Enroll Employees</h2>
+            <p className="text-[10px] text-muted uppercase tracking-widest mt-1 font-black">{program.title}</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900 text-xl font-black">✕</button>
+          <button onClick={onClose} className="text-muted hover:text-ink text-xl font-black">✕</button>
         </div>
         <div className="p-6 flex flex-col gap-4 min-h-0 flex-1">
           {result ? (
-            <div className="p-4 bg-emerald-50 text-emerald-700 text-xs font-black rounded-xl border border-emerald-200">{result}</div>
+            <div className="p-4 bg-page text-accent text-xs font-black border border-accent">{result}</div>
           ) : (
             <>
               {/* Search */}
@@ -550,7 +551,7 @@ function EnrollModal({ program, onClose, onDone }: { program: TrainingProgram; o
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search by name, code, or department…"
-                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-amber-400 shrink-0"
+                className="w-full border border-rule px-4 py-3 text-sm font-bold outline-none focus:border-highlight shrink-0"
               />
 
               {/* Select all / count */}
@@ -564,7 +565,7 @@ function EnrollModal({ program, onClose, onDone }: { program: TrainingProgram; o
                       setSelectedIds(prev => { const n = new Set(prev); filtered.forEach(e => n.add(e.id)); return n; });
                     }
                   }}
-                  className="text-[10px] font-black text-amber-600 uppercase tracking-widest hover:underline"
+                  className="text-[10px] font-black text-ink uppercase tracking-widest hover:underline"
                 >
                   {allFilteredSelected ? 'Deselect All' : 'Select All'}
                 </button>
@@ -572,26 +573,26 @@ function EnrollModal({ program, onClose, onDone }: { program: TrainingProgram; o
               </div>
 
               {/* Employee list */}
-              <div className="flex-1 overflow-y-auto border border-slate-100 rounded-2xl divide-y divide-slate-50 min-h-0">
+              <div className="flex-1 overflow-y-auto border border-rule divide-y divide-rule min-h-0">
                 {empLoading ? (
-                  <div className="p-8 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest animate-pulse">Loading employees…</div>
+                  <div className="p-8 text-center text-[10px] font-black text-muted uppercase tracking-widest animate-pulse">Loading employees…</div>
                 ) : filtered.length === 0 ? (
-                  <div className="p-8 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">No employees found</div>
+                  <div className="p-8 text-center text-[10px] font-black text-muted uppercase tracking-widest">No employees found</div>
                 ) : filtered.map(emp => {
                   const checked = selectedIds.has(emp.id);
                   return (
-                    <label key={emp.id} className={`flex items-center gap-4 px-5 py-3 cursor-pointer transition-colors ${checked ? 'bg-amber-50' : 'hover:bg-slate-50'}`}>
+                    <label key={emp.id} className={`flex items-center gap-4 px-5 py-3 cursor-pointer transition-colors ${checked ? 'bg-page' : 'hover:bg-page'}`}>
                       <input
                         type="checkbox"
                         checked={checked}
                         onChange={() => setSelectedIds(prev => { const n = new Set(prev); checked ? n.delete(emp.id) : n.add(emp.id); return n; })}
-                        className="w-4 h-4 rounded accent-amber-500"
+                        className="w-4 h-4 accent-highlight"
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-black text-slate-900 truncate">{emp.fullName}</p>
+                        <p className="text-sm font-black text-ink truncate">{emp.fullName}</p>
                         <p className="label-form">{emp.employeeCode}{emp.department ? ` · ${emp.department}` : ''}</p>
                       </div>
-                      {emp.designation && <span className="text-[9px] font-bold text-slate-400 truncate max-w-28">{emp.designation}</span>}
+                      {emp.designation && <span className="text-[9px] font-bold text-muted truncate max-w-28">{emp.designation}</span>}
                     </label>
                   );
                 })}
@@ -602,7 +603,7 @@ function EnrollModal({ program, onClose, onDone }: { program: TrainingProgram; o
                 <label className="eyebrow-tight block mb-2">Due Date (optional)</label>
                 <input
                   type="date"
-                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-xs font-black text-slate-700 focus:outline-none focus:border-amber-400"
+                  className="w-full border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight"
                   value={dueDate}
                   onChange={e => setDueDate(e.target.value)}
                 />
@@ -611,13 +612,13 @@ function EnrollModal({ program, onClose, onDone }: { program: TrainingProgram; o
               <button
                 onClick={submit}
                 disabled={saving || selectedIds.size === 0}
-                className="w-full py-3 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all disabled:opacity-50 shrink-0"
+                className="w-full py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all disabled:opacity-50 shrink-0"
               >
                 {saving ? 'Enrolling…' : `Enroll${selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}`}
               </button>
             </>
           )}
-          <button onClick={onClose} className="w-full py-3 border border-slate-200 text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-50 shrink-0">
+          <button onClick={onClose} className="w-full py-3 border border-rule text-muted text-[10px] font-black uppercase tracking-widest hover:bg-page shrink-0">
             {result ? 'Close' : 'Cancel'}
           </button>
         </div>
@@ -715,7 +716,7 @@ function AdminProgramsTab({ onRefreshStats }: { onRefreshStats: () => void }) {
             <button
               key={s}
               onClick={() => setFilter(s)}
-              className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${filter === s ? 'bg-amber-500 text-white' : 'bg-white text-slate-500 border border-slate-200 hover:border-amber-300'}`}
+              className={`px-4 py-2  text-[9px] font-black uppercase tracking-widest transition-all ${filter === s ? 'bg-highlight text-paper' : 'bg-paper text-muted border border-rule hover:border-highlight'}`}
             >
               {s || 'All'}
             </button>
@@ -723,30 +724,30 @@ function AdminProgramsTab({ onRefreshStats }: { onRefreshStats: () => void }) {
         </div>
         <button
           onClick={() => setShowCreate(v => !v)}
-          className="px-6 py-3 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all active:scale-95"
+          className="px-6 py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all active:scale-95"
         >
           {showCreate ? '✕ Cancel' : '+ New Program'}
         </button>
       </div>
 
       {showCreate && (
-        <div className="bg-amber-50 rounded-2xl border border-amber-200 p-6 flex flex-col gap-4">
-          <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest">Create Training Program</p>
+        <div className="bg-page border border-highlight p-6 flex flex-col gap-4">
+          <p className="text-[10px] font-black text-ink uppercase tracking-widest">Create Training Program</p>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <input
-              className="border border-slate-200 rounded-xl px-4 py-3 text-xs font-black text-slate-700 focus:outline-none focus:border-amber-400 col-span-2"
+              className="border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight col-span-2"
               placeholder="Program Title *"
               value={form.title}
               onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
             />
             <textarea
-              className="border border-slate-200 rounded-xl px-4 py-3 text-xs font-black text-slate-700 focus:outline-none focus:border-amber-400 col-span-2 resize-none h-20"
+              className="border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight col-span-2 resize-none h-20"
               placeholder="Description"
               value={form.description}
               onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
             />
             <select
-              className="border border-slate-200 rounded-xl px-4 py-3 text-xs font-black text-slate-700 focus:outline-none focus:border-amber-400"
+              className="border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight"
               value={form.category}
               onChange={e => setForm(f => ({ ...f, category: e.target.value as ProgramCategory }))}
             >
@@ -755,14 +756,14 @@ function AdminProgramsTab({ onRefreshStats }: { onRefreshStats: () => void }) {
               ))}
             </select>
             <input
-              className="border border-slate-200 rounded-xl px-4 py-3 text-xs font-black text-slate-700 focus:outline-none focus:border-amber-400"
+              className="border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight"
               placeholder="Duration (mins)"
               type="number"
               value={form.durationMins}
               onChange={e => setForm(f => ({ ...f, durationMins: e.target.value }))}
             />
             <input
-              className="border border-slate-200 rounded-xl px-4 py-3 text-xs font-black text-slate-700 focus:outline-none focus:border-amber-400"
+              className="border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight"
               placeholder="Passing Score % (optional)"
               type="number"
               min={0} max={100}
@@ -774,15 +775,15 @@ function AdminProgramsTab({ onRefreshStats }: { onRefreshStats: () => void }) {
                 type="checkbox"
                 checked={form.isMandatory}
                 onChange={e => setForm(f => ({ ...f, isMandatory: e.target.checked }))}
-                className="w-4 h-4 accent-amber-500"
+                className="w-4 h-4 accent-highlight"
               />
-              <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Mandatory for all employees</span>
+              <span className="text-[10px] font-black text-ink uppercase tracking-widest">Mandatory for all employees</span>
             </label>
           </div>
           <button
             onClick={createProgram}
             disabled={saving || !form.title}
-            className="self-start px-8 py-3 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all disabled:opacity-50"
+            className="self-start px-8 py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all disabled:opacity-50"
           >
             {saving ? 'Creating…' : 'Create Program'}
           </button>
@@ -790,20 +791,20 @@ function AdminProgramsTab({ onRefreshStats }: { onRefreshStats: () => void }) {
       )}
 
       {error && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex items-center justify-between gap-4">
-          <p className="text-sm font-black text-amber-700">{error}</p>
-          <button onClick={load} className="px-5 py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 shrink-0">Retry</button>
+        <div className="bg-page border border-highlight p-6 flex items-center justify-between gap-4">
+          <p className="text-sm font-black text-ink">{error}</p>
+          <button onClick={load} className="px-5 py-2 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight shrink-0">Retry</button>
         </div>
       )}
 
       {loading ? (
-        <p className="text-sm text-slate-400 p-4">Loading programs…</p>
+        <p className="text-sm text-muted p-4">Loading programs…</p>
       ) : filteredPrograms.length === 0 ? (
-        <p className="text-sm text-slate-400 p-4 text-center">No programs found.</p>
+        <p className="text-sm text-muted p-4 text-center">No programs found.</p>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-lg overflow-hidden">
+        <div className="bg-paper border border-rule overflow-hidden">
           <table className="w-full text-left border-collapse">
-            <thead className="label-form border-b border-slate-50">
+            <thead className="label-form border-b border-rule">
               <tr>
                 {([
                   { col: 'title',    label: 'Program',   cls: 'px-6 py-5' },
@@ -815,7 +816,7 @@ function AdminProgramsTab({ onRefreshStats }: { onRefreshStats: () => void }) {
                 ] as const).map(h => (
                   <th key={h.label} className={h.cls}>
                     {h.col ? (
-                      <button onClick={() => toggleProgSort(h.col!)} className="flex items-center hover:text-slate-600 transition-colors">
+                      <button onClick={() => toggleProgSort(h.col!)} className="flex items-center hover:text-ink transition-colors">
                         {h.label}<ProgSortIcon col={h.col} />
                       </button>
                     ) : h.label}
@@ -823,51 +824,51 @@ function AdminProgramsTab({ onRefreshStats }: { onRefreshStats: () => void }) {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-rule">
               {sortedPrograms.map(p => (
-                <tr key={p.id} className="hover:bg-slate-50/50 transition-all group">
+                <tr key={p.id} className="hover:bg-page transition-all group">
                   <td className="px-6 py-4">
                     <div className="flex flex-col gap-1">
-                      <span className="text-xs font-black text-slate-900 group-hover:text-amber-600 transition-colors">{p.title}</span>
+                      <span className="text-xs font-black text-ink group-hover:text-ink transition-colors">{p.title}</span>
                       <div className="flex items-center gap-2">
-                        {p.isMandatory && <span className="text-[8px] font-black px-1.5 py-0.5 bg-red-50 text-red-600 border border-red-200 rounded-full uppercase">Required</span>}
-                        {p.durationMins && <span className="text-[9px] text-slate-400 font-black">{fmtDuration(p.durationMins)}</span>}
+                        {p.isMandatory && <span className="text-[8px] font-black px-1.5 py-0.5 bg-page text-ink border border-ink uppercase">Required</span>}
+                        {p.durationMins && <span className="text-[9px] text-muted font-black">{fmtDuration(p.durationMins)}</span>}
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${CATEGORY_COLORS[p.category]}`}>
+                    <span className={`text-[9px] font-black px-2 py-0.5  border ${CATEGORY_COLORS[p.category]}`}>
                       {CATEGORY_LABELS[p.category]}
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${STATUS_COLORS[p.status]}`}>{p.status}</span>
+                    <span className={`text-[9px] font-black px-2 py-0.5  ${STATUS_COLORS[p.status]}`}>{p.status}</span>
                   </td>
                   <td className="px-6 py-4">
                     <button
                       onClick={() => setMaterialsFor(p)}
-                      className="text-[10px] font-black text-indigo-600 hover:underline"
+                      className="text-[10px] font-black text-accent hover:underline"
                     >
                       {p._count?.materials ?? 0} lessons
                     </button>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-[10px] font-black text-slate-500">{p._count?.enrollments ?? 0}</span>
+                    <span className="text-[10px] font-black text-muted">{p._count?.enrollments ?? 0}</span>
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-2 flex-wrap">
-                      <button onClick={() => setMaterialsFor(p)} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-[9px] font-black uppercase hover:bg-indigo-100 transition-all">📚 Lessons</button>
+                      <button onClick={() => setMaterialsFor(p)} className="px-3 py-1.5 bg-page text-accent border border-accent text-[9px] font-black uppercase hover:bg-page transition-all">📚 Lessons</button>
                       {p.status === 'DRAFT' && (
-                        <button onClick={() => updateStatus(p.id, 'PUBLISHED')} className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[9px] font-black uppercase hover:bg-emerald-100 transition-all">Publish</button>
+                        <button onClick={() => updateStatus(p.id, 'PUBLISHED')} className="px-3 py-1.5 bg-page text-accent border border-accent text-[9px] font-black uppercase hover:bg-page transition-all">Publish</button>
                       )}
                       {p.status === 'PUBLISHED' && (
                         <>
-                          <button onClick={() => setEnrollFor(p)} className="px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-[9px] font-black uppercase hover:bg-amber-100 transition-all">Enroll</button>
-                          <button onClick={() => updateStatus(p.id, 'DRAFT')} className="px-3 py-1.5 bg-slate-50 text-slate-600 border border-slate-200 rounded-lg text-[9px] font-black uppercase hover:bg-slate-100 transition-all">Unpublish</button>
+                          <button onClick={() => setEnrollFor(p)} className="px-3 py-1.5 bg-page text-ink border border-highlight text-[9px] font-black uppercase hover:bg-page transition-all">Enroll</button>
+                          <button onClick={() => updateStatus(p.id, 'DRAFT')} className="px-3 py-1.5 bg-page text-ink border border-rule text-[9px] font-black uppercase hover:bg-page transition-all">Unpublish</button>
                         </>
                       )}
                       {p.status !== 'ARCHIVED' && (
-                        <button onClick={() => archiveProgram(p.id)} className="px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-lg text-[9px] font-black uppercase hover:bg-red-100 transition-all">Archive</button>
+                        <button onClick={() => archiveProgram(p.id)} className="px-3 py-1.5 bg-page text-ink border border-ink text-[9px] font-black uppercase hover:bg-page transition-all">Archive</button>
                       )}
                     </div>
                   </td>
@@ -925,7 +926,7 @@ function AdminEnrollmentsTab() {
           <button
             key={s}
             onClick={() => setFilter(s)}
-            className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${filter === s ? 'bg-amber-500 text-white' : 'bg-white text-slate-500 border border-slate-200 hover:border-amber-300'}`}
+            className={`px-4 py-2  text-[9px] font-black uppercase tracking-widest transition-all ${filter === s ? 'bg-highlight text-paper' : 'bg-paper text-muted border border-rule hover:border-highlight'}`}
           >
             {s || 'All'}
           </button>
@@ -933,19 +934,19 @@ function AdminEnrollmentsTab() {
       </div>
 
       {error && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex items-center justify-between gap-4">
-          <p className="text-sm font-black text-amber-700">{error}</p>
+        <div className="bg-page border border-highlight p-6 flex items-center justify-between gap-4">
+          <p className="text-sm font-black text-ink">{error}</p>
         </div>
       )}
 
       {loading ? (
-        <p className="text-sm text-slate-400 p-4">Loading enrollments…</p>
+        <p className="text-sm text-muted p-4">Loading enrollments…</p>
       ) : enrollments.length === 0 ? (
-        <p className="text-sm text-slate-400 p-4 text-center">No enrollments found.</p>
+        <p className="text-sm text-muted p-4 text-center">No enrollments found.</p>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-lg overflow-hidden">
+        <div className="bg-paper border border-rule overflow-hidden">
           <table className="w-full text-left border-collapse">
-            <thead className="label-form border-b border-slate-50">
+            <thead className="label-form border-b border-rule">
               <tr>
                 {([
                   { col: 'employee', label: 'Employee ID', cls: 'px-6 py-5' },
@@ -957,39 +958,39 @@ function AdminEnrollmentsTab() {
                   { col: 'due',      label: 'Due',         cls: 'px-6 py-5' },
                 ] as const).map(h => (
                   <th key={h.label} className={h.cls}>
-                    <button onClick={() => toggleEnrSort(h.col)} className="flex items-center hover:text-slate-600 transition-colors">
+                    <button onClick={() => toggleEnrSort(h.col)} className="flex items-center hover:text-ink transition-colors">
                       {h.label}<EnrSortIcon col={h.col} />
                     </button>
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-rule">
               {sortedEnrollments.map(e => (
-                <tr key={e.id} className="hover:bg-slate-50/50">
+                <tr key={e.id} className="hover:bg-page">
                   <td className="px-6 py-4">
-                    <span className="text-[10px] font-black text-slate-500 font-mono">{e.employeeId.slice(0, 8)}…</span>
+                    <span className="text-[10px] font-black text-muted font-mono">{e.employeeId.slice(0, 8)}…</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-xs font-black text-slate-800">{e.program?.title ?? '—'}</span>
+                    <span className="text-xs font-black text-ink">{e.program?.title ?? '—'}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${ENR_COLORS[e.status]}`}>{e.status.replace('_', ' ')}</span>
+                    <span className={`text-[9px] font-black px-2 py-0.5  ${ENR_COLORS[e.status]}`}>{e.status.replace('_', ' ')}</span>
                   </td>
                   <td className="px-6 py-4 w-32">
                     <div className="flex items-center gap-2">
-                      <ProgressBar pct={e.progress} color={e.status === 'COMPLETED' ? 'bg-emerald-500' : 'bg-amber-500'} />
-                      <span className="text-[9px] font-black text-slate-400 shrink-0">{e.progress}%</span>
+                      <ProgressBar pct={e.progress} color={e.status === 'COMPLETED' ? 'bg-accent' : 'bg-highlight'} />
+                      <span className="text-[9px] font-black text-muted shrink-0">{e.progress}%</span>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-[10px] font-black text-slate-500">{e.score !== null && e.score !== undefined ? `${e.score}%` : '—'}</span>
+                    <span className="text-[10px] font-black text-muted">{e.score !== null && e.score !== undefined ? `${e.score}%` : '—'}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-[10px] font-black text-slate-400">{fmtDate(e.enrolledAt)}</span>
+                    <span className="text-[10px] font-black text-muted">{fmtDate(e.enrolledAt)}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`text-[10px] font-black ${e.dueDate && new Date(e.dueDate) < new Date() ? 'text-red-500' : 'text-slate-400'}`}>
+                    <span className={`text-[10px] font-black ${e.dueDate && new Date(e.dueDate) < new Date() ? 'text-ink' : 'text-muted'}`}>
                       {fmtDate(e.dueDate)}
                     </span>
                   </td>
@@ -1095,46 +1096,46 @@ function CoursePlayer({
     <div className="flex flex-col gap-0 animate-in fade-in duration-300">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black text-slate-400 hover:text-slate-900 uppercase tracking-widest transition-colors">
+        <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black text-muted hover:text-ink uppercase tracking-widest transition-colors">
           ← Back
         </button>
-        <div className="h-4 w-px bg-slate-200" />
+        <div className="h-4 w-px bg-rule" />
         <div className="flex-1 min-w-0">
-          <h2 className="text-sm font-black text-slate-900 truncate">{enrollment.program?.title}</h2>
+          <h2 className="text-sm font-black text-ink truncate">{enrollment.program?.title}</h2>
           <div className="flex items-center gap-3 mt-1 flex-wrap">
             {enrollment.program && (
-              <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border ${CATEGORY_COLORS[enrollment.program.category]}`}>
+              <span className={`text-[8px] font-black px-2 py-0.5  border ${CATEGORY_COLORS[enrollment.program.category]}`}>
                 {CATEGORY_LABELS[enrollment.program.category]}
               </span>
             )}
             {enrollment.program?.isMandatory && (
-              <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200">Required</span>
+              <span className="text-[8px] font-black px-2 py-0.5 bg-page text-ink border border-ink">Required</span>
             )}
             {enrollment.dueDate && (
-              <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border ${isOverdue ? 'bg-red-50 text-red-600 border-red-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+              <span className={`text-[8px] font-black px-2 py-0.5  border ${isOverdue ? 'bg-page text-ink border-ink' : 'bg-page text-muted border-rule'}`}>
                 {isOverdue ? 'Overdue · ' : 'Due · '}{fmtDate(enrollment.dueDate)}
               </span>
             )}
           </div>
         </div>
         <div className="text-right shrink-0">
-          <p className="text-xl font-black text-slate-900">{progress}%</p>
-          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{doneMats}/{totalMats} done</p>
+          <p className="text-xl font-black text-ink">{progress}%</p>
+          <p className="text-[8px] font-black text-muted uppercase tracking-widest">{doneMats}/{totalMats} done</p>
         </div>
       </div>
 
       {/* Progress bar */}
       <div className="mb-6">
-        <ProgressBar pct={progress} color={isCompleted ? 'bg-emerald-500' : 'bg-amber-500'} />
+        <ProgressBar pct={progress} color={isCompleted ? 'bg-accent' : 'bg-highlight'} />
       </div>
 
       {/* Completion banner */}
       {isCompleted && (
-        <div className="mb-6 bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-center gap-4">
-          <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center text-white text-lg font-black shrink-0">✓</div>
+        <div className="mb-6 bg-page border border-accent p-5 flex items-center gap-4">
+          <div className="w-10 h-10 bg-accent flex items-center justify-center text-paper text-lg font-black shrink-0">✓</div>
           <div>
-            <p className="text-sm font-black text-emerald-800">Course Completed!</p>
-            <p className="text-[10px] text-emerald-600 font-black uppercase tracking-widest mt-0.5">
+            <p className="text-sm font-black text-accent">Course Completed!</p>
+            <p className="text-[10px] text-accent font-black uppercase tracking-widest mt-0.5">
               Completed {fmtDate(enrollment.completedAt)}
               {enrollment.score !== null && enrollment.score !== undefined && ` · Score: ${enrollment.score}%`}
             </p>
@@ -1144,10 +1145,10 @@ function CoursePlayer({
 
       {/* No materials state */}
       {materials.length === 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center">
+        <div className="bg-page border border-highlight p-8 text-center">
           <p className="text-3xl mb-3">🏗️</p>
-          <p className="text-sm font-black text-amber-800">Course materials are being prepared</p>
-          <p className="text-[10px] text-amber-600 font-black uppercase tracking-widest mt-1">Check back soon — content will appear here once ready</p>
+          <p className="text-sm font-black text-ink">Course materials are being prepared</p>
+          <p className="text-[10px] text-ink font-black uppercase tracking-widest mt-1">Check back soon — content will appear here once ready</p>
         </div>
       )}
 
@@ -1156,13 +1157,13 @@ function CoursePlayer({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         {/* Material list */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-lg overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-50">
+        <div className="bg-paper border border-rule overflow-hidden">
+          <div className="px-5 py-4 border-b border-rule">
             <p className="label-form">Course Materials</p>
           </div>
-          <div className="divide-y divide-slate-50">
+          <div className="divide-y divide-rule">
             {materials.length === 0 && (
-              <p className="text-[10px] text-slate-400 p-5 text-center font-black uppercase tracking-widest">No materials yet</p>
+              <p className="text-[10px] text-muted p-5 text-center font-black uppercase tracking-widest">No materials yet</p>
             )}
             {materials.map((m, idx) => {
               const done = isMaterialDone(m.id);
@@ -1171,18 +1172,18 @@ function CoursePlayer({
                 <button
                   key={m.id}
                   onClick={() => openMaterial(m)}
-                  className={`w-full flex items-center gap-3 px-5 py-4 text-left transition-all ${isActive ? 'bg-amber-50 border-l-2 border-amber-500' : 'hover:bg-slate-50'}`}
+                  className={`w-full flex items-center gap-3 px-5 py-4 text-left transition-all ${isActive ? 'bg-page border-l-2 border-highlight' : 'hover:bg-page'}`}
                 >
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 border-2 transition-all ${done ? 'bg-emerald-500 border-emerald-500 text-white' : isActive ? 'border-amber-500 text-amber-600' : 'border-slate-200 text-slate-400'}`}>
+                  <div className={`w-6 h-6  flex items-center justify-center text-[10px] font-black shrink-0 border-2 transition-all ${done ? 'bg-accent border-accent text-paper' : isActive ? 'border-highlight text-ink' : 'border-rule text-muted'}`}>
                     {done ? '✓' : idx + 1}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-[11px] font-black truncate ${isActive ? 'text-amber-700' : done ? 'text-slate-500' : 'text-slate-800'}`}>{m.title}</p>
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
+                    <p className={`text-[11px] font-black truncate ${isActive ? 'text-ink' : done ? 'text-muted' : 'text-ink'}`}>{m.title}</p>
+                    <p className="text-[8px] font-black text-muted uppercase tracking-widest mt-0.5">
                       {m.type}{m.durationMins ? ` · ${fmtDuration(m.durationMins)}` : ''}
                     </p>
                   </div>
-                  {done && <span className="text-emerald-500 text-xs shrink-0">✓</span>}
+                  {done && <span className="text-accent text-xs shrink-0">✓</span>}
                 </button>
               );
             })}
@@ -1190,23 +1191,23 @@ function CoursePlayer({
         </div>
 
         {/* Content viewer */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-lg overflow-hidden flex flex-col">
+        <div className="lg:col-span-2 bg-paper border border-rule overflow-hidden flex flex-col">
           {!activeMaterial ? (
             <div className="flex-1 flex items-center justify-center p-12 text-center">
               <div>
                 <p className="text-4xl mb-3">📖</p>
-                <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Select a material to begin</p>
+                <p className="text-sm font-black text-muted uppercase tracking-widest">Select a material to begin</p>
               </div>
             </div>
           ) : (
             <>
-              <div className="px-7 py-5 border-b border-slate-50 flex items-center justify-between gap-4">
+              <div className="px-7 py-5 border-b border-rule flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{activeMaterial.type}</p>
-                  <h3 className="text-sm font-black text-slate-900 mt-0.5">{activeMaterial.title}</h3>
+                  <p className="text-[8px] font-black text-muted uppercase tracking-widest">{activeMaterial.type}</p>
+                  <h3 className="text-sm font-black text-ink mt-0.5">{activeMaterial.title}</h3>
                 </div>
                 {isMaterialDone(activeMaterial.id) && (
-                  <span className="text-[9px] font-black px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full shrink-0">Completed ✓</span>
+                  <span className="text-[9px] font-black px-3 py-1 bg-page text-accent border border-accent shrink-0">Completed ✓</span>
                 )}
               </div>
 
@@ -1218,7 +1219,7 @@ function CoursePlayer({
                   return (
                     <div className="flex flex-col gap-4">
                       {embedUrl ? (
-                        <div className="relative w-full rounded-2xl overflow-hidden bg-black" style={{ paddingTop: '56.25%' }}>
+                        <div className="relative w-full overflow-hidden bg-shadow" style={{ paddingTop: '56.25%' }}>
                           <iframe
                             src={embedUrl}
                             className="absolute inset-0 w-full h-full"
@@ -1228,19 +1229,19 @@ function CoursePlayer({
                         </div>
                       ) : activeMaterial.url ? (
                         <div className="flex flex-col gap-3">
-                          <video src={activeMaterial.url} controls className="w-full rounded-2xl bg-black max-h-80" />
+                          <video src={activeMaterial.url} controls className="w-full bg-shadow max-h-80" />
                         </div>
                       ) : (
-                        <div className="bg-slate-50 rounded-2xl p-8 text-center border border-slate-100">
-                          <p className="text-slate-400 text-sm font-black">No video URL provided</p>
+                        <div className="bg-page p-8 text-center border border-rule">
+                          <p className="text-muted text-sm font-black">No video URL provided</p>
                         </div>
                       )}
-                      {activeMaterial.content && <p className="text-sm text-slate-600 leading-relaxed">{activeMaterial.content}</p>}
+                      {activeMaterial.content && <p className="text-sm text-ink leading-relaxed">{activeMaterial.content}</p>}
                       {!isMaterialDone(activeMaterial.id) && (
                         <button
                           onClick={() => completeMaterial(activeMaterial.id)}
                           disabled={completing}
-                          className="self-start px-6 py-3 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all disabled:opacity-50 active:scale-95"
+                          className="self-start px-6 py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all disabled:opacity-50 active:scale-95"
                         >
                           {completing ? 'Saving…' : "Mark as Watched ✓"}
                         </button>
@@ -1254,24 +1255,24 @@ function CoursePlayer({
                   <div className="flex flex-col gap-4">
                     {activeMaterial.url && (
                       <a href={activeMaterial.url} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 self-start">
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-page text-accent border border-accent text-[10px] font-black uppercase tracking-widest hover:bg-page self-start">
                         📎 Open Document →
                       </a>
                     )}
                     {activeMaterial.content ? (
-                      <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap font-medium max-h-96 overflow-y-auto">
+                      <div className="bg-page border border-rule p-6 text-sm text-ink leading-relaxed whitespace-pre-wrap font-medium max-h-96 overflow-y-auto">
                         {activeMaterial.content}
                       </div>
                     ) : (
-                      <div className="bg-slate-50 rounded-2xl p-8 text-center border border-slate-100">
-                        <p className="text-slate-400 text-sm font-black">No document content provided</p>
+                      <div className="bg-page p-8 text-center border border-rule">
+                        <p className="text-muted text-sm font-black">No document content provided</p>
                       </div>
                     )}
                     {!isMaterialDone(activeMaterial.id) && (
                       <button
                         onClick={() => completeMaterial(activeMaterial.id)}
                         disabled={completing}
-                        className="self-start px-6 py-3 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all disabled:opacity-50 active:scale-95"
+                        className="self-start px-6 py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all disabled:opacity-50 active:scale-95"
                       >
                         {completing ? 'Saving…' : "I've Read This ✓"}
                       </button>
@@ -1282,27 +1283,27 @@ function CoursePlayer({
                 {/* LINK */}
                 {activeMaterial.type === 'LINK' && (
                   <div className="flex flex-col gap-4">
-                    {activeMaterial.content && <p className="text-sm text-slate-600 leading-relaxed">{activeMaterial.content}</p>}
+                    {activeMaterial.content && <p className="text-sm text-ink leading-relaxed">{activeMaterial.content}</p>}
                     {activeMaterial.url && (
                       <a
                         href={activeMaterial.url}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={() => setLinkVisited(true)}
-                        className="flex items-center justify-between p-5 bg-indigo-50 border border-indigo-200 rounded-2xl hover:bg-indigo-100 transition-all group"
+                        className="flex items-center justify-between p-5 bg-page border border-accent hover:bg-page transition-all group"
                       >
                         <div>
-                          <p className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">External Resource</p>
-                          <p className="text-xs text-indigo-500 mt-1 truncate max-w-xs">{activeMaterial.url}</p>
+                          <p className="text-[10px] font-black text-accent uppercase tracking-widest">External Resource</p>
+                          <p className="text-xs text-accent mt-1 truncate max-w-xs">{activeMaterial.url}</p>
                         </div>
-                        <span className="text-indigo-600 font-black group-hover:translate-x-1 transition-transform">→</span>
+                        <span className="text-accent font-black group-hover:translate-x-1 transition-transform">→</span>
                       </a>
                     )}
                     {!isMaterialDone(activeMaterial.id) && (linkVisited || !activeMaterial.url) && (
                       <button
                         onClick={() => completeMaterial(activeMaterial.id)}
                         disabled={completing}
-                        className="self-start px-6 py-3 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all disabled:opacity-50 active:scale-95"
+                        className="self-start px-6 py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all disabled:opacity-50 active:scale-95"
                       >
                         {completing ? 'Saving…' : "Mark as Visited ✓"}
                       </button>
@@ -1322,11 +1323,11 @@ function CoursePlayer({
                   if (done && !quizResult) {
                     return (
                       <div className="flex flex-col gap-4">
-                        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center">
-                          <p className="text-2xl font-black text-emerald-700">{existingScore ?? '—'}%</p>
-                          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mt-1">Quiz Score</p>
+                        <div className="bg-page border border-accent p-6 text-center">
+                          <p className="text-2xl font-black text-accent">{existingScore ?? '—'}%</p>
+                          <p className="text-[10px] font-black text-accent uppercase tracking-widest mt-1">Quiz Score</p>
                           {existingScore !== null && existingScore !== undefined && (
-                            <p className={`text-[9px] font-black uppercase tracking-widest mt-2 ${existingScore >= passingScore ? 'text-emerald-500' : 'text-red-500'}`}>
+                            <p className={`text-[9px] font-black uppercase tracking-widest mt-2 ${existingScore >= passingScore ? 'text-accent' : 'text-ink'}`}>
                               {existingScore >= passingScore ? 'Passed ✓' : `Below passing score (${passingScore}%)`}
                             </p>
                           )}
@@ -1334,7 +1335,7 @@ function CoursePlayer({
                         {questions.length > 0 && (
                           <button
                             onClick={() => { setQuizAnswers({}); setQuizResult(null); }}
-                            className="self-start px-5 py-2 border border-slate-200 text-slate-500 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50"
+                            className="self-start px-5 py-2 border border-rule text-muted text-[9px] font-black uppercase tracking-widest hover:bg-page"
                           >
                             Retake Quiz
                           </button>
@@ -1346,16 +1347,16 @@ function CoursePlayer({
                   if (quizResult) {
                     return (
                       <div className="flex flex-col gap-4">
-                        <div className={`rounded-2xl p-8 text-center border ${quizResult.passed ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
-                          <p className={`text-4xl font-black ${quizResult.passed ? 'text-emerald-700' : 'text-amber-700'}`}>{quizResult.score}%</p>
-                          <p className={`text-[10px] font-black uppercase tracking-widest mt-2 ${quizResult.passed ? 'text-emerald-600' : 'text-amber-600'}`}>
+                        <div className={` p-8 text-center border ${quizResult.passed ? 'bg-page border-accent' : 'bg-page border-highlight'}`}>
+                          <p className={`text-4xl font-black ${quizResult.passed ? 'text-accent' : 'text-ink'}`}>{quizResult.score}%</p>
+                          <p className={`text-[10px] font-black uppercase tracking-widest mt-2 ${quizResult.passed ? 'text-accent' : 'text-ink'}`}>
                             {quizResult.passed ? 'Quiz Passed! Well done.' : `Not quite — passing score is ${passingScore}%`}
                           </p>
                         </div>
                         {!quizResult.passed && (
                           <button
                             onClick={() => { setQuizAnswers({}); setQuizResult(null); }}
-                            className="self-start px-5 py-2 bg-amber-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-amber-600"
+                            className="self-start px-5 py-2 bg-highlight text-paper text-[9px] font-black uppercase tracking-widest hover:bg-highlight"
                           >
                             Retake Quiz
                           </button>
@@ -1367,14 +1368,14 @@ function CoursePlayer({
                   if (questions.length === 0) {
                     return (
                       <div className="flex flex-col gap-4">
-                        <div className="bg-slate-50 rounded-2xl p-8 text-center border border-slate-100">
-                          <p className="text-slate-400 text-sm font-black">No quiz questions configured yet</p>
+                        <div className="bg-page p-8 text-center border border-rule">
+                          <p className="text-muted text-sm font-black">No quiz questions configured yet</p>
                         </div>
                         {!done && (
                           <button
                             onClick={() => completeMaterial(activeMaterial.id)}
                             disabled={completing}
-                            className="self-start px-6 py-3 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all disabled:opacity-50"
+                            className="self-start px-6 py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all disabled:opacity-50"
                           >
                             {completing ? 'Saving…' : 'Mark as Complete ✓'}
                           </button>
@@ -1389,19 +1390,19 @@ function CoursePlayer({
                       <p className="eyebrow-tight">{questions.length} Question{questions.length !== 1 ? 's' : ''}</p>
                       {questions.map((q, qi) => (
                         <div key={q.id} className="flex flex-col gap-3">
-                          <p className="text-sm font-black text-slate-900">{qi + 1}. {q.text}</p>
+                          <p className="text-sm font-black text-ink">{qi + 1}. {q.text}</p>
                           <div className="flex flex-col gap-2">
                             {q.options.map((opt, oi) => (
                               <label
                                 key={oi}
-                                className={`flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all ${quizAnswers[q.id] === oi ? 'bg-amber-50 border-amber-400 text-amber-800' : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'}`}
+                                className={`flex items-center gap-3 p-4  border cursor-pointer transition-all ${quizAnswers[q.id] === oi ? 'bg-page border-highlight text-ink' : 'bg-paper border-rule hover:border-rule text-ink'}`}
                               >
                                 <input
                                   type="radio"
                                   name={`q_${q.id}`}
                                   checked={quizAnswers[q.id] === oi}
                                   onChange={() => setQuizAnswers(a => ({ ...a, [q.id]: oi }))}
-                                  className="accent-amber-500"
+                                  className="accent-highlight"
                                 />
                                 <span className="text-sm font-bold">{opt}</span>
                               </label>
@@ -1412,7 +1413,7 @@ function CoursePlayer({
                       <button
                         onClick={() => completeMaterial(activeMaterial.id, quizAnswers)}
                         disabled={completing || !allAnswered}
-                        className="self-start px-8 py-3 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all disabled:opacity-50 active:scale-95"
+                        className="self-start px-8 py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all disabled:opacity-50 active:scale-95"
                       >
                         {completing ? 'Submitting…' : 'Submit Quiz →'}
                       </button>
@@ -1454,15 +1455,15 @@ function MyTrainingTab() {
 
   if (loading) return (
     <div className="flex flex-col gap-4">
-      {[1,2,3].map(i => <div key={i} className="h-32 bg-white rounded-2xl border border-slate-100 animate-pulse" />)}
+      {[1,2,3].map(i => <div key={i} className="h-32 bg-paper border border-rule animate-pulse" />)}
     </div>
   );
 
   if (error) return (
-    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center">
-      <p className="text-sm font-black text-amber-700 uppercase tracking-widest mb-2">Could not load training</p>
-      <p className="text-xs text-amber-600 mb-4">{error}</p>
-      <button onClick={load} className="px-6 py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600">Retry</button>
+    <div className="bg-page border border-highlight p-8 text-center">
+      <p className="text-sm font-black text-ink uppercase tracking-widest mb-2">Could not load training</p>
+      <p className="text-xs text-ink mb-4">{error}</p>
+      <button onClick={load} className="px-6 py-2 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight">Retry</button>
     </div>
   );
 
@@ -1486,10 +1487,10 @@ function MyTrainingTab() {
 
   if (enrollments.length === 0) {
     return (
-      <div className="text-center py-20 text-slate-400">
+      <div className="text-center py-20 text-muted">
         <p className="text-5xl mb-4">📚</p>
         <p className="text-sm font-black uppercase tracking-widest mb-1">No training assigned yet</p>
-        <p className="text-xs text-slate-300">Browse available courses in the Programs tab to get started.</p>
+        <p className="text-xs text-muted">Browse available courses in the Programs tab to get started.</p>
       </div>
     );
   }
@@ -1500,12 +1501,12 @@ function MyTrainingTab() {
       {/* Stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'In Progress', value: inProgress.length, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-100' },
-          { label: 'Completed', value: completed.length, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
-          { label: 'Not Started', value: notStarted.length, color: 'text-slate-600', bg: 'bg-slate-50 border-slate-100' },
-          { label: 'Overdue', value: overdue.length, color: overdue.length > 0 ? 'text-red-600' : 'text-slate-400', bg: overdue.length > 0 ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100' },
+          { label: 'In Progress', value: inProgress.length, color: 'text-ink', bg: 'bg-page border-highlight' },
+          { label: 'Completed', value: completed.length, color: 'text-accent', bg: 'bg-page border-accent' },
+          { label: 'Not Started', value: notStarted.length, color: 'text-ink', bg: 'bg-page border-rule' },
+          { label: 'Overdue', value: overdue.length, color: overdue.length > 0 ? 'text-ink' : 'text-muted', bg: overdue.length > 0 ? 'bg-page border-ink' : 'bg-page border-rule' },
         ].map(s => (
-          <div key={s.label} className={`rounded-2xl border p-5 ${s.bg}`}>
+          <div key={s.label} className={` border p-5 ${s.bg}`}>
             <p className={`text-3xl font-black tracking-tighter ${s.color}`}>{s.value}</p>
             <p className="label-form mt-1">{s.label}</p>
           </div>
@@ -1514,11 +1515,11 @@ function MyTrainingTab() {
 
       {/* Mandatory alert */}
       {mandatory.length > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-5 flex items-start gap-4">
-          <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-black shrink-0">!</div>
+        <div className="bg-page border border-ink p-5 flex items-start gap-4">
+          <div className="w-8 h-8 bg-ink flex items-center justify-center text-paper text-xs font-black shrink-0">!</div>
           <div>
-            <p className="text-sm font-black text-red-800">You have {mandatory.length} mandatory course{mandatory.length !== 1 ? 's' : ''} to complete</p>
-            <p className="text-[10px] text-red-600 font-black uppercase tracking-widest mt-0.5">
+            <p className="text-sm font-black text-ink">You have {mandatory.length} mandatory course{mandatory.length !== 1 ? 's' : ''} to complete</p>
+            <p className="text-[10px] text-ink font-black uppercase tracking-widest mt-0.5">
               {mandatory.map(e => e.program?.title).join(' · ')}
             </p>
           </div>
@@ -1551,19 +1552,19 @@ function MyTrainingTab() {
           <p className="eyebrow-tight mb-4">Completed ({completed.length})</p>
           <div className="flex flex-col gap-3">
             {completed.map(e => (
-              <div key={e.id} className="bg-white rounded-2xl border border-slate-100 p-5 flex items-center gap-4 group">
-                <div className="w-10 h-10 bg-emerald-50 border border-emerald-200 rounded-full flex items-center justify-center text-emerald-600 font-black text-sm shrink-0">✓</div>
+              <div key={e.id} className="bg-paper border border-rule p-5 flex items-center gap-4 group">
+                <div className="w-10 h-10 bg-page border border-accent flex items-center justify-center text-accent font-black text-sm shrink-0">✓</div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-black text-slate-800 truncate">{e.program?.title}</p>
+                  <p className="text-xs font-black text-ink truncate">{e.program?.title}</p>
                   <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                    {e.program && <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full border ${CATEGORY_COLORS[e.program.category]}`}>{CATEGORY_LABELS[e.program.category]}</span>}
-                    <span className="text-[9px] font-black text-slate-400">Completed {fmtDate(e.completedAt)}</span>
+                    {e.program && <span className={`text-[8px] font-black px-1.5 py-0.5  border ${CATEGORY_COLORS[e.program.category]}`}>{CATEGORY_LABELS[e.program.category]}</span>}
+                    <span className="text-[9px] font-black text-muted">Completed {fmtDate(e.completedAt)}</span>
                     {e.score !== null && e.score !== undefined && (
-                      <span className="text-[9px] font-black text-emerald-600">Score: {e.score}%</span>
+                      <span className="text-[9px] font-black text-accent">Score: {e.score}%</span>
                     )}
                   </div>
                 </div>
-                <button onClick={() => setActiveEnrollment(e)} className="px-4 py-2 border border-slate-200 text-slate-500 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 shrink-0">
+                <button onClick={() => setActiveEnrollment(e)} className="px-4 py-2 border border-rule text-muted text-[9px] font-black uppercase tracking-widest hover:bg-page shrink-0">
                   Review
                 </button>
               </div>
@@ -1582,15 +1583,15 @@ function EnrollmentCard({ e, onOpen }: { e: EnrollmentWithProgress; onOpen: () =
   const isNew = e.status === 'ENROLLED';
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-lg p-6 flex flex-col gap-4 hover:border-amber-200 hover:shadow-xl transition-all group">
+    <div className="bg-paper border border-rule p-6 flex flex-col gap-4 hover:border-highlight hover: transition-all group">
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-          <h3 className="text-sm font-black text-slate-900 leading-tight truncate">{e.program?.title}</h3>
-          {e.program?.description && <p className="text-[10px] text-slate-400 leading-relaxed line-clamp-2">{e.program.description}</p>}
+          <h3 className="text-sm font-black text-ink leading-tight truncate">{e.program?.title}</h3>
+          {e.program?.description && <p className="text-[10px] text-muted leading-relaxed line-clamp-2">{e.program.description}</p>}
           <div className="flex flex-wrap gap-2 mt-0.5">
-            {e.program && <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border ${CATEGORY_COLORS[e.program.category]}`}>{CATEGORY_LABELS[e.program.category]}</span>}
-            {e.program?.isMandatory && <span className="text-[8px] font-black px-2 py-0.5 bg-red-50 text-red-600 border border-red-200 rounded-full">Required</span>}
-            {e.dueDate && <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border ${isOverdue ? 'bg-red-50 text-red-600 border-red-200' : 'bg-slate-50 text-slate-500 border-slate-100'}`}>Due {fmtDate(e.dueDate)}</span>}
+            {e.program && <span className={`text-[8px] font-black px-2 py-0.5  border ${CATEGORY_COLORS[e.program.category]}`}>{CATEGORY_LABELS[e.program.category]}</span>}
+            {e.program?.isMandatory && <span className="text-[8px] font-black px-2 py-0.5 bg-page text-ink border border-ink ">Required</span>}
+            {e.dueDate && <span className={`text-[8px] font-black px-2 py-0.5  border ${isOverdue ? 'bg-page text-ink border-ink' : 'bg-page text-muted border-rule'}`}>Due {fmtDate(e.dueDate)}</span>}
           </div>
         </div>
       </div>
@@ -1598,14 +1599,14 @@ function EnrollmentCard({ e, onOpen }: { e: EnrollmentWithProgress; onOpen: () =
       <div className="flex flex-col gap-1.5">
         <div className="flex justify-between items-center">
           <span className="label-form">{done}/{total} materials</span>
-          <span className="text-[10px] font-black text-slate-600">{e.progress}%</span>
+          <span className="text-[10px] font-black text-ink">{e.progress}%</span>
         </div>
-        <ProgressBar pct={e.progress} color={isOverdue ? 'bg-red-400' : 'bg-amber-500'} />
+        <ProgressBar pct={e.progress} color={isOverdue ? 'bg-ink' : 'bg-highlight'} />
       </div>
 
       <button
         onClick={onOpen}
-        className="w-full py-3 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all active:scale-95 shadow-lg shadow-amber-500/20"
+        className="w-full py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all active:scale-95 "
       >
         {isNew ? '▶ Start Course' : e.status === 'COMPLETED' ? '✓ Review Course' : '▶ Continue'}
       </button>
@@ -1639,10 +1640,10 @@ function BrowseProgramsTab({ onGoToMyTraining }: { onGoToMyTraining?: () => void
   }
 
   if (error) return (
-    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center">
-      <p className="text-sm font-black text-amber-700 uppercase tracking-widest mb-2">Could not load programs</p>
-      <p className="text-xs text-amber-600 mb-4">{error}</p>
-      <button onClick={load} className="px-6 py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600">Retry</button>
+    <div className="bg-page border border-highlight p-8 text-center">
+      <p className="text-sm font-black text-ink uppercase tracking-widest mb-2">Could not load programs</p>
+      <p className="text-xs text-ink mb-4">{error}</p>
+      <button onClick={load} className="px-6 py-2 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight">Retry</button>
     </div>
   );
 
@@ -1651,7 +1652,7 @@ function BrowseProgramsTab({ onGoToMyTraining }: { onGoToMyTraining?: () => void
       <div className="flex gap-2 flex-wrap">
         <button
           onClick={() => setCategory('')}
-          className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${category === '' ? 'bg-amber-500 text-white' : 'bg-white text-slate-500 border border-slate-200 hover:border-amber-300'}`}
+          className={`px-4 py-2  text-[9px] font-black uppercase tracking-widest transition-all ${category === '' ? 'bg-highlight text-paper' : 'bg-paper text-muted border border-rule hover:border-highlight'}`}
         >
           All
         </button>
@@ -1659,7 +1660,7 @@ function BrowseProgramsTab({ onGoToMyTraining }: { onGoToMyTraining?: () => void
           <button
             key={c}
             onClick={() => setCategory(c)}
-            className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${category === c ? 'bg-amber-500 text-white' : 'bg-white text-slate-500 border border-slate-200 hover:border-amber-300'}`}
+            className={`px-4 py-2  text-[9px] font-black uppercase tracking-widest transition-all ${category === c ? 'bg-highlight text-paper' : 'bg-paper text-muted border border-rule hover:border-highlight'}`}
           >
             {CATEGORY_LABELS[c]}
           </button>
@@ -1667,9 +1668,9 @@ function BrowseProgramsTab({ onGoToMyTraining }: { onGoToMyTraining?: () => void
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-400 p-4">Loading programs…</p>
+        <p className="text-sm text-muted p-4">Loading programs…</p>
       ) : programs.length === 0 ? (
-        <div className="text-center py-16 text-slate-400">
+        <div className="text-center py-16 text-muted">
           <p className="text-3xl mb-3">🎓</p>
           <p className="text-sm font-black uppercase tracking-widest">No programs available.</p>
         </div>
@@ -1694,10 +1695,10 @@ interface EmployeeCertification {
 }
 
 const CERT_STATUS_COLOR: Record<CertStatus, string> = {
-  ACTIVE:         'bg-emerald-50 text-emerald-700 border-emerald-200',
-  EXPIRING_SOON:  'bg-amber-50 text-amber-700 border-amber-200',
-  EXPIRED:        'bg-red-50 text-red-600 border-red-200',
-  REVOKED:        'bg-slate-50 text-slate-500 border-slate-200',
+  ACTIVE:         'bg-page text-accent border-accent',
+  EXPIRING_SOON:  'bg-page text-ink border-highlight',
+  EXPIRED:        'bg-page text-ink border-ink',
+  REVOKED:        'bg-page text-muted border-rule',
 };
 
 function CertificationsTab() {
@@ -1752,15 +1753,15 @@ function CertificationsTab() {
   return (
     <div className="space-y-6">
       {toast && (
-        <div className="fixed top-6 right-6 z-[200] px-6 py-3 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl shadow-2xl animate-in slide-in-from-top-4">{toast}</div>
+        <div className="fixed top-6 right-6 z-[200] px-6 py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest animate-in slide-in-from-top-4">{toast}</div>
       )}
 
       {/* Header */}
       <div className="flex flex-wrap items-center gap-4 justify-between">
         <div className="flex items-center gap-3">
-          <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest">Certifications</h3>
+          <h3 className="text-lg font-black text-ink uppercase tracking-widest">Certifications</h3>
           {expiringSoon > 0 && (
-            <span className="px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-black uppercase tracking-widest rounded-full">
+            <span className="px-3 py-1 bg-page text-ink border border-highlight text-[9px] font-black uppercase tracking-widest ">
               {expiringSoon} Expiring Soon
             </span>
           )}
@@ -1769,7 +1770,7 @@ function CertificationsTab() {
           <select
             value={filterStatus}
             onChange={e => setFilterStatus(e.target.value)}
-            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 focus:outline-none"
+            className="px-3 py-2 bg-page border border-rule text-[10px] font-black text-ink focus:outline-none"
           >
             <option value="">All Statuses</option>
             <option value="ACTIVE">Active</option>
@@ -1777,7 +1778,7 @@ function CertificationsTab() {
             <option value="EXPIRED">Expired</option>
             <option value="REVOKED">Revoked</option>
           </select>
-          <button onClick={() => setShowAdd(true)} className="px-5 py-2 bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-amber-600 transition-all">
+          <button onClick={() => setShowAdd(true)} className="px-5 py-2 bg-highlight text-paper text-[9px] font-black uppercase tracking-widest hover:bg-highlight transition-all">
             + Add Certification
           </button>
         </div>
@@ -1785,11 +1786,11 @@ function CertificationsTab() {
 
       {/* Add Form Modal */}
       {showAdd && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 backdrop-blur-md p-6">
-          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100">
-            <div className="bg-slate-900 p-6 flex justify-between items-center">
-              <h4 className="text-base font-black text-white uppercase tracking-tight">Add Certification</h4>
-              <button onClick={() => setShowAdd(false)} className="w-8 h-8 bg-slate-800 border border-slate-700 rounded-xl text-slate-400 hover:text-white text-lg font-black flex items-center justify-center">×</button>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-shadow backdrop- p-6">
+          <div className="bg-paper w-full max-w-lg overflow-hidden border border-rule">
+            <div className="bg-shadow p-6 flex justify-between items-center">
+              <h4 className="text-base font-black text-paper uppercase tracking-tight">Add Certification</h4>
+              <button onClick={() => setShowAdd(false)} className="w-8 h-8 bg-shadow border border-shadow text-muted hover:text-paper text-lg font-black flex items-center justify-center">×</button>
             </div>
             <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
               {[
@@ -1802,31 +1803,31 @@ function CertificationsTab() {
                   <label className="label-form block mb-1">{f.label}</label>
                   <input type="text" placeholder={f.placeholder} value={(form as any)[f.key]}
                     onChange={e => setForm(fm => ({ ...fm, [f.key]: e.target.value }))}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-400" />
+                    className="w-full px-3 py-2.5 bg-page border border-rule text-xs font-bold text-ink focus:outline-none focus:border-highlight" />
                 </div>
               ))}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label-form block mb-1">Issued Date</label>
                   <input type="date" value={form.issuedAt} onChange={e => setForm(f => ({ ...f, issuedAt: e.target.value }))}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-400" />
+                    className="w-full px-3 py-2.5 bg-page border border-rule text-xs font-bold text-ink focus:outline-none focus:border-highlight" />
                 </div>
                 <div>
                   <label className="label-form block mb-1">Expiry Date</label>
                   <input type="date" value={form.expiresAt} onChange={e => setForm(f => ({ ...f, expiresAt: e.target.value }))}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-400" />
+                    className="w-full px-3 py-2.5 bg-page border border-rule text-xs font-bold text-ink focus:outline-none focus:border-highlight" />
                 </div>
               </div>
               <div>
                 <label className="label-form block mb-1">Notes</label>
                 <textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-400 resize-none" />
+                  className="w-full px-3 py-2.5 bg-page border border-rule text-xs font-bold text-ink focus:outline-none focus:border-highlight resize-none" />
               </div>
             </div>
-            <div className="p-5 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
-              <button onClick={() => setShowAdd(false)} className="px-5 py-2.5 bg-white border border-slate-200 text-[10px] font-black text-slate-500 uppercase tracking-widest rounded-xl hover:bg-slate-100">Cancel</button>
+            <div className="p-5 bg-page border-t border-rule flex justify-end gap-3">
+              <button onClick={() => setShowAdd(false)} className="px-5 py-2.5 bg-paper border border-rule text-[10px] font-black text-muted uppercase tracking-widest hover:bg-page">Cancel</button>
               <button onClick={handleAdd} disabled={submitting || !form.employeeId || !form.certName}
-                className="px-6 py-2.5 bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-amber-600 disabled:opacity-50">
+                className="px-6 py-2.5 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight disabled:opacity-50">
                 {submitting ? 'Adding...' : 'Add'}
               </button>
             </div>
@@ -1835,45 +1836,45 @@ function CertificationsTab() {
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl overflow-hidden">
+      <div className="bg-paper border border-rule overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse">Loading…</div>
+          <div className="p-12 text-center text-xs font-black text-muted uppercase tracking-widest animate-pulse">Loading…</div>
         ) : certs.length === 0 ? (
           <div className="p-12 text-center">
             <p className="eyebrow-tight">No certifications found</p>
-            <button onClick={() => setShowAdd(true)} className="mt-4 px-5 py-2 bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-amber-600">Add First</button>
+            <button onClick={() => setShowAdd(true)} className="mt-4 px-5 py-2 bg-highlight text-paper text-[9px] font-black uppercase tracking-widest hover:bg-highlight">Add First</button>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left">
-              <thead className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-50">
+              <thead className="text-[10px] font-black text-muted uppercase tracking-[0.2em] border-b border-rule">
                 <tr>
                   {['Employee ID', 'Certificate', 'Issuing Body', 'Cert #', 'Issued', 'Expires', 'Status', ''].map(h => (
                     <th key={h} className="px-6 py-4">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="divide-y divide-rule">
                 {certs.map(c => (
-                  <tr key={c.id} className="hover:bg-slate-50/50 transition-all">
-                    <td className="px-6 py-4 text-[10px] font-bold text-slate-500 font-mono">{c.employeeId.slice(0, 8)}…</td>
+                  <tr key={c.id} className="hover:bg-page transition-all">
+                    <td className="px-6 py-4 text-[10px] font-bold text-muted font-mono">{c.employeeId.slice(0, 8)}…</td>
                     <td className="px-6 py-4">
-                      <p className="text-xs font-black text-slate-900 uppercase tracking-tight">{c.certName}</p>
-                      {c.notes && <p className="text-[9px] text-slate-400 mt-0.5">{c.notes}</p>}
+                      <p className="text-xs font-black text-ink uppercase tracking-tight">{c.certName}</p>
+                      {c.notes && <p className="text-[9px] text-muted mt-0.5">{c.notes}</p>}
                     </td>
-                    <td className="px-6 py-4 text-[10px] font-bold text-slate-500">{c.issuingBody || '—'}</td>
-                    <td className="px-6 py-4 text-[10px] font-bold text-slate-400 font-mono">{c.certNumber || '—'}</td>
-                    <td className="px-6 py-4 text-[10px] font-bold text-slate-400">{fmtDate(c.issuedAt)}</td>
-                    <td className="px-6 py-4 text-[10px] font-bold text-slate-400">{fmtDate(c.expiresAt)}</td>
+                    <td className="px-6 py-4 text-[10px] font-bold text-muted">{c.issuingBody || '—'}</td>
+                    <td className="px-6 py-4 text-[10px] font-bold text-muted font-mono">{c.certNumber || '—'}</td>
+                    <td className="px-6 py-4 text-[10px] font-bold text-muted">{fmtDate(c.issuedAt)}</td>
+                    <td className="px-6 py-4 text-[10px] font-bold text-muted">{fmtDate(c.expiresAt)}</td>
                     <td className="px-6 py-4">
-                      <span className={`text-[9px] font-black px-2.5 py-1 rounded-full border uppercase tracking-widest ${CERT_STATUS_COLOR[c.status]}`}>
+                      <span className={`text-[9px] font-black px-2.5 py-1  border uppercase tracking-widest ${CERT_STATUS_COLOR[c.status]}`}>
                         {c.status.replace('_', ' ')}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
                       {c.status !== 'REVOKED' && (
                         <button onClick={() => handleRevoke(c.id)}
-                          className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[9px] font-black text-slate-500 uppercase tracking-widest hover:border-red-400 hover:text-red-600 transition-all">
+                          className="px-3 py-1.5 bg-paper border border-rule text-[9px] font-black text-muted uppercase tracking-widest hover:border-ink hover:text-ink transition-all">
                           Revoke
                         </button>
                       )}
@@ -1924,35 +1925,35 @@ export default function TrainingPage() {
   }, []);
 
   if (authLoading) {
-    return <div className="h-40 bg-white rounded-[2rem] border border-slate-100 animate-pulse max-w-[1400px] mx-auto" />;
+    return <div className="h-40 bg-paper border border-rule animate-pulse max-w-[1400px] mx-auto" />;
   }
 
   // ── Employee layout ─────────────────────────────────────────────────────────
   if (isEmployee) {
     return (
       <div className="flex flex-col gap-10 max-w-[1400px] mx-auto pb-20 animate-in fade-in duration-700">
-        <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-amber-500/5 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-amber-500/5 rounded-full blur-3xl" />
+        <div className="bg-paper p-10 border border-rule relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-highlight " />
           <div className="relative z-10">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-2 h-2 bg-amber-500 rounded-full" />
-              <span className="text-[10px] font-black text-amber-600 uppercase tracking-[0.4em]">Learning & Development</span>
+              <div className="w-2 h-2 bg-highlight " />
+              <span className="text-[10px] font-black text-ink uppercase tracking-[0.4em]">Learning & Development</span>
             </div>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tighter">
-              Hi, {firstName} <span className="text-amber-600">— Your Training</span>
+            <h1 className="text-4xl font-black text-ink tracking-tighter">
+              Hi, {firstName} <span className="text-ink">— Your Training</span>
             </h1>
-            <p className="text-sm font-bold text-slate-400 mt-2 uppercase tracking-widest">
+            <p className="text-sm font-bold text-muted mt-2 uppercase tracking-widest">
               Track progress on enrolled programs and discover new learning opportunities.
             </p>
           </div>
         </div>
 
-        <div className="flex gap-2 border-b border-slate-100 pb-0">
+        <div className="flex gap-2 border-b border-rule pb-0">
           {empTabs.map(t => (
             <button
               key={t}
               onClick={() => setEmpTab(t)}
-              className={`px-6 py-3 text-[10px] font-black uppercase tracking-widest rounded-t-xl transition-all ${empTab === t ? 'bg-white border border-slate-200 border-b-white text-amber-600' : 'text-slate-400 hover:text-slate-700'}`}
+              className={`px-6 py-3 text-[10px] font-black uppercase tracking-widest  transition-all ${empTab === t ? 'bg-paper border border-rule border-b-paper text-ink' : 'text-muted hover:text-ink'}`}
             >
               {t}
             </button>
@@ -1970,31 +1971,31 @@ export default function TrainingPage() {
   // ── Admin / Manager layout ──────────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-10 max-w-[1400px] mx-auto pb-20 animate-in fade-in duration-700">
-      <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-amber-500/5 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-48 h-48 bg-amber-500/5 rounded-full blur-3xl" />
+      <div className="bg-paper p-10 border border-rule relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-48 h-48 bg-highlight " />
         <div className="relative z-10 flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-2 h-2 bg-amber-500 rounded-full" />
-              <span className="text-[10px] font-black text-amber-600 uppercase tracking-[0.4em]">Learning & Development</span>
+              <div className="w-2 h-2 bg-highlight " />
+              <span className="text-[10px] font-black text-ink uppercase tracking-[0.4em]">Learning & Development</span>
             </div>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tighter">
-              Training <span className="text-amber-600">Management</span>
+            <h1 className="text-4xl font-black text-ink tracking-tighter">
+              Training <span className="text-ink">Management</span>
             </h1>
-            <p className="text-sm font-bold text-slate-400 mt-2 uppercase tracking-widest max-w-xl">
+            <p className="text-sm font-bold text-muted mt-2 uppercase tracking-widest max-w-xl">
               Create training programs, manage materials, track enrollments and completion rates.
             </p>
           </div>
           {stats && (
             <div className="flex flex-wrap gap-6">
               {[
-                { label: 'Published', value: stats.published, color: 'text-emerald-600' },
-                { label: 'Mandatory', value: stats.mandatory, color: 'text-red-600' },
-                { label: 'Completion', value: `${stats.completionRate}%`, color: 'text-amber-600' },
+                { label: 'Published', value: stats.published, color: 'text-accent' },
+                { label: 'Mandatory', value: stats.mandatory, color: 'text-ink' },
+                { label: 'Completion', value: `${stats.completionRate}%`, color: 'text-ink' },
               ].map(k => (
                 <div key={k.label} className="text-center">
                   <p className={`text-2xl font-black tracking-tighter ${k.color}`}>{k.value}</p>
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{k.label}</p>
+                  <p className="text-[8px] font-black text-muted uppercase tracking-widest">{k.label}</p>
                 </div>
               ))}
             </div>
@@ -2002,12 +2003,12 @@ export default function TrainingPage() {
         </div>
       </div>
 
-      <div className="flex gap-2 border-b border-slate-100">
+      <div className="flex gap-2 border-b border-rule">
         {adminTabs.map(t => (
           <button
             key={t}
             onClick={() => setAdminTab(t)}
-            className={`px-6 py-3 text-[10px] font-black uppercase tracking-widest rounded-t-xl transition-all ${adminTab === t ? 'bg-white border border-slate-200 border-b-white text-amber-600' : 'text-slate-400 hover:text-slate-700'}`}
+            className={`px-6 py-3 text-[10px] font-black uppercase tracking-widest  transition-all ${adminTab === t ? 'bg-paper border border-rule border-b-paper text-ink' : 'text-muted hover:text-ink'}`}
           >
             {t}
           </button>

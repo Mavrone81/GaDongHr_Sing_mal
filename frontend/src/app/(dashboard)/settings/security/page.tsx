@@ -14,21 +14,21 @@ const MFA_METHOD_OPTIONS: { value: MfaMethod; label: string; desc: string; badge
     label: 'Authenticator App (TOTP)',
     desc: 'Microsoft Authenticator, Google Authenticator, Authy — 6-digit rotating code. Most secure.',
     badge: 'Recommended',
-    badgeColor: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+    badgeColor: 'bg-page text-accent border-accent',
   },
   {
     value: 'EMAIL_OTP',
     label: 'Email One-Time Password',
     desc: 'A 6-digit code is emailed to the user on each login. No app required.',
     badge: 'Easy Setup',
-    badgeColor: 'bg-sky-100 text-sky-700 border-sky-200',
+    badgeColor: 'bg-page text-accent border-accent',
   },
   {
     value: 'EITHER',
     label: 'Either (User\'s Choice)',
     desc: 'Users with an authenticator app use TOTP; others receive an email code. Most flexible.',
     badge: 'Flexible',
-    badgeColor: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    badgeColor: 'bg-page text-accent border-accent',
   },
 ];
 
@@ -43,9 +43,9 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
   return (
     <button
       onClick={() => onChange(!on)}
-      className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${on ? 'bg-indigo-600' : 'bg-slate-200'}`}
+      className={`relative w-12 h-6  transition-colors duration-200 ${on ? 'bg-accent' : 'bg-rule'}`}
     >
-      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${on ? 'translate-x-6' : 'translate-x-0'}`} />
+      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-paper  shadow transition-transform duration-200 ${on ? 'translate-x-6' : 'translate-x-0'}`} />
     </button>
   );
 }
@@ -261,43 +261,43 @@ export default function SecurityPage() {
     <div className="flex flex-col gap-8 max-w-[1100px] mx-auto pb-16 animate-in fade-in duration-700">
 
       {/* Header */}
-      <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-violet-500/5 flex justify-between items-center">
+      <div className="bg-paper p-8 border border-rule flex justify-between items-center">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-2 h-2 bg-violet-600 rounded-full" />
-            <span className="text-[10px] font-black text-violet-600 uppercase tracking-[0.4em]">Identity & Access Management</span>
+            <div className="w-2 h-2 bg-accent " />
+            <span className="text-[10px] font-black text-accent uppercase tracking-[0.4em]">Identity & Access Management</span>
           </div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tighter">Security <span className="text-violet-600">Settings</span></h1>
-          <p className="text-[10px] font-black text-slate-400 mt-1 uppercase tracking-widest">MFA enforcement · SSO configuration · Session policy</p>
+          <h1 className="text-3xl font-black text-ink tracking-tighter">Security <span className="text-accent">Settings</span></h1>
+          <p className="text-[10px] font-black text-muted mt-1 uppercase tracking-widest">MFA enforcement · SSO configuration · Session policy</p>
         </div>
         {canEdit && (
           <button onClick={handleSave} disabled={saving}
-            className="px-6 py-3 bg-violet-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-violet-700 shadow-lg shadow-violet-500/20 transition-all disabled:opacity-60 disabled:pointer-events-none flex items-center gap-2">
-            {saving ? <><svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Saving…</> : 'Save Settings'}
+            className="px-6 py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all disabled:opacity-60 disabled:pointer-events-none flex items-center gap-2">
+            {saving ? <><svg className="animate-spin h-3.5 w-3.5 rounded-full" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Saving…</> : 'Save Settings'}
           </button>
         )}
       </div>
 
       {!canEdit && (
-        <div className="px-5 py-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3">
-          <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
-          <p className="text-[11px] font-black text-amber-700 uppercase tracking-widest">Read-only — Super Admin or IT Admin required to make changes</p>
+        <div className="px-5 py-4 bg-page border border-highlight flex items-center gap-3">
+          <svg className="w-4 h-4 text-ink shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+          <p className="text-[11px] font-black text-ink uppercase tracking-widest">Read-only — Super Admin or IT Admin required to make changes</p>
         </div>
       )}
 
       {/* MFA Policy */}
-      <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 overflow-hidden">
-        <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
-          <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Multi-Factor Authentication</h2>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">TOTP-based 2FA enforcement policy</p>
+      <div className="bg-paper border border-rule overflow-hidden">
+        <div className="px-8 py-6 border-b border-rule bg-page">
+          <h2 className="text-sm font-black text-ink uppercase tracking-widest">Multi-Factor Authentication</h2>
+          <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1">TOTP-based 2FA enforcement policy</p>
         </div>
         <div className="p-8 flex flex-col gap-6">
 
           {/* Org-wide MFA toggle */}
-          <div className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl border border-slate-100">
+          <div className="flex items-center justify-between p-5 bg-page border border-rule">
             <div>
-              <p className="text-sm font-black text-slate-900 uppercase tracking-tight">Require MFA for all users</p>
-              <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">
+              <p className="text-sm font-black text-ink uppercase tracking-tight">Require MFA for all users</p>
+              <p className="text-[10px] font-bold text-muted mt-1 uppercase tracking-widest">
                 All accounts must enroll in MFA before accessing the system · Individual users can be exempted below
               </p>
             </div>
@@ -318,12 +318,12 @@ export default function SecurityPage() {
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-black text-slate-900 uppercase tracking-tight">MFA Method</p>
-                <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-widest">How users verify their identity at login</p>
+                <p className="text-sm font-black text-ink uppercase tracking-tight">MFA Method</p>
+                <p className="text-[10px] font-bold text-muted mt-0.5 uppercase tracking-widest">How users verify their identity at login</p>
               </div>
               {savingMfaMethod && (
                 <div className="flex items-center gap-2">
-                  <svg className="animate-spin h-3.5 w-3.5 text-indigo-600" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                  <svg className="animate-spin h-3.5 w-3.5 text-accent rounded-full" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                   <span className="label-form">Saving…</span>
                 </div>
               )}
@@ -335,28 +335,28 @@ export default function SecurityPage() {
                   key={opt.value}
                   disabled={!canEdit || savingMfaMethod}
                   onClick={() => canEdit && handleSaveMfaMethod(opt.value)}
-                  className={`relative text-left p-4 rounded-2xl border-2 transition-all disabled:opacity-60 disabled:pointer-events-none ${
+                  className={`relative text-left p-4  border-2 transition-all disabled:opacity-60 disabled:pointer-events-none ${
                     mfaMethod === opt.value
-                      ? 'border-indigo-500 bg-indigo-50/60'
-                      : 'border-slate-100 bg-white hover:border-slate-200 hover:bg-slate-50/50'
+                      ? 'border-accent bg-page'
+                      : 'border-rule bg-paper hover:border-rule hover:bg-page'
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
-                      mfaMethod === opt.value ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'
+                    <div className={`mt-0.5 w-4 h-4  border-2 flex items-center justify-center shrink-0 transition-all ${
+                      mfaMethod === opt.value ? 'border-accent bg-accent' : 'border-rule'
                     }`}>
-                      {mfaMethod === opt.value && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                      {mfaMethod === opt.value && <div className="w-1.5 h-1.5 bg-paper " />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                        <p className={`text-[11px] font-black uppercase tracking-tight ${mfaMethod === opt.value ? 'text-indigo-900' : 'text-slate-900'}`}>
+                        <p className={`text-[11px] font-black uppercase tracking-tight ${mfaMethod === opt.value ? 'text-accent' : 'text-ink'}`}>
                           {opt.label}
                         </p>
-                        <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border uppercase tracking-widest ${opt.badgeColor}`}>
+                        <span className={`text-[8px] font-black px-2 py-0.5  border uppercase tracking-widest ${opt.badgeColor}`}>
                           {opt.badge}
                         </span>
                       </div>
-                      <p className="text-[10px] font-bold text-slate-400 leading-relaxed">{opt.desc}</p>
+                      <p className="text-[10px] font-bold text-muted leading-relaxed">{opt.desc}</p>
                     </div>
                   </div>
                 </button>
@@ -364,11 +364,11 @@ export default function SecurityPage() {
             </div>
 
             {/* Microsoft note */}
-            <div className="flex items-start gap-2.5 p-3.5 bg-blue-50 border border-blue-100 rounded-xl">
-              <span className="text-blue-500 text-sm shrink-0 mt-0.5">ℹ</span>
+            <div className="flex items-start gap-2.5 p-3.5 bg-page border border-accent ">
+              <span className="text-accent text-sm shrink-0 mt-0.5">ℹ</span>
               <div>
-                <p className="text-[10px] font-black text-blue-800 uppercase tracking-widest mb-0.5">Microsoft Authenticator push notifications</p>
-                <p className="text-[10px] font-bold text-blue-600 leading-relaxed">
+                <p className="text-[10px] font-black text-accent uppercase tracking-widest mb-0.5">Microsoft Authenticator push notifications</p>
+                <p className="text-[10px] font-bold text-accent leading-relaxed">
                   Number matching (pick 1 of 3) and approve/deny push require <strong>Azure AD / Microsoft Entra ID</strong> — enable via the SSO section below using your Microsoft tenant.
                 </p>
               </div>
@@ -377,18 +377,18 @@ export default function SecurityPage() {
 
           {/* MFA stats */}
           <div className="grid grid-cols-3 gap-4">
-            <div className="p-5 bg-emerald-50/60 rounded-2xl border border-emerald-100">
-              <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-2">MFA Enabled</p>
-              {usersLoading ? <div className="h-8 w-10 bg-emerald-100 rounded-lg animate-pulse" /> : <p className="text-3xl font-black text-emerald-700">{mfaCount}</p>}
+            <div className="p-5 bg-page border border-accent">
+              <p className="text-[10px] font-black text-accent uppercase tracking-widest mb-2">MFA Enabled</p>
+              {usersLoading ? <div className="h-8 w-10 bg-page animate-pulse" /> : <p className="text-3xl font-black text-accent">{mfaCount}</p>}
             </div>
-            <div className="p-5 bg-amber-50/60 rounded-2xl border border-amber-100">
-              <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-2">Not Enrolled</p>
-              {usersLoading ? <div className="h-8 w-10 bg-amber-100 rounded-lg animate-pulse" /> : <p className="text-3xl font-black text-amber-600">{users.length - mfaCount}</p>}
+            <div className="p-5 bg-page border border-highlight">
+              <p className="text-[10px] font-black text-ink uppercase tracking-widest mb-2">Not Enrolled</p>
+              {usersLoading ? <div className="h-8 w-10 bg-page animate-pulse" /> : <p className="text-3xl font-black text-ink">{users.length - mfaCount}</p>}
             </div>
-            <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
+            <div className="p-5 bg-page border border-rule">
               <p className="eyebrow-tight mb-2">Coverage</p>
-              {usersLoading ? <div className="h-8 w-14 bg-slate-100 rounded-lg animate-pulse" /> : (
-                <p className="text-3xl font-black text-slate-900">
+              {usersLoading ? <div className="h-8 w-14 bg-page animate-pulse" /> : (
+                <p className="text-3xl font-black text-ink">
                   {users.length > 0 ? Math.round((mfaCount / users.length) * 100) : 0}%
                 </p>
               )}
@@ -397,34 +397,34 @@ export default function SecurityPage() {
 
           {/* User MFA list */}
           {!usersLoading && users.length > 0 && (
-            <div className="border border-slate-100 rounded-2xl overflow-hidden">
-              <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 grid grid-cols-2 gap-y-1 gap-x-4">
-                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest col-span-2 mb-1">User MFA Status — overrides apply even when org policy is active</p>
-                <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 bg-indigo-500 rounded-full" /><p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Enable = force MFA on</p></div>
-                <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 bg-amber-400 rounded-full" /><p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Disable = off, secret kept</p></div>
-                <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 bg-violet-500 rounded-full" /><p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Exempt = skip org requirement</p></div>
-                <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 bg-red-400 rounded-full" /><p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Reset = wipe &amp; re-enroll</p></div>
+            <div className="border border-rule overflow-hidden">
+              <div className="px-5 py-3 bg-page border-b border-rule grid grid-cols-2 gap-y-1 gap-x-4">
+                <p className="text-[9px] font-black text-muted uppercase tracking-widest col-span-2 mb-1">User MFA Status — overrides apply even when org policy is active</p>
+                <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 bg-accent " /><p className="text-[8px] font-bold text-muted uppercase tracking-widest">Enable = force MFA on</p></div>
+                <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 bg-highlight " /><p className="text-[8px] font-bold text-muted uppercase tracking-widest">Disable = off, secret kept</p></div>
+                <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 bg-accent " /><p className="text-[8px] font-bold text-muted uppercase tracking-widest">Exempt = skip org requirement</p></div>
+                <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 bg-ink " /><p className="text-[8px] font-bold text-muted uppercase tracking-widest">Reset = wipe &amp; re-enroll</p></div>
               </div>
-              <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
+              <div className="max-h-80 overflow-y-auto divide-y divide-rule">
                 {users.filter(u => u.isActive).slice(0, 50).map(u => {
                   const isBusy = disablingMfa === u.id || resetMfa?.userId === u.id;
                   return (
-                    <div key={u.id} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50/50 transition-all">
-                      <div className="w-8 h-8 bg-slate-900 rounded-xl flex items-center justify-center text-[10px] font-black text-white shrink-0">
+                    <div key={u.id} className="flex items-center gap-3 px-5 py-3 hover:bg-page transition-all">
+                      <div className="w-8 h-8 bg-shadow flex items-center justify-center text-[10px] font-black text-paper shrink-0">
                         {u.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-black text-slate-900 truncate">{u.name}</p>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest truncate">{u.email}</p>
+                        <p className="text-[11px] font-black text-ink truncate">{u.name}</p>
+                        <p className="text-[9px] font-bold text-muted uppercase tracking-widest truncate">{u.email}</p>
                       </div>
 
                       {/* Status badge */}
-                      <span className={`text-[8px] font-black uppercase px-2 py-1 rounded-lg border tracking-widest shrink-0 ${
+                      <span className={`text-[8px] font-black uppercase px-2 py-1  border tracking-widest shrink-0 ${
                         u.mfaExempt
-                          ? 'bg-violet-50 text-violet-600 border-violet-100'
+                          ? 'bg-page text-accent border-accent'
                           : u.mfaEnabled
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                          : 'bg-slate-100 text-slate-400 border-slate-200'
+                          ? 'bg-page text-accent border-accent'
+                          : 'bg-page text-muted border-rule'
                       }`}>
                         {u.mfaExempt ? 'Exempt' : u.mfaEnabled ? '✓ MFA On' : 'No MFA'}
                       </span>
@@ -437,7 +437,7 @@ export default function SecurityPage() {
                             <button
                               onClick={() => handleEnableMfa(u.id, u.name)}
                               disabled={isBusy}
-                              className="text-[8px] font-black uppercase text-indigo-500 hover:text-indigo-700 tracking-widest disabled:opacity-40 transition-colors"
+                              className="text-[8px] font-black uppercase text-accent hover:text-accent tracking-widest disabled:opacity-40 transition-colors"
                             >
                               Enable
                             </button>
@@ -447,7 +447,7 @@ export default function SecurityPage() {
                             <button
                               onClick={() => handleDisableMfa(u.id, u.name)}
                               disabled={isBusy}
-                              className="text-[8px] font-black uppercase text-amber-500 hover:text-amber-700 tracking-widest disabled:opacity-40 transition-colors"
+                              className="text-[8px] font-black uppercase text-ink hover:text-ink tracking-widest disabled:opacity-40 transition-colors"
                             >
                               {disablingMfa === u.id ? '…' : 'Disable'}
                             </button>
@@ -456,7 +456,7 @@ export default function SecurityPage() {
                           <button
                             onClick={() => handleToggleExempt(u.id, u.name, u.mfaExempt)}
                             disabled={isBusy}
-                            className={`text-[8px] font-black uppercase tracking-widest disabled:opacity-40 transition-colors ${u.mfaExempt ? 'text-violet-600 hover:text-violet-800' : 'text-violet-400 hover:text-violet-600'}`}
+                            className={`text-[8px] font-black uppercase tracking-widest disabled:opacity-40 transition-colors ${u.mfaExempt ? 'text-accent hover:text-accent' : 'text-accent hover:text-accent'}`}
                           >
                             {u.mfaExempt ? 'Remove Exempt' : 'Exempt'}
                           </button>
@@ -464,7 +464,7 @@ export default function SecurityPage() {
                           <button
                             onClick={() => handleResetMfa(u.id, 'reset')}
                             disabled={isBusy}
-                            className="text-[8px] font-black uppercase text-red-400 hover:text-red-600 tracking-widest disabled:opacity-40 transition-colors"
+                            className="text-[8px] font-black uppercase text-ink hover:text-ink tracking-widest disabled:opacity-40 transition-colors"
                           >
                             {resetMfa?.userId === u.id && resetMfa.step === 'loading' ? '…' : 'Reset'}
                           </button>
@@ -475,7 +475,7 @@ export default function SecurityPage() {
                 })}
               </div>
               {users.filter(u => u.isActive).length > 50 && (
-                <div className="px-5 py-3 bg-slate-50 border-t border-slate-100">
+                <div className="px-5 py-3 bg-page border-t border-rule">
                   <p className="label-form">Showing 50 of {users.filter(u => u.isActive).length} active users</p>
                 </div>
               )}
@@ -485,10 +485,10 @@ export default function SecurityPage() {
       </div>
 
       {/* SSO Configuration */}
-      <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 overflow-hidden">
-        <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
-          <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Single Sign-On (SSO)</h2>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">OIDC / SAML 2.0 identity provider integrations</p>
+      <div className="bg-paper border border-rule overflow-hidden">
+        <div className="px-8 py-6 border-b border-rule bg-page">
+          <h2 className="text-sm font-black text-ink uppercase tracking-widest">Single Sign-On (SSO)</h2>
+          <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1">OIDC / SAML 2.0 identity provider integrations</p>
         </div>
         <div className="p-8 flex flex-col gap-4">
           {SSO_PROVIDERS.map(provider => {
@@ -497,23 +497,23 @@ export default function SecurityPage() {
             const expanded = expandedSso === provider.id;
 
             return (
-              <div key={provider.id} className={`border rounded-2xl transition-all overflow-hidden ${enabled ? 'border-violet-200 bg-violet-50/30' : 'border-slate-100 bg-white'}`}>
+              <div key={provider.id} className={`border  transition-all overflow-hidden ${enabled ? 'border-accent bg-page' : 'border-rule bg-paper'}`}>
                 <div className="flex items-center gap-4 p-5">
                   <span className="text-2xl shrink-0">{provider.icon}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{provider.name}</p>
-                    <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-widest">{provider.desc}</p>
+                    <p className="text-sm font-black text-ink uppercase tracking-tight">{provider.name}</p>
+                    <p className="text-[10px] font-bold text-muted mt-0.5 uppercase tracking-widest">{provider.desc}</p>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     {enabled && (
                       <button
                         onClick={() => setExpandedSso(expanded ? null : provider.id)}
-                        className="text-[9px] font-black uppercase text-violet-600 tracking-widest hover:text-violet-800 transition-all"
+                        className="text-[9px] font-black uppercase text-accent tracking-widest hover:text-accent transition-all"
                       >
                         {expanded ? 'Hide Config' : 'Configure'}
                       </button>
                     )}
-                    <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-lg border tracking-widest ${enabled ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-400 border-slate-200'}`}>
+                    <span className={`text-[9px] font-black uppercase px-2.5 py-1  border tracking-widest ${enabled ? 'bg-page text-accent border-accent' : 'bg-page text-muted border-rule'}`}>
                       {enabled ? 'Active' : 'Off'}
                     </span>
                     <Toggle on={enabled} onChange={v => {
@@ -526,41 +526,41 @@ export default function SecurityPage() {
                 </div>
 
                 {enabled && expanded && (
-                  <div className="px-5 pb-5 border-t border-violet-100 pt-4 flex flex-col gap-4">
+                  <div className="px-5 pb-5 border-t border-accent pt-4 flex flex-col gap-4">
                     <div className={`grid gap-4 ${provider.id === 'microsoft' ? 'grid-cols-3' : 'grid-cols-2'}`}>
                       <div className="flex flex-col gap-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Client ID / App ID</label>
+                        <label className="text-[10px] font-black text-muted uppercase tracking-widest">Client ID / App ID</label>
                         <input
                           type="text"
                           value={cfg.clientId}
                           onChange={e => setSsoConfig(prev => ({ ...prev, [provider.id]: { ...cfg, clientId: e.target.value } }))}
                           placeholder="e.g. 123456789-abc.apps.googleusercontent.com"
                           disabled={!canEdit}
-                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 transition-all placeholder:font-normal placeholder:text-slate-300 disabled:opacity-60"
+                          className="w-full px-4 py-3 bg-paper border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent transition-all placeholder:font-normal placeholder:text-muted disabled:opacity-60"
                         />
                       </div>
                       {provider.id === 'microsoft' && (
                         <div className="flex flex-col gap-2">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tenant ID</label>
+                          <label className="text-[10px] font-black text-muted uppercase tracking-widest">Tenant ID</label>
                           <input
                             type="text"
                             value={(cfg as { clientId: string; domain: string; tenantId?: string }).tenantId ?? ''}
                             onChange={e => setSsoConfig(prev => ({ ...prev, [provider.id]: { ...cfg, tenantId: e.target.value } }))}
                             placeholder="common (or your tenant UUID)"
                             disabled={!canEdit}
-                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 transition-all placeholder:font-normal placeholder:text-slate-300 disabled:opacity-60"
+                            className="w-full px-4 py-3 bg-paper border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent transition-all placeholder:font-normal placeholder:text-muted disabled:opacity-60"
                           />
                         </div>
                       )}
                       <div className="flex flex-col gap-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Organisation Domain</label>
+                        <label className="text-[10px] font-black text-muted uppercase tracking-widest">Organisation Domain</label>
                         <input
                           type="text"
                           value={cfg.domain}
                           onChange={e => setSsoConfig(prev => ({ ...prev, [provider.id]: { ...cfg, domain: e.target.value } }))}
                           placeholder="e.g. yourcompany.com"
                           disabled={!canEdit}
-                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 transition-all placeholder:font-normal placeholder:text-slate-300 disabled:opacity-60"
+                          className="w-full px-4 py-3 bg-paper border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent transition-all placeholder:font-normal placeholder:text-muted disabled:opacity-60"
                         />
                       </div>
                     </div>
@@ -568,9 +568,9 @@ export default function SecurityPage() {
                     {/* Client Secret — full width, server-side only, never returned */}
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Client Secret</label>
+                        <label className="text-[10px] font-black text-muted uppercase tracking-widest">Client Secret</label>
                         {ssoSecretStatus[provider.id] && (
-                          <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg uppercase tracking-widest">Secret configured ✓</span>
+                          <span className="text-[9px] font-black text-accent bg-page border border-accent px-2 py-0.5 uppercase tracking-widest">Secret configured ✓</span>
                         )}
                       </div>
                       <input
@@ -580,14 +580,14 @@ export default function SecurityPage() {
                         placeholder={ssoSecretStatus[provider.id] ? 'Enter new value to replace existing secret' : 'Paste your client secret'}
                         disabled={!canEdit}
                         autoComplete="new-password"
-                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 transition-all placeholder:font-normal placeholder:text-slate-300 disabled:opacity-60"
+                        className="w-full px-4 py-3 bg-paper border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent transition-all placeholder:font-normal placeholder:text-muted disabled:opacity-60"
                       />
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Stored encrypted on the server — never displayed after saving.</p>
+                      <p className="text-[9px] font-bold text-muted uppercase tracking-widest">Stored encrypted on the server — never displayed after saving.</p>
                     </div>
 
-                    <div className="flex items-center gap-3 px-4 py-3 bg-violet-50 border border-violet-100 rounded-xl">
-                      <svg className="w-4 h-4 text-violet-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                      <p className="text-[10px] font-bold text-violet-700 uppercase tracking-widest">
+                    <div className="flex items-center gap-3 px-4 py-3 bg-page border border-accent ">
+                      <svg className="w-4 h-4 text-accent shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                      <p className="text-[10px] font-bold text-accent uppercase tracking-widest">
                         Callback URL: <span className="font-black select-all">{typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback/{provider.id}</span>
                       </p>
                     </div>
@@ -600,20 +600,20 @@ export default function SecurityPage() {
       </div>
 
       {/* Session Policy */}
-      <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 overflow-hidden">
-        <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
-          <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Session & Access Policy</h2>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Token expiry · IP restrictions</p>
+      <div className="bg-paper border border-rule overflow-hidden">
+        <div className="px-8 py-6 border-b border-rule bg-page">
+          <h2 className="text-sm font-black text-ink uppercase tracking-widest">Session & Access Policy</h2>
+          <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1">Token expiry · IP restrictions</p>
         </div>
         <div className="p-8 flex flex-col gap-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Session Timeout (minutes)</label>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Session Timeout (minutes)</label>
               <select
                 value={sessionTimeout}
                 onChange={e => setSessionTimeout(e.target.value)}
                 disabled={!canEdit}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 transition-all appearance-none disabled:opacity-60"
+                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent transition-all appearance-none disabled:opacity-60"
               >
                 <option value="15">15 minutes</option>
                 <option value="30">30 minutes</option>
@@ -622,38 +622,38 @@ export default function SecurityPage() {
                 <option value="480">8 hours</option>
                 <option value="1440">24 hours</option>
               </select>
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Users are logged out after this period of inactivity</p>
+              <p className="text-[9px] font-bold text-muted uppercase tracking-widest">Users are logged out after this period of inactivity</p>
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Current Token Expiry</label>
-              <div className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl">
-                <span className="text-sm font-black text-slate-700">60 min (JWT RS256)</span>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Current Token Expiry</label>
+              <div className="px-4 py-3 bg-page border border-rule ">
+                <span className="text-sm font-black text-ink">60 min (JWT RS256)</span>
               </div>
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Set in auth service configuration</p>
+              <p className="text-[9px] font-bold text-muted uppercase tracking-widest">Set in auth service configuration</p>
             </div>
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">IP Whitelist (one per line, leave blank to allow all)</label>
+            <label className="text-[10px] font-black text-muted uppercase tracking-widest">IP Whitelist (one per line, leave blank to allow all)</label>
             <textarea
               value={ipWhitelist}
               onChange={e => setIpWhitelist(e.target.value)}
               rows={4}
               disabled={!canEdit}
               placeholder={'e.g.\n203.0.113.0/24\n192.168.1.0/24'}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 transition-all resize-none placeholder:font-normal placeholder:text-slate-300 disabled:opacity-60"
+              className="w-full px-4 py-3 bg-page border border-rule text-sm font-mono font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent transition-all resize-none placeholder:font-normal placeholder:text-muted disabled:opacity-60"
             />
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">CIDR notation supported · Only applies to admin roles</p>
+            <p className="text-[9px] font-bold text-muted uppercase tracking-widest">CIDR notation supported · Only applies to admin roles</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {SESSION_OPTS.map(opt => {
               const key = `session_${opt.label.replace(/\s/g, '_')}`;
               return (
-                <div key={opt.label} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div key={opt.label} className="flex items-center justify-between p-4 bg-page border border-rule">
                   <div>
-                    <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{opt.label}</p>
-                    <p className="text-[9px] font-bold text-slate-400 mt-0.5 uppercase tracking-widest">{opt.desc}</p>
+                    <p className="text-[11px] font-black text-ink uppercase tracking-tight">{opt.label}</p>
+                    <p className="text-[9px] font-bold text-muted mt-0.5 uppercase tracking-widest">{opt.desc}</p>
                   </div>
                   <Toggle on={securityToggles[key]} onChange={v => {
                     if (!canEdit) return;
@@ -672,25 +672,25 @@ export default function SecurityPage() {
         const u = users.find(x => x.id === resetMfa.userId);
         const isReset = resetMfaMode === 'reset';
         return (
-          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-[2rem] border border-slate-200 shadow-2xl p-8 max-w-md w-full mx-4">
+          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-shadow/60 backdrop- animate-in fade-in duration-200">
+            <div className="bg-paper border border-rule p-8 max-w-md w-full mx-4">
               <div className="flex items-center gap-3 mb-4">
-                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${isReset ? 'bg-red-100' : 'bg-amber-100'}`}>
-                  <svg className={`w-5 h-5 ${isReset ? 'text-red-500' : 'text-amber-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                <div className={`w-10 h-10  flex items-center justify-center ${isReset ? 'bg-page' : 'bg-page'}`}>
+                  <svg className={`w-5 h-5 ${isReset ? 'text-ink' : 'text-ink'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">
+                  <h3 className="text-base font-black text-ink uppercase tracking-tight">
                     {isReset ? 'Reset MFA' : 'Disable MFA'}
                   </h3>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  <p className="text-[10px] font-bold text-muted uppercase tracking-widest">
                     {isReset ? 'Wipes authenticator — requires re-enrollment' : 'Turns off MFA — secret is preserved'}
                   </p>
                 </div>
               </div>
-              <p className="text-sm font-bold text-slate-700 mb-1">
-                {isReset ? 'Reset' : 'Disable'} MFA for <span className="text-slate-900 font-black">{u?.name}</span>?
+              <p className="text-sm font-bold text-ink mb-1">
+                {isReset ? 'Reset' : 'Disable'} MFA for <span className="text-ink font-black">{u?.name}</span>?
               </p>
-              <p className="text-[11px] font-bold text-slate-400 mb-6 uppercase tracking-widest leading-relaxed">
+              <p className="text-[11px] font-bold text-muted mb-6 uppercase tracking-widest leading-relaxed">
                 {isReset
                   ? 'Their authenticator app entry will be unlinked. They must scan a new QR code to re-enroll.'
                   : 'MFA will be turned off but their authenticator app stays linked. An admin can re-enable it without a new QR scan.'}
@@ -698,13 +698,13 @@ export default function SecurityPage() {
               <div className="flex gap-3">
                 <button
                   onClick={confirmResetMfa}
-                  className={`flex-1 py-3 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg ${isReset ? 'bg-red-500 hover:bg-red-600 shadow-red-500/20' : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20'}`}
+                  className={`flex-1 py-3 text-paper text-[10px] font-black uppercase tracking-widest  transition-all  ${isReset ? 'bg-ink hover:bg-ink ' : 'bg-highlight hover:bg-highlight '}`}
                 >
                   Confirm {isReset ? 'Reset' : 'Disable'}
                 </button>
                 <button
                   onClick={() => setResetMfa(null)}
-                  className="flex-1 py-3 bg-slate-100 text-slate-700 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-200 transition-all"
+                  className="flex-1 py-3 bg-page text-ink text-[10px] font-black uppercase tracking-widest hover:bg-rule transition-all"
                 >
                   Cancel
                 </button>
@@ -717,9 +717,9 @@ export default function SecurityPage() {
       {/* Toast */}
       {toast && (
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-8 duration-300">
-          <div className={`px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-4 ${toast.type === 'success' ? 'bg-slate-900 border border-slate-700' : 'bg-red-900 border border-red-700'}`}>
-            <div className={`w-2 h-2 rounded-full ${toast.type === 'success' ? 'bg-emerald-500' : 'bg-red-400'}`} />
-            <span className="text-[10px] font-black text-white uppercase tracking-widest">{toast.msg}</span>
+          <div className={`px-8 py-4   flex items-center gap-4 ${toast.type === 'success' ? 'bg-shadow border border-shadow' : 'bg-ink border border-ink'}`}>
+            <div className={`w-2 h-2  ${toast.type === 'success' ? 'bg-accent' : 'bg-ink'}`} />
+            <span className="text-[10px] font-black text-paper uppercase tracking-widest">{toast.msg}</span>
           </div>
         </div>
       )}

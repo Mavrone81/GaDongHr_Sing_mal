@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { TONES } from '@/lib/statusTone';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
@@ -139,12 +140,12 @@ interface FlexiWalletConfig {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  GYM:                    'bg-emerald-50 text-emerald-700',
-  DENTAL:                 'bg-cyan-50 text-cyan-700',
-  OPTICAL:                'bg-blue-50 text-blue-700',
-  HEALTH_SCREENING:       'bg-rose-50 text-rose-700',
-  WELLNESS:               'bg-violet-50 text-violet-700',
-  PROFESSIONAL_DEVELOPMENT:'bg-amber-50 text-amber-700',
+  GYM:                    'bg-page text-accent',
+  DENTAL:                 'bg-page text-accent',
+  OPTICAL:                'bg-page text-accent',
+  HEALTH_SCREENING:       'bg-page text-ink',
+  WELLNESS:               'bg-page text-accent',
+  PROFESSIONAL_DEVELOPMENT:'bg-page text-ink',
 };
 
 const HR_ROLES = ['HR_ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'];
@@ -156,23 +157,23 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
-  GHS:        { bg: 'bg-rose-50',    text: 'text-rose-700'    },
-  GTL:        { bg: 'bg-violet-50',  text: 'text-violet-700'  },
-  PA:         { bg: 'bg-amber-50',   text: 'text-amber-700'   },
-  DENTAL:     { bg: 'bg-cyan-50',    text: 'text-cyan-700'    },
-  OUTPATIENT: { bg: 'bg-emerald-50', text: 'text-emerald-700' },
-  OTHER:      { bg: 'bg-slate-100',  text: 'text-slate-700'   },
+  GHS:        { bg: 'bg-page',    text: 'text-ink'    },
+  GTL:        { bg: 'bg-page',  text: 'text-accent'  },
+  PA:         { bg: 'bg-page',   text: 'text-ink'   },
+  DENTAL:     { bg: 'bg-page',    text: 'text-accent'    },
+  OUTPATIENT: { bg: 'bg-page', text: 'text-accent' },
+  OTHER:      { bg: 'bg-page',  text: 'text-ink'   },
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  ACTIVE:      'bg-emerald-100 text-emerald-700',
-  CANCELLED:   'bg-slate-100 text-slate-600',
-  EXPIRED:     'bg-amber-100 text-amber-700',
-  SUBMITTED:   'bg-blue-100 text-blue-700',
-  UNDER_REVIEW:'bg-indigo-100 text-indigo-700',
-  APPROVED:    'bg-emerald-100 text-emerald-700',
-  REJECTED:    'bg-red-100 text-red-700',
-  REIMBURSED:  'bg-teal-100 text-teal-700',
+  SUBMITTED:    TONES.pending,
+  UNDER_REVIEW: TONES.active,
+  APPROVED:     TONES.approved,
+  REIMBURSED:   TONES.done,
+  ACTIVE:       TONES.approved,
+  EXPIRED:      TONES.warning,
+  REJECTED:     TONES.critical,
+  CANCELLED:    TONES.inert,
 };
 
 export default function BenefitsPage() {
@@ -402,7 +403,7 @@ export default function BenefitsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+        <div className="w-10 h-10 border-4 border-accent border-accent animate-spin rounded-full" />
       </div>
     );
   }
@@ -419,13 +420,13 @@ export default function BenefitsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-black text-slate-900">My Benefits</h1>
-            <p className="text-xs text-slate-500 mt-0.5 uppercase tracking-widest font-bold">Insurance · Claims · Dependents</p>
+            <h1 className="text-xl font-black text-ink">My Benefits</h1>
+            <p className="text-xs text-muted mt-0.5 uppercase tracking-widest font-bold">Insurance · Claims · Dependents</p>
           </div>
           {openPeriod && (
-            <div className="px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-xl">
-              <p className="text-xs font-black text-indigo-700 uppercase tracking-widest">◑ Open Enrollment Active</p>
-              <p className="text-[10px] text-indigo-600 font-bold mt-0.5">
+            <div className="px-4 py-2 bg-page border border-accent ">
+              <p className="text-xs font-black text-accent uppercase tracking-widest">◑ Open Enrollment Active</p>
+              <p className="text-[10px] text-accent font-bold mt-0.5">
                 {openPeriod.name} · ends {new Date(openPeriod.endDate).toLocaleDateString('en-SG')}
               </p>
             </div>
@@ -434,12 +435,12 @@ export default function BenefitsPage() {
 
         {/* Active Enrollments */}
         <section>
-          <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-3">Active Plans ({activeEnrollments.length})</h2>
+          <h2 className="text-sm font-black text-ink uppercase tracking-widest mb-3">Active Plans ({activeEnrollments.length})</h2>
           {activeEnrollments.length === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 lg:p-8 text-center">
-              <p className="text-sm text-slate-500">You have no active benefit plans.</p>
+            <div className="bg-paper border border-rule p-4 sm:p-6 lg:p-8 text-center">
+              <p className="text-sm text-muted">You have no active benefit plans.</p>
               {openPeriod && availablePlansForSelfEnroll.length > 0 && (
-                <p className="text-xs text-indigo-600 mt-2 font-bold">Enroll in a plan below ↓</p>
+                <p className="text-xs text-accent mt-2 font-bold">Enroll in a plan below ↓</p>
               )}
             </div>
           ) : (
@@ -447,32 +448,32 @@ export default function BenefitsPage() {
               {activeEnrollments.map(e => {
                 const tc = TYPE_COLORS[e.plan?.type || 'OTHER'];
                 return (
-                  <div key={e.id} className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-md transition-all">
+                  <div key={e.id} className="bg-paper border border-rule p-5 hover: transition-all">
                     <div className="flex items-start justify-between mb-3">
                       <div>
-                        <h3 className="text-base font-black text-slate-900">{e.plan?.name}</h3>
-                        <p className="text-xs text-slate-500 mt-0.5 font-bold">{e.plan?.insurerName}</p>
+                        <h3 className="text-base font-black text-ink">{e.plan?.name}</h3>
+                        <p className="text-xs text-muted mt-0.5 font-bold">{e.plan?.insurerName}</p>
                       </div>
-                      <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${tc.bg} ${tc.text}`}>
+                      <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest  ${tc.bg} ${tc.text}`}>
                         {TYPE_LABELS[e.plan?.type || 'OTHER']}
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-3 text-xs">
                       <div>
-                        <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Coverage</p>
-                        <p className="text-slate-700 font-black mt-0.5">SGD {(e.plan?.coverageAmount || 0).toLocaleString()}</p>
+                        <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Coverage</p>
+                        <p className="text-ink font-black mt-0.5">SGD {(e.plan?.coverageAmount || 0).toLocaleString()}</p>
                       </div>
                       <div>
-                        <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Effective</p>
-                        <p className="text-slate-700 font-black mt-0.5">{new Date(e.effectiveFrom).toLocaleDateString('en-SG')}</p>
+                        <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Effective</p>
+                        <p className="text-ink font-black mt-0.5">{new Date(e.effectiveFrom).toLocaleDateString('en-SG')}</p>
                       </div>
                       <div>
-                        <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Dependents</p>
-                        <p className="text-slate-700 font-black mt-0.5">{e.enrolledDependentIds.length}</p>
+                        <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Dependents</p>
+                        <p className="text-ink font-black mt-0.5">{e.enrolledDependentIds.length}</p>
                       </div>
                       <div>
-                        <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Your Co-Pay</p>
-                        <p className="text-slate-700 font-black mt-0.5">
+                        <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Your Co-Pay</p>
+                        <p className="text-ink font-black mt-0.5">
                           {e.annualPremiumEmployee > 0 ? `SGD ${e.annualPremiumEmployee}/yr` : 'Employer-paid'}
                         </p>
                       </div>
@@ -480,13 +481,13 @@ export default function BenefitsPage() {
                     <div className="mt-4 flex gap-2">
                       <button
                         onClick={() => { setClaimEnrollment(e); setShowClaimModal(true); }}
-                        className="flex-1 py-2 px-3 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-lg hover:bg-indigo-700 transition-all"
+                        className="flex-1 py-2 px-3 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent transition-all"
                       >
                         Submit Claim
                       </button>
                       <button
                         onClick={() => cancelEnrollment(e.id)}
-                        className="py-2 px-3 border border-slate-200 text-slate-600 text-xs font-black uppercase tracking-widest rounded-lg hover:bg-slate-50 transition-all"
+                        className="py-2 px-3 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page transition-all"
                       >
                         Cancel
                       </button>
@@ -501,35 +502,35 @@ export default function BenefitsPage() {
         {/* Available plans (only during open enrollment) */}
         {openPeriod && availablePlansForSelfEnroll.length > 0 && (
           <section>
-            <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-3">Available During Open Enrollment</h2>
+            <h2 className="text-sm font-black text-ink uppercase tracking-widest mb-3">Available During Open Enrollment</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {availablePlansForSelfEnroll.map(p => {
                 const tc = TYPE_COLORS[p.type];
                 return (
-                  <div key={p.id} className="bg-white rounded-2xl border-2 border-indigo-100 p-5 hover:shadow-md transition-all">
+                  <div key={p.id} className="bg-paper border-2 border-accent p-5 hover: transition-all">
                     <div className="flex items-start justify-between mb-3">
                       <div>
-                        <h3 className="text-base font-black text-slate-900">{p.name}</h3>
-                        <p className="text-xs text-slate-500 mt-0.5 font-bold">{p.insurerName}</p>
+                        <h3 className="text-base font-black text-ink">{p.name}</h3>
+                        <p className="text-xs text-muted mt-0.5 font-bold">{p.insurerName}</p>
                       </div>
-                      <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${tc.bg} ${tc.text}`}>
+                      <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest  ${tc.bg} ${tc.text}`}>
                         {TYPE_LABELS[p.type]}
                       </span>
                     </div>
-                    {p.description && <p className="text-xs text-slate-500 mb-3">{p.description}</p>}
+                    {p.description && <p className="text-xs text-muted mb-3">{p.description}</p>}
                     <div className="grid grid-cols-2 gap-3 text-xs">
                       <div>
-                        <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Coverage</p>
-                        <p className="text-slate-700 font-black mt-0.5">SGD {p.coverageAmount.toLocaleString()}</p>
+                        <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Coverage</p>
+                        <p className="text-ink font-black mt-0.5">SGD {p.coverageAmount.toLocaleString()}</p>
                       </div>
                       <div>
-                        <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Your Co-Pay</p>
-                        <p className="text-slate-700 font-black mt-0.5">{p.premiumEmployee > 0 ? `SGD ${p.premiumEmployee}/yr` : 'Free'}</p>
+                        <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Your Co-Pay</p>
+                        <p className="text-ink font-black mt-0.5">{p.premiumEmployee > 0 ? `SGD ${p.premiumEmployee}/yr` : 'Free'}</p>
                       </div>
                     </div>
                     <button
                       onClick={() => { setEnrollPlan(p); setShowEnrollModal(true); }}
-                      className="mt-4 w-full py-2 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-lg hover:bg-indigo-700 transition-all"
+                      className="mt-4 w-full py-2 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent transition-all"
                     >
                       Enroll
                     </button>
@@ -543,37 +544,37 @@ export default function BenefitsPage() {
         {/* Dependents */}
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest">My Dependents ({myDependents.length})</h2>
+            <h2 className="text-sm font-black text-ink uppercase tracking-widest">My Dependents ({myDependents.length})</h2>
             <button
               onClick={() => setShowDependentModal(true)}
-              className="text-xs font-bold text-indigo-600 hover:text-indigo-700 border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50 transition-all"
+              className="text-xs font-bold text-accent hover:text-accent border border-accent px-3 py-1.5 hover:bg-page transition-all"
             >
               + Add Dependent
             </button>
           </div>
           {myDependents.length === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 text-center text-sm text-slate-500">
+            <div className="bg-paper border border-rule p-4 sm:p-6 text-center text-sm text-muted">
               No dependents on file.
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="bg-paper border border-rule overflow-hidden">
               <table className="w-full">
-                <thead className="bg-slate-50 border-b border-slate-200">
+                <thead className="bg-page border-b border-rule">
                   <tr>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Name</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Relationship</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">DOB</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Name</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Relationship</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">DOB</th>
                     <th className="px-4 py-2.5 text-right"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {myDependents.map(d => (
-                    <tr key={d.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
-                      <td className="px-4 py-2.5 text-sm font-bold text-slate-700">{d.fullName}</td>
-                      <td className="px-4 py-2.5 text-sm text-slate-600">{d.relationship}</td>
-                      <td className="px-4 py-2.5 text-sm text-slate-600">{new Date(d.dateOfBirth).toLocaleDateString('en-SG')}</td>
+                    <tr key={d.id} className="border-b border-rule last:border-0 hover:bg-page">
+                      <td className="px-4 py-2.5 text-sm font-bold text-ink">{d.fullName}</td>
+                      <td className="px-4 py-2.5 text-sm text-ink">{d.relationship}</td>
+                      <td className="px-4 py-2.5 text-sm text-ink">{new Date(d.dateOfBirth).toLocaleDateString('en-SG')}</td>
                       <td className="px-4 py-2.5 text-right">
-                        <button onClick={() => deleteDependent(d.id)} className="text-xs font-bold text-red-500 hover:text-red-600">Remove</button>
+                        <button onClick={() => deleteDependent(d.id)} className="text-xs font-bold text-ink hover:text-ink">Remove</button>
                       </td>
                     </tr>
                   ))}
@@ -585,32 +586,32 @@ export default function BenefitsPage() {
 
         {/* My Claims */}
         <section>
-          <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-3">My Claims ({myClaims.length})</h2>
+          <h2 className="text-sm font-black text-ink uppercase tracking-widest mb-3">My Claims ({myClaims.length})</h2>
           {myClaims.length === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 text-center text-sm text-slate-500">
+            <div className="bg-paper border border-rule p-4 sm:p-6 text-center text-sm text-muted">
               No claims submitted yet.
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="bg-paper border border-rule overflow-hidden">
               <table className="w-full">
-                <thead className="bg-slate-50 border-b border-slate-200">
+                <thead className="bg-page border-b border-rule">
                   <tr>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Claim #</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Treatment</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Date</th>
-                    <th className="px-4 py-2.5 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">Amount</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Claim #</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Treatment</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Date</th>
+                    <th className="px-4 py-2.5 text-right text-[10px] font-black text-muted uppercase tracking-widest">Amount</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {myClaims.map(c => (
-                    <tr key={c.id} className="border-b border-slate-100 last:border-0">
-                      <td className="px-4 py-2.5 text-sm font-mono font-bold text-slate-700">{c.claimNumber}</td>
-                      <td className="px-4 py-2.5 text-sm text-slate-600">{c.treatmentType}</td>
-                      <td className="px-4 py-2.5 text-sm text-slate-600">{new Date(c.treatmentDate).toLocaleDateString('en-SG')}</td>
-                      <td className="px-4 py-2.5 text-sm text-slate-700 font-bold text-right">SGD {c.claimAmount}</td>
+                    <tr key={c.id} className="border-b border-rule last:border-0">
+                      <td className="px-4 py-2.5 text-sm font-mono font-bold text-ink">{c.claimNumber}</td>
+                      <td className="px-4 py-2.5 text-sm text-ink">{c.treatmentType}</td>
+                      <td className="px-4 py-2.5 text-sm text-ink">{new Date(c.treatmentDate).toLocaleDateString('en-SG')}</td>
+                      <td className="px-4 py-2.5 text-sm text-ink font-bold text-right">SGD {c.claimAmount}</td>
                       <td className="px-4 py-2.5">
-                        <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${STATUS_COLORS[c.status] || 'bg-slate-100 text-slate-600'}`}>
+                        <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[c.status] || 'bg-page text-ink'}`}>
                           {c.status}
                         </span>
                       </td>
@@ -625,11 +626,11 @@ export default function BenefitsPage() {
         {/* Flexi Benefits Wallet */}
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest">My Flexi Benefits Wallet</h2>
+            <h2 className="text-sm font-black text-ink uppercase tracking-widest">My Flexi Benefits Wallet</h2>
             {flexiWallet && flexiCategories.length > 0 && (
               <button
                 onClick={() => setShowFlexiClaimModal(true)}
-                className="text-xs font-bold text-indigo-600 hover:text-indigo-700 border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50 transition-all"
+                className="text-xs font-bold text-accent hover:text-accent border border-accent px-3 py-1.5 hover:bg-page transition-all"
               >
                 + Submit Claim
               </button>
@@ -637,35 +638,35 @@ export default function BenefitsPage() {
           </div>
 
           {!flexiWallet ? (
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 text-center text-sm text-slate-500">
+            <div className="bg-paper border border-rule p-4 sm:p-6 text-center text-sm text-muted">
               No flexi benefits wallet for {new Date().getFullYear()}. Contact HR to have one credited.
             </div>
           ) : (
             <div className="space-y-4">
               {/* Balance Card */}
-              <div className={`bg-white rounded-2xl border-2 p-5 ${flexiWallet.status === 'EXPIRED' ? 'border-slate-200 opacity-70' : 'border-indigo-100'}`}>
+              <div className={`bg-paper  border-2 p-5 ${flexiWallet.status === 'EXPIRED' ? 'border-rule opacity-70' : 'border-accent'}`}>
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Flexi Benefits Wallet {flexiWallet.year}</p>
-                    <p className={`text-3xl font-black mt-1 ${flexiWallet.status === 'EXPIRED' ? 'text-slate-400' : 'text-indigo-700'}`}>
+                    <p className="text-[10px] font-black text-muted uppercase tracking-widest">Flexi Benefits Wallet {flexiWallet.year}</p>
+                    <p className={`text-3xl font-black mt-1 ${flexiWallet.status === 'EXPIRED' ? 'text-muted' : 'text-accent'}`}>
                       SGD {flexiBalance?.remaining?.toLocaleString() || 0}
                     </p>
-                    <p className="text-xs text-slate-500 mt-0.5 font-bold">remaining balance</p>
+                    <p className="text-xs text-muted mt-0.5 font-bold">remaining balance</p>
                   </div>
-                  <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${flexiWallet.status === 'EXPIRED' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                  <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest  ${flexiWallet.status === 'EXPIRED' ? 'bg-page text-ink' : 'bg-page text-accent'}`}>
                     {flexiWallet.status}
                   </span>
                 </div>
                 {/* Progress bar */}
                 {flexiBalance && flexiBalance.credited > 0 && (
                   <div className="mb-4">
-                    <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                    <div className="flex justify-between text-[10px] font-black text-muted uppercase tracking-widest mb-1.5">
                       <span>Used</span>
                       <span>{Math.round((flexiBalance.used / flexiBalance.credited) * 100)}%</span>
                     </div>
-                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-2 bg-page overflow-hidden">
                       <div
-                        className="h-full bg-indigo-500 rounded-full transition-all"
+                        className="h-full bg-accent transition-all"
                         style={{ width: `${Math.min(100, (flexiBalance.used / flexiBalance.credited) * 100)}%` }}
                       />
                     </div>
@@ -673,19 +674,19 @@ export default function BenefitsPage() {
                 )}
                 <div className="grid grid-cols-3 gap-3 text-xs">
                   <div>
-                    <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Credited</p>
-                    <p className="text-slate-700 font-black mt-0.5">SGD {flexiBalance?.credited}</p>
+                    <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Credited</p>
+                    <p className="text-ink font-black mt-0.5">SGD {flexiBalance?.credited}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Approved Used</p>
-                    <p className="text-slate-700 font-black mt-0.5">SGD {flexiBalance?.used}</p>
+                    <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Approved Used</p>
+                    <p className="text-ink font-black mt-0.5">SGD {flexiBalance?.used}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Pending</p>
-                    <p className="text-amber-600 font-black mt-0.5">SGD {flexiBalance?.pending || 0}</p>
+                    <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Pending</p>
+                    <p className="text-ink font-black mt-0.5">SGD {flexiBalance?.pending || 0}</p>
                   </div>
                 </div>
-                <p className="text-[10px] text-slate-400 font-bold mt-3">
+                <p className="text-[10px] text-muted font-bold mt-3">
                   Expires: {new Date(flexiWallet.expiresAt).toLocaleDateString('en-SG', { day: 'numeric', month: 'long', year: 'numeric' })}
                 </p>
               </div>
@@ -693,10 +694,10 @@ export default function BenefitsPage() {
               {/* Eligible Categories */}
               {flexiCategories.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Eligible Spend Categories</p>
+                  <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-2">Eligible Spend Categories</p>
                   <div className="flex flex-wrap gap-2">
                     {flexiCategories.map(cat => (
-                      <span key={cat.id} className={`px-3 py-1 text-xs font-black uppercase tracking-widest rounded-full ${CATEGORY_COLORS[cat.code] || 'bg-slate-100 text-slate-600'}`}>
+                      <span key={cat.id} className={`px-3 py-1 text-xs font-black uppercase tracking-widest  ${CATEGORY_COLORS[cat.code] || 'bg-page text-ink'}`}>
                         {cat.name}
                       </span>
                     ))}
@@ -710,38 +711,38 @@ export default function BenefitsPage() {
         {/* My Flexi Claims */}
         {myFlexiClaims.length > 0 && (
           <section>
-            <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-3">My Flexi Claims ({myFlexiClaims.length})</h2>
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <h2 className="text-sm font-black text-ink uppercase tracking-widest mb-3">My Flexi Claims ({myFlexiClaims.length})</h2>
+            <div className="bg-paper border border-rule overflow-hidden">
               <table className="w-full">
-                <thead className="bg-slate-50 border-b border-slate-200">
+                <thead className="bg-page border-b border-rule">
                   <tr>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Claim #</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Category</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Description</th>
-                    <th className="px-4 py-2.5 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">Amount</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Claim #</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Category</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Description</th>
+                    <th className="px-4 py-2.5 text-right text-[10px] font-black text-muted uppercase tracking-widest">Amount</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Status</th>
                     <th className="px-4 py-2.5 text-right"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {myFlexiClaims.map(c => (
-                    <tr key={c.id} className="border-b border-slate-100 last:border-0">
-                      <td className="px-4 py-2.5 text-xs font-mono font-bold text-slate-700">{c.claimNumber}</td>
+                    <tr key={c.id} className="border-b border-rule last:border-0">
+                      <td className="px-4 py-2.5 text-xs font-mono font-bold text-ink">{c.claimNumber}</td>
                       <td className="px-4 py-2.5">
-                        <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${CATEGORY_COLORS[c.categoryCode] || 'bg-slate-100 text-slate-600'}`}>
+                        <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest  ${CATEGORY_COLORS[c.categoryCode] || 'bg-page text-ink'}`}>
                           {c.categoryName}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-sm text-slate-600 max-w-[180px] truncate">{c.description}</td>
+                      <td className="px-4 py-2.5 text-sm text-ink max-w-[180px] truncate">{c.description}</td>
                       <td className="px-4 py-2.5 text-sm font-bold text-right">SGD {c.claimAmount}</td>
                       <td className="px-4 py-2.5">
-                        <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${STATUS_COLORS[c.status] || 'bg-slate-100 text-slate-600'}`}>
+                        <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[c.status] || 'bg-page text-ink'}`}>
                           {c.status}{c.autoApproved && c.status === 'APPROVED' ? ' (auto)' : ''}
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         {c.status === 'PENDING' && (
-                          <button onClick={() => cancelFlexiClaim(c.id)} className="text-xs font-bold text-red-500 hover:text-red-600">Cancel</button>
+                          <button onClick={() => cancelFlexiClaim(c.id)} className="text-xs font-bold text-ink hover:text-ink">Cancel</button>
                         )}
                       </td>
                     </tr>
@@ -794,13 +795,13 @@ export default function BenefitsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-black text-slate-900">Benefits Administration</h1>
-          <p className="text-xs text-slate-500 mt-0.5 uppercase tracking-widest font-bold">Group Insurance · Claims · Open Enrollment</p>
+          <h1 className="text-xl font-black text-ink">Benefits Administration</h1>
+          <p className="text-xs text-muted mt-0.5 uppercase tracking-widest font-bold">Group Insurance · Claims · Open Enrollment</p>
         </div>
         {openPeriod && (
-          <div className="px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-xl">
-            <p className="text-xs font-black text-emerald-700 uppercase tracking-widest">● Open Enrollment Active</p>
-            <p className="text-[10px] text-emerald-600 font-bold mt-0.5">
+          <div className="px-4 py-2 bg-page border border-accent ">
+            <p className="text-xs font-black text-accent uppercase tracking-widest">● Open Enrollment Active</p>
+            <p className="text-[10px] text-accent font-bold mt-0.5">
               {openPeriod.name} · ends {new Date(openPeriod.endDate).toLocaleDateString('en-SG')}
             </p>
           </div>
@@ -816,7 +817,7 @@ export default function BenefitsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-slate-200 flex-wrap">
+      <div className="flex gap-1 border-b border-rule flex-wrap">
         {([
           ['plans',       'Plans',           plans.length],
           ['enrollments', 'Enrollments',     allEnrollments.length],
@@ -828,7 +829,7 @@ export default function BenefitsPage() {
             key={id}
             onClick={() => setHrTab(id)}
             className={`px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-all border-b-2 -mb-px ${
-              hrTab === id ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+              hrTab === id ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'
             }`}
           >
             {label} <span className="ml-1 opacity-60">{n}</span>
@@ -842,7 +843,7 @@ export default function BenefitsPage() {
           <div className="flex justify-end">
             <button
               onClick={() => { setEditingPlan(null); setShowPlanModal(true); }}
-              className="px-4 py-2 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all"
+              className="px-4 py-2 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent transition-all"
             >
               + New Plan
             </button>
@@ -852,37 +853,37 @@ export default function BenefitsPage() {
               const tc = TYPE_COLORS[p.type];
               const active = allEnrollments.filter(e => e.planId === p.id && e.status === 'ACTIVE').length;
               return (
-                <div key={p.id} className={`bg-white rounded-2xl border p-5 ${p.isActive ? 'border-slate-200' : 'border-slate-100 opacity-60'}`}>
+                <div key={p.id} className={`bg-paper  border p-5 ${p.isActive ? 'border-rule' : 'border-rule opacity-60'}`}>
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-base font-black text-slate-900">{p.name}</h3>
-                        {!p.isActive && <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Inactive</span>}
+                        <h3 className="text-base font-black text-ink">{p.name}</h3>
+                        {!p.isActive && <span className="text-[9px] font-black text-muted uppercase tracking-widest">Inactive</span>}
                       </div>
-                      <p className="text-xs text-slate-500 mt-0.5 font-bold font-mono">{p.code} · {p.insurerName}</p>
+                      <p className="text-xs text-muted mt-0.5 font-bold font-mono">{p.code} · {p.insurerName}</p>
                     </div>
-                    <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${tc.bg} ${tc.text}`}>
+                    <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest  ${tc.bg} ${tc.text}`}>
                       {TYPE_LABELS[p.type]}
                     </span>
                   </div>
                   <div className="grid grid-cols-3 gap-2 mt-3 text-xs">
                     <div>
-                      <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Coverage</p>
-                      <p className="text-slate-700 font-black mt-0.5">SGD {p.coverageAmount.toLocaleString()}</p>
+                      <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Coverage</p>
+                      <p className="text-ink font-black mt-0.5">SGD {p.coverageAmount.toLocaleString()}</p>
                     </div>
                     <div>
-                      <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Employer/yr</p>
-                      <p className="text-slate-700 font-black mt-0.5">SGD {p.premiumEmployer}</p>
+                      <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Employer/yr</p>
+                      <p className="text-ink font-black mt-0.5">SGD {p.premiumEmployer}</p>
                     </div>
                     <div>
-                      <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Active Enrolled</p>
-                      <p className="text-slate-700 font-black mt-0.5">{active}</p>
+                      <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Active Enrolled</p>
+                      <p className="text-ink font-black mt-0.5">{active}</p>
                     </div>
                   </div>
                   <div className="mt-4 flex gap-2">
                     <button
                       onClick={() => { setEditingPlan(p); setShowPlanModal(true); }}
-                      className="flex-1 py-1.5 text-xs font-bold text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-all"
+                      className="flex-1 py-1.5 text-xs font-bold text-accent border border-accent hover:bg-page transition-all"
                     >
                       Edit
                     </button>
@@ -894,7 +895,7 @@ export default function BenefitsPage() {
                               .then(r => r.ok ? loadData() : r.json().then((e: any) => alert(e.error || 'Failed')));
                           }
                         }}
-                        className="py-1.5 px-3 text-xs font-bold text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-all"
+                        className="py-1.5 px-3 text-xs font-bold text-ink border border-ink hover:bg-page transition-all"
                       >
                         Deactivate
                       </button>
@@ -909,28 +910,28 @@ export default function BenefitsPage() {
 
       {/* Enrollments Tab */}
       {hrTab === 'enrollments' && (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="bg-paper border border-rule overflow-hidden">
           <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-page border-b border-rule">
               <tr>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Employee</th>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Plan</th>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Source</th>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Effective From</th>
-                <th className="px-4 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">Premium/yr</th>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Employee</th>
+                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Plan</th>
+                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Source</th>
+                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Effective From</th>
+                <th className="px-4 py-3 text-right text-[10px] font-black text-muted uppercase tracking-widest">Premium/yr</th>
+                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Status</th>
               </tr>
             </thead>
             <tbody>
               {allEnrollments.map(e => (
-                <tr key={e.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-4 py-3 text-sm font-bold text-slate-700">{e.employeeName}</td>
-                  <td className="px-4 py-3 text-sm text-slate-600">{e.plan?.name || e.planId}</td>
-                  <td className="px-4 py-3 text-xs text-slate-500 uppercase tracking-wider font-bold">{(e as any).enrollmentSource}</td>
-                  <td className="px-4 py-3 text-sm text-slate-600">{new Date(e.effectiveFrom).toLocaleDateString('en-SG')}</td>
-                  <td className="px-4 py-3 text-sm text-slate-700 font-bold text-right">SGD {e.annualPremiumEmployer}</td>
+                <tr key={e.id} className="border-b border-rule last:border-0">
+                  <td className="px-4 py-3 text-sm font-bold text-ink">{e.employeeName}</td>
+                  <td className="px-4 py-3 text-sm text-ink">{e.plan?.name || e.planId}</td>
+                  <td className="px-4 py-3 text-xs text-muted uppercase tracking-wider font-bold">{(e as any).enrollmentSource}</td>
+                  <td className="px-4 py-3 text-sm text-ink">{new Date(e.effectiveFrom).toLocaleDateString('en-SG')}</td>
+                  <td className="px-4 py-3 text-sm text-ink font-bold text-right">SGD {e.annualPremiumEmployer}</td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${STATUS_COLORS[e.status] || 'bg-slate-100 text-slate-600'}`}>
+                    <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[e.status] || 'bg-page text-ink'}`}>
                       {e.status}
                     </span>
                   </td>
@@ -943,43 +944,43 @@ export default function BenefitsPage() {
 
       {/* Claims Tab */}
       {hrTab === 'claims' && (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="bg-paper border border-rule overflow-hidden">
           <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-page border-b border-rule">
               <tr>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Claim #</th>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Employee</th>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Treatment</th>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Date</th>
-                <th className="px-4 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">Claim</th>
-                <th className="px-4 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">Approved</th>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Claim #</th>
+                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Employee</th>
+                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Treatment</th>
+                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Date</th>
+                <th className="px-4 py-3 text-right text-[10px] font-black text-muted uppercase tracking-widest">Claim</th>
+                <th className="px-4 py-3 text-right text-[10px] font-black text-muted uppercase tracking-widest">Approved</th>
+                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Status</th>
                 <th className="px-4 py-3 text-right"></th>
               </tr>
             </thead>
             <tbody>
               {allClaims.map(c => (
-                <tr key={c.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-4 py-3 text-xs font-mono font-bold text-slate-700">{c.claimNumber}</td>
-                  <td className="px-4 py-3 text-sm text-slate-600">{c.employeeName}</td>
-                  <td className="px-4 py-3 text-sm text-slate-600">{c.treatmentType}</td>
-                  <td className="px-4 py-3 text-sm text-slate-600">{new Date(c.treatmentDate).toLocaleDateString('en-SG')}</td>
+                <tr key={c.id} className="border-b border-rule last:border-0">
+                  <td className="px-4 py-3 text-xs font-mono font-bold text-ink">{c.claimNumber}</td>
+                  <td className="px-4 py-3 text-sm text-ink">{c.employeeName}</td>
+                  <td className="px-4 py-3 text-sm text-ink">{c.treatmentType}</td>
+                  <td className="px-4 py-3 text-sm text-ink">{new Date(c.treatmentDate).toLocaleDateString('en-SG')}</td>
                   <td className="px-4 py-3 text-sm font-bold text-right">SGD {c.claimAmount}</td>
                   <td className="px-4 py-3 text-sm font-bold text-right">{c.approvedAmount !== null ? `SGD ${c.approvedAmount}` : '—'}</td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${STATUS_COLORS[c.status] || 'bg-slate-100 text-slate-600'}`}>
+                    <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[c.status] || 'bg-page text-ink'}`}>
                       {c.status}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right space-x-1">
                     {(c.status === 'SUBMITTED' || c.status === 'UNDER_REVIEW') && (
                       <>
-                        <button onClick={() => approveClaim(c.id)} className="text-xs font-bold text-emerald-600 hover:text-emerald-700 px-2">Approve</button>
-                        <button onClick={() => rejectClaim(c.id)}  className="text-xs font-bold text-red-500 hover:text-red-600 px-2">Reject</button>
+                        <button onClick={() => approveClaim(c.id)} className="text-xs font-bold text-accent hover:text-accent px-2">Approve</button>
+                        <button onClick={() => rejectClaim(c.id)}  className="text-xs font-bold text-ink hover:text-ink px-2">Reject</button>
                       </>
                     )}
                     {c.status === 'APPROVED' && (
-                      <button onClick={() => reimburseClaim(c.id)} className="text-xs font-bold text-teal-600 hover:text-teal-700 px-2">Mark Reimbursed</button>
+                      <button onClick={() => reimburseClaim(c.id)} className="text-xs font-bold text-accent hover:text-accent px-2">Mark Reimbursed</button>
                     )}
                   </td>
                 </tr>
@@ -995,44 +996,44 @@ export default function BenefitsPage() {
           <div className="flex justify-end">
             <button
               onClick={() => setShowPeriodModal(true)}
-              className="px-4 py-2 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all"
+              className="px-4 py-2 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent transition-all"
             >
               + New Period
             </button>
           </div>
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="bg-paper border border-rule overflow-hidden">
             <table className="w-full">
-              <thead className="bg-slate-50 border-b border-slate-200">
+              <thead className="bg-page border-b border-rule">
                 <tr>
-                  <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Name</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Year</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Window</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Plans</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                  <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Name</th>
+                  <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Year</th>
+                  <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Window</th>
+                  <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Plans</th>
+                  <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Status</th>
                   <th className="px-4 py-3 text-right"></th>
                 </tr>
               </thead>
               <tbody>
                 {allPeriods.map(p => (
-                  <tr key={p.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-4 py-3 text-sm font-bold text-slate-700">{p.name}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600">{p.year}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600">
+                  <tr key={p.id} className="border-b border-rule last:border-0">
+                    <td className="px-4 py-3 text-sm font-bold text-ink">{p.name}</td>
+                    <td className="px-4 py-3 text-sm text-ink">{p.year}</td>
+                    <td className="px-4 py-3 text-sm text-ink">
                       {new Date(p.startDate).toLocaleDateString('en-SG')} → {new Date(p.endDate).toLocaleDateString('en-SG')}
                     </td>
-                    <td className="px-4 py-3 text-sm text-slate-600">{p.planIds.length || 'All'}</td>
+                    <td className="px-4 py-3 text-sm text-ink">{p.planIds.length || 'All'}</td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${
-                        p.status === 'ACTIVE'    ? 'bg-emerald-100 text-emerald-700' :
-                        p.status === 'SCHEDULED' ? 'bg-blue-100 text-blue-700' :
-                                                    'bg-slate-100 text-slate-600'
+                      <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest  ${
+                        p.status === 'ACTIVE'    ? 'bg-page text-accent' :
+                        p.status === 'SCHEDULED' ? 'bg-page text-accent' :
+                                                    'bg-page text-ink'
                       }`}>
                         {p.status}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
                       {p.status !== 'CLOSED' && (
-                        <button onClick={() => closePeriod(p.id)} className="text-xs font-bold text-slate-500 hover:text-slate-700">Close</button>
+                        <button onClick={() => closePeriod(p.id)} className="text-xs font-bold text-muted hover:text-ink">Close</button>
                       )}
                     </td>
                   </tr>
@@ -1047,7 +1048,7 @@ export default function BenefitsPage() {
       {hrTab === 'flexi' && (
         <div className="space-y-4">
           {/* Sub-tab strip */}
-          <div className="flex gap-1 border-b border-slate-200">
+          <div className="flex gap-1 border-b border-rule">
             {([
               ['wallets', 'Wallets',  allFlexiWallets.length],
               ['claims',  'Claims',   allFlexiClaims.length],
@@ -1058,7 +1059,7 @@ export default function BenefitsPage() {
                 key={id}
                 onClick={() => setFlexiSubTab(id)}
                 className={`px-4 py-2 text-xs font-black uppercase tracking-widest transition-all border-b-2 -mb-px ${
-                  flexiSubTab === id ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+                  flexiSubTab === id ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'
                 }`}
               >
                 {label}{n > 0 && <span className="ml-1 opacity-60">{n}</span>}
@@ -1068,23 +1069,23 @@ export default function BenefitsPage() {
 
           {/* Year selector + seed */}
           <div className="flex items-center gap-3">
-            <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Year</label>
+            <label className="text-xs font-black text-muted uppercase tracking-widest">Year</label>
             <select
               value={flexiYear}
               onChange={e => setFlexiYear(parseInt(e.target.value))}
-              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-bold text-slate-700 outline-none focus:border-indigo-400"
+              className="border border-rule px-3 py-1.5 text-sm font-bold text-ink outline-none focus:border-accent"
             >
               {[flexiYear - 1, flexiYear, flexiYear + 1].map(y => <option key={y} value={y}>{y}</option>)}
             </select>
             <button
               onClick={() => loadData()}
-              className="px-3 py-1.5 text-xs font-black uppercase tracking-widest border border-slate-200 rounded-lg hover:bg-slate-50 transition-all"
+              className="px-3 py-1.5 text-xs font-black uppercase tracking-widest border border-rule hover:bg-page transition-all"
             >
               Refresh
             </button>
             <button
               onClick={seedFlexiCategories}
-              className="px-3 py-1.5 text-xs font-black uppercase tracking-widest border border-indigo-200 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-all"
+              className="px-3 py-1.5 text-xs font-black uppercase tracking-widest border border-accent text-accent hover:bg-page transition-all"
             >
               Seed Categories
             </button>
@@ -1105,7 +1106,7 @@ export default function BenefitsPage() {
               <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setShowFlexiCreditModal(true)}
-                  className="px-4 py-2 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all"
+                  className="px-4 py-2 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent transition-all"
                 >
                   + Credit Wallet
                 </button>
@@ -1119,42 +1120,42 @@ export default function BenefitsPage() {
                     if (res.ok) { const d = await res.json(); alert(`Credited ${d.credited} wallets (${d.skipped} skipped).`); loadData(); }
                     else alert((await res.json()).error || 'Failed');
                   }}
-                  className="px-4 py-2 border border-emerald-200 text-emerald-700 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-emerald-50 transition-all"
+                  className="px-4 py-2 border border-accent text-accent text-xs font-black uppercase tracking-widest hover:bg-page transition-all"
                 >
                   Batch Credit All
                 </button>
               </div>
-              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="bg-paper border border-rule overflow-hidden">
                 <table className="w-full">
-                  <thead className="bg-slate-50 border-b border-slate-200">
+                  <thead className="bg-page border-b border-rule">
                     <tr>
-                      <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Employee</th>
-                      <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Grade</th>
-                      <th className="px-4 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">Credited</th>
-                      <th className="px-4 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">Used</th>
-                      <th className="px-4 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">Remaining</th>
-                      <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Expires</th>
-                      <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                      <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Employee</th>
+                      <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Grade</th>
+                      <th className="px-4 py-3 text-right text-[10px] font-black text-muted uppercase tracking-widest">Credited</th>
+                      <th className="px-4 py-3 text-right text-[10px] font-black text-muted uppercase tracking-widest">Used</th>
+                      <th className="px-4 py-3 text-right text-[10px] font-black text-muted uppercase tracking-widest">Remaining</th>
+                      <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Expires</th>
+                      <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {allFlexiWallets.length === 0 ? (
-                      <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-400">No wallets for {flexiYear}.</td></tr>
+                      <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-muted">No wallets for {flexiYear}.</td></tr>
                     ) : allFlexiWallets.map(w => (
-                      <tr key={w.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
-                        <td className="px-4 py-3 text-sm font-bold text-slate-700">{w.employeeName}</td>
-                        <td className="px-4 py-3 text-xs font-black text-slate-500">{w.employeeGrade || '—'}</td>
+                      <tr key={w.id} className="border-b border-rule last:border-0 hover:bg-page">
+                        <td className="px-4 py-3 text-sm font-bold text-ink">{w.employeeName}</td>
+                        <td className="px-4 py-3 text-xs font-black text-muted">{w.employeeGrade || '—'}</td>
                         <td className="px-4 py-3 text-sm text-right">SGD {w.creditedAmount.toLocaleString()}</td>
                         <td className="px-4 py-3 text-sm text-right">SGD {w.usedAmount.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-sm font-bold text-right text-indigo-700">
+                        <td className="px-4 py-3 text-sm font-bold text-right text-accent">
                           SGD {(w.creditedAmount - w.usedAmount).toLocaleString()}
                         </td>
-                        <td className="px-4 py-3 text-xs text-slate-500">
+                        <td className="px-4 py-3 text-xs text-muted">
                           {new Date(w.expiresAt).toLocaleDateString('en-SG')}
                         </td>
                         <td className="px-4 py-3">
-                          <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${
-                            w.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                          <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest  ${
+                            w.status === 'ACTIVE' ? 'bg-page text-accent' : 'bg-page text-ink'
                           }`}>{w.status}</span>
                         </td>
                       </tr>
@@ -1167,47 +1168,47 @@ export default function BenefitsPage() {
 
           {/* ── Claims sub-tab ── */}
           {flexiSubTab === 'claims' && (
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="bg-paper border border-rule overflow-hidden">
               <table className="w-full">
-                <thead className="bg-slate-50 border-b border-slate-200">
+                <thead className="bg-page border-b border-rule">
                   <tr>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Claim #</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Employee</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Category</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Description</th>
-                    <th className="px-4 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">Amount</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Claim #</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Employee</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Category</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Description</th>
+                    <th className="px-4 py-3 text-right text-[10px] font-black text-muted uppercase tracking-widest">Amount</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Status</th>
                     <th className="px-4 py-3 text-right"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {allFlexiClaims.length === 0 ? (
-                    <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-400">No claims for {flexiYear}.</td></tr>
+                    <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-muted">No claims for {flexiYear}.</td></tr>
                   ) : allFlexiClaims.map(c => (
-                    <tr key={c.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
-                      <td className="px-4 py-3 text-xs font-mono font-bold text-slate-700">{c.claimNumber}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{c.employeeName}</td>
+                    <tr key={c.id} className="border-b border-rule last:border-0 hover:bg-page">
+                      <td className="px-4 py-3 text-xs font-mono font-bold text-ink">{c.claimNumber}</td>
+                      <td className="px-4 py-3 text-sm text-ink">{c.employeeName}</td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${CATEGORY_COLORS[c.categoryCode] || 'bg-slate-100 text-slate-600'}`}>
+                        <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest  ${CATEGORY_COLORS[c.categoryCode] || 'bg-page text-ink'}`}>
                           {c.categoryName}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-600 max-w-[150px] truncate">{c.description}</td>
+                      <td className="px-4 py-3 text-sm text-ink max-w-[150px] truncate">{c.description}</td>
                       <td className="px-4 py-3 text-sm font-bold text-right">SGD {c.claimAmount}</td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${STATUS_COLORS[c.status] || 'bg-slate-100 text-slate-600'}`}>
+                        <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[c.status] || 'bg-page text-ink'}`}>
                           {c.status}{c.autoApproved && c.status === 'APPROVED' ? ' (auto)' : ''}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right space-x-1">
                         {c.status === 'PENDING' && (
                           <>
-                            <button onClick={() => approveFlexiClaim(c.id, c.claimAmount)} className="text-xs font-bold text-emerald-600 hover:text-emerald-700 px-2">Approve</button>
-                            <button onClick={() => rejectFlexiClaim(c.id)}                  className="text-xs font-bold text-red-500 hover:text-red-600 px-2">Reject</button>
+                            <button onClick={() => approveFlexiClaim(c.id, c.claimAmount)} className="text-xs font-bold text-accent hover:text-accent px-2">Approve</button>
+                            <button onClick={() => rejectFlexiClaim(c.id)}                  className="text-xs font-bold text-ink hover:text-ink px-2">Reject</button>
                           </>
                         )}
                         {c.status === 'APPROVED' && (
-                          <button onClick={() => rejectFlexiClaim(c.id)} className="text-xs font-bold text-red-500 hover:text-red-600 px-2">Reverse</button>
+                          <button onClick={() => rejectFlexiClaim(c.id)} className="text-xs font-bold text-ink hover:text-ink px-2">Reverse</button>
                         )}
                       </td>
                     </tr>
@@ -1220,28 +1221,28 @@ export default function BenefitsPage() {
           {/* ── Config sub-tab ── */}
           {flexiSubTab === 'config' && (
             <div className="space-y-4">
-              <p className="text-xs text-slate-500">Configure annual wallet amounts and auto-approve thresholds by employment grade.</p>
-              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <p className="text-xs text-muted">Configure annual wallet amounts and auto-approve thresholds by employment grade.</p>
+              <div className="bg-paper border border-rule overflow-hidden">
                 <table className="w-full">
-                  <thead className="bg-slate-50 border-b border-slate-200">
+                  <thead className="bg-page border-b border-rule">
                     <tr>
-                      <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Grade</th>
-                      <th className="px-4 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">Annual Amount (SGD)</th>
-                      <th className="px-4 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">Auto-Approve ≤ (SGD)</th>
-                      <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Source</th>
+                      <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Grade</th>
+                      <th className="px-4 py-3 text-right text-[10px] font-black text-muted uppercase tracking-widest">Annual Amount (SGD)</th>
+                      <th className="px-4 py-3 text-right text-[10px] font-black text-muted uppercase tracking-widest">Auto-Approve ≤ (SGD)</th>
+                      <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Source</th>
                       <th className="px-4 py-3 text-right"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {flexiConfigs.map(cfg => (
-                      <tr key={cfg.grade} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
-                        <td className="px-4 py-3 text-sm font-black text-slate-700">{cfg.grade}</td>
+                      <tr key={cfg.grade} className="border-b border-rule last:border-0 hover:bg-page">
+                        <td className="px-4 py-3 text-sm font-black text-ink">{cfg.grade}</td>
                         <td className="px-4 py-3 text-sm font-bold text-right">{cfg.annualAmount.toLocaleString()}</td>
                         <td className="px-4 py-3 text-sm text-right">{cfg.autoApproveThreshold}</td>
                         <td className="px-4 py-3">
                           {cfg.isDefault
-                            ? <span className="px-2 py-1 text-[10px] font-black uppercase tracking-widest rounded-full bg-slate-100 text-slate-500">Default</span>
-                            : <span className="px-2 py-1 text-[10px] font-black uppercase tracking-widest rounded-full bg-indigo-50 text-indigo-700">Custom</span>}
+                            ? <span className="px-2 py-1 text-[10px] font-black uppercase tracking-widest bg-page text-muted">Default</span>
+                            : <span className="px-2 py-1 text-[10px] font-black uppercase tracking-widest bg-page text-accent">Custom</span>}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button
@@ -1257,7 +1258,7 @@ export default function BenefitsPage() {
                               if (res.ok) loadData();
                               else alert((await res.json()).error || 'Failed');
                             }}
-                            className="text-xs font-bold text-indigo-600 hover:text-indigo-700"
+                            className="text-xs font-bold text-accent hover:text-accent"
                           >
                             Edit
                           </button>
@@ -1273,9 +1274,9 @@ export default function BenefitsPage() {
           {/* ── Year-End sub-tab ── */}
           {flexiSubTab === 'yearend' && (
             <div className="space-y-6">
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
-                <p className="text-sm font-black text-amber-800">Year-End Processing — {flexiYear}</p>
-                <p className="text-xs text-amber-700 mt-1">
+              <div className="bg-page border border-highlight p-4">
+                <p className="text-sm font-black text-ink">Year-End Processing — {flexiYear}</p>
+                <p className="text-xs text-ink mt-1">
                   This marks all ACTIVE wallets for {flexiYear} as EXPIRED and either encashes remaining balances via payroll or forfeits them. This action is irreversible.
                 </p>
               </div>
@@ -1283,49 +1284,49 @@ export default function BenefitsPage() {
               <div className="flex gap-3">
                 <button
                   onClick={loadYearEndPreview}
-                  className="px-4 py-2 border border-slate-200 text-slate-700 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-slate-50 transition-all"
+                  className="px-4 py-2 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page transition-all"
                 >
                   Preview
                 </button>
                 <button
                   onClick={() => runFlexiYearEnd(false)}
-                  className="px-4 py-2 border border-red-200 text-red-700 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-red-50 transition-all"
+                  className="px-4 py-2 border border-ink text-ink text-xs font-black uppercase tracking-widest hover:bg-page transition-all"
                 >
                   Forfeit Unused Balances
                 </button>
                 <button
                   onClick={() => runFlexiYearEnd(true)}
-                  className="px-4 py-2 bg-emerald-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-emerald-700 transition-all"
+                  className="px-4 py-2 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent transition-all"
                 >
                   Encash to Payroll
                 </button>
               </div>
 
               {flexiYearEndPreview && (
-                <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-                  <h3 className="text-sm font-black text-slate-800">Preview — {flexiYearEndPreview.year}</h3>
+                <div className="bg-paper border border-rule p-5 space-y-4">
+                  <h3 className="text-sm font-black text-ink">Preview — {flexiYearEndPreview.year}</h3>
                   <div className="grid grid-cols-3 gap-4 text-xs">
                     <div>
-                      <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Active Wallets</p>
-                      <p className="text-2xl font-black text-slate-800 mt-1">{flexiYearEndPreview.totalWallets}</p>
+                      <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Active Wallets</p>
+                      <p className="text-2xl font-black text-ink mt-1">{flexiYearEndPreview.totalWallets}</p>
                     </div>
                     <div>
-                      <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Total Credited</p>
-                      <p className="text-2xl font-black text-slate-800 mt-1">SGD {(flexiYearEndPreview.totalCredited || 0).toLocaleString()}</p>
+                      <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Total Credited</p>
+                      <p className="text-2xl font-black text-ink mt-1">SGD {(flexiYearEndPreview.totalCredited || 0).toLocaleString()}</p>
                     </div>
                     <div>
-                      <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Total Remaining</p>
-                      <p className="text-2xl font-black text-indigo-700 mt-1">SGD {(flexiYearEndPreview.totalRemaining || 0).toLocaleString()}</p>
+                      <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Total Remaining</p>
+                      <p className="text-2xl font-black text-accent mt-1">SGD {(flexiYearEndPreview.totalRemaining || 0).toLocaleString()}</p>
                     </div>
                   </div>
                   {flexiYearEndPreview.byGrade && Object.keys(flexiYearEndPreview.byGrade).length > 0 && (
                     <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">By Grade</p>
+                      <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-2">By Grade</p>
                       <div className="space-y-1">
                         {Object.entries(flexiYearEndPreview.byGrade).map(([grade, data]: [string, any]) => (
-                          <div key={grade} className="flex items-center justify-between py-1.5 border-b border-slate-100 last:border-0 text-xs">
-                            <span className="font-black text-slate-700">{grade}</span>
-                            <span className="text-slate-500">{data.count} wallets · SGD {(data.remaining || 0).toLocaleString()} remaining</span>
+                          <div key={grade} className="flex items-center justify-between py-1.5 border-b border-rule last:border-0 text-xs">
+                            <span className="font-black text-ink">{grade}</span>
+                            <span className="text-muted">{data.count} wallets · SGD {(data.remaining || 0).toLocaleString()} remaining</span>
                           </div>
                         ))}
                       </div>
@@ -1367,15 +1368,15 @@ export default function BenefitsPage() {
 // ─── StatCard ────────────────────────────────────────────────────────────────
 function StatCard({ label, value, accent }: { label: string; value: string | number; accent: string }) {
   const colorMap: Record<string, string> = {
-    emerald: 'text-emerald-700',
-    blue:    'text-blue-700',
-    teal:    'text-teal-700',
-    violet:  'text-violet-700',
+    emerald: 'text-accent',
+    blue:    'text-accent',
+    teal:    'text-accent',
+    violet:  'text-accent',
   };
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4">
-      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{label}</p>
-      <p className={`text-2xl font-black ${colorMap[accent] || 'text-slate-700'}`}>{value}</p>
+    <div className="bg-paper border border-rule p-4">
+      <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-2">{label}</p>
+      <p className={`text-2xl font-black ${colorMap[accent] || 'text-ink'}`}>{value}</p>
     </div>
   );
 }
@@ -1413,11 +1414,11 @@ function PlanModal({ plan, onClose, onSuccess }: { plan: Plan | null; onClose: (
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white">
-          <h3 className="text-sm font-black text-slate-900">{plan ? 'Edit Plan' : 'New Plan'}</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 text-lg">×</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow backdrop- p-4">
+      <div className="bg-paper w-full max-w-2xl border border-rule max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-rule flex items-center justify-between sticky top-0 bg-paper">
+          <h3 className="text-sm font-black text-ink">{plan ? 'Edit Plan' : 'New Plan'}</h3>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center hover:bg-page text-muted text-lg">×</button>
         </div>
         <div className="p-4 sm:p-6 space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -1471,23 +1472,23 @@ function PlanModal({ plan, onClose, onSuccess }: { plan: Plan | null; onClose: (
               Covers Dependents
             </label>
           </div>
-          {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-bold">{error}</div>}
+          {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
           <div className="flex gap-3 pt-2">
-            <button onClick={save} disabled={saving} className="flex-1 py-2.5 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 disabled:opacity-50">
+            <button onClick={save} disabled={saving} className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
               {saving ? 'Saving…' : (plan ? 'Update' : 'Create')}
             </button>
-            <button onClick={onClose} className="px-5 py-2.5 border border-slate-200 text-slate-600 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-slate-50">Cancel</button>
+            <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
           </div>
         </div>
       </div>
       <style jsx>{`
         :global(.input) {
-          width: 100%; border: 1px solid rgb(226 232 240); border-radius: 0.75rem;
+          width: 100%; border: 1px solid var(--rule);
           padding: 0.6rem 0.9rem; font-size: 0.875rem; outline: none;
           transition: all 0.15s;
         }
         :global(.input:focus) {
-          border-color: rgb(99 102 241); box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
+          border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
         }
         :global(.input:disabled) {
           background: rgb(248 250 252); cursor: not-allowed;
@@ -1524,11 +1525,11 @@ function EnrollModal({ plan, dependents, onClose, onSuccess }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200">
-        <div className="px-6 py-4 border-b border-slate-100">
-          <h3 className="text-sm font-black text-slate-900">Enroll in {plan.name}</h3>
-          <p className="text-xs text-slate-500 mt-0.5">{plan.insurerName} · Coverage SGD {plan.coverageAmount.toLocaleString()}</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow backdrop- p-4">
+      <div className="bg-paper w-full max-w-md border border-rule">
+        <div className="px-6 py-4 border-b border-rule">
+          <h3 className="text-sm font-black text-ink">Enroll in {plan.name}</h3>
+          <p className="text-xs text-muted mt-0.5">{plan.insurerName} · Coverage SGD {plan.coverageAmount.toLocaleString()}</p>
         </div>
         <div className="p-4 sm:p-6 space-y-4">
           <Field label="Effective From" required>
@@ -1536,26 +1537,26 @@ function EnrollModal({ plan, dependents, onClose, onSuccess }: {
           </Field>
           {plan.coversDependents && dependents.length > 0 && (
             <div>
-              <p className="text-xs font-black text-slate-700 uppercase tracking-wider mb-2">Include Dependents (SGD {plan.premiumDependent}/yr each)</p>
-              <div className="space-y-1 max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-2">
+              <p className="text-xs font-black text-ink uppercase tracking-wider mb-2">Include Dependents (SGD {plan.premiumDependent}/yr each)</p>
+              <div className="space-y-1 max-h-40 overflow-y-auto border border-rule p-2">
                 {dependents.map(d => (
-                  <label key={d.id} className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                  <label key={d.id} className="flex items-center gap-2 p-2 hover:bg-page cursor-pointer">
                     <input type="checkbox" checked={selectedDeps.includes(d.id)} onChange={e => {
                       setSelectedDeps(prev => e.target.checked ? [...prev, d.id] : prev.filter(id => id !== d.id));
                     }} />
-                    <span className="text-sm font-medium text-slate-700">{d.fullName}</span>
-                    <span className="text-xs text-slate-400">({d.relationship})</span>
+                    <span className="text-sm font-medium text-ink">{d.fullName}</span>
+                    <span className="text-xs text-muted">({d.relationship})</span>
                   </label>
                 ))}
               </div>
             </div>
           )}
-          {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-bold">{error}</div>}
+          {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
           <div className="flex gap-3 pt-2">
-            <button onClick={enroll} disabled={saving} className="flex-1 py-2.5 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 disabled:opacity-50">
+            <button onClick={enroll} disabled={saving} className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
               {saving ? 'Enrolling…' : 'Confirm Enrollment'}
             </button>
-            <button onClick={onClose} className="px-5 py-2.5 border border-slate-200 text-slate-600 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-slate-50">Cancel</button>
+            <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
           </div>
         </div>
       </div>
@@ -1582,10 +1583,10 @@ function DependentModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200">
-        <div className="px-6 py-4 border-b border-slate-100">
-          <h3 className="text-sm font-black text-slate-900">Add Dependent</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow backdrop- p-4">
+      <div className="bg-paper w-full max-w-md border border-rule">
+        <div className="px-6 py-4 border-b border-rule">
+          <h3 className="text-sm font-black text-ink">Add Dependent</h3>
         </div>
         <div className="p-4 sm:p-6 space-y-4">
           <Field label="Full Name" required>
@@ -1614,12 +1615,12 @@ function DependentModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
               </select>
             </Field>
           </div>
-          {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-bold">{error}</div>}
+          {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
           <div className="flex gap-3 pt-2">
-            <button onClick={save} disabled={saving} className="flex-1 py-2.5 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 disabled:opacity-50">
+            <button onClick={save} disabled={saving} className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
               {saving ? 'Saving…' : 'Add Dependent'}
             </button>
-            <button onClick={onClose} className="px-5 py-2.5 border border-slate-200 text-slate-600 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-slate-50">Cancel</button>
+            <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
           </div>
         </div>
       </div>
@@ -1668,11 +1669,11 @@ function ClaimModal({ enrollment, dependents, onClose, onSuccess }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-slate-100 sticky top-0 bg-white">
-          <h3 className="text-sm font-black text-slate-900">Submit Claim</h3>
-          <p className="text-xs text-slate-500 mt-0.5">{enrollment.plan?.name} · Coverage SGD {enrollment.plan?.coverageAmount.toLocaleString()}</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow backdrop- p-4">
+      <div className="bg-paper w-full max-w-lg border border-rule max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-rule sticky top-0 bg-paper">
+          <h3 className="text-sm font-black text-ink">Submit Claim</h3>
+          <p className="text-xs text-muted mt-0.5">{enrollment.plan?.name} · Coverage SGD {enrollment.plan?.coverageAmount.toLocaleString()}</p>
         </div>
         <div className="p-4 sm:p-6 space-y-4">
           {enrolledDeps.length > 0 && (
@@ -1706,12 +1707,12 @@ function ClaimModal({ enrollment, dependents, onClose, onSuccess }: {
           <Field label="Claim Amount (SGD)" required>
             <input type="number" step="0.01" value={form.claimAmount} onChange={e => setForm({...form, claimAmount: e.target.value})} className="input" />
           </Field>
-          {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-bold">{error}</div>}
+          {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
           <div className="flex gap-3 pt-2">
-            <button onClick={save} disabled={saving || !form.claimAmount} className="flex-1 py-2.5 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 disabled:opacity-50">
+            <button onClick={save} disabled={saving || !form.claimAmount} className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
               {saving ? 'Submitting…' : 'Submit Claim'}
             </button>
-            <button onClick={onClose} className="px-5 py-2.5 border border-slate-200 text-slate-600 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-slate-50">Cancel</button>
+            <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
           </div>
         </div>
       </div>
@@ -1743,10 +1744,10 @@ function PeriodModal({ plans, onClose, onSuccess }: { plans: Plan[]; onClose: ()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-slate-100 sticky top-0 bg-white">
-          <h3 className="text-sm font-black text-slate-900">New Open Enrollment Period</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow backdrop- p-4">
+      <div className="bg-paper w-full max-w-lg border border-rule max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-rule sticky top-0 bg-paper">
+          <h3 className="text-sm font-black text-ink">New Open Enrollment Period</h3>
         </div>
         <div className="p-4 sm:p-6 space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -1766,31 +1767,31 @@ function PeriodModal({ plans, onClose, onSuccess }: { plans: Plan[]; onClose: ()
             </Field>
           </div>
           <Field label="Available Plans">
-            <div className="space-y-1 max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-2">
-              <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+            <div className="space-y-1 max-h-40 overflow-y-auto border border-rule p-2">
+              <label className="flex items-center gap-2 p-2 hover:bg-page cursor-pointer">
                 <input type="checkbox" checked={form.planIds.length === 0} onChange={() => setForm({...form, planIds: []})} />
-                <span className="text-sm font-medium text-slate-700">All active plans</span>
+                <span className="text-sm font-medium text-ink">All active plans</span>
               </label>
               {plans.filter(p => p.isActive).map(p => (
-                <label key={p.id} className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                <label key={p.id} className="flex items-center gap-2 p-2 hover:bg-page cursor-pointer">
                   <input type="checkbox" checked={form.planIds.includes(p.id)} onChange={e => {
                     setForm(prev => ({
                       ...prev,
                       planIds: e.target.checked ? [...prev.planIds, p.id] : prev.planIds.filter(id => id !== p.id),
                     }));
                   }} />
-                  <span className="text-sm font-medium text-slate-700">{p.name}</span>
-                  <span className="text-xs text-slate-400">({p.type})</span>
+                  <span className="text-sm font-medium text-ink">{p.name}</span>
+                  <span className="text-xs text-muted">({p.type})</span>
                 </label>
               ))}
             </div>
           </Field>
-          {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-bold">{error}</div>}
+          {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
           <div className="flex gap-3 pt-2">
-            <button onClick={save} disabled={saving} className="flex-1 py-2.5 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 disabled:opacity-50">
+            <button onClick={save} disabled={saving} className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
               {saving ? 'Creating…' : 'Create Period'}
             </button>
-            <button onClick={onClose} className="px-5 py-2.5 border border-slate-200 text-slate-600 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-slate-50">Cancel</button>
+            <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
           </div>
         </div>
       </div>
@@ -1835,11 +1836,11 @@ function FlexiClaimModal({ wallet, categories, onClose, onSuccess }: {
   const selectedCat = categories.find(c => c.id === form.categoryId);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-slate-100 sticky top-0 bg-white">
-          <h3 className="text-sm font-black text-slate-900">Submit Flexi Claim</h3>
-          <p className="text-xs text-slate-500 mt-0.5">Wallet {wallet.year} · SGD {wallet.creditedAmount.toLocaleString()} credited</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow backdrop- p-4">
+      <div className="bg-paper w-full max-w-lg border border-rule max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-rule sticky top-0 bg-paper">
+          <h3 className="text-sm font-black text-ink">Submit Flexi Claim</h3>
+          <p className="text-xs text-muted mt-0.5">Wallet {wallet.year} · SGD {wallet.creditedAmount.toLocaleString()} credited</p>
         </div>
         <div className="p-4 sm:p-6 space-y-4">
           <Field label="Category" required>
@@ -1848,7 +1849,7 @@ function FlexiClaimModal({ wallet, categories, onClose, onSuccess }: {
             </select>
           </Field>
           {selectedCat && (
-            <p className="text-xs text-slate-500 -mt-2">{selectedCat.description}</p>
+            <p className="text-xs text-muted -mt-2">{selectedCat.description}</p>
           )}
           <div className="grid grid-cols-2 gap-4">
             <Field label="Receipt Date" required>
@@ -1868,18 +1869,18 @@ function FlexiClaimModal({ wallet, categories, onClose, onSuccess }: {
               onChange={e => setForm({...form, description: e.target.value})} className="input resize-none" />
           </Field>
           {selectedCat?.requiresReceipt && (
-            <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest">Receipt required — keep originals for audit</p>
+            <p className="text-[10px] text-ink font-bold uppercase tracking-widest">Receipt required — keep originals for audit</p>
           )}
-          {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-bold">{error}</div>}
+          {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
           <div className="flex gap-3 pt-2">
             <button
               onClick={save}
               disabled={saving || !form.description.trim() || !form.claimAmount}
-              className="flex-1 py-2.5 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 disabled:opacity-50"
+              className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50"
             >
               {saving ? 'Submitting…' : 'Submit Claim'}
             </button>
-            <button onClick={onClose} className="px-5 py-2.5 border border-slate-200 text-slate-600 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-slate-50">Cancel</button>
+            <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
           </div>
         </div>
       </div>
@@ -1920,11 +1921,11 @@ function FlexiWalletCreditModal({ year, onClose, onSuccess }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200">
-        <div className="px-6 py-4 border-b border-slate-100">
-          <h3 className="text-sm font-black text-slate-900">Credit Flexi Wallet — {year}</h3>
-          <p className="text-xs text-slate-500 mt-0.5">Creates or updates an employee's wallet for this year.</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow backdrop- p-4">
+      <div className="bg-paper w-full max-w-md border border-rule">
+        <div className="px-6 py-4 border-b border-rule">
+          <h3 className="text-sm font-black text-ink">Credit Flexi Wallet — {year}</h3>
+          <p className="text-xs text-muted mt-0.5">Creates or updates an employee's wallet for this year.</p>
         </div>
         <div className="p-4 sm:p-6 space-y-4">
           <Field label="Employee ID" required>
@@ -1945,12 +1946,12 @@ function FlexiWalletCreditModal({ year, onClose, onSuccess }: {
             <input type="number" step="0.01" min="1" value={form.creditedAmount}
               onChange={e => setForm({...form, creditedAmount: e.target.value})} className="input" />
           </Field>
-          {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-bold">{error}</div>}
+          {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
           <div className="flex gap-3 pt-2">
-            <button onClick={save} disabled={saving} className="flex-1 py-2.5 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 disabled:opacity-50">
+            <button onClick={save} disabled={saving} className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
               {saving ? 'Crediting…' : 'Credit Wallet'}
             </button>
-            <button onClick={onClose} className="px-5 py-2.5 border border-slate-200 text-slate-600 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-slate-50">Cancel</button>
+            <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
           </div>
         </div>
       </div>
@@ -1962,8 +1963,8 @@ function FlexiWalletCreditModal({ year, onClose, onSuccess }: {
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-1.5">
-        {label}{required && <span className="text-red-500"> *</span>}
+      <label className="block text-xs font-black text-ink uppercase tracking-wider mb-1.5">
+        {label}{required && <span className="text-ink"> *</span>}
       </label>
       {children}
     </div>

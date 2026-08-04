@@ -204,7 +204,7 @@ function ApplyLeaveModal({ onClose, onCreated, leaveTypes, balances }: ApplyModa
           <button onClick={onClose} className="px-6 py-3 bg-paper border border-rule text-muted font-black text-[10px] uppercase tracking-widest hover:bg-page transition-all">Cancel</button>
           <button onClick={handleSubmit} disabled={!form.from || !form.to || !form.reason.trim() || !form.typeId || submitting}
             className="px-4 sm:px-6 lg:px-8 py-3 bg-accent text-paper font-black text-[10px] uppercase tracking-widest hover:bg-accent transition-all disabled:opacity-50 disabled:pointer-events-none flex items-center gap-2">
-            {submitting ? <><svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Submitting…</> : 'Submit Request'}
+            {submitting ? <><svg className="animate-spin h-3.5 w-3.5 rounded-full" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Submitting…</> : 'Submit Request'}
           </button>
         </div>
       </div>
@@ -303,7 +303,7 @@ function EmployeeLeaveView() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-10 h-10 border-4 border-accent border-accent animate-spin" />
+        <div className="w-10 h-10 border-4 border-t-accent border-accent animate-spin rounded-full" />
       </div>
     );
   }
@@ -547,7 +547,7 @@ function HRLeaveAnalytics() {
           </select>
           <button onClick={load} disabled={loading}
             className="px-5 py-2.5 bg-ink text-paper text-[10px] font-black uppercase tracking-widest hover:bg-ink transition-all disabled:opacity-50 flex items-center gap-2">
-            {loading ? <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> : '↺'}
+            {loading ? <svg className="animate-spin h-3.5 w-3.5 rounded-full" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> : '↺'}
             Refresh
           </button>
         </div>

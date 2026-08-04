@@ -30,7 +30,7 @@ export default function ClaimsRegistryPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-10 h-10 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin" />
+        <div className="w-10 h-10 border-4 border-accent border-t-accent animate-spin rounded-full" />
       </div>
     );
   }
@@ -100,89 +100,89 @@ function AdminClaimsView() {
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto pb-12 animate-in fade-in duration-700">
 
-      <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 flex justify-between items-center">
+      <div className="bg-paper p-8 border border-rule flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tighter">Claims <span className="text-indigo-600">Audit</span></h1>
-          <p className="text-[10px] font-black text-slate-400 mt-1 uppercase tracking-widest">Reimbursement oversight · Policy compliance</p>
+          <h1 className="text-3xl font-black text-ink tracking-tighter">Claims <span className="text-accent">Audit</span></h1>
+          <p className="text-[10px] font-black text-muted mt-1 uppercase tracking-widest">Reimbursement oversight · Policy compliance</p>
         </div>
-        <button className="px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-all">
+        <button className="px-6 py-2.5 text-[10px] font-black uppercase tracking-widest text-accent bg-page border border-accent hover:bg-page transition-all">
           Download Audit Log
         </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div className="bg-white p-7 rounded-[1.5rem] border border-slate-100 shadow-lg shadow-indigo-500/5">
+        <div className="bg-paper p-7 border border-rule ">
           <p className="eyebrow-tight mb-3">Pending Outflow</p>
           {loading
-            ? <div className="h-10 w-32 bg-slate-100 rounded-xl animate-pulse" />
-            : <p className="text-4xl font-black text-slate-900 tracking-tighter">SGD {fmtSGD(totalPending)}</p>
+            ? <div className="h-10 w-32 bg-page animate-pulse" />
+            : <p className="text-4xl font-black text-ink tracking-tighter">SGD {fmtSGD(totalPending)}</p>
           }
           <div className="mt-4 flex items-center gap-2">
-            <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
+            <span className="w-2 h-2 bg-highlight animate-pulse" />
             {loading
-              ? <div className="h-3 w-40 bg-slate-100 rounded animate-pulse" />
-              : <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest">{claims.length} pending authorization</p>
+              ? <div className="h-3 w-40 bg-page animate-pulse" />
+              : <p className="text-[9px] font-black text-ink uppercase tracking-widest">{claims.length} pending authorization</p>
             }
           </div>
         </div>
-        <div className="bg-slate-900 p-7 rounded-[1.5rem] border border-slate-800 shadow-xl">
-          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">Avg. Processing</p>
-          <p className="text-4xl font-black text-white tracking-tighter">48h</p>
-          <p className="text-[9px] font-black text-slate-500 mt-4 uppercase tracking-widest italic">Target: 24h</p>
+        <div className="bg-shadow p-7 border border-shadow ">
+          <p className="text-[10px] font-black text-accent uppercase tracking-widest mb-3">Avg. Processing</p>
+          <p className="text-4xl font-black text-paper tracking-tighter">48h</p>
+          <p className="text-[9px] font-black text-muted mt-4 uppercase tracking-widest italic">Target: 24h</p>
         </div>
-        <div className="bg-indigo-50/60 p-7 rounded-[1.5rem] border border-indigo-100">
-          <p className="text-[10px] font-black text-indigo-700 uppercase tracking-widest mb-3">Policy Compliance</p>
-          <p className="text-4xl font-black text-indigo-700 tracking-tighter">98.2%</p>
-          <p className="text-[9px] font-black text-indigo-400 mt-4 uppercase tracking-widest italic">2 anomalies in Travel</p>
+        <div className="bg-page p-7 border border-accent">
+          <p className="text-[10px] font-black text-accent uppercase tracking-widest mb-3">Policy Compliance</p>
+          <p className="text-4xl font-black text-accent tracking-tighter">98.2%</p>
+          <p className="text-[9px] font-black text-accent mt-4 uppercase tracking-widest italic">2 anomalies in Travel</p>
         </div>
       </div>
 
-      <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 overflow-hidden">
-        <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-          <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
+      <div className="bg-paper border border-rule overflow-hidden">
+        <div className="px-8 py-6 border-b border-rule bg-page flex items-center justify-between">
+          <h3 className="text-sm font-black text-ink uppercase tracking-widest">
             Authorization Queue {!loading && `(${claims.length})`}
           </h3>
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-indigo-600 rounded-full animate-ping" />
-            <span className="text-[9px] font-black text-slate-400 uppercase">Live</span>
+            <div className="w-2 h-2 bg-accent animate-ping" />
+            <span className="text-[9px] font-black text-muted uppercase">Live</span>
           </div>
         </div>
-        <div className="divide-y divide-slate-50">
+        <div className="divide-y divide-rule">
           {loading ? (
-            [1, 2, 3].map(i => <div key={i} className="h-20 mx-8 my-3 bg-slate-50 rounded-2xl animate-pulse" />)
+            [1, 2, 3].map(i => <div key={i} className="h-20 mx-8 my-3 bg-page animate-pulse" />)
           ) : claims.length === 0 ? (
             <div className="py-16 text-center">
-              <p className="text-sm font-black text-slate-300 uppercase tracking-widest">No pending claims</p>
+              <p className="text-sm font-black text-muted uppercase tracking-widest">No pending claims</p>
             </div>
           ) : claims.map(c => (
-            <div key={c.id} className="flex items-center gap-5 px-8 py-5 hover:bg-slate-50/50 transition-all">
-              <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-[11px] font-black text-white shrink-0">
+            <div key={c.id} className="flex items-center gap-5 px-8 py-5 hover:bg-page transition-all">
+              <div className="w-10 h-10 bg-shadow flex items-center justify-center text-[11px] font-black text-paper shrink-0">
                 {c.employeeName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{c.employeeName}</p>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{c.dept} · {c.claimDate}</p>
-                {c.title && <p className="text-[9px] font-bold text-slate-400 mt-0.5 truncate">&quot;{c.title}&quot;</p>}
+                <p className="text-sm font-black text-ink uppercase tracking-tight">{c.employeeName}</p>
+                <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-0.5">{c.dept} · {c.claimDate}</p>
+                {c.title && <p className="text-[9px] font-bold text-muted mt-0.5 truncate">&quot;{c.title}&quot;</p>}
               </div>
               <div className="text-center shrink-0">
-                <span className="text-[9px] font-black uppercase px-2.5 py-1 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-lg tracking-widest">
+                <span className="text-[9px] font-black uppercase px-2.5 py-1 bg-page text-accent border border-accent tracking-widest">
                   {c.categoryName}
                 </span>
               </div>
               <div className="text-right shrink-0">
-                <p className="text-sm font-black text-slate-900">SGD {fmtSGD(c.totalAmount)}</p>
-                {c.gstAmount > 0 && <p className="text-[9px] font-bold text-slate-400">GST {fmtSGD(c.gstAmount)}</p>}
+                <p className="text-sm font-black text-ink">SGD {fmtSGD(c.totalAmount)}</p>
+                {c.gstAmount > 0 && <p className="text-[9px] font-bold text-muted">GST {fmtSGD(c.gstAmount)}</p>}
               </div>
               <div className="flex gap-2 shrink-0">
                 <button
                   onClick={() => handleReject(c.id)}
-                  className="text-[9px] font-black text-red-600 bg-red-50 border border-red-100 uppercase tracking-widest px-4 py-1.5 rounded-lg hover:bg-red-100 transition-all"
+                  className="text-[9px] font-black text-ink bg-page border border-ink uppercase tracking-widest px-4 py-1.5 hover:bg-page transition-all"
                 >
                   Reject
                 </button>
                 <button
                   onClick={() => handleApprove(c.id)}
-                  className="text-[9px] font-black text-white bg-indigo-600 uppercase tracking-widest px-4 py-1.5 rounded-lg hover:bg-indigo-700 transition-all"
+                  className="text-[9px] font-black text-paper bg-accent uppercase tracking-widest px-4 py-1.5 hover:bg-accent transition-all"
                 >
                   Approve
                 </button>
@@ -194,9 +194,9 @@ function AdminClaimsView() {
 
       {toast && (
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-8 duration-300">
-          <div className={`px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-4 ${toast.type === 'success' ? 'bg-slate-900 border border-slate-700' : 'bg-red-900 border border-red-700'}`}>
-            <div className={`w-2 h-2 rounded-full ${toast.type === 'success' ? 'bg-emerald-500' : 'bg-red-400'}`} />
-            <span className="text-[10px] font-black text-white uppercase tracking-widest">{toast.msg}</span>
+          <div className={`px-8 py-4   flex items-center gap-4 ${toast.type === 'success' ? 'bg-shadow border border-shadow' : 'bg-ink border border-ink'}`}>
+            <div className={`w-2 h-2  ${toast.type === 'success' ? 'bg-accent' : 'bg-ink'}`} />
+            <span className="text-[10px] font-black text-paper uppercase tracking-widest">{toast.msg}</span>
           </div>
         </div>
       )}

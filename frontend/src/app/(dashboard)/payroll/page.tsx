@@ -552,7 +552,7 @@ function AdminPayrollDashboard() {
               </p>
               {conflictLoading ? (
                 <div className="flex items-center gap-3 py-8">
-                  <div className="w-4 h-4 border-2 border-rule border-t-accent animate-spin" />
+                  <div className="w-4 h-4 border-2 border-rule border-t-accent animate-spin rounded-full" />
                   <span className="eyebrow-tight">Loading employee payslip data…</span>
                 </div>
               ) : conflictPayslips.length === 0 ? (
@@ -660,7 +660,7 @@ function AdminPayrollDashboard() {
                     className="px-8 py-3 bg-ink text-paper text-[10px] font-black uppercase tracking-widest hover:bg-ink transition-all disabled:opacity-60 flex items-center gap-2"
                   >
                     {isProcessing ? (
-                      <><div className="w-3 h-3 border-2 border-white/30 border-t-white animate-spin" /> Processing…</>
+                      <><div className="w-3 h-3 border-2 border-paper/30 border-t-paper animate-spin rounded-full" /> Processing…</>
                     ) : (
                       <>⚡ Void & Replace — {selectedRunType}</>
                     )}
@@ -672,7 +672,7 @@ function AdminPayrollDashboard() {
                     className="px-8 py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all disabled:opacity-60 flex items-center gap-2"
                   >
                     {isProcessing ? (
-                      <><div className="w-3 h-3 border-2 border-white/30 border-t-white animate-spin" /> Creating…</>
+                      <><div className="w-3 h-3 border-2 border-paper/30 border-t-paper animate-spin rounded-full" /> Creating…</>
                     ) : (
                       <>⚡ Confirm — Create Supplemental Run</>
                     )}
@@ -936,7 +936,7 @@ function AdminPayrollDashboard() {
                 })}
                 className="w-full flex items-center gap-4 p-5 bg-accent hover:bg-accent disabled:opacity-60 text-paper transition-all active:scale-[0.98]"
               >
-                <div className="w-10 h-10 bg-paper flex items-center justify-center flex-shrink-0">
+                <div className="w-10 h-10 bg-paper/10 flex items-center justify-center flex-shrink-0">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
@@ -1103,7 +1103,7 @@ function AdminPayrollDashboard() {
                   className="flex items-center gap-3 px-8 py-3 bg-shadow text-paper text-[10px] font-black uppercase tracking-widest hover:bg-shadow transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {giroDownloading ? (
-                    <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white animate-spin" /><span>Generating…</span></>
+                    <><div className="w-3.5 h-3.5 border-2 border-paper/30 border-t-paper animate-spin rounded-full" /><span>Generating…</span></>
                   ) : (
                     <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg><span>Generate {giroBank.toUpperCase()} File</span></>
                   )}
@@ -1251,7 +1251,7 @@ function AdminPayrollDashboard() {
             <div className="bg-page border-t border-rule p-10 flex justify-end gap-5 shrink-0">
                <button onClick={() => setIsRunModalOpen(false)} className="px-8 py-4 bg-paper border border-rule text-muted font-black text-[10px] uppercase tracking-widest hover:bg-page transition-all">Abort</button>
                <button onClick={handleExecute} disabled={isProcessing} className={`px-10 py-4 bg-accent text-paper font-black text-[10px] uppercase tracking-[0.2em]  transition-all   flex items-center gap-3 active:scale-95 ${isProcessing ? 'opacity-70 pointer-events-none' : 'hover:bg-accent'}`}>
-                {isProcessing ? (<><svg className="animate-spin h-4 w-4 text-paper" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Simulating Compute…</>) : (<><span>⚡</span>Execute Nexus Pipeline</>)}
+                {isProcessing ? (<><svg className="animate-spin h-4 w-4 text-paper rounded-full" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Simulating Compute…</>) : (<><span>⚡</span>Execute Nexus Pipeline</>)}
               </button>
             </div>
           </div>
@@ -1291,7 +1291,7 @@ function AdminPayrollDashboard() {
               {/* Variance warning — shown when other finalised runs exist for same period */}
               {varianceLoading && (
                 <div className="bg-page border border-highlight px-6 py-4 flex items-center gap-3">
-                  <div className="w-4 h-4 border-2 border-highlight border-t-highlight animate-spin" />
+                  <div className="w-4 h-4 border-2 border-highlight/30 border-t-highlight animate-spin rounded-full" />
                   <span className="text-[9px] font-black text-ink uppercase tracking-widest">Checking for period conflicts…</span>
                 </div>
               )}
@@ -1551,7 +1551,7 @@ function AdminPayrollDashboard() {
               <div className="flex-1 overflow-y-auto">
                  {payslipLoading ? (
                    <div className="py-16 flex items-center justify-center gap-3">
-                     <div className="w-6 h-6 border-2 border-accent border-t-accent animate-spin" />
+                     <div className="w-6 h-6 border-2 border-accent/20 border-t-accent animate-spin rounded-full" />
                      <span className="eyebrow-tight">Loading payslips…</span>
                    </div>
                  ) : payslipRows.length === 0 ? (
@@ -1693,7 +1693,7 @@ export default function PayrollPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-10 h-10 border-4 border-accent border-t-accent animate-spin" />
+        <div className="w-10 h-10 border-4 border-accent/20 border-t-accent animate-spin rounded-full" />
       </div>
     );
   }

@@ -20,9 +20,9 @@ const CATEGORY_ICONS: Record<string, string> = {
 };
 
 function statusStyle(s: Claim['status']) {
-  if (s === 'Approved') return 'bg-emerald-50 text-emerald-700 border-emerald-100';
-  if (s === 'Rejected') return 'bg-red-50 text-red-600 border-red-100';
-  return 'bg-amber-50 text-amber-600 border-amber-100';
+  if (s === 'Approved') return 'bg-page text-accent border-accent';
+  if (s === 'Rejected') return 'bg-page text-ink border-ink';
+  return 'bg-page text-ink border-highlight';
 }
 function fmtDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -105,80 +105,80 @@ function SubmitClaimModal({ onClose, onCreated, categories }: SubmitModalProps) 
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg border border-slate-100 overflow-hidden animate-in slide-in-from-bottom-8 duration-300 max-h-[90vh] flex flex-col">
-        <div className="px-4 sm:px-6 lg:px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-shadow backdrop- animate-in fade-in duration-200">
+      <div className="bg-paper w-full max-w-lg border border-rule overflow-hidden animate-in slide-in-from-bottom-8 duration-300 max-h-[90vh] flex flex-col">
+        <div className="px-4 sm:px-6 lg:px-8 py-6 border-b border-rule bg-page flex justify-between items-center shrink-0">
           <div>
-            <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest">Submit Claim</h3>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Expense reimbursement request</p>
+            <h3 className="text-lg font-black text-ink uppercase tracking-widest">Submit Claim</h3>
+            <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1">Expense reimbursement request</p>
           </div>
-          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-red-500 hover:border-red-200 transition-all text-lg font-black">&times;</button>
+          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center bg-paper border border-rule text-muted hover:text-ink hover:border-ink transition-all text-lg font-black">&times;</button>
         </div>
 
         <div className="px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-5 overflow-y-auto">
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Expense Date</label>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Expense Date</label>
               <input type="date" value={form.date} max={new Date().toISOString().slice(0, 10)} onChange={e => set('date', e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all" />
+                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent transition-all" />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Category</label>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Category</label>
               <select value={form.categoryId} onChange={e => set('categoryId', e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all appearance-none">
+                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent transition-all appearance-none">
                 {categories.map(c => <option key={c.id} value={c.id}>{CATEGORY_ICONS[c.code] ?? '◎'} {c.name}</option>)}
               </select>
             </div>
           </div>
 
           {selectedCat?.maxAmount && (
-            <div className="px-4 py-3 bg-amber-50 border border-amber-100 rounded-xl">
-              <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest">Policy limit: SGD {selectedCat.maxAmount.toFixed(2)} per claim</span>
+            <div className="px-4 py-3 bg-page border border-highlight ">
+              <span className="text-[10px] font-black text-ink uppercase tracking-widest">Policy limit: SGD {selectedCat.maxAmount.toFixed(2)} per claim</span>
             </div>
           )}
 
           <div className="flex flex-col gap-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Merchant / Payee</label>
+            <label className="text-[10px] font-black text-muted uppercase tracking-widest">Merchant / Payee</label>
             <input type="text" value={form.merchant} onChange={e => set('merchant', e.target.value)}
               placeholder="e.g. Grab, Singapore Airlines, NTUC FairPrice…"
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all placeholder:font-normal placeholder:text-slate-300" />
+              className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent transition-all placeholder:font-normal placeholder:text-muted" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Amount (SGD incl. GST)</label>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Amount (SGD incl. GST)</label>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-slate-400">$</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-muted">$</span>
                 <input type="number" value={form.amount} onChange={e => set('amount', e.target.value)} placeholder="0.00" min="0" step="0.01"
-                  className="w-full pl-8 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all" />
+                  className="w-full pl-8 pr-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent transition-all" />
               </div>
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">GST {selectedCat?.isGstClaimable ? '(9% auto-calculated)' : '(N/A)'}</label>
-              <div className="px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-xl">
-                <span className="text-sm font-black text-indigo-700">$ {gst.toFixed(2)}</span>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest">GST {selectedCat?.isGstClaimable ? '(9% auto-calculated)' : '(N/A)'}</label>
+              <div className="px-4 py-3 bg-page border border-accent ">
+                <span className="text-sm font-black text-accent">$ {gst.toFixed(2)}</span>
               </div>
             </div>
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Business Purpose</label>
+            <label className="text-[10px] font-black text-muted uppercase tracking-widest">Business Purpose</label>
             <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={2}
               placeholder="Describe the business purpose of this expense…"
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all resize-none placeholder:font-normal placeholder:text-slate-300" />
+              className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent transition-all resize-none placeholder:font-normal placeholder:text-muted" />
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Receipt (optional)</label>
+            <label className="text-[10px] font-black text-muted uppercase tracking-widest">Receipt (optional)</label>
             {receipt ? (
-              <div className="flex items-center gap-3 px-4 py-3 bg-emerald-50 border border-emerald-100 rounded-xl">
-                <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                <span className="text-[11px] font-black text-emerald-700 uppercase tracking-widest flex-1">Receipt attached</span>
-                <button onClick={() => setReceipt(null)} className="text-[10px] font-black text-red-400 hover:text-red-600 uppercase transition-all">Remove</button>
+              <div className="flex items-center gap-3 px-4 py-3 bg-page border border-accent ">
+                <svg className="w-4 h-4 text-accent shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span className="text-[11px] font-black text-accent uppercase tracking-widest flex-1">Receipt attached</span>
+                <button onClick={() => setReceipt(null)} className="text-[10px] font-black text-ink hover:text-ink uppercase transition-all">Remove</button>
               </div>
             ) : (
               <button type="button" onClick={() => fileRef.current?.click()}
-                className="flex items-center gap-3 px-4 py-3 bg-slate-50 border border-dashed border-slate-300 rounded-xl text-[11px] font-bold text-slate-400 hover:border-indigo-400 hover:text-indigo-500 hover:bg-indigo-50/30 transition-all">
+                className="flex items-center gap-3 px-4 py-3 bg-page border border-dashed border-rule text-[11px] font-bold text-muted hover:border-accent hover:text-accent hover:bg-page transition-all">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
                 Attach receipt (JPG, PNG, PDF)
               </button>
@@ -186,16 +186,16 @@ function SubmitClaimModal({ onClose, onCreated, categories }: SubmitModalProps) 
             <input ref={fileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleFile} />
           </div>
 
-          {error && <p className="text-[10px] font-black text-red-600 bg-red-50 border border-red-100 px-4 py-3 rounded-xl">{error}</p>}
+          {error && <p className="text-[10px] font-black text-ink bg-page border border-ink px-4 py-3 ">{error}</p>}
         </div>
 
-        <div className="px-4 sm:px-6 lg:px-8 py-5 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
-          <div className="text-sm font-black text-slate-900">Total: <span className="text-indigo-600">SGD {amountNum.toFixed(2)}</span></div>
+        <div className="px-4 sm:px-6 lg:px-8 py-5 border-t border-rule bg-page flex justify-between items-center shrink-0">
+          <div className="text-sm font-black text-ink">Total: <span className="text-accent">SGD {amountNum.toFixed(2)}</span></div>
           <div className="flex gap-3">
-            <button onClick={onClose} className="px-6 py-3 bg-white border border-slate-200 text-slate-500 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-50 transition-all">Cancel</button>
+            <button onClick={onClose} className="px-6 py-3 bg-paper border border-rule text-muted font-black text-[10px] uppercase tracking-widest hover:bg-page transition-all">Cancel</button>
             <button onClick={handleSubmit} disabled={!form.merchant.trim() || !form.amount || !form.description.trim() || !form.categoryId || submitting}
-              className="px-4 sm:px-6 lg:px-8 py-3 bg-indigo-600 text-white font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:pointer-events-none flex items-center gap-2">
-              {submitting ? <><svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Submitting…</> : 'Submit Claim'}
+              className="px-4 sm:px-6 lg:px-8 py-3 bg-accent text-paper font-black text-[10px] uppercase tracking-widest hover:bg-accent transition-all disabled:opacity-50 disabled:pointer-events-none flex items-center gap-2">
+              {submitting ? <><svg className="animate-spin h-3.5 w-3.5 rounded-full" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Submitting…</> : 'Submit Claim'}
             </button>
           </div>
         </div>
@@ -262,79 +262,79 @@ function EditClaimModal({ claim, onClose, onSaved, categories }: EditModalProps)
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg border border-slate-100 overflow-hidden animate-in slide-in-from-bottom-8 duration-300 max-h-[90vh] flex flex-col">
-        <div className="px-4 sm:px-6 lg:px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-shadow backdrop- animate-in fade-in duration-200">
+      <div className="bg-paper w-full max-w-lg border border-rule overflow-hidden animate-in slide-in-from-bottom-8 duration-300 max-h-[90vh] flex flex-col">
+        <div className="px-4 sm:px-6 lg:px-8 py-6 border-b border-rule bg-page flex justify-between items-center shrink-0">
           <div>
-            <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest">Amend Claim</h3>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Edit pending expense · changes saved immediately</p>
+            <h3 className="text-lg font-black text-ink uppercase tracking-widest">Amend Claim</h3>
+            <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1">Edit pending expense · changes saved immediately</p>
           </div>
-          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-red-500 hover:border-red-200 transition-all text-lg font-black">&times;</button>
+          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center bg-paper border border-rule text-muted hover:text-ink hover:border-ink transition-all text-lg font-black">&times;</button>
         </div>
 
         <div className="px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-5 overflow-y-auto">
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Expense Date</label>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Expense Date</label>
               <input type="date" value={form.date} max={new Date().toISOString().slice(0, 10)} onChange={e => set('date', e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all" />
+                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent transition-all" />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Category</label>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Category</label>
               <select value={form.categoryId} onChange={e => set('categoryId', e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all appearance-none">
+                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent transition-all appearance-none">
                 {categories.map(c => <option key={c.id} value={c.id}>{CATEGORY_ICONS[c.code] ?? '◎'} {c.name}</option>)}
               </select>
             </div>
           </div>
 
           {selectedCat?.maxAmount && (
-            <div className="px-4 py-3 bg-amber-50 border border-amber-100 rounded-xl">
-              <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest">Policy limit: SGD {selectedCat.maxAmount.toFixed(2)} per claim</span>
+            <div className="px-4 py-3 bg-page border border-highlight ">
+              <span className="text-[10px] font-black text-ink uppercase tracking-widest">Policy limit: SGD {selectedCat.maxAmount.toFixed(2)} per claim</span>
             </div>
           )}
 
           <div className="flex flex-col gap-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Merchant / Payee</label>
+            <label className="text-[10px] font-black text-muted uppercase tracking-widest">Merchant / Payee</label>
             <input type="text" value={form.merchant} onChange={e => set('merchant', e.target.value)}
               placeholder="e.g. Grab, Singapore Airlines, NTUC FairPrice…"
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all placeholder:font-normal placeholder:text-slate-300" />
+              className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent transition-all placeholder:font-normal placeholder:text-muted" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Amount (SGD incl. GST)</label>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Amount (SGD incl. GST)</label>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-slate-400">$</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-muted">$</span>
                 <input type="number" value={form.amount} onChange={e => set('amount', e.target.value)} placeholder="0.00" min="0" step="0.01"
-                  className="w-full pl-8 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all" />
+                  className="w-full pl-8 pr-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent transition-all" />
               </div>
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">GST {selectedCat?.isGstClaimable ? '(9% auto-calculated)' : '(N/A)'}</label>
-              <div className="px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-xl">
-                <span className="text-sm font-black text-indigo-700">$ {gst.toFixed(2)}</span>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest">GST {selectedCat?.isGstClaimable ? '(9% auto-calculated)' : '(N/A)'}</label>
+              <div className="px-4 py-3 bg-page border border-accent ">
+                <span className="text-sm font-black text-accent">$ {gst.toFixed(2)}</span>
               </div>
             </div>
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Business Purpose</label>
+            <label className="text-[10px] font-black text-muted uppercase tracking-widest">Business Purpose</label>
             <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={2}
               placeholder="Describe the business purpose of this expense…"
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all resize-none placeholder:font-normal placeholder:text-slate-300" />
+              className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent transition-all resize-none placeholder:font-normal placeholder:text-muted" />
           </div>
 
-          {error && <p className="text-[10px] font-black text-red-600 bg-red-50 border border-red-100 px-4 py-3 rounded-xl">{error}</p>}
+          {error && <p className="text-[10px] font-black text-ink bg-page border border-ink px-4 py-3 ">{error}</p>}
         </div>
 
-        <div className="px-4 sm:px-6 lg:px-8 py-5 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
-          <div className="text-sm font-black text-slate-900">Total: <span className="text-indigo-600">SGD {amountNum.toFixed(2)}</span></div>
+        <div className="px-4 sm:px-6 lg:px-8 py-5 border-t border-rule bg-page flex justify-between items-center shrink-0">
+          <div className="text-sm font-black text-ink">Total: <span className="text-accent">SGD {amountNum.toFixed(2)}</span></div>
           <div className="flex gap-3">
-            <button onClick={onClose} className="px-6 py-3 bg-white border border-slate-200 text-slate-500 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-50 transition-all">Cancel</button>
+            <button onClick={onClose} className="px-6 py-3 bg-paper border border-rule text-muted font-black text-[10px] uppercase tracking-widest hover:bg-page transition-all">Cancel</button>
             <button onClick={handleSave} disabled={!form.merchant.trim() || !form.amount || !form.description.trim() || submitting}
-              className="px-4 sm:px-6 lg:px-8 py-3 bg-indigo-600 text-white font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:pointer-events-none flex items-center gap-2">
-              {submitting ? <><svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Saving…</> : 'Save Changes'}
+              className="px-4 sm:px-6 lg:px-8 py-3 bg-accent text-paper font-black text-[10px] uppercase tracking-widest hover:bg-accent transition-all disabled:opacity-50 disabled:pointer-events-none flex items-center gap-2">
+              {submitting ? <><svg className="animate-spin h-3.5 w-3.5 rounded-full" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Saving…</> : 'Save Changes'}
             </button>
           </div>
         </div>
@@ -405,7 +405,7 @@ function EmployeeClaimsView() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-10 h-10 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin" />
+        <div className="w-10 h-10 border-4 border-accent border-t-accent animate-spin rounded-full" />
       </div>
     );
   }
@@ -413,44 +413,44 @@ function EmployeeClaimsView() {
   return (
     <div className="flex flex-col gap-6 max-w-[1100px] mx-auto pb-16 animate-in fade-in duration-700">
 
-      <div className="bg-white p-4 sm:p-6 lg:p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5">
+      <div className="bg-paper p-4 sm:p-6 lg:p-8 border border-rule flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tighter">My <span className="text-indigo-600">Claims</span></h1>
-          <p className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-widest">Submit and track expense reimbursements</p>
+          <h1 className="text-3xl font-black text-ink tracking-tighter">My <span className="text-accent">Claims</span></h1>
+          <p className="text-sm font-bold text-muted mt-1 uppercase tracking-widest">Submit and track expense reimbursements</p>
         </div>
         <button onClick={() => setShowModal(true)}
-          className="px-6 py-2.5 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 transition-all flex items-center gap-2">
+          className="px-6 py-2.5 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all flex items-center gap-2">
           <span className="text-base leading-none">+</span> Submit Expense
         </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-7 rounded-[1.5rem] border border-slate-100 shadow-lg shadow-indigo-500/5">
+        <div className="bg-paper p-7 border border-rule ">
           <p className="eyebrow-tight mb-3">Approved (MTD)</p>
-          <p className="text-4xl font-black text-emerald-600 tracking-tighter">SGD {totalApproved.toFixed(2)}</p>
+          <p className="text-4xl font-black text-accent tracking-tighter">SGD {totalApproved.toFixed(2)}</p>
           <p className="label-form mt-3">Approved &amp; ready for payout</p>
         </div>
-        <div className="bg-white p-7 rounded-[1.5rem] border border-slate-100 shadow-lg shadow-indigo-500/5">
+        <div className="bg-paper p-7 border border-rule ">
           <p className="eyebrow-tight mb-3">Pending Review</p>
-          <p className="text-4xl font-black text-amber-500 tracking-tighter">SGD {totalPending.toFixed(2)}</p>
-          <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mt-3 flex items-center gap-2">
-            <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
+          <p className="text-4xl font-black text-ink tracking-tighter">SGD {totalPending.toFixed(2)}</p>
+          <p className="text-[9px] font-black text-ink uppercase tracking-widest mt-3 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 bg-highlight animate-pulse" />
             {claims.filter(c => c.status === 'Pending').length} awaiting approval
           </p>
         </div>
-        <div className="bg-white p-7 rounded-[1.5rem] border border-slate-100 shadow-lg shadow-indigo-500/5">
+        <div className="bg-paper p-7 border border-rule ">
           <p className="eyebrow-tight mb-3">GST Recoverable</p>
-          <p className="text-4xl font-black text-indigo-600 tracking-tighter">SGD {totalGst.toFixed(2)}</p>
-          <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mt-3">IRAS 9% auto-captured</p>
+          <p className="text-4xl font-black text-accent tracking-tighter">SGD {totalGst.toFixed(2)}</p>
+          <p className="text-[9px] font-black text-accent uppercase tracking-widest mt-3">IRAS 9% auto-captured</p>
         </div>
       </div>
 
       {categories.length > 0 && (
-        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 p-4 sm:p-6">
+        <div className="bg-paper border border-rule p-4 sm:p-6">
           <p className="eyebrow-tight mb-4">Your Eligible Claim Categories</p>
           <div className="flex flex-wrap gap-2">
             {categories.map(c => (
-              <span key={c.id} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 uppercase tracking-wider">
+              <span key={c.id} className="flex items-center gap-1.5 px-3 py-1.5 bg-page border border-rule text-[10px] font-black text-ink uppercase tracking-wider">
                 <span>{CATEGORY_ICONS[c.code] ?? '◎'}</span> {c.name}
               </span>
             ))}
@@ -458,39 +458,39 @@ function EmployeeClaimsView() {
         </div>
       )}
 
-      <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 overflow-hidden">
-        <div className="px-4 sm:px-6 lg:px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-          <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">My Submissions</h3>
+      <div className="bg-paper border border-rule overflow-hidden">
+        <div className="px-4 sm:px-6 lg:px-8 py-6 border-b border-rule bg-page flex items-center justify-between">
+          <h3 className="text-sm font-black text-ink uppercase tracking-widest">My Submissions</h3>
           <span className="eyebrow-tight">{claims.length} total</span>
         </div>
         {claims.length === 0 ? (
           <div className="py-20 flex flex-col items-center gap-4">
-            <div className="w-16 h-16 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl flex items-center justify-center text-2xl">◎</div>
-            <p className="text-sm font-black text-slate-400 uppercase tracking-widest">No claims submitted yet</p>
+            <div className="w-16 h-16 bg-page border-2 border-dashed border-rule flex items-center justify-center text-2xl">◎</div>
+            <p className="text-sm font-black text-muted uppercase tracking-widest">No claims submitted yet</p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-50">
+          <div className="divide-y divide-rule">
             {claims.map(c => (
-              <div key={c.id} className="flex items-center gap-5 px-4 sm:px-6 lg:px-8 py-5 hover:bg-slate-50/50 transition-all">
-                <div className="w-11 h-11 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center justify-center text-lg shrink-0">
+              <div key={c.id} className="flex items-center gap-5 px-4 sm:px-6 lg:px-8 py-5 hover:bg-page transition-all">
+                <div className="w-11 h-11 bg-page border border-accent flex items-center justify-center text-lg shrink-0">
                   {CATEGORY_ICONS[c.categoryCode] ?? '◎'}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-black text-slate-900 truncate">{c.merchant}</p>
-                    <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-slate-100 text-slate-500 rounded-lg tracking-wider">{c.category}</span>
+                    <p className="text-sm font-black text-ink truncate">{c.merchant}</p>
+                    <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-page text-muted tracking-wider">{c.category}</span>
                   </div>
-                  <p className="text-[10px] font-bold text-slate-400 mt-0.5">{fmtDate(c.date)} · &quot;{c.description}&quot;</p>
+                  <p className="text-[10px] font-bold text-muted mt-0.5">{fmtDate(c.date)} · &quot;{c.description}&quot;</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-sm font-black text-slate-900">SGD {c.amount.toFixed(2)}</p>
-                  <p className="text-[9px] font-bold text-slate-400 mt-0.5">GST {c.gst.toFixed(2)}</p>
+                  <p className="text-sm font-black text-ink">SGD {c.amount.toFixed(2)}</p>
+                  <p className="text-[9px] font-bold text-muted mt-0.5">GST {c.gst.toFixed(2)}</p>
                 </div>
                 <div className="shrink-0 flex items-center gap-2">
-                  <span className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-xl border tracking-widest ${statusStyle(c.status)}`}>{c.status}</span>
+                  <span className={`text-[9px] font-black uppercase px-3 py-1.5  border tracking-widest ${statusStyle(c.status)}`}>{c.status}</span>
                   {c.status === 'Pending' && (
                     <button onClick={() => setEditClaim(c)}
-                      className="text-[9px] font-black uppercase px-3 py-1.5 rounded-xl border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 tracking-widest transition-all">
+                      className="text-[9px] font-black uppercase px-3 py-1.5 border border-rule text-muted hover:text-accent hover:border-accent hover:bg-page tracking-widest transition-all">
                       Edit
                     </button>
                   )}
@@ -499,8 +499,8 @@ function EmployeeClaimsView() {
             ))}
           </div>
         )}
-        <div className="px-4 sm:px-6 lg:px-8 py-4 border-t border-slate-100 bg-slate-50/50">
-          <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest text-center">Approved claims are reimbursed with monthly payroll</p>
+        <div className="px-4 sm:px-6 lg:px-8 py-4 border-t border-rule bg-page">
+          <p className="text-[9px] font-bold text-muted uppercase tracking-widest text-center">Approved claims are reimbursed with monthly payroll</p>
         </div>
       </div>
 
@@ -509,9 +509,9 @@ function EmployeeClaimsView() {
 
       {toast && (
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-8 duration-400">
-          <div className="bg-slate-900 border border-slate-700 px-4 sm:px-6 lg:px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-4">
-            <div className="w-2 h-2 bg-emerald-500 rounded-full" />
-            <span className="text-[10px] font-black text-white uppercase tracking-widest">{toast}</span>
+          <div className="bg-shadow border border-shadow px-4 sm:px-6 lg:px-8 py-4 flex items-center gap-4">
+            <div className="w-2 h-2 bg-accent " />
+            <span className="text-[10px] font-black text-paper uppercase tracking-widest">{toast}</span>
           </div>
         </div>
       )}

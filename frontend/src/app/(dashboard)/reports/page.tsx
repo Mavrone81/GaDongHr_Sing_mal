@@ -21,10 +21,10 @@ function Toast({ msg, type, onClose }: { msg: string; type: 'ok' | 'err'; onClos
   useEffect(() => { const t = setTimeout(onClose, 4000); return () => clearTimeout(t); }, [onClose]);
   return (
     <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-6 duration-300">
-      <div className={`px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 ${type === 'ok' ? 'bg-slate-900 border border-slate-700' : 'bg-red-900 border border-red-700'}`}>
-        <div className={`w-2 h-2 rounded-full ${type === 'ok' ? 'bg-emerald-400' : 'bg-red-400'}`} />
-        <span className="text-[11px] font-black text-white uppercase tracking-widest">{msg}</span>
-        <button onClick={onClose} className="ml-4 text-white/50 hover:text-white text-xs">✕</button>
+      <div className={`px-8 py-4   flex items-center gap-3 ${type === 'ok' ? 'bg-shadow border border-shadow' : 'bg-ink border border-ink'}`}>
+        <div className={`w-2 h-2  ${type === 'ok' ? 'bg-accent' : 'bg-ink'}`} />
+        <span className="text-[11px] font-black text-paper uppercase tracking-widest">{msg}</span>
+        <button onClick={onClose} className="ml-4 text-paper/50 hover:text-paper text-xs">✕</button>
       </div>
     </div>
   );
@@ -41,31 +41,31 @@ function RunSelectorModal({ title, onSelect, onClose }: { title: string; onSelec
       .finally(() => setLoading(false));
   }, []);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
+      <div className="w-full max-w-md bg-paper flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-8 py-6 border-b border-rule">
           <div>
-            <h2 className="text-base font-black text-slate-900 tracking-tighter">{title}</h2>
+            <h2 className="text-base font-black text-ink tracking-tighter">{title}</h2>
             <p className="eyebrow-tight mt-0.5">Select a payroll run</p>
           </div>
-          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">✕</button>
+          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page transition-all">✕</button>
         </div>
         <div className="p-6 flex flex-col gap-2 max-h-80 overflow-y-auto">
           {loading ? (
-            [1,2,3].map(i => <div key={i} className="h-12 bg-slate-100 rounded-xl animate-pulse" />)
+            [1,2,3].map(i => <div key={i} className="h-12 bg-page animate-pulse" />)
           ) : runs.length === 0 ? (
-            <p className="text-sm text-slate-400 font-bold text-center py-8">No payroll runs found</p>
+            <p className="text-sm text-muted font-bold text-center py-8">No payroll runs found</p>
           ) : runs.map(r => (
             <button key={r.id} onClick={() => onSelect(r.id, r.period)}
-              className="flex items-center justify-between px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition-all text-left">
+              className="flex items-center justify-between px-5 py-3.5 bg-page border border-rule hover:border-accent hover:bg-page transition-all text-left">
               <div>
-                <span className="text-sm font-black text-slate-900">{r.period}</span>
+                <span className="text-sm font-black text-ink">{r.period}</span>
                 <span className="ml-3 label-form">{r.runType}</span>
               </div>
-              <span className={`text-[9px] font-black px-2.5 py-1 rounded-lg uppercase tracking-widest border ${
-                r.status === 'FINALISED' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                r.status === 'APPROVED' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
-                'bg-amber-50 text-amber-700 border-amber-100'
+              <span className={`text-[9px] font-black px-2.5 py-1  uppercase tracking-widest border ${
+                r.status === 'FINALISED' ? 'bg-page text-accent border-accent' :
+                r.status === 'APPROVED' ? 'bg-page text-accent border-accent' :
+                'bg-page text-ink border-highlight'
               }`}>{r.status}</span>
             </button>
           ))}
@@ -230,37 +230,37 @@ function LeaveLiabilityModal({ onClose, onToast }: { onClose: () => void; onToas
   }, {}) ?? {};
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-      <div className="w-full max-w-5xl bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
-        <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100 flex-shrink-0">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
+      <div className="w-full max-w-5xl bg-paper flex flex-col overflow-hidden max-h-[90vh]">
+        <div className="flex items-center justify-between px-8 py-5 border-b border-rule flex-shrink-0">
           <div>
-            <h2 className="text-base font-black text-slate-900 tracking-tighter">Leave Liability Report</h2>
+            <h2 className="text-base font-black text-ink tracking-tighter">Leave Liability Report</h2>
             <p className="eyebrow-tight mt-0.5">Accrued leave liability for finance accrual reporting</p>
           </div>
           <div className="flex items-center gap-3">
-            {data && <button onClick={handleCsv} className="px-5 py-2 bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all">Download CSV</button>}
-            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">✕</button>
+            {data && <button onClick={handleCsv} className="px-5 py-2 bg-accent text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent transition-all">Download CSV</button>}
+            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page transition-all">✕</button>
           </div>
         </div>
-        <div className="flex items-center gap-4 px-8 py-4 border-b border-slate-50 bg-slate-50/50 flex-shrink-0">
-          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Year</label>
+        <div className="flex items-center gap-4 px-8 py-4 border-b border-rule bg-page flex-shrink-0">
+          <label className="text-[10px] font-black text-muted uppercase tracking-widest">Year</label>
           <input type="number" value={year} onChange={e => setYear(Number(e.target.value))} min={2020} max={2030}
-            className="w-28 px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500" />
+            className="w-28 px-3 py-2 bg-paper border border-rule text-sm font-bold text-ink outline-none focus:border-accent" />
           <button onClick={generate} disabled={loading}
-            className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center gap-2">
-            {loading ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating…</> : 'Generate'}
+            className="px-6 py-2 bg-accent text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50 transition-all flex items-center gap-2">
+            {loading ? <><span className="w-3 h-3 border-2 border-paper/30 border-t-paper animate-spin rounded-full" />Generating…</> : 'Generate'}
           </button>
         </div>
         {data && (
-          <div className="flex flex-wrap gap-3 px-8 py-4 border-b border-slate-50 flex-shrink-0">
+          <div className="flex flex-wrap gap-3 px-8 py-4 border-b border-rule flex-shrink-0">
             {[
-              { label: 'Total Liability', value: fmt(data.totalLiability), color: 'text-emerald-700' },
-              { label: 'Headcount', value: String(data.headcount), color: 'text-slate-700' },
-              { label: 'Year', value: String(data.year), color: 'text-indigo-700' },
-              { label: 'Generated', value: new Date(data.generatedAt).toLocaleDateString('en-SG'), color: 'text-slate-500' },
+              { label: 'Total Liability', value: fmt(data.totalLiability), color: 'text-accent' },
+              { label: 'Headcount', value: String(data.headcount), color: 'text-ink' },
+              { label: 'Year', value: String(data.year), color: 'text-accent' },
+              { label: 'Generated', value: new Date(data.generatedAt).toLocaleDateString('en-SG'), color: 'text-muted' },
             ].map(s => (
-              <div key={s.label} className="px-4 py-2 bg-white rounded-xl border border-slate-100 text-center">
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{s.label}</p>
+              <div key={s.label} className="px-4 py-2 bg-paper border border-rule text-center">
+                <p className="text-[8px] font-black text-muted uppercase tracking-widest">{s.label}</p>
                 <p className={`text-xs font-black ${s.color}`}>{s.value}</p>
               </div>
             ))}
@@ -268,36 +268,36 @@ function LeaveLiabilityModal({ onClose, onToast }: { onClose: () => void; onToas
         )}
         <div className="overflow-auto flex-1">
           {!data ? (
-            <div className="flex items-center justify-center h-40 text-slate-400 text-sm font-bold">{loading ? 'Loading…' : 'Select year and click Generate'}</div>
+            <div className="flex items-center justify-center h-40 text-muted text-sm font-bold">{loading ? 'Loading…' : 'Select year and click Generate'}</div>
           ) : data.rows.length === 0 ? (
-            <div className="flex items-center justify-center h-40 text-slate-400 text-sm font-bold">No data for {year}</div>
+            <div className="flex items-center justify-center h-40 text-muted text-sm font-bold">No data for {year}</div>
           ) : (
             <table className="w-full text-left border-collapse text-[11px]">
-              <thead className="sticky top-0 bg-slate-50 border-b border-slate-100 label-form">
+              <thead className="sticky top-0 bg-page border-b border-rule label-form">
                 <tr>{['Employee', 'Leave Type', 'Entitled', 'C/F', 'Used', 'Pending', 'Unused', 'Daily Rate', 'Liability'].map(h => <th key={h} className="px-4 py-3 whitespace-nowrap">{h}</th>)}</tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="divide-y divide-rule">
                 {Object.entries(byDept).map(([dept, rows]: [string, any[]]) => (
                   <>
-                    <tr key={`hdr-${dept}`} className="bg-slate-50">
-                      <td colSpan={9} className="px-4 py-2 font-black text-slate-600 text-[10px] uppercase tracking-widest">{dept}</td>
+                    <tr key={`hdr-${dept}`} className="bg-page">
+                      <td colSpan={9} className="px-4 py-2 font-black text-ink text-[10px] uppercase tracking-widest">{dept}</td>
                     </tr>
                     {rows.map((r: any, i: number) => (
-                      <tr key={`${r.employeeId}-${r.leaveCode}-${i}`} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-4 py-3"><p className="font-black text-slate-800 whitespace-nowrap">{r.fullName}</p><p className="text-[9px] text-slate-400 font-bold">{r.employeeCode}</p></td>
-                        <td className="px-4 py-3 font-bold text-slate-600 whitespace-nowrap">{r.leaveType}</td>
-                        <td className="px-4 py-3 text-right font-mono text-slate-600">{r.entitledDays}</td>
-                        <td className="px-4 py-3 text-right font-mono text-slate-500">{r.carryForward ?? 0}</td>
-                        <td className="px-4 py-3 text-right font-mono text-slate-600">{r.usedDays}</td>
-                        <td className="px-4 py-3 text-right font-mono text-amber-600">{r.pendingDays ?? 0}</td>
-                        <td className="px-4 py-3 text-right font-mono font-bold text-slate-800">{r.unusedDays}</td>
-                        <td className="px-4 py-3 text-right font-mono text-slate-500">{fmt(r.dailyRate)}</td>
-                        <td className="px-4 py-3 text-right font-mono font-black text-emerald-700">{fmt(r.liability)}</td>
+                      <tr key={`${r.employeeId}-${r.leaveCode}-${i}`} className="hover:bg-page transition-colors">
+                        <td className="px-4 py-3"><p className="font-black text-ink whitespace-nowrap">{r.fullName}</p><p className="text-[9px] text-muted font-bold">{r.employeeCode}</p></td>
+                        <td className="px-4 py-3 font-bold text-ink whitespace-nowrap">{r.leaveType}</td>
+                        <td className="px-4 py-3 text-right font-mono text-ink">{r.entitledDays}</td>
+                        <td className="px-4 py-3 text-right font-mono text-muted">{r.carryForward ?? 0}</td>
+                        <td className="px-4 py-3 text-right font-mono text-ink">{r.usedDays}</td>
+                        <td className="px-4 py-3 text-right font-mono text-ink">{r.pendingDays ?? 0}</td>
+                        <td className="px-4 py-3 text-right font-mono font-bold text-ink">{r.unusedDays}</td>
+                        <td className="px-4 py-3 text-right font-mono text-muted">{fmt(r.dailyRate)}</td>
+                        <td className="px-4 py-3 text-right font-mono font-black text-accent">{fmt(r.liability)}</td>
                       </tr>
                     ))}
-                    <tr key={`sub-${dept}`} className="bg-blue-50/50">
-                      <td colSpan={8} className="px-4 py-2 text-right text-[9px] font-black text-slate-500 uppercase tracking-widest">Dept Total</td>
-                      <td className="px-4 py-2 text-right font-mono font-black text-blue-700">{fmt(data.byDepartment[dept])}</td>
+                    <tr key={`sub-${dept}`} className="bg-page">
+                      <td colSpan={8} className="px-4 py-2 text-right text-[9px] font-black text-muted uppercase tracking-widest">Dept Total</td>
+                      <td className="px-4 py-2 text-right font-mono font-black text-accent">{fmt(data.byDepartment[dept])}</td>
                     </tr>
                   </>
                 ))}
@@ -339,55 +339,55 @@ function Ir8aModal({ onClose, onToast }: { onClose: () => void; onToast: (m: str
   const fmt = (v: number | null | undefined) => v == null ? '—' : `$${Number(v).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-      <div className="w-full max-w-5xl bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
-        <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100 flex-shrink-0">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
+      <div className="w-full max-w-5xl bg-paper flex flex-col overflow-hidden max-h-[90vh]">
+        <div className="flex items-center justify-between px-8 py-5 border-b border-rule flex-shrink-0">
           <div>
-            <h2 className="text-base font-black text-slate-900 tracking-tighter">IR8A Annual Filing — {year}</h2>
+            <h2 className="text-base font-black text-ink tracking-tighter">IR8A Annual Filing — {year}</h2>
             <p className="eyebrow-tight mt-0.5">IRAS AIS submission data · deadline 1 March {year + 1}</p>
           </div>
           <div className="flex items-center gap-3">
             {data && data.length > 0 && (
               <button onClick={downloadFlatFile}
-                className="px-5 py-2 bg-slate-800 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-900 transition-all">
+                className="px-5 py-2 bg-shadow text-paper text-[9px] font-black uppercase tracking-widest hover:bg-shadow transition-all">
                 Download Flat File
               </button>
             )}
-            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">✕</button>
+            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page transition-all">✕</button>
           </div>
         </div>
-        <div className="flex items-center gap-4 px-8 py-4 border-b border-slate-50 bg-slate-50/50 flex-shrink-0">
-          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Year of Assessment</label>
+        <div className="flex items-center gap-4 px-8 py-4 border-b border-rule bg-page flex-shrink-0">
+          <label className="text-[10px] font-black text-muted uppercase tracking-widest">Year of Assessment</label>
           <input type="number" value={year} onChange={e => setYear(Number(e.target.value))} min={2020} max={2030}
-            className="w-28 px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500" />
+            className="w-28 px-3 py-2 bg-paper border border-rule text-sm font-bold text-ink outline-none focus:border-accent" />
           <button onClick={generate} disabled={loading}
-            className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center gap-2">
-            {loading ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating…</> : 'Generate'}
+            className="px-6 py-2 bg-accent text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50 transition-all flex items-center gap-2">
+            {loading ? <><span className="w-3 h-3 border-2 border-paper/30 border-t-paper animate-spin rounded-full" />Generating…</> : 'Generate'}
           </button>
-          <span className="ml-auto text-[9px] font-black text-amber-600 uppercase tracking-widest bg-amber-50 border border-amber-100 px-3 py-1.5 rounded-lg">
+          <span className="ml-auto text-[9px] font-black text-ink uppercase tracking-widest bg-page border border-highlight px-3 py-1.5 ">
             IRAS Deadline: 1 Mar {year + 1}
           </span>
         </div>
         <div className="overflow-auto flex-1">
           {!data ? (
-            <div className="flex items-center justify-center h-40 text-slate-400 text-sm font-bold">{loading ? 'Loading…' : 'Select year and click Generate'}</div>
+            <div className="flex items-center justify-center h-40 text-muted text-sm font-bold">{loading ? 'Loading…' : 'Select year and click Generate'}</div>
           ) : data.length === 0 ? (
-            <div className="flex items-center justify-center h-40 text-slate-400 text-sm font-bold">No finalised payslips for {year}</div>
+            <div className="flex items-center justify-center h-40 text-muted text-sm font-bold">No finalised payslips for {year}</div>
           ) : (
             <table className="w-full text-left border-collapse text-[11px]">
-              <thead className="sticky top-0 bg-slate-50 border-b border-slate-100 label-form">
+              <thead className="sticky top-0 bg-page border-b border-rule label-form">
                 <tr>{['Employee', 'NRIC', 'Employment Income', 'Emp CPF', 'Emplr CPF', 'AW Income', 'Other Taxable'].map(h => <th key={h} className="px-4 py-3 whitespace-nowrap">{h}</th>)}</tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="divide-y divide-rule">
                 {data.map((emp: any, i: number) => (
-                  <tr key={emp.employeeId ?? i} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-4 py-3"><p className="font-black text-slate-800 whitespace-nowrap">{emp.fullName}</p><p className="text-[9px] text-slate-400 font-bold">{emp.employeeId}</p></td>
-                    <td className="px-4 py-3 font-mono text-slate-600 tracking-wider">{emp.nric ?? '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-slate-800">{fmt(emp.employmentIncome)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-indigo-600">{fmt(emp.employeeCpf)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-purple-600">{fmt(emp.employerCpf)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-teal-600">{emp.awIncome > 0 ? fmt(emp.awIncome) : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-500">{emp.otherTaxableIncome > 0 ? fmt(emp.otherTaxableIncome) : '—'}</td>
+                  <tr key={emp.employeeId ?? i} className="hover:bg-page transition-colors">
+                    <td className="px-4 py-3"><p className="font-black text-ink whitespace-nowrap">{emp.fullName}</p><p className="text-[9px] text-muted font-bold">{emp.employeeId}</p></td>
+                    <td className="px-4 py-3 font-mono text-ink tracking-wider">{emp.nric ?? '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-ink">{fmt(emp.employmentIncome)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-accent">{fmt(emp.employeeCpf)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-accent">{fmt(emp.employerCpf)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-accent">{emp.awIncome > 0 ? fmt(emp.awIncome) : '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono text-muted">{emp.otherTaxableIncome > 0 ? fmt(emp.otherTaxableIncome) : '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -422,20 +422,20 @@ function PayrollBreakdownModal({ runId, period, onClose, onToast }: { runId: str
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-      <div className="w-full max-w-6xl bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
+      <div className="w-full max-w-6xl bg-paper flex flex-col overflow-hidden max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100 flex-shrink-0">
+        <div className="flex items-center justify-between px-8 py-5 border-b border-rule flex-shrink-0">
           <div>
-            <h2 className="text-base font-black text-slate-900 tracking-tighter">Payroll Breakdown — {period}</h2>
+            <h2 className="text-base font-black text-ink tracking-tighter">Payroll Breakdown — {period}</h2>
             <p className="eyebrow-tight mt-0.5">All payroll calculations per employee (Singapore MOM/CPF/EA)</p>
           </div>
           <div className="flex items-center gap-3">
             <button onClick={handleCsv} disabled={loading || rows.length === 0}
-              className="px-5 py-2 bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-700 disabled:opacity-50 transition-all">
+              className="px-5 py-2 bg-accent text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50 transition-all">
               Download CSV
             </button>
-            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">✕</button>
+            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page transition-all">✕</button>
           </div>
         </div>
 
@@ -449,17 +449,17 @@ function PayrollBreakdownModal({ runId, period, onClose, onToast }: { runId: str
             sdl: a.sdl + r.sdl,
           }), { gross: 0, net: 0, empCpf: 0, emplrCpf: 0, sdl: 0 });
           return (
-            <div className="flex flex-wrap gap-3 px-8 py-4 border-b border-slate-50 bg-slate-50/50 flex-shrink-0">
+            <div className="flex flex-wrap gap-3 px-8 py-4 border-b border-rule bg-page flex-shrink-0">
               {[
-                { label: 'Total Gross', value: fmt(tot.gross), color: 'text-slate-700' },
-                { label: 'Total Net', value: fmt(tot.net), color: 'text-emerald-700' },
-                { label: 'Employee CPF', value: fmt(tot.empCpf), color: 'text-indigo-700' },
-                { label: 'Employer CPF', value: fmt(tot.emplrCpf), color: 'text-purple-700' },
-                { label: 'SDL', value: fmt(tot.sdl), color: 'text-amber-700' },
-                { label: 'Employees', value: String(rows.length), color: 'text-slate-700' },
+                { label: 'Total Gross', value: fmt(tot.gross), color: 'text-ink' },
+                { label: 'Total Net', value: fmt(tot.net), color: 'text-accent' },
+                { label: 'Employee CPF', value: fmt(tot.empCpf), color: 'text-accent' },
+                { label: 'Employer CPF', value: fmt(tot.emplrCpf), color: 'text-accent' },
+                { label: 'SDL', value: fmt(tot.sdl), color: 'text-ink' },
+                { label: 'Employees', value: String(rows.length), color: 'text-ink' },
               ].map(s => (
-                <div key={s.label} className="px-4 py-2 bg-white rounded-xl border border-slate-100 text-center">
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{s.label}</p>
+                <div key={s.label} className="px-4 py-2 bg-paper border border-rule text-center">
+                  <p className="text-[8px] font-black text-muted uppercase tracking-widest">{s.label}</p>
                   <p className={`text-xs font-black ${s.color}`}>{s.value}</p>
                 </div>
               ))}
@@ -470,36 +470,36 @@ function PayrollBreakdownModal({ runId, period, onClose, onToast }: { runId: str
         {/* Table */}
         <div className="overflow-auto flex-1">
           {loading ? (
-            <div className="flex items-center justify-center h-40 text-slate-400 text-sm font-bold">Loading…</div>
+            <div className="flex items-center justify-center h-40 text-muted text-sm font-bold">Loading…</div>
           ) : rows.length === 0 ? (
-            <div className="flex items-center justify-center h-40 text-slate-400 text-sm font-bold">No payslips found for this run</div>
+            <div className="flex items-center justify-center h-40 text-muted text-sm font-bold">No payslips found for this run</div>
           ) : (
             <table className="w-full text-left border-collapse text-[11px]">
-              <thead className="sticky top-0 bg-slate-50 border-b border-slate-100 label-form">
+              <thead className="sticky top-0 bg-page border-b border-rule label-form">
                 <tr>
                   {['Code', 'Employee', 'Basic Salary (OW)', 'Gross Pay', 'Emp CPF', 'Emplr CPF', 'SDL', 'FWL', 'NPL Days', 'NPL Deduct', 'Govt Days', 'Govt Amt', 'Net Pay', 'YTD Gross', 'YTD Emp CPF'].map(h => (
                     <th key={h} className="px-4 py-3 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="divide-y divide-rule">
                 {rows.map(r => (
-                  <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-4 py-3 font-black text-slate-500 whitespace-nowrap">{r.employeeCode}</td>
-                    <td className="px-4 py-3 font-bold text-slate-800 whitespace-nowrap">{r.employeeName}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-600">{fmt(r.basicSalary)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-700 font-bold">{fmt(r.grossPay)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-indigo-600">{fmt(r.employeeCpf)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-purple-600">{fmt(r.employerCpf)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-amber-600">{fmt(r.sdl)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-400">{r.fwl > 0 ? fmt(r.fwl) : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-rose-500">{r.nplDays > 0 ? r.nplDays : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-rose-500">{r.nplDeduction > 0 ? fmt(r.nplDeduction) : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-teal-600">{r.govtPaidDays > 0 ? r.govtPaidDays : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-teal-600">{r.govtPaidAmount > 0 ? fmt(r.govtPaidAmount) : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono font-black text-emerald-700">{fmt(r.netPay)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-500">{fmt(r.ytdGross)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-500">{fmt(r.ytdEmployeeCpf)}</td>
+                  <tr key={r.id} className="hover:bg-page transition-colors">
+                    <td className="px-4 py-3 font-black text-muted whitespace-nowrap">{r.employeeCode}</td>
+                    <td className="px-4 py-3 font-bold text-ink whitespace-nowrap">{r.employeeName}</td>
+                    <td className="px-4 py-3 text-right font-mono text-ink">{fmt(r.basicSalary)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-ink font-bold">{fmt(r.grossPay)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-accent">{fmt(r.employeeCpf)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-accent">{fmt(r.employerCpf)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-ink">{fmt(r.sdl)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-muted">{r.fwl > 0 ? fmt(r.fwl) : '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono text-ink">{r.nplDays > 0 ? r.nplDays : '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono text-ink">{r.nplDeduction > 0 ? fmt(r.nplDeduction) : '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono text-accent">{r.govtPaidDays > 0 ? r.govtPaidDays : '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono text-accent">{r.govtPaidAmount > 0 ? fmt(r.govtPaidAmount) : '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono font-black text-accent">{fmt(r.netPay)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-muted">{fmt(r.ytdGross)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-muted">{fmt(r.ytdEmployeeCpf)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -540,11 +540,11 @@ const REPORTS: ReportDef[] = [
 ];
 
 const CATEGORY_COLORS: Record<string, string> = {
-  Statutory: 'bg-red-50 text-red-600 border-red-100',
-  Financial:  'bg-emerald-50 text-emerald-600 border-emerald-100',
-  Workforce:  'bg-blue-50 text-blue-600 border-blue-100',
-  Analytics:  'bg-indigo-50 text-indigo-600 border-indigo-100',
-  Training:   'bg-amber-50 text-amber-600 border-amber-100',
+  Statutory: 'bg-page text-ink border-ink',
+  Financial:  'bg-page text-accent border-accent',
+  Workforce:  'bg-page text-accent border-accent',
+  Analytics:  'bg-page text-accent border-accent',
+  Training:   'bg-page text-ink border-highlight',
 };
 
 // ── RPT-001 Executive Workforce Dashboard Modal ───────────────────────────────
@@ -615,10 +615,10 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
 
   if (loading || !data) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
-        <div className="bg-white rounded-[2rem] p-12 flex flex-col items-center gap-4 shadow-2xl">
-          <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-          <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Loading dashboard…</p>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow backdrop-">
+        <div className="bg-paper p-12 flex flex-col items-center gap-4 ">
+          <div className="w-8 h-8 border-4 border-accent border-t-accent animate-spin rounded-full" />
+          <p className="text-sm font-black text-muted uppercase tracking-widest">Loading dashboard…</p>
         </div>
       </div>
     );
@@ -638,7 +638,18 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
   const etEntries    = Object.entries(byEmploymentType).sort((a, b) => b[1] - a[1]);
   const csEntries    = Object.entries(byCitizenship).filter(e => e[1] > 0);
   const totalCiti    = csEntries.reduce((s, e) => s + e[1], 0) || 1;
-  const csColors: Record<string, string> = { SC: '#6366f1', PR: '#8b5cf6', EP: '#06b6d4', S_PASS: '#f59e0b', WP: '#ef4444', OTHER: '#94a3b8' };
+  // Six chart series from the token set. A bar chart cannot use the fill/outline
+  // trick the status chips use, so the ramp mixes each token toward the paper
+  // ground to get distinguishable steps. SVG `fill` takes CSS variables, so
+  // these follow the theme (including dark mode) rather than freezing a hex.
+  const csColors: Record<string, string> = {
+    SC:      'var(--accent)',
+    PR:      'var(--highlight)',
+    EP:      'var(--ink)',
+    S_PASS:  'color-mix(in srgb, var(--accent) 55%, var(--paper))',
+    WP:      'color-mix(in srgb, var(--ink) 45%, var(--paper))',
+    OTHER:   'var(--muted)',
+  };
 
   // ── OT helpers ─────────────────────────────────────────────────────────────
   const otEntries = otData ? Object.entries(otData.totals).sort((a, b) => b[1] - a[1]).slice(0, 6) : [];
@@ -655,33 +666,33 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
   const maxCat = Math.max(...catEntries.map(c => c._count.id), 1);
 
   const kpiCards = [
-    { label: 'Total Headcount',     value: kpis.totalHeadcount,        sub: `${kpis.activeHeadcount} active`,           color: 'text-slate-900' },
-    { label: 'Hires MTD',           value: kpis.hiresMtd,              sub: 'this month',                               color: 'text-emerald-600' },
-    { label: 'Terminations MTD',    value: kpis.termsMtd,              sub: 'this month',                               color: 'text-red-600' },
-    { label: '12m Attrition Rate',  value: `${kpis.attritionRate12m}%`, sub: `${kpis.terminations12m} exits in 12m`,   color: 'text-indigo-600' },
+    { label: 'Total Headcount',     value: kpis.totalHeadcount,        sub: `${kpis.activeHeadcount} active`,           color: 'text-ink' },
+    { label: 'Hires MTD',           value: kpis.hiresMtd,              sub: 'this month',                               color: 'text-accent' },
+    { label: 'Terminations MTD',    value: kpis.termsMtd,              sub: 'this month',                               color: 'text-ink' },
+    { label: '12m Attrition Rate',  value: `${kpis.attritionRate12m}%`, sub: `${kpis.terminations12m} exits in 12m`,   color: 'text-accent' },
   ];
 
   const refreshLabel = secAgo < 60 ? 'just now' : secAgo < 3600 ? `${Math.floor(secAgo / 60)}m ago` : `${Math.floor(secAgo / 3600)}h ago`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm print:p-0 print:bg-transparent print:inset-auto print:relative">
-      <div className="w-full max-w-5xl bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden max-h-[92vh] print:shadow-none print:rounded-none print:max-h-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop- print:p-0 print:bg-transparent print:inset-auto print:relative">
+      <div className="w-full max-w-5xl bg-paper flex flex-col overflow-hidden max-h-[92vh] print: print:rounded-none print:max-h-none">
         {/* Header */}
-        <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100 flex-shrink-0 print:border-slate-300">
+        <div className="flex items-center justify-between px-8 py-5 border-b border-rule flex-shrink-0 print:border-rule">
           <div>
-            <h2 className="text-base font-black text-slate-900 tracking-tighter">Executive Workforce Dashboard</h2>
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] mt-0.5">
+            <h2 className="text-base font-black text-ink tracking-tighter">Executive Workforce Dashboard</h2>
+            <p className="text-[9px] font-black text-muted uppercase tracking-[0.3em] mt-0.5">
               Auto-refresh every 5 min · {lastRefreshed ? `Updated ${refreshLabel}` : 'Loading…'}
-              {refreshing && <span className="ml-2 inline-block w-2.5 h-2.5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin align-middle" />}
+              {refreshing && <span className="ml-2 inline-block w-2.5 h-2.5 border-2 border-rule border-t-rule animate-spin align-middle rounded-full" />}
             </p>
           </div>
           <div className="flex items-center gap-2 print:hidden">
             <button onClick={() => loadAll(true)} disabled={refreshing}
-              className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-200 disabled:opacity-50 transition-all">
+              className="px-4 py-2 bg-page text-ink text-[9px] font-black uppercase tracking-widest hover:bg-rule disabled:opacity-50 transition-all">
               ↺ Refresh
             </button>
-            <button onClick={() => window.print()} className="px-5 py-2 bg-slate-800 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-900 transition-all">Print / PDF</button>
-            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">✕</button>
+            <button onClick={() => window.print()} className="px-5 py-2 bg-shadow text-paper text-[9px] font-black uppercase tracking-widest hover:bg-shadow transition-all">Print / PDF</button>
+            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page transition-all">✕</button>
           </div>
         </div>
 
@@ -689,17 +700,17 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
           {/* KPI Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {kpiCards.map(k => (
-              <div key={k.label} className="bg-slate-50 rounded-2xl p-5 border border-slate-100 flex flex-col gap-1">
-                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{k.label}</span>
+              <div key={k.label} className="bg-page p-5 border border-rule flex flex-col gap-1">
+                <span className="text-[9px] font-black text-muted uppercase tracking-widest">{k.label}</span>
                 <span className={`text-3xl font-black tracking-tighter ${k.color}`}>{k.value}</span>
-                <span className="text-[10px] text-slate-400 font-bold">{k.sub}</span>
+                <span className="text-[10px] text-muted font-bold">{k.sub}</span>
               </div>
             ))}
           </div>
 
           {/* 12-month Hires vs Terminations trend */}
-          <div className="bg-white rounded-2xl border border-slate-100 p-6">
-            <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">12-Month Hires vs Terminations</h3>
+          <div className="bg-paper border border-rule p-6">
+            <h3 className="text-[10px] font-black text-muted uppercase tracking-widest mb-4">12-Month Hires vs Terminations</h3>
             <svg viewBox={`0 0 ${chartW} ${chartH + 30}`} width="100%" className="overflow-visible">
               {[0, 0.25, 0.5, 0.75, 1].map(f => (
                 <line key={f} x1={30} y1={chartH * (1 - f)} x2={chartW} y2={chartH * (1 - f)} stroke="#f1f5f9" strokeWidth="1" />
@@ -712,64 +723,64 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
                   <g key={m.label}>
                     <rect x={x}           y={chartH - hH} width={barW} height={hH} rx="2" fill="#10b981" opacity={0.85} />
                     <rect x={x + barW + 1} y={chartH - tH} width={barW} height={tH} rx="2" fill="#ef4444" opacity={0.85} />
-                    <text x={x + barW} y={chartH + 16} textAnchor="middle" fontSize="8" fill="#94a3b8" fontWeight="700">{m.label}</text>
+                    <text x={x + barW} y={chartH + 16} textAnchor="middle" fontSize="8" fill="var(--muted)" fontWeight="700">{m.label}</text>
                   </g>
                 );
               })}
             </svg>
             <div className="flex gap-5 mt-1">
-              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-500 block" /><span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Hires</span></div>
-              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-500 block" /><span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Terminations</span></div>
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 bg-accent block" /><span className="text-[9px] font-black text-muted uppercase tracking-widest">Hires</span></div>
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 bg-ink block" /><span className="text-[9px] font-black text-muted uppercase tracking-widest">Terminations</span></div>
             </div>
           </div>
 
           {/* Headcount breakdowns */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="bg-white rounded-2xl border border-slate-100 p-6 flex flex-col gap-3">
-              <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">By Department</h3>
+            <div className="bg-paper border border-rule p-6 flex flex-col gap-3">
+              <h3 className="text-[10px] font-black text-muted uppercase tracking-widest">By Department</h3>
               {deptEntries.map(([dept, count]) => (
                 <div key={dept} className="flex flex-col gap-1">
                   <div className="flex justify-between">
-                    <span className="text-[10px] font-black text-slate-700 truncate max-w-[80%]">{dept}</span>
-                    <span className="text-[10px] font-black text-slate-900">{count}</span>
+                    <span className="text-[10px] font-black text-ink truncate max-w-[80%]">{dept}</span>
+                    <span className="text-[10px] font-black text-ink">{count}</span>
                   </div>
-                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${(count / maxDept) * 100}%` }} />
+                  <div className="h-1.5 bg-page overflow-hidden">
+                    <div className="h-full bg-accent transition-all" style={{ width: `${(count / maxDept) * 100}%` }} />
                   </div>
                 </div>
               ))}
             </div>
-            <div className="bg-white rounded-2xl border border-slate-100 p-6 flex flex-col gap-3">
-              <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Employment Type</h3>
+            <div className="bg-paper border border-rule p-6 flex flex-col gap-3">
+              <h3 className="text-[10px] font-black text-muted uppercase tracking-widest">Employment Type</h3>
               {etEntries.map(([type, count]) => {
                 const total = etEntries.reduce((s, e) => s + e[1], 0) || 1;
                 const pct   = Math.round((count / total) * 100);
                 return (
                   <div key={type} className="flex flex-col gap-1">
                     <div className="flex justify-between">
-                      <span className="text-[10px] font-black text-slate-700">{type.replace(/_/g, ' ')}</span>
-                      <span className="text-[10px] font-black text-slate-500">{count} ({pct}%)</span>
+                      <span className="text-[10px] font-black text-ink">{type.replace(/_/g, ' ')}</span>
+                      <span className="text-[10px] font-black text-muted">{count} ({pct}%)</span>
                     </div>
-                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
+                    <div className="h-1.5 bg-page overflow-hidden">
+                      <div className="h-full bg-accent " style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 );
               })}
             </div>
-            <div className="bg-white rounded-2xl border border-slate-100 p-6 flex flex-col gap-3">
-              <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Citizenship / Pass</h3>
+            <div className="bg-paper border border-rule p-6 flex flex-col gap-3">
+              <h3 className="text-[10px] font-black text-muted uppercase tracking-widest">Citizenship / Pass</h3>
               {csEntries.map(([key, count]) => {
                 const pct   = Math.round((count / totalCiti) * 100);
-                const color = csColors[key] || '#94a3b8';
+                const color = csColors[key] || 'var(--muted)';
                 return (
                   <div key={key} className="flex flex-col gap-1">
                     <div className="flex justify-between">
-                      <span className="text-[10px] font-black text-slate-700">{key.replace(/_/g, ' ')}</span>
-                      <span className="text-[10px] font-black text-slate-500">{count} ({pct}%)</span>
+                      <span className="text-[10px] font-black text-ink">{key.replace(/_/g, ' ')}</span>
+                      <span className="text-[10px] font-black text-muted">{count} ({pct}%)</span>
                     </div>
-                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+                    <div className="h-1.5 bg-page overflow-hidden">
+                      <div className="h-full " style={{ width: `${pct}%`, backgroundColor: color }} />
                     </div>
                   </div>
                 );
@@ -780,15 +791,15 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
           {/* OT by department + Training completion */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* OT by department */}
-            <div className="bg-white rounded-2xl border border-slate-100 p-6 flex flex-col gap-3">
+            <div className="bg-paper border border-rule p-6 flex flex-col gap-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">OT Hours by Department</h3>
-                {otData && <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">6-month total · this month highlighted</span>}
+                <h3 className="text-[10px] font-black text-muted uppercase tracking-widest">OT Hours by Department</h3>
+                {otData && <span className="text-[8px] font-black text-muted uppercase tracking-widest">6-month total · this month highlighted</span>}
               </div>
               {!otData ? (
-                <p className="text-[10px] text-slate-400 font-bold py-4 text-center">No OT data available</p>
+                <p className="text-[10px] text-muted font-bold py-4 text-center">No OT data available</p>
               ) : otEntries.length === 0 ? (
-                <p className="text-[10px] text-slate-400 font-bold py-4 text-center">No OT recorded in this period</p>
+                <p className="text-[10px] text-muted font-bold py-4 text-center">No OT recorded in this period</p>
               ) : otEntries.map(([dept, total]) => {
                 const thisMo = otCurrentMonth[dept] ?? 0;
                 const pct    = Math.round((total / maxOt) * 100);
@@ -796,16 +807,16 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
                 return (
                   <div key={dept} className="flex flex-col gap-1">
                     <div className="flex justify-between items-baseline">
-                      <span className="text-[10px] font-black text-slate-700 truncate max-w-[60%]">{dept}</span>
-                      <span className="text-[10px] font-black text-slate-500">
-                        <span className="text-amber-600">{thisMo}h</span>
-                        <span className="text-slate-300 mx-1">/</span>
+                      <span className="text-[10px] font-black text-ink truncate max-w-[60%]">{dept}</span>
+                      <span className="text-[10px] font-black text-muted">
+                        <span className="text-ink">{thisMo}h</span>
+                        <span className="text-muted mx-1">/</span>
                         {total}h total
                       </span>
                     </div>
-                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-amber-200 rounded-full relative" style={{ width: `${pct}%` }}>
-                        <div className="h-full bg-amber-500 rounded-full absolute left-0 top-0" style={{ width: `${moPct}%` }} />
+                    <div className="h-2 bg-page overflow-hidden">
+                      <div className="h-full bg-page relative" style={{ width: `${pct}%` }}>
+                        <div className="h-full bg-highlight absolute left-0 top-0" style={{ width: `${moPct}%` }} />
                       </div>
                     </div>
                   </div>
@@ -814,53 +825,53 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
             </div>
 
             {/* Training completion */}
-            <div className="bg-white rounded-2xl border border-slate-100 p-6 flex flex-col gap-4">
-              <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Training Completion</h3>
+            <div className="bg-paper border border-rule p-6 flex flex-col gap-4">
+              <h3 className="text-[10px] font-black text-muted uppercase tracking-widest">Training Completion</h3>
               {!trainData ? (
-                <p className="text-[10px] text-slate-400 font-bold py-4 text-center">No training data available</p>
+                <p className="text-[10px] text-muted font-bold py-4 text-center">No training data available</p>
               ) : (
                 <>
                   <div className="flex items-center gap-6">
                     <div className="flex flex-col items-center">
-                      <span className={`text-4xl font-black tracking-tighter ${trainData.completionRate >= 80 ? 'text-emerald-600' : trainData.completionRate >= 50 ? 'text-amber-600' : 'text-red-500'}`}>
+                      <span className={`text-4xl font-black tracking-tighter ${trainData.completionRate >= 80 ? 'text-accent' : trainData.completionRate >= 50 ? 'text-ink' : 'text-ink'}`}>
                         {trainData.completionRate}%
                       </span>
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Completion Rate</span>
+                      <span className="text-[9px] font-black text-muted uppercase tracking-widest mt-0.5">Completion Rate</span>
                     </div>
                     <div className="flex flex-col gap-1 flex-1">
                       {[
-                        { label: 'Completed',   value: trainData.completed,        color: 'bg-emerald-500' },
-                        { label: 'In Progress', value: trainData.inProgress,       color: 'bg-amber-400' },
-                        { label: 'Total',       value: trainData.totalEnrollments, color: 'bg-slate-300' },
+                        { label: 'Completed',   value: trainData.completed,        color: 'bg-accent' },
+                        { label: 'In Progress', value: trainData.inProgress,       color: 'bg-highlight' },
+                        { label: 'Total',       value: trainData.totalEnrollments, color: 'bg-rule' },
                       ].map(s => (
                         <div key={s.label} className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full ${s.color}`} />
-                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{s.label}</span>
+                            <span className={`w-2 h-2  ${s.color}`} />
+                            <span className="text-[9px] font-black text-muted uppercase tracking-widest">{s.label}</span>
                           </div>
-                          <span className="text-[10px] font-black text-slate-800">{s.value}</span>
+                          <span className="text-[10px] font-black text-ink">{s.value}</span>
                         </div>
                       ))}
                       {trainData.mandatory > 0 && (
-                        <div className="mt-1 px-2 py-1 bg-red-50 border border-red-100 rounded-lg">
-                          <span className="text-[8px] font-black text-red-600 uppercase tracking-widest">{trainData.mandatory} mandatory programme{trainData.mandatory !== 1 ? 's' : ''}</span>
+                        <div className="mt-1 px-2 py-1 bg-page border border-ink ">
+                          <span className="text-[8px] font-black text-ink uppercase tracking-widest">{trainData.mandatory} mandatory programme{trainData.mandatory !== 1 ? 's' : ''}</span>
                         </div>
                       )}
                     </div>
                   </div>
                   {catEntries.length > 0 && (
-                    <div className="flex flex-col gap-2 pt-2 border-t border-slate-50">
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Programmes by Category</span>
+                    <div className="flex flex-col gap-2 pt-2 border-t border-rule">
+                      <span className="text-[9px] font-black text-muted uppercase tracking-widest">Programmes by Category</span>
                       {catEntries.map(c => {
                         const pct = Math.round((c._count.id / maxCat) * 100);
                         return (
                           <div key={c.category} className="flex flex-col gap-0.5">
                             <div className="flex justify-between">
-                              <span className="text-[9px] font-black text-slate-600">{c.category}</span>
-                              <span className="text-[9px] font-black text-slate-400">{c._count.id}</span>
+                              <span className="text-[9px] font-black text-ink">{c.category}</span>
+                              <span className="text-[9px] font-black text-muted">{c._count.id}</span>
                             </div>
-                            <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${pct}%` }} />
+                            <div className="h-1 bg-page overflow-hidden">
+                              <div className="h-full bg-accent " style={{ width: `${pct}%` }} />
                             </div>
                           </div>
                         );
@@ -916,40 +927,40 @@ function CustomReportModal({ onClose, onToast }: { onClose: () => void; onToast:
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-      <div className="w-full max-w-lg bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
+      <div className="w-full max-w-lg bg-paper flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-8 py-6 border-b border-rule">
           <div>
-            <h2 className="text-base font-black text-slate-900 tracking-tighter">Custom Report Builder</h2>
+            <h2 className="text-base font-black text-ink tracking-tighter">Custom Report Builder</h2>
             <p className="eyebrow-tight mt-0.5">Pick dataset and fields → download CSV</p>
           </div>
-          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">✕</button>
+          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page transition-all">✕</button>
         </div>
         <div className="p-8 flex flex-col gap-6">
           <div className="flex flex-col gap-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Dataset</label>
+            <label className="text-[10px] font-black text-muted uppercase tracking-widest">Dataset</label>
             <select value={dataset} onChange={e => { setDataset(e.target.value); setFields([]); }}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500">
+              className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent">
               <option value="employees">Employees</option>
               <option value="leave">Leave Applications</option>
             </select>
           </div>
           <div className="flex flex-col gap-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Fields to Include</label>
+            <label className="text-[10px] font-black text-muted uppercase tracking-widest">Fields to Include</label>
             <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto">
               {DATASETS[dataset].map(f => (
-                <label key={f} className={`flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer border transition-all ${fields.includes(f) ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'}`}>
-                  <input type="checkbox" checked={fields.includes(f)} onChange={() => toggle(f)} className="w-3.5 h-3.5 accent-indigo-600" />
+                <label key={f} className={`flex items-center gap-2 px-3 py-2.5  cursor-pointer border transition-all ${fields.includes(f) ? 'bg-page border-accent text-accent' : 'bg-page border-rule text-ink hover:border-rule'}`}>
+                  <input type="checkbox" checked={fields.includes(f)} onChange={() => toggle(f)} className="w-3.5 h-3.5 accent-accent" />
                   <span className="text-[10px] font-black uppercase tracking-widest">{f}</span>
                 </label>
               ))}
             </div>
           </div>
         </div>
-        <div className="flex gap-3 px-8 py-5 border-t border-slate-100 bg-slate-50/50">
-          <button onClick={onClose} className="flex-1 py-3 text-[10px] font-black text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-100 uppercase tracking-widest">Cancel</button>
+        <div className="flex gap-3 px-8 py-5 border-t border-rule bg-page">
+          <button onClick={onClose} className="flex-1 py-3 text-[10px] font-black text-muted border border-rule hover:bg-page uppercase tracking-widest">Cancel</button>
           <button onClick={handleRun} disabled={running || fields.length === 0}
-            className="flex-1 py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl uppercase tracking-widest transition-all">
+            className="flex-1 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent disabled:opacity-50 uppercase tracking-widest transition-all">
             {running ? 'Generating…' : `Download CSV (${fields.length} fields)`}
           </button>
         </div>
@@ -1062,53 +1073,53 @@ function ReportBuilderWizard({ onClose, onSaved, onToast }: {
     : groupBy !== '' && aggregations.some(a => a.as.trim());
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-      <div className="w-full max-w-3xl bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden max-h-[92vh]">
-        <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
+      <div className="w-full max-w-3xl bg-paper flex flex-col overflow-hidden max-h-[92vh]">
+        <div className="flex items-center justify-between px-8 py-5 border-b border-rule">
           <div>
-            <h2 className="text-base font-black text-slate-900 tracking-tighter">New Saved Report</h2>
+            <h2 className="text-base font-black text-ink tracking-tighter">New Saved Report</h2>
             <div className="flex items-center gap-2 mt-1.5">
               {([1, 2, 3] as const).map(s => (
-                <div key={s} className={`h-1.5 w-12 rounded-full transition-all ${s <= step ? 'bg-indigo-600' : 'bg-slate-200'}`} />
+                <div key={s} className={`h-1.5 w-12  transition-all ${s <= step ? 'bg-accent' : 'bg-rule'}`} />
               ))}
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Step {step} of 3</span>
+              <span className="text-[9px] font-black text-muted uppercase tracking-widest ml-1">Step {step} of 3</span>
             </div>
           </div>
-          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100">✕</button>
+          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page">✕</button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-6">
           {step === 1 && (
             <>
               <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Report Name *</label>
+                <label className="text-[10px] font-black text-muted uppercase tracking-widest">Report Name *</label>
                 <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Active Headcount by Department"
-                  className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500" />
+                  className="px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Category</label>
+                  <label className="text-[10px] font-black text-muted uppercase tracking-widest">Category</label>
                   <select value={category} onChange={e => setCategory(e.target.value)}
-                    className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500">
+                    className="px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent">
                     {['WORKFORCE', 'FINANCIAL', 'LEAVE', 'TRAINING', 'COMPLIANCE', 'CUSTOM'].map(c => (
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Description</label>
+                  <label className="text-[10px] font-black text-muted uppercase tracking-widest">Description</label>
                   <input value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional"
-                    className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500" />
+                    className="px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent" />
                 </div>
               </div>
               <div className="flex flex-col gap-3">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Data Source</label>
+                <label className="text-[10px] font-black text-muted uppercase tracking-widest">Data Source</label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {Object.entries(DS_LABELS).map(([ds, lbl]) => (
                     <button key={ds} onClick={() => { setDataSource(ds); setSelectedFields([]); setGroupBy(''); }}
-                      className={`px-4 py-3 rounded-xl border-2 text-left transition-all ${dataSource === ds ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300'}`}>
-                      <p className={`text-[10px] font-black uppercase tracking-wide ${dataSource === ds ? 'text-indigo-700' : 'text-slate-700'}`}>{lbl}</p>
-                      <p className="text-[8px] text-slate-400 mt-0.5 font-bold uppercase">{(catalog[ds] || []).length || '—'} fields</p>
+                      className={`px-4 py-3  border-2 text-left transition-all ${dataSource === ds ? 'border-accent bg-page' : 'border-rule bg-page hover:border-rule'}`}>
+                      <p className={`text-[10px] font-black uppercase tracking-wide ${dataSource === ds ? 'text-accent' : 'text-ink'}`}>{lbl}</p>
+                      <p className="text-[8px] text-muted mt-0.5 font-bold uppercase">{(catalog[ds] || []).length || '—'} fields</p>
                     </button>
                   ))}
                 </div>
@@ -1121,7 +1132,7 @@ function ReportBuilderWizard({ onClose, onSaved, onToast }: {
               <div className="flex gap-3">
                 {(['fields', 'grouped'] as ReportMode[]).map(m => (
                   <button key={m} onClick={() => setMode(m)}
-                    className={`flex-1 py-3 rounded-xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${mode === m ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+                    className={`flex-1 py-3  border-2 font-black text-[10px] uppercase tracking-widest transition-all ${mode === m ? 'border-accent bg-page text-accent' : 'border-rule text-muted hover:border-rule'}`}>
                     {m === 'fields' ? 'Field List (rows)' : 'Grouped Summary'}
                   </button>
                 ))}
@@ -1129,14 +1140,14 @@ function ReportBuilderWizard({ onClose, onSaved, onToast }: {
 
               {mode === 'fields' && (
                 <>
-                  <p className="text-[10px] font-bold text-slate-400 -mt-2">Select the columns to include. No aggregation applied.</p>
+                  <p className="text-[10px] font-bold text-muted -mt-2">Select the columns to include. No aggregation applied.</p>
                   <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
                     {fields.map(f => (
-                      <label key={f.key} className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl cursor-pointer border transition-all ${selectedFields.includes(f.key) ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'}`}>
-                        <input type="checkbox" checked={selectedFields.includes(f.key)} onChange={() => toggleField(f.key)} className="w-3.5 h-3.5 accent-indigo-600" />
+                      <label key={f.key} className={`flex items-center gap-2.5 px-3 py-2.5  cursor-pointer border transition-all ${selectedFields.includes(f.key) ? 'bg-page border-accent text-accent' : 'bg-page border-rule text-ink hover:border-rule'}`}>
+                        <input type="checkbox" checked={selectedFields.includes(f.key)} onChange={() => toggleField(f.key)} className="w-3.5 h-3.5 accent-accent" />
                         <div className="min-w-0">
                           <span className="text-[10px] font-black uppercase tracking-widest block truncate">{f.label}</span>
-                          <span className="text-[8px] font-bold text-slate-400 uppercase">{f.type}</span>
+                          <span className="text-[8px] font-bold text-muted uppercase">{f.type}</span>
                         </div>
                       </label>
                     ))}
@@ -1146,39 +1157,39 @@ function ReportBuilderWizard({ onClose, onSaved, onToast }: {
 
               {mode === 'grouped' && (
                 <>
-                  <p className="text-[10px] font-bold text-slate-400 -mt-2">Group by a single field and compute aggregations per group.</p>
+                  <p className="text-[10px] font-bold text-muted -mt-2">Group by a single field and compute aggregations per group.</p>
                   <div className="flex flex-col gap-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Group By</label>
+                    <label className="text-[10px] font-black text-muted uppercase tracking-widest">Group By</label>
                     <select value={groupBy} onChange={e => setGroupBy(e.target.value)}
-                      className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500">
+                      className="px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent">
                       <option value="">— pick a field —</option>
                       {fields.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
                     </select>
                   </div>
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Aggregations</label>
+                      <label className="text-[10px] font-black text-muted uppercase tracking-widest">Aggregations</label>
                       <button onClick={() => setAggregations(p => [...p, { id: nanoid6(), field: '', op: 'count', as: '' }])}
-                        className="text-[9px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest">+ Add</button>
+                        className="text-[9px] font-black text-accent hover:text-accent uppercase tracking-widest">+ Add</button>
                     </div>
                     {aggregations.map((agg, i) => (
                       <div key={agg.id} className="flex gap-2 items-center">
                         <select value={agg.op} onChange={e => setAggregations(p => p.map((a, j) => j === i ? { ...a, op: e.target.value } : a))}
-                          className="w-20 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-700 outline-none focus:border-indigo-500">
+                          className="w-20 px-2 py-2 bg-page border border-rule text-[10px] font-black text-ink outline-none focus:border-accent">
                           {AGG_OPS_META.map(o => <option key={o.op} value={o.op}>{o.label}</option>)}
                         </select>
                         <select value={agg.field} onChange={e => setAggregations(p => p.map((a, j) => j === i ? { ...a, field: e.target.value } : a))}
                           disabled={agg.op === 'count'}
-                          className="flex-1 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-700 outline-none focus:border-indigo-500 disabled:opacity-50">
+                          className="flex-1 px-2 py-2 bg-page border border-rule text-[10px] font-black text-ink outline-none focus:border-accent disabled:opacity-50">
                           <option value="">{agg.op === 'count' ? '(all rows)' : '— numeric field —'}</option>
                           {fields.filter(f => f.type === 'number').map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
                         </select>
-                        <span className="text-[9px] font-black text-slate-400">AS</span>
+                        <span className="text-[9px] font-black text-muted">AS</span>
                         <input value={agg.as} onChange={e => setAggregations(p => p.map((a, j) => j === i ? { ...a, as: e.target.value } : a))}
                           placeholder="alias"
-                          className="w-20 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 outline-none focus:border-indigo-500" />
+                          className="w-20 px-2 py-2 bg-page border border-rule text-[10px] font-bold text-ink outline-none focus:border-accent" />
                         {aggregations.length > 1 && (
-                          <button onClick={() => setAggregations(p => p.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600 text-xs font-black">✕</button>
+                          <button onClick={() => setAggregations(p => p.filter((_, j) => j !== i))} className="text-ink hover:text-ink text-xs font-black">✕</button>
                         )}
                       </div>
                     ))}
@@ -1192,53 +1203,53 @@ function ReportBuilderWizard({ onClose, onSaved, onToast }: {
             <>
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Filters (optional)</label>
+                  <label className="text-[10px] font-black text-muted uppercase tracking-widest">Filters (optional)</label>
                   <button onClick={() => setFilters(p => [...p, { id: nanoid6(), field: fields[0]?.key || '', op: 'eq', value: '' }])}
-                    className="text-[9px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest">+ Add Filter</button>
+                    className="text-[9px] font-black text-accent hover:text-accent uppercase tracking-widest">+ Add Filter</button>
                 </div>
-                {filters.length === 0 && <p className="text-[10px] text-slate-400 font-bold">No filters — returns all rows.</p>}
+                {filters.length === 0 && <p className="text-[10px] text-muted font-bold">No filters — returns all rows.</p>}
                 {filters.map((f, i) => (
                   <div key={f.id} className="flex gap-2 items-center">
                     <select value={f.field} onChange={e => setFilters(p => p.map((r, j) => j === i ? { ...r, field: e.target.value } : r))}
-                      className="flex-1 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-700 outline-none focus:border-indigo-500">
+                      className="flex-1 px-2 py-2 bg-page border border-rule text-[10px] font-black text-ink outline-none focus:border-accent">
                       {fields.map(fd => <option key={fd.key} value={fd.key}>{fd.label}</option>)}
                     </select>
                     <select value={f.op} onChange={e => setFilters(p => p.map((r, j) => j === i ? { ...r, op: e.target.value } : r))}
-                      className="w-24 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-700 outline-none focus:border-indigo-500">
+                      className="w-24 px-2 py-2 bg-page border border-rule text-[10px] font-black text-ink outline-none focus:border-accent">
                       {FILTER_OPS_META.map(o => <option key={o.op} value={o.op}>{o.label}</option>)}
                     </select>
                     <input value={f.value} onChange={e => setFilters(p => p.map((r, j) => j === i ? { ...r, value: e.target.value } : r))}
                       placeholder={f.op === 'in' ? 'val1,val2' : 'value'}
-                      className="flex-1 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 outline-none focus:border-indigo-500" />
-                    <button onClick={() => setFilters(p => p.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600 text-xs font-black">✕</button>
+                      className="flex-1 px-2 py-2 bg-page border border-rule text-[10px] font-bold text-ink outline-none focus:border-accent" />
+                    <button onClick={() => setFilters(p => p.filter((_, j) => j !== i))} className="text-ink hover:text-ink text-xs font-black">✕</button>
                   </div>
                 ))}
               </div>
 
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Sort Order (optional)</label>
+                  <label className="text-[10px] font-black text-muted uppercase tracking-widest">Sort Order (optional)</label>
                   <button onClick={() => setSortBy(p => [...p, { id: nanoid6(), field: fields[0]?.key || '', dir: 'asc' }])}
-                    className="text-[9px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest">+ Add Sort</button>
+                    className="text-[9px] font-black text-accent hover:text-accent uppercase tracking-widest">+ Add Sort</button>
                 </div>
                 {sortBy.map((s, i) => (
                   <div key={s.id} className="flex gap-2 items-center">
                     <select value={s.field} onChange={e => setSortBy(p => p.map((r, j) => j === i ? { ...r, field: e.target.value } : r))}
-                      className="flex-1 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-700 outline-none focus:border-indigo-500">
+                      className="flex-1 px-2 py-2 bg-page border border-rule text-[10px] font-black text-ink outline-none focus:border-accent">
                       {fields.map(fd => <option key={fd.key} value={fd.key}>{fd.label}</option>)}
                     </select>
                     <button onClick={() => setSortBy(p => p.map((r, j) => j === i ? { ...r, dir: r.dir === 'asc' ? 'desc' : 'asc' } : r))}
-                      className={`px-3 py-2 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all ${s.dir === 'asc' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-purple-50 border-purple-200 text-purple-700'}`}>
+                      className={`px-3 py-2  border text-[9px] font-black uppercase tracking-widest transition-all ${s.dir === 'asc' ? 'bg-page border-accent text-accent' : 'bg-page border-accent text-accent'}`}>
                       {s.dir === 'asc' ? '↑ ASC' : '↓ DESC'}
                     </button>
-                    <button onClick={() => setSortBy(p => p.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600 text-xs font-black">✕</button>
+                    <button onClick={() => setSortBy(p => p.filter((_, j) => j !== i))} className="text-ink hover:text-ink text-xs font-black">✕</button>
                   </div>
                 ))}
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Definition Preview</label>
-                <pre className="p-4 bg-slate-900 text-emerald-400 rounded-xl text-[9px] font-mono overflow-auto max-h-40 leading-relaxed">
+                <label className="text-[10px] font-black text-muted uppercase tracking-widest">Definition Preview</label>
+                <pre className="p-4 bg-shadow text-accent text-[9px] font-mono overflow-auto max-h-40 leading-relaxed">
                   {JSON.stringify(buildDefinition(), null, 2)}
                 </pre>
               </div>
@@ -1246,21 +1257,21 @@ function ReportBuilderWizard({ onClose, onSaved, onToast }: {
           )}
         </div>
 
-        <div className="flex gap-3 px-8 py-5 border-t border-slate-100 bg-slate-50/50 flex-shrink-0">
-          <button onClick={onClose} className="px-6 py-3 text-[10px] font-black text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-100 uppercase tracking-widest">Cancel</button>
+        <div className="flex gap-3 px-8 py-5 border-t border-rule bg-page flex-shrink-0">
+          <button onClick={onClose} className="px-6 py-3 text-[10px] font-black text-muted border border-rule hover:bg-page uppercase tracking-widest">Cancel</button>
           {step > 1 && (
             <button onClick={() => setStep(s => (s - 1) as 1 | 2 | 3)}
-              className="px-6 py-3 text-[10px] font-black text-slate-600 border border-slate-300 rounded-xl hover:bg-slate-100 uppercase tracking-widest">← Back</button>
+              className="px-6 py-3 text-[10px] font-black text-ink border border-rule hover:bg-page uppercase tracking-widest">← Back</button>
           )}
           <div className="flex-1" />
           {step < 3 ? (
             <button onClick={() => setStep(s => (s + 1) as 1 | 2 | 3)} disabled={step === 1 ? !canNext1 : !canNext2}
-              className="px-8 py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 rounded-xl uppercase tracking-widest transition-all">
+              className="px-8 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent disabled:opacity-40 uppercase tracking-widest transition-all">
               Next →
             </button>
           ) : (
             <button onClick={save} disabled={saving}
-              className="px-8 py-3 text-[10px] font-black text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl uppercase tracking-widest transition-all">
+              className="px-8 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent disabled:opacity-50 uppercase tracking-widest transition-all">
               {saving ? 'Saving…' : 'Save Report'}
             </button>
           )}
@@ -1321,63 +1332,63 @@ function ScheduleModal({ templateId, templateName, onClose, onToast }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-      <div className="w-full max-w-lg bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden max-h-[85vh]">
-        <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
+      <div className="w-full max-w-lg bg-paper flex flex-col overflow-hidden max-h-[85vh]">
+        <div className="flex items-center justify-between px-8 py-5 border-b border-rule">
           <div>
-            <h2 className="text-base font-black text-slate-900 tracking-tighter">Scheduled Delivery</h2>
+            <h2 className="text-base font-black text-ink tracking-tighter">Scheduled Delivery</h2>
             <p className="eyebrow-tight mt-0.5">{templateName}</p>
           </div>
-          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100">✕</button>
+          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page">✕</button>
         </div>
         <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-5">
           <div className="flex flex-col gap-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Active Schedules</label>
-            {loading ? <div className="h-10 bg-slate-100 rounded-xl animate-pulse" />
-              : schedules.length === 0 ? <p className="text-[10px] font-bold text-slate-400">No schedules yet.</p>
+            <label className="text-[10px] font-black text-muted uppercase tracking-widest">Active Schedules</label>
+            {loading ? <div className="h-10 bg-page animate-pulse" />
+              : schedules.length === 0 ? <p className="text-[10px] font-bold text-muted">No schedules yet.</p>
               : schedules.map(s => (
-                <div key={s.id} className="flex items-center justify-between px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <div key={s.id} className="flex items-center justify-between px-4 py-3 bg-page border border-rule ">
                   <div className="flex flex-col gap-0.5">
                     <div className="flex items-center gap-2">
-                      <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border uppercase tracking-widest ${s.isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>{s.isActive ? 'Active' : 'Paused'}</span>
-                      <span className="text-[10px] font-black text-slate-700">{s.frequency}</span>
-                      <span className="text-[9px] font-black px-2 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-md uppercase">{s.format}</span>
+                      <span className={`text-[8px] font-black px-2 py-0.5  border uppercase tracking-widest ${s.isActive ? 'bg-page text-accent border-accent' : 'bg-page text-muted border-rule'}`}>{s.isActive ? 'Active' : 'Paused'}</span>
+                      <span className="text-[10px] font-black text-ink">{s.frequency}</span>
+                      <span className="text-[9px] font-black px-2 py-0.5 bg-page text-accent border border-accent uppercase">{s.format}</span>
                     </div>
-                    <span className="text-[9px] text-slate-400 font-bold truncate max-w-xs">{s.recipients}</span>
+                    <span className="text-[9px] text-muted font-bold truncate max-w-xs">{s.recipients}</span>
                   </div>
                   <button onClick={() => remove(s.id)} disabled={deleting === s.id}
-                    className="text-[9px] font-black text-red-500 hover:text-red-700 disabled:opacity-50 uppercase tracking-widest ml-4">
+                    className="text-[9px] font-black text-ink hover:text-ink disabled:opacity-50 uppercase tracking-widest ml-4">
                     {deleting === s.id ? '…' : 'Delete'}
                   </button>
                 </div>
               ))}
           </div>
-          <div className="border-t border-slate-100 pt-4 flex flex-col gap-3">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Create New Schedule</label>
+          <div className="border-t border-rule pt-4 flex flex-col gap-3">
+            <label className="text-[10px] font-black text-muted uppercase tracking-widest">Create New Schedule</label>
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Frequency</label>
+                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Frequency</label>
                 <select value={freq} onChange={e => setFreq(e.target.value)}
-                  className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-700 outline-none focus:border-indigo-500">
+                  className="px-3 py-2.5 bg-page border border-rule text-[10px] font-black text-ink outline-none focus:border-accent">
                   {['DAILY', 'WEEKLY', 'MONTHLY'].map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Format</label>
+                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Format</label>
                 <select value={format} onChange={e => setFormat(e.target.value)}
-                  className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black text-slate-700 outline-none focus:border-indigo-500">
+                  className="px-3 py-2.5 bg-page border border-rule text-[10px] font-black text-ink outline-none focus:border-accent">
                   {['CSV', 'XLSX', 'PDF'].map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Recipients (comma-separated)</label>
+              <label className="text-[9px] font-black text-muted uppercase tracking-widest">Recipients (comma-separated)</label>
               <input value={recipients} onChange={e => setRecipients(e.target.value)}
                 placeholder="hr@company.com, finance@company.com"
-                className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 outline-none focus:border-indigo-500" />
+                className="px-3 py-2.5 bg-page border border-rule text-[10px] font-bold text-ink outline-none focus:border-accent" />
             </div>
             <button onClick={create} disabled={creating || !recipients.trim()}
-              className="py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl uppercase tracking-widest transition-all">
+              className="py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent disabled:opacity-50 uppercase tracking-widest transition-all">
               {creating ? 'Creating…' : 'Create Schedule'}
             </button>
           </div>
@@ -1451,30 +1462,30 @@ function SavedReportsSection({ onToast }: { onToast: (msg: string, type: 'ok' | 
   }
 
   return (
-    <section className="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 overflow-hidden">
-      <div className="p-8 border-b border-slate-50 flex items-center justify-between gap-4">
+    <section className="bg-paper border border-rule overflow-hidden">
+      <div className="p-8 border-b border-rule flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-2 h-8 bg-indigo-600 rounded-full" />
+          <div className="w-2 h-8 bg-accent " />
           <div>
-            <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest">Saved Reports</h3>
+            <h3 className="text-lg font-black text-ink uppercase tracking-widest">Saved Reports</h3>
             <p className="eyebrow-tight mt-1">User-defined templates · run, export, schedule</p>
           </div>
         </div>
         <button onClick={() => setEditorOpen(true)}
-          className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 transition-all active:scale-95">
+          className="px-6 py-2.5 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95">
           + New Report
         </button>
       </div>
       <div className="overflow-x-auto">
         {loading ? (
-          <div className="p-8 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">Loading…</div>
+          <div className="p-8 text-center text-[10px] font-black text-muted uppercase tracking-widest">Loading…</div>
         ) : templates.length === 0 ? (
           <div className="p-12 text-center">
-            <p className="text-sm font-bold text-slate-400">No saved reports yet. Click <span className="text-indigo-600">+ New Report</span> to create one.</p>
+            <p className="text-sm font-bold text-muted">No saved reports yet. Click <span className="text-accent">+ New Report</span> to create one.</p>
           </div>
         ) : (
           <table className="w-full text-left border-collapse">
-            <thead className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-50">
+            <thead className="text-[10px] font-black text-muted uppercase tracking-[0.2em] border-b border-rule">
               <tr>
                 <th className="px-8 py-5">Name</th>
                 <th className="px-8 py-5">Data Source</th>
@@ -1483,20 +1494,20 @@ function SavedReportsSection({ onToast }: { onToast: (msg: string, type: 'ok' | 
                 <th className="px-8 py-5 text-center">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-rule">
               {templates.map(t => (
-                <tr key={t.id} className="hover:bg-slate-50/50 transition-all">
+                <tr key={t.id} className="hover:bg-page transition-all">
                   <td className="px-8 py-5">
                     <div className="flex flex-col">
-                      <span className="text-xs font-black text-slate-900 uppercase tracking-tight">{t.name}</span>
-                      {t.description && <span className="text-[10px] text-slate-500 mt-0.5">{t.description}</span>}
+                      <span className="text-xs font-black text-ink uppercase tracking-tight">{t.name}</span>
+                      {t.description && <span className="text-[10px] text-muted mt-0.5">{t.description}</span>}
                     </div>
                   </td>
                   <td className="px-8 py-5">
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t.definition?.dataSource || '—'}</span>
+                    <span className="text-[10px] font-black text-muted uppercase tracking-widest">{t.definition?.dataSource || '—'}</span>
                   </td>
                   <td className="px-8 py-5">
-                    <span className="text-[9px] font-black px-3 py-1.5 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-100 uppercase tracking-widest">{t.category || 'Custom'}</span>
+                    <span className="text-[9px] font-black px-3 py-1.5 border bg-page text-accent border-accent uppercase tracking-widest">{t.category || 'Custom'}</span>
                   </td>
                   <td className="px-8 py-5">
                     <span className="eyebrow-tight">{new Date(t.updatedAt).toLocaleDateString('en-SG')}</span>
@@ -1504,27 +1515,27 @@ function SavedReportsSection({ onToast }: { onToast: (msg: string, type: 'ok' | 
                   <td className="px-8 py-5">
                     <div className="flex gap-1.5 justify-center flex-wrap">
                       <button onClick={() => run(t)} disabled={busy === `run-${t.id}`}
-                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-slate-600 hover:border-emerald-500 hover:text-emerald-600 uppercase tracking-widest disabled:opacity-50">
+                        className="px-3 py-1.5 bg-paper border border-rule text-[9px] font-black text-ink hover:border-accent hover:text-accent uppercase tracking-widest disabled:opacity-50">
                         {busy === `run-${t.id}` ? '…' : 'Run'}
                       </button>
                       <button onClick={() => exportFormat(t, 'csv')} disabled={busy === `csv-${t.id}`}
-                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-slate-600 hover:border-indigo-500 hover:text-indigo-600 uppercase tracking-widest disabled:opacity-50">
+                        className="px-3 py-1.5 bg-paper border border-rule text-[9px] font-black text-ink hover:border-accent hover:text-accent uppercase tracking-widest disabled:opacity-50">
                         {busy === `csv-${t.id}` ? '…' : 'CSV'}
                       </button>
                       <button onClick={() => exportFormat(t, 'xlsx')} disabled={busy === `xlsx-${t.id}`}
-                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-slate-600 hover:border-indigo-500 hover:text-indigo-600 uppercase tracking-widest disabled:opacity-50">
+                        className="px-3 py-1.5 bg-paper border border-rule text-[9px] font-black text-ink hover:border-accent hover:text-accent uppercase tracking-widest disabled:opacity-50">
                         {busy === `xlsx-${t.id}` ? '…' : 'XLSX'}
                       </button>
                       <button onClick={() => exportFormat(t, 'pdf')} disabled={busy === `pdf-${t.id}`}
-                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-slate-600 hover:border-rose-500 hover:text-rose-600 uppercase tracking-widest disabled:opacity-50">
+                        className="px-3 py-1.5 bg-paper border border-rule text-[9px] font-black text-ink hover:border-ink hover:text-ink uppercase tracking-widest disabled:opacity-50">
                         {busy === `pdf-${t.id}` ? '…' : 'PDF'}
                       </button>
                       <button onClick={() => setScheduleModal({ id: t.id, name: t.name })}
-                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-slate-600 hover:border-amber-500 hover:text-amber-600 uppercase tracking-widest">
+                        className="px-3 py-1.5 bg-paper border border-rule text-[9px] font-black text-ink hover:border-highlight hover:text-ink uppercase tracking-widest">
                         Sched
                       </button>
                       <button onClick={() => remove(t)} disabled={busy === `del-${t.id}`}
-                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-red-500 hover:border-red-500 hover:bg-red-50 uppercase tracking-widest disabled:opacity-50">
+                        className="px-3 py-1.5 bg-paper border border-rule text-[9px] font-black text-ink hover:border-ink hover:bg-page uppercase tracking-widest disabled:opacity-50">
                         {busy === `del-${t.id}` ? '…' : 'Del'}
                       </button>
                     </div>
@@ -1625,21 +1636,21 @@ export default function ReportsPage() {
     <div className="flex flex-col gap-10 max-w-[1400px] mx-auto pb-20 animate-in fade-in duration-700">
 
       {/* Header */}
-      <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6 bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/5 rounded-full blur-3xl" />
+      <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6 bg-paper p-10 border border-rule relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-40 h-40 bg-accent " />
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-2 h-2 bg-emerald-600 rounded-full" />
-            <span className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.4em]">Compliance Intelligence Layer</span>
+            <div className="w-2 h-2 bg-accent " />
+            <span className="text-[10px] font-black text-accent uppercase tracking-[0.4em]">Compliance Intelligence Layer</span>
           </div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tighter">Reports <span className="text-emerald-600">&amp; Analytics</span></h1>
-          <p className="text-sm font-bold text-slate-400 mt-2 uppercase tracking-widest max-w-xl">
+          <h1 className="text-4xl font-black text-ink tracking-tighter">Reports <span className="text-accent">&amp; Analytics</span></h1>
+          <p className="text-sm font-bold text-muted mt-2 uppercase tracking-widest max-w-xl">
             Statutory filings, workforce analytics, and custom report generation for MOM, IRAS, and CPF Board compliance.
           </p>
         </div>
         <div className="flex flex-wrap gap-4 relative z-10">
           <button onClick={() => setCustomOpen(true)}
-            className="px-8 py-4 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 shadow-xl shadow-emerald-500/20 transition-all active:scale-95">
+            className="px-8 py-4 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95">
             + Custom Report
           </button>
         </div>
@@ -1648,12 +1659,12 @@ export default function ReportsPage() {
       {/* Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: 'Reports Available', value: String(REPORTS.length), status: 'text-slate-900', bg: 'bg-white border-slate-100' },
-          { label: 'Statutory Reports', value: String(REPORTS.filter(r => r.category === 'Statutory').length), status: 'text-red-600', bg: 'bg-red-50 border-red-100' },
-          { label: 'Financial Reports', value: String(REPORTS.filter(r => r.category === 'Financial').length), status: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
-          { label: 'Runs This Session', value: String(Object.keys(lastRun).length), status: 'text-indigo-600', bg: 'bg-indigo-50 border-indigo-100' },
+          { label: 'Reports Available', value: String(REPORTS.length), status: 'text-ink', bg: 'bg-paper border-rule' },
+          { label: 'Statutory Reports', value: String(REPORTS.filter(r => r.category === 'Statutory').length), status: 'text-ink', bg: 'bg-page border-ink' },
+          { label: 'Financial Reports', value: String(REPORTS.filter(r => r.category === 'Financial').length), status: 'text-accent', bg: 'bg-page border-accent' },
+          { label: 'Runs This Session', value: String(Object.keys(lastRun).length), status: 'text-accent', bg: 'bg-page border-accent' },
         ].map(s => (
-          <div key={s.label} className={`p-8 rounded-[2rem] border shadow-2xl shadow-indigo-500/5 ${s.bg}`}>
+          <div key={s.label} className={`p-8  border   ${s.bg}`}>
             <p className="label-form mb-4">{s.label}</p>
             <h3 className={`text-3xl font-black tracking-tighter ${s.status}`}>{s.value}</h3>
           </div>
@@ -1661,14 +1672,14 @@ export default function ReportsPage() {
       </div>
 
       {/* Reports Matrix */}
-      <section className="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 overflow-hidden">
-        <div className="p-8 border-b border-slate-50 flex items-center gap-4">
-          <div className="w-2 h-8 bg-emerald-600 rounded-full" />
-          <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest">Report Registry</h3>
+      <section className="bg-paper border border-rule overflow-hidden">
+        <div className="p-8 border-b border-rule flex items-center gap-4">
+          <div className="w-2 h-8 bg-accent " />
+          <h3 className="text-lg font-black text-ink uppercase tracking-widest">Report Registry</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
-            <thead className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-50">
+            <thead className="text-[10px] font-black text-muted uppercase tracking-[0.2em] border-b border-rule">
               <tr>
                 {([
                   { col: 'name',     label: 'Report Name' },
@@ -1676,7 +1687,7 @@ export default function ReportsPage() {
                   { col: 'freq',     label: 'Frequency' },
                 ] as const).map(h => (
                   <th key={h.col} className="px-8 py-7">
-                    <button onClick={() => toggleRptSort(h.col)} className="flex items-center hover:text-slate-600 transition-colors">
+                    <button onClick={() => toggleRptSort(h.col)} className="flex items-center hover:text-ink transition-colors">
                       {h.label}<RptSortIcon col={h.col} />
                     </button>
                   </th>
@@ -1685,25 +1696,25 @@ export default function ReportsPage() {
                 <th className="px-8 py-7 text-center">Generate</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-rule">
               {sortedReports.map(r => (
-                <tr key={r.key} className="group hover:bg-slate-50/50 transition-all duration-300">
+                <tr key={r.key} className="group hover:bg-page transition-all duration-300">
                   <td className="px-8 py-5">
                     <div className="flex items-center gap-4">
-                      <span className="text-lg text-slate-400 group-hover:text-indigo-500 transition-colors">{r.icon}</span>
+                      <span className="text-lg text-muted group-hover:text-accent transition-colors">{r.icon}</span>
                       <div className="flex flex-col">
-                        <span className="text-xs font-black text-slate-900 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">{r.name}</span>
+                        <span className="text-xs font-black text-ink uppercase tracking-tight group-hover:text-accent transition-colors">{r.name}</span>
                         {r.badge && (
-                          <span className="mt-1 inline-block text-[8px] font-black px-2 py-0.5 bg-indigo-50 text-indigo-500 border border-indigo-100 rounded-full uppercase tracking-widest w-fit">{r.badge}</span>
+                          <span className="mt-1 inline-block text-[8px] font-black px-2 py-0.5 bg-page text-accent border border-accent uppercase tracking-widest w-fit">{r.badge}</span>
                         )}
                       </div>
                     </div>
                   </td>
                   <td className="px-8 py-5">
-                    <span className={`text-[9px] font-black px-3 py-1.5 rounded-full border uppercase tracking-widest ${CATEGORY_COLORS[r.category]}`}>{r.category}</span>
+                    <span className={`text-[9px] font-black px-3 py-1.5  border uppercase tracking-widest ${CATEGORY_COLORS[r.category]}`}>{r.category}</span>
                   </td>
                   <td className="px-8 py-5">
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{r.freq}</span>
+                    <span className="text-[10px] font-black text-muted uppercase tracking-widest">{r.freq}</span>
                   </td>
                   <td className="px-8 py-5">
                     <span className="eyebrow-tight">
@@ -1714,11 +1725,11 @@ export default function ReportsPage() {
                     <button
                       onClick={() => handleRun(r)}
                       disabled={running === r.key}
-                      className="px-6 py-2 bg-white border border-slate-200 rounded-xl text-[9px] font-black text-slate-500 uppercase tracking-widest hover:border-emerald-600 hover:text-emerald-600 hover:bg-emerald-50 shadow-sm transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
+                      className="px-6 py-2 bg-paper border border-rule text-[9px] font-black text-muted uppercase tracking-widest hover:border-accent hover:text-accent hover:bg-page transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
                     >
                       {running === r.key ? (
                         <>
-                          <span className="w-3 h-3 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+                          <span className="w-3 h-3 border-2 border-rule border-t-rule animate-spin rounded-full" />
                           Generating…
                         </>
                       ) : 'Run Now'}

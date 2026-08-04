@@ -351,7 +351,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
   // ── Derived values ─────────────────────────────────────────────────────────
   if (loading) return (
     <div className="p-20 text-center flex flex-col items-center gap-4">
-      <div className="animate-spin h-12 w-12 border-t-2 border-b-2 border-accent" />
+      <div className="animate-spin h-12 w-12 border-t-2 border-b-2 border-accent rounded-full" />
       <p className="text-xs font-bold text-muted uppercase tracking-widest animate-pulse">Syncing Employee Records…</p>
     </div>
   );
@@ -414,7 +414,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                   disabled={saving}
                   className="px-5 py-2 text-[10px] font-black text-paper bg-accent hover:bg-accent transition-all uppercase tracking-widest disabled:opacity-60 flex items-center gap-2"
                 >
-                  {saving && <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>}
+                  {saving && <svg className="w-3 h-3 animate-spin rounded-full" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>}
                   {saving ? 'Saving…' : 'Save Changes'}
                 </button>
               </div>
@@ -910,7 +910,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                             }}
                             className="flex-1 px-4 py-2.5 bg-accent hover:bg-accent disabled:opacity-50 text-paper text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"
                           >
-                            {uploading && <span className="w-3 h-3 border-2 border-white/40 border-t-white animate-spin" />}
+                            {uploading && <span className="w-3 h-3 border-2 border-paper/40 border-t-paper animate-spin rounded-full" />}
                             {uploading ? 'Uploading…' : 'Upload'}
                           </button>
                         </div>
@@ -925,7 +925,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
 
                   {docsLoading ? (
                     <div className="py-12 flex items-center justify-center gap-3 text-muted text-xs font-bold">
-                      <span className="w-4 h-4 border-2 border-rule border-rule animate-spin" /> Loading documents…
+                      <span className="w-4 h-4 border-2 border-t-rule border-rule animate-spin rounded-full" /> Loading documents…
                     </div>
                   ) : documents.length === 0 ? (
                     <div className="py-14 flex flex-col items-center gap-3 text-center opacity-40">
@@ -1017,7 +1017,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                 <div className="flex flex-col gap-6">
                   {loadingSupervisors ? (
                     <div className="flex items-center justify-center py-16">
-                      <div className="w-8 h-8 border-[3px] border-accent border-accent animate-spin" />
+                      <div className="w-8 h-8 border-[3px] border-t-accent border-accent animate-spin rounded-full" />
                     </div>
                   ) : (
                     <>
@@ -1285,7 +1285,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                             }}
                             className="flex-1 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent disabled:opacity-50 uppercase tracking-widest flex items-center justify-center gap-2"
                           >
-                            {submittingRevision && <span className="w-3 h-3 border-2 border-white/40 border-t-white animate-spin" />}
+                            {submittingRevision && <span className="w-3 h-3 border-2 border-paper/40 border-t-paper animate-spin rounded-full" />}
                             {submittingRevision ? 'Submitting…' : 'Submit for Approval'}
                           </button>
                         </div>

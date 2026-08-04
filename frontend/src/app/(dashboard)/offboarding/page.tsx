@@ -472,7 +472,7 @@ function ManageModal({ caseId, onClose, onUpdate }: { caseId: string; onClose: (
                 disabled={computingFinalPay}
                 className="w-full py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50 transition-all flex items-center justify-center gap-2"
               >
-                {computingFinalPay ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white animate-spin" />Computing…</> : 'Compute Final Pay'}
+                {computingFinalPay ? <><span className="w-3 h-3 border-2 border-paper/30 border-t-paper animate-spin rounded-full" />Computing…</> : 'Compute Final Pay'}
               </button>
 
               {/* Breakdown table */}

@@ -335,11 +335,10 @@ function EmployeeAttendanceView() {
     <div className="flex flex-col gap-6 max-w-[1100px] mx-auto pb-20 animate-in fade-in duration-700">
 
       {/* ── Main Clock-in Card ──────────────────────────────────────────────── */}
-      <div className="bg-[#0a0f1e] overflow-hidden border border-white/5">
+      <div className="bg-[#0a0f1e] overflow-hidden border border-paper/5">
 
         {/* Top: clock + status */}
-        <div className="relative px-10 pt-10 pb-8 text-center border-b border-white/5">
-          <div className="absolute inset-0 bg-gradient-to-br to-accent via-transparent to-page" />
+        <div className="relative px-10 pt-10 pb-8 text-center border-b border-rule/20">
           <div className="relative z-10">
             <p className="text-[9px] font-black text-accent uppercase tracking-[0.4em] mb-5">
               {user?.name ? `Welcome, ${user.name.split(' ')[0]}` : 'Employee Self-Service'} · Attendance
@@ -374,7 +373,7 @@ function EmployeeAttendanceView() {
               )}
               {photoLoading ? (
                 <div className="flex flex-col items-center gap-3">
-                  <div className="w-10 h-10 border-4 border-accent border-accent animate-spin" />
+                  <div className="w-10 h-10 border-4 border-t-accent border-accent animate-spin rounded-full" />
                   <p className="text-[10px] font-black text-muted uppercase tracking-widest">Loading profile…</p>
                 </div>
               ) : (
@@ -389,7 +388,7 @@ function EmployeeAttendanceView() {
                         </div>
                       </div>
                     ) : (
-                      <div className="w-20 h-20 bg-paper border border-white/8 flex items-center justify-center">
+                      <div className="w-20 h-20 bg-paper/5 border border-paper/8 flex items-center justify-center">
                         <svg className="w-9 h-9 text-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
                         </svg>
@@ -451,7 +450,7 @@ function EmployeeAttendanceView() {
                 >
                   Add Profile Photo
                 </button>
-                <button onClick={() => setClockState('idle')} className="px-4 sm:px-6 lg:px-8 py-4 bg-paper border border-white/10 text-muted text-[10px] font-black uppercase tracking-widest hover:bg-paper transition-all">
+                <button onClick={() => setClockState('idle')} className="px-4 sm:px-6 lg:px-8 py-4 bg-paper/5 border border-paper/10 text-muted text-[10px] font-black uppercase tracking-widest hover:bg-paper/8 transition-all">
                   Cancel
                 </button>
               </div>
@@ -466,7 +465,7 @@ function EmployeeAttendanceView() {
               </p>
 
               {/* Source tabs */}
-              <div className="flex bg-paper border border-white/10 p-0.5 gap-0.5 w-full">
+              <div className="flex bg-paper/5 border border-paper/10 p-0.5 gap-0.5 w-full">
                 <button
                   onClick={() => { stopUploadCamera(); setUploadPreview(null); setPhotoSource('file'); }}
                   className={`flex-1 py-2 text-[9px] font-black uppercase tracking-widest  transition-all ${photoSource === 'file' ? 'bg-accent text-paper' : 'text-muted hover:text-muted'}`}
@@ -484,7 +483,7 @@ function EmployeeAttendanceView() {
               {/* File upload mode */}
               {photoSource === 'file' && (
                 <div
-                  className="relative w-52 h-52 border-2 border-dashed border-white/15 bg-paper flex items-center justify-center cursor-pointer hover:border-accent hover:bg-accent transition-all overflow-hidden"
+                  className="relative w-52 h-52 border-2 border-dashed border-paper/15 bg-paper/3 flex items-center justify-center cursor-pointer hover:border-accent hover:bg-accent transition-all overflow-hidden"
                   onClick={() => uploadInputRef.current?.click()}
                 >
                   {uploadPreview ? (
@@ -509,7 +508,7 @@ function EmployeeAttendanceView() {
               {/* Camera capture mode */}
               {photoSource === 'camera' && (
                 <div className="flex flex-col items-center gap-3">
-                  <div className="relative w-52 h-52 overflow-hidden border border-white/10 bg-shadow">
+                  <div className="relative w-52 h-52 overflow-hidden border border-paper/10 bg-shadow">
                     <video
                       ref={uploadVideoRef}
                       className="w-full h-full object-cover"
@@ -536,7 +535,7 @@ function EmployeeAttendanceView() {
                       <div className="absolute inset-0 flex items-end justify-center pb-3">
                         <button
                           onClick={() => { setUploadPreview(null); setRetakeKey(k => k + 1); }}
-                          className="px-4 py-1.5 bg-shadow text-paper text-[9px] font-black uppercase tracking-wider backdrop-"
+                          className="px-4 py-1.5 bg-shadow/60 text-paper text-[9px] font-black uppercase tracking-wider backdrop-"
                         >
                           Retake
                         </button>
@@ -575,7 +574,7 @@ function EmployeeAttendanceView() {
                 </button>
                 <button
                   onClick={() => { stopUploadCamera(); setPhotoSource('file'); setClockState('idle'); }}
-                  className="flex-1 py-4 bg-paper border border-white/10 text-muted text-[10px] font-black uppercase tracking-widest hover:bg-paper transition-all"
+                  className="flex-1 py-4 bg-paper/5 border border-paper/10 text-muted text-[10px] font-black uppercase tracking-widest hover:bg-paper/8 transition-all"
                 >
                   Cancel
                 </button>
@@ -589,7 +588,7 @@ function EmployeeAttendanceView() {
               {/* Live camera */}
               <div className="flex flex-col items-center gap-3">
                 <p className="text-[9px] font-black text-muted uppercase tracking-widest">Live Camera</p>
-                <div className="relative overflow-hidden border border-white/10 bg-shadow" style={{ width: 280, height: 280 }}>
+                <div className="relative overflow-hidden border border-paper/10 bg-shadow" style={{ width: 280, height: 280 }}>
                   <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="w-44 h-52 border-2 border-accent" style={{ boxShadow: '0 0 0 9999px rgba(10,15,30,0.5)' }} />
@@ -611,15 +610,15 @@ function EmployeeAttendanceView() {
 
               {/* VS divider */}
               <div className="flex lg:flex-col items-center gap-2">
-                <div className="w-16 h-px lg:w-px lg:h-16 bg-paper" />
+                <div className="w-16 h-px lg:w-px lg:h-16 bg-paper/10" />
                 <span className="text-[9px] font-black text-ink uppercase">vs</span>
-                <div className="w-16 h-px lg:w-px lg:h-16 bg-paper" />
+                <div className="w-16 h-px lg:w-px lg:h-16 bg-paper/10" />
               </div>
 
               {/* Profile photo */}
               <div className="flex flex-col items-center gap-3">
                 <p className="text-[9px] font-black text-muted uppercase tracking-widest">Profile Photo</p>
-                <div className="relative overflow-hidden border border-white/10 bg-shadow" style={{ width: 280, height: 280 }}>
+                <div className="relative overflow-hidden border border-paper/10 bg-shadow" style={{ width: 280, height: 280 }}>
                   {profilePhoto ? (
                     <img src={profilePhoto} className="w-full h-full object-cover" alt="Profile" />
                   ) : (
@@ -643,7 +642,7 @@ function EmployeeAttendanceView() {
                 {/* Captured frame */}
                 <div className="flex flex-col items-center gap-2">
                   <p className="text-[9px] font-black text-muted uppercase tracking-widest">Captured</p>
-                  <div className="overflow-hidden border border-white/10" style={{ width: 160, height: 160 }}>
+                  <div className="overflow-hidden border border-paper/10" style={{ width: 160, height: 160 }}>
                     {capturedImg
                       ? <img src={capturedImg} className="w-full h-full object-cover" alt="Captured" />
                       : <div className="w-full h-full bg-shadow animate-pulse" />
@@ -654,8 +653,8 @@ function EmployeeAttendanceView() {
                 {/* Spinner */}
                 <div className="flex flex-col items-center gap-4">
                   <div className="relative w-20 h-20">
-                    <div className="absolute inset-0 border-4 border-accent border-accent animate-spin" />
-                    <div className="absolute inset-3 border-4 border-shadow border-accent animate-spin [animation-direction:reverse] [animation-duration:0.7s]" />
+                    <div className="absolute inset-0 border-4 border-t-accent border-accent animate-spin rounded-full" />
+                    <div className="absolute inset-3 border-4 border-t-shadow border-accent animate-spin [animation-direction:reverse] [animation-duration:0.7s] rounded-full" />
                     <div className="absolute inset-0 flex items-center justify-center">
                       <svg className="w-7 h-7 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7.864 4.243A7.5 7.5 0 0119.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 004.5 10.5a7.464 7.464 0 01-1.15 3.993m1.989 3.559A11.209 11.209 0 008.25 10.5a3.75 3.75 0 117.5 0c0 .527-.021 1.049-.064 1.565" /></svg>
                     </div>
@@ -669,7 +668,7 @@ function EmployeeAttendanceView() {
                 {/* Profile photo reference */}
                 <div className="flex flex-col items-center gap-2">
                   <p className="text-[9px] font-black text-muted uppercase tracking-widest">Profile</p>
-                  <div className="overflow-hidden border border-white/10 bg-shadow" style={{ width: 160, height: 160 }}>
+                  <div className="overflow-hidden border border-paper/10 bg-shadow" style={{ width: 160, height: 160 }}>
                     {profilePhoto
                       ? <img src={profilePhoto} className="w-full h-full object-cover" alt="Profile reference" />
                       : <div className="w-full h-full bg-shadow" />
@@ -734,7 +733,7 @@ function EmployeeAttendanceView() {
                 </button>
                 <button
                   onClick={() => { retry(); setPhotoSource('file'); setClockState('upload_photo'); setUploadPreview(null); setUploadError(null); }}
-                  className="px-4 sm:px-6 lg:px-8 py-4 bg-paper border border-white/10 text-muted text-[10px] font-black uppercase tracking-widest hover:bg-paper transition-all"
+                  className="px-4 sm:px-6 lg:px-8 py-4 bg-paper/5 border border-paper/10 text-muted text-[10px] font-black uppercase tracking-widest hover:bg-paper/8 transition-all"
                 >
                   Update Photo
                 </button>

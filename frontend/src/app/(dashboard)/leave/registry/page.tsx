@@ -65,7 +65,7 @@ export default function LeaveRegistryPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-10 h-10 border-4 border-accent border-accent animate-spin" />
+        <div className="w-10 h-10 border-4 border-t-accent border-accent animate-spin rounded-full" />
       </div>
     );
   }
@@ -611,11 +611,11 @@ function AdminLeaveView() {
                 {subordinates.length > 0 && (
                   <div className="flex -space-x-2">
                     {subordinates.slice(0, 6).map(s => (
-                      <div key={s.id} className="w-8 h-8 bg-shadow border-2 border-white flex items-center justify-center text-[9px] font-black text-accent">
+                      <div key={s.id} className="w-8 h-8 bg-shadow border-2 border-paper flex items-center justify-center text-[9px] font-black text-accent">
                         {s.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                       </div>
                     ))}
-                    {subordinates.length > 6 && <div className="w-8 h-8 bg-rule border-2 border-white flex items-center justify-center text-[9px] font-black text-muted">+{subordinates.length - 6}</div>}
+                    {subordinates.length > 6 && <div className="w-8 h-8 bg-rule border-2 border-paper flex items-center justify-center text-[9px] font-black text-muted">+{subordinates.length - 6}</div>}
                   </div>
                 )}
               </div>

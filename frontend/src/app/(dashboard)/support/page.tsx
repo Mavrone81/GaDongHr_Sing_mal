@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { TONES } from '@/lib/statusTone';
 import { apiFetch } from '@/lib/api';
 
 type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
@@ -27,10 +28,10 @@ interface Ticket {
 }
 
 const STATUS_COLORS: Record<TicketStatus, string> = {
-  OPEN: 'bg-blue-100 text-blue-700',
-  IN_PROGRESS: 'bg-amber-100 text-amber-700',
-  RESOLVED: 'bg-emerald-100 text-emerald-700',
-  CLOSED: 'bg-slate-100 text-slate-500',
+  OPEN:        TONES.warning,   // nobody has picked it up yet
+  IN_PROGRESS: TONES.active,
+  RESOLVED:    TONES.approved,  // fixed, but the reporter has not confirmed
+  CLOSED:      TONES.done,
 };
 
 const CATEGORY_LABELS: Record<TicketCategory, string> = {
@@ -70,11 +71,11 @@ function TicketThread({ ticket, onBack, onUpdated }: { ticket: Ticket; onBack: (
     <div className="flex flex-col gap-6">
       {/* Back + header */}
       <div className="flex items-center gap-4">
-        <button onClick={onBack} className="eyebrow-tight hover:text-indigo-600 transition-colors">← Back</button>
+        <button onClick={onBack} className="eyebrow-tight hover:text-accent transition-colors">← Back</button>
         <div className="flex-1">
-          <h2 className="text-lg font-black text-slate-900 truncate">{ticket.subject}</h2>
+          <h2 className="text-lg font-black text-ink truncate">{ticket.subject}</h2>
           <div className="flex items-center gap-3 mt-1">
-            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${STATUS_COLORS[ticket.status]}`}>{ticket.status.replace('_', ' ')}</span>
+            <span className={`px-2 py-0.5  text-[9px] font-black uppercase tracking-widest ${STATUS_COLORS[ticket.status]}`}>{ticket.status.replace('_', ' ')}</span>
             <span className="label-form">{CATEGORY_LABELS[ticket.category]}</span>
             <span className="label-form">{new Date(ticket.createdAt).toLocaleDateString()}</span>
           </div>
@@ -87,11 +88,11 @@ function TicketThread({ ticket, onBack, onUpdated }: { ticket: Ticket; onBack: (
           const isHR = ['SUPER_ADMIN', 'HR_ADMIN'].includes(msg.authorRole);
           return (
             <div key={msg.id} className={`flex ${isHR ? 'justify-start' : 'justify-end'}`}>
-              <div className={`max-w-[75%] rounded-2xl px-6 py-4 ${isHR ? 'bg-slate-50 border border-slate-100' : 'bg-indigo-600 text-white'}`}>
-                <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${isHR ? 'text-slate-400' : 'text-indigo-200'}`}>
+              <div className={`max-w-[75%]  px-6 py-4 ${isHR ? 'bg-page border border-rule' : 'bg-accent text-paper'}`}>
+                <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${isHR ? 'text-muted' : 'text-paper'}`}>
                   {msg.authorName} · {new Date(msg.createdAt).toLocaleString()}
                 </p>
-                <p className={`text-sm font-bold leading-relaxed whitespace-pre-wrap ${isHR ? 'text-slate-700' : 'text-white'}`}>{msg.body}</p>
+                <p className={`text-sm font-bold leading-relaxed whitespace-pre-wrap ${isHR ? 'text-ink' : 'text-paper'}`}>{msg.body}</p>
               </div>
             </div>
           );
@@ -100,27 +101,27 @@ function TicketThread({ ticket, onBack, onUpdated }: { ticket: Ticket; onBack: (
 
       {/* Reply */}
       {ticket.status !== 'CLOSED' && (
-        <div className="bg-white rounded-[2rem] border border-slate-100 p-6 flex flex-col gap-4">
+        <div className="bg-paper border border-rule p-6 flex flex-col gap-4">
           <label className="label-form">Add Reply</label>
           <textarea
             value={reply}
             onChange={e => setReply(e.target.value)}
             rows={3}
             placeholder="Type your message…"
-            className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 placeholder:text-slate-300 outline-none focus:border-indigo-600 resize-none"
+            className="w-full border border-rule px-4 py-3 text-sm font-bold text-ink placeholder:text-muted outline-none focus:border-accent resize-none"
           />
-          {error && <p className="text-xs font-black text-red-500">{error}</p>}
+          {error && <p className="text-xs font-black text-ink">{error}</p>}
           <button
             onClick={sendReply}
             disabled={sending || !reply.trim()}
-            className="self-end px-8 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 transition-all"
+            className="self-end px-8 py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50 transition-all"
           >
             {sending ? 'Sending…' : 'Send Reply'}
           </button>
         </div>
       )}
       {ticket.status === 'CLOSED' && (
-        <div className="bg-slate-50 rounded-2xl p-5 text-center eyebrow-tight border border-slate-100">
+        <div className="bg-page p-5 text-center eyebrow-tight border border-rule">
           This ticket is closed. Raise a new ticket if you need further assistance.
         </div>
       )}
@@ -185,20 +186,20 @@ export default function SupportPage() {
     <div className="flex flex-col gap-8 max-w-[1000px] mx-auto pb-20 animate-in fade-in duration-700">
 
       {/* Header */}
-      <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-sky-500/5 rounded-full blur-3xl" />
+      <div className="bg-paper p-10 border border-rule relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-accent " />
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-2 h-2 bg-sky-500 rounded-full" />
-          <span className="text-[10px] font-black text-sky-600 uppercase tracking-[0.4em]">Employee Support</span>
+          <div className="w-2 h-2 bg-accent " />
+          <span className="text-[10px] font-black text-accent uppercase tracking-[0.4em]">Employee Support</span>
         </div>
         <div className="flex items-end justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tighter">Help <span className="text-sky-600">&amp; Support</span></h1>
-            <p className="text-sm font-bold text-slate-400 mt-2 uppercase tracking-widest">Raise a ticket or browse your ticket history.</p>
+            <h1 className="text-4xl font-black text-ink tracking-tighter">Help <span className="text-accent">&amp; Support</span></h1>
+            <p className="text-sm font-bold text-muted mt-2 uppercase tracking-widest">Raise a ticket or browse your ticket history.</p>
           </div>
           <button
             onClick={() => setShowForm(v => !v)}
-            className="px-7 py-3.5 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 shadow-xl shadow-indigo-500/20 transition-all shrink-0"
+            className="px-7 py-3.5 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all shrink-0"
           >
             {showForm ? 'Cancel' : '+ New Ticket'}
           </button>
@@ -207,28 +208,28 @@ export default function SupportPage() {
 
       {/* New ticket form */}
       {showForm && (
-        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 overflow-hidden animate-in slide-in-from-top-4 duration-300">
-          <div className="p-7 border-b border-slate-50 flex items-center gap-4">
-            <div className="w-2 h-6 bg-indigo-600 rounded-full" />
-            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Raise a Ticket</h3>
+        <div className="bg-paper border border-rule overflow-hidden animate-in slide-in-from-top-4 duration-300">
+          <div className="p-7 border-b border-rule flex items-center gap-4">
+            <div className="w-2 h-6 bg-accent " />
+            <h3 className="text-sm font-black text-ink uppercase tracking-widest">Raise a Ticket</h3>
           </div>
           <div className="p-7 flex flex-col gap-5">
             <div className="flex flex-col gap-2">
               <label className="label-form">Category</label>
-              <select value={category} onChange={e => setCategory(e.target.value as TicketCategory)} className="bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-xs font-black text-slate-900 outline-none focus:border-indigo-600 appearance-none cursor-pointer">
+              <select value={category} onChange={e => setCategory(e.target.value as TicketCategory)} className="bg-page border border-rule px-5 py-3.5 text-xs font-black text-ink outline-none focus:border-accent appearance-none cursor-pointer">
                 {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-2">
               <label className="label-form">Subject</label>
-              <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Brief description of your issue…" className="bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-xs font-black text-slate-900 placeholder:text-slate-300 outline-none focus:border-indigo-600 transition-all" />
+              <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Brief description of your issue…" className="bg-page border border-rule px-5 py-3.5 text-xs font-black text-ink placeholder:text-muted outline-none focus:border-accent transition-all" />
             </div>
             <div className="flex flex-col gap-2">
               <label className="label-form">Details</label>
-              <textarea value={body} onChange={e => setBody(e.target.value)} rows={5} placeholder="Describe the issue in detail…" className="bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-xs font-black text-slate-900 placeholder:text-slate-300 outline-none focus:border-indigo-600 transition-all resize-none" />
+              <textarea value={body} onChange={e => setBody(e.target.value)} rows={5} placeholder="Describe the issue in detail…" className="bg-page border border-rule px-5 py-3.5 text-xs font-black text-ink placeholder:text-muted outline-none focus:border-accent transition-all resize-none" />
             </div>
-            {formError && <p className="text-xs font-black text-red-500">{formError}</p>}
-            <button onClick={submitTicket} disabled={submitting} className="w-full py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 shadow-xl shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-60">
+            {formError && <p className="text-xs font-black text-ink">{formError}</p>}
+            <button onClick={submitTicket} disabled={submitting} className="w-full py-4 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95 disabled:opacity-60">
               {submitting ? 'Submitting…' : 'Submit Ticket'}
             </button>
           </div>
@@ -237,28 +238,28 @@ export default function SupportPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Ticket history */}
-        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 overflow-hidden">
-          <div className="p-7 border-b border-slate-50 flex items-center gap-4">
-            <div className="w-2 h-6 bg-indigo-600 rounded-full" />
-            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">My Tickets</h3>
+        <div className="bg-paper border border-rule overflow-hidden">
+          <div className="p-7 border-b border-rule flex items-center gap-4">
+            <div className="w-2 h-6 bg-accent " />
+            <h3 className="text-sm font-black text-ink uppercase tracking-widest">My Tickets</h3>
             <span className="ml-auto label-form">{tickets.length} total</span>
           </div>
           {loading ? (
-            <div className="p-10 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest animate-pulse">Loading…</div>
+            <div className="p-10 text-center text-[10px] font-black text-muted uppercase tracking-widest animate-pulse">Loading…</div>
           ) : tickets.length === 0 ? (
-            <div className="p-10 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">No tickets yet. Raise one above.</div>
+            <div className="p-10 text-center text-[10px] font-black text-muted uppercase tracking-widest">No tickets yet. Raise one above.</div>
           ) : (
-            <div className="divide-y divide-slate-50">
+            <div className="divide-y divide-rule">
               {tickets.map(t => (
-                <button key={t.id} onClick={() => setActiveTicket(t)} className="w-full text-left px-7 py-5 hover:bg-slate-50 transition-colors">
+                <button key={t.id} onClick={() => setActiveTicket(t)} className="w-full text-left px-7 py-5 hover:bg-page transition-colors">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-black text-slate-900 truncate">{t.subject}</p>
+                      <p className="text-sm font-black text-ink truncate">{t.subject}</p>
                       <p className="label-form mt-1">{CATEGORY_LABELS[t.category]} · {new Date(t.updatedAt).toLocaleDateString()}</p>
                     </div>
-                    <span className={`shrink-0 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${STATUS_COLORS[t.status]}`}>{t.status.replace('_', ' ')}</span>
+                    <span className={`shrink-0 px-2.5 py-1  text-[9px] font-black uppercase tracking-widest ${STATUS_COLORS[t.status]}`}>{t.status.replace('_', ' ')}</span>
                   </div>
-                  <p className="text-xs font-bold text-slate-400 mt-2 line-clamp-1">{t.messages[0]?.body}</p>
+                  <p className="text-xs font-bold text-muted mt-2 line-clamp-1">{t.messages[0]?.body}</p>
                 </button>
               ))}
             </div>
@@ -266,20 +267,20 @@ export default function SupportPage() {
         </div>
 
         {/* FAQ */}
-        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 overflow-hidden">
-          <div className="p-7 border-b border-slate-50 flex items-center gap-4">
-            <div className="w-2 h-6 bg-sky-500 rounded-full" />
-            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Quick Answers</h3>
+        <div className="bg-paper border border-rule overflow-hidden">
+          <div className="p-7 border-b border-rule flex items-center gap-4">
+            <div className="w-2 h-6 bg-accent " />
+            <h3 className="text-sm font-black text-ink uppercase tracking-widest">Quick Answers</h3>
           </div>
-          <div className="divide-y divide-slate-50">
+          <div className="divide-y divide-rule">
             {FAQS.map(f => (
               <details key={f.q} className="group">
-                <summary className="flex items-center justify-between px-7 py-5 cursor-pointer list-none hover:bg-slate-50 transition-all">
-                  <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight group-open:text-indigo-600 transition-colors">{f.q}</span>
-                  <span className="text-slate-300 group-open:rotate-90 transition-transform duration-300 text-lg">›</span>
+                <summary className="flex items-center justify-between px-7 py-5 cursor-pointer list-none hover:bg-page transition-all">
+                  <span className="text-[11px] font-black text-ink uppercase tracking-tight group-open:text-accent transition-colors">{f.q}</span>
+                  <span className="text-muted group-open:rotate-90 transition-transform duration-300 text-lg">›</span>
                 </summary>
                 <div className="px-7 pb-5">
-                  <p className="text-[10px] font-bold text-slate-500 leading-relaxed">{f.a}</p>
+                  <p className="text-[10px] font-bold text-muted leading-relaxed">{f.a}</p>
                 </div>
               </details>
             ))}

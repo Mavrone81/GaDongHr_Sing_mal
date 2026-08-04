@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { TONES } from '@/lib/statusTone';
 import { apiFetch } from '@/lib/api';
 
 interface Asset {
@@ -19,10 +20,10 @@ interface Asset {
 }
 
 const STATUS_STYLE: Record<string, string> = {
-  AVAILABLE:    'bg-emerald-50 text-emerald-700 border-emerald-100',
-  ASSIGNED:     'bg-indigo-50 text-indigo-700 border-indigo-100',
-  UNDER_REPAIR: 'bg-amber-50 text-amber-700 border-amber-100',
-  RETIRED:      'bg-slate-100 text-slate-400 border-slate-200',
+  AVAILABLE: TONES.critical,
+  ASSIGNED: TONES.done,
+  UNDER_REPAIR: TONES.warning,
+  RETIRED: TONES.active,
 };
 const STATUS_LABEL: Record<string, string> = {
   AVAILABLE: 'Available', ASSIGNED: 'Assigned', UNDER_REPAIR: 'Under Repair', RETIRED: 'Retired',
@@ -34,10 +35,10 @@ function Toast({ msg, type, onClose }: { msg: string; type: 'ok' | 'err'; onClos
   useEffect(() => { const t = setTimeout(onClose, 3500); return () => clearTimeout(t); }, [onClose]);
   return (
     <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-6 duration-300">
-      <div className={`px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 ${type === 'ok' ? 'bg-slate-900 border border-slate-700' : 'bg-red-900 border border-red-700'}`}>
-        <div className={`w-2 h-2 rounded-full ${type === 'ok' ? 'bg-emerald-400' : 'bg-red-400'}`} />
-        <span className="text-[11px] font-black text-white uppercase tracking-widest">{msg}</span>
-        <button onClick={onClose} className="ml-4 text-white/50 hover:text-white text-xs">✕</button>
+      <div className={`px-8 py-4   flex items-center gap-3 ${type === 'ok' ? 'bg-shadow border border-shadow' : 'bg-ink border border-ink'}`}>
+        <div className={`w-2 h-2  ${type === 'ok' ? 'bg-accent' : 'bg-ink'}`} />
+        <span className="text-[11px] font-black text-paper uppercase tracking-widest">{msg}</span>
+        <button onClick={onClose} className="ml-4 text-paper/50 hover:text-paper text-xs">✕</button>
       </div>
     </div>
   );
@@ -61,66 +62,66 @@ function RegisterModal({ onClose, onSaved }: { onClose: () => void; onSaved: (a:
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-      <div className="w-full max-w-lg bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
+      <div className="w-full max-w-lg bg-paper flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-8 py-6 border-b border-rule">
           <div>
-            <h2 className="text-lg font-black text-slate-900 tracking-tighter">Register New Asset</h2>
+            <h2 className="text-lg font-black text-ink tracking-tighter">Register New Asset</h2>
             <p className="eyebrow-tight mt-0.5">Add to the asset registry</p>
           </div>
-          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">✕</button>
+          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page transition-all">✕</button>
         </div>
         <div className="p-8 flex flex-col gap-4 overflow-y-auto max-h-[65vh]">
-          {err && <div className="px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-xs font-bold rounded-xl">{err}</div>}
+          {err && <div className="px-4 py-3 bg-page border border-ink text-ink text-xs font-bold ">{err}</div>}
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2 flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Asset Name *</label>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Asset Name *</label>
               <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. MacBook Pro 14"
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10" />
+                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent" />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Category *</label>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Category *</label>
               <select value={form.category} onChange={e => set('category', e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-teal-500">
+                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent">
                 {CATEGORIES.filter(c => c !== 'All').map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Serial Number</label>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Serial Number</label>
               <input value={form.serialNumber} onChange={e => set('serialNumber', e.target.value)} placeholder="Optional"
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-teal-500" />
+                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent" />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Purchase Date</label>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Purchase Date</label>
               <input type="date" value={form.purchaseDate} onChange={e => set('purchaseDate', e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-teal-500" />
+                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent" />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Purchase Value (SGD)</label>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Purchase Value (SGD)</label>
               <input type="number" min={0} value={form.purchaseValue} onChange={e => set('purchaseValue', e.target.value)} placeholder="0"
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-teal-500" />
+                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent" />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Current Value (SGD)</label>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Current Value (SGD)</label>
               <input type="number" min={0} value={form.currentValue} onChange={e => set('currentValue', e.target.value)} placeholder="Same as purchase"
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-teal-500" />
+                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent" />
             </div>
             <div className="col-span-2 flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Location</label>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Location</label>
               <input value={form.location} onChange={e => set('location', e.target.value)} placeholder="e.g. Office Level 3"
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-teal-500" />
+                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent" />
             </div>
             <div className="col-span-2 flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Notes</label>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Notes</label>
               <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} placeholder="Optional notes"
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-teal-500 resize-none" />
+                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent resize-none" />
             </div>
           </div>
         </div>
-        <div className="flex gap-3 px-8 py-5 border-t border-slate-100 bg-slate-50/50">
-          <button onClick={onClose} className="flex-1 py-3 text-[10px] font-black text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-100 uppercase tracking-widest">Cancel</button>
+        <div className="flex gap-3 px-8 py-5 border-t border-rule bg-page">
+          <button onClick={onClose} className="flex-1 py-3 text-[10px] font-black text-muted border border-rule hover:bg-page uppercase tracking-widest">Cancel</button>
           <button onClick={handleSave} disabled={saving}
-            className="flex-1 py-3 text-[10px] font-black text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-xl uppercase tracking-widest transition-all">
+            className="flex-1 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent disabled:opacity-50 uppercase tracking-widest transition-all">
             {saving ? 'Registering…' : 'Register Asset'}
           </button>
         </div>
@@ -178,21 +179,21 @@ function ManageModal({ asset, onClose, onUpdated }: { asset: Asset; onClose: () 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-      <div className="w-full max-w-lg bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
+      <div className="w-full max-w-lg bg-paper flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-8 py-6 border-b border-rule">
           <div>
-            <h2 className="text-base font-black text-slate-900 tracking-tighter">{asset.name}</h2>
+            <h2 className="text-base font-black text-ink tracking-tighter">{asset.name}</h2>
             <div className="flex items-center gap-2 mt-1">
               <span className="label-form">{asset.assetCode}</span>
-              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${STATUS_STYLE[asset.status]}`}>{STATUS_LABEL[asset.status]}</span>
+              <span className={`text-[9px] font-black px-2 py-0.5  border uppercase ${STATUS_STYLE[asset.status]}`}>{STATUS_LABEL[asset.status]}</span>
             </div>
           </div>
-          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">✕</button>
+          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page transition-all">✕</button>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-slate-100 bg-slate-50/50">
+        <div className="flex border-b border-rule bg-page">
           {([
             { key: 'assign' as const, label: 'Assign', show: asset.status === 'AVAILABLE' },
             { key: 'return' as const, label: 'Return', show: asset.status === 'ASSIGNED' },
@@ -200,31 +201,31 @@ function ManageModal({ asset, onClose, onUpdated }: { asset: Asset; onClose: () 
             { key: 'history' as const, label: 'History', show: true },
           ]).filter(t => t.show !== false).map(t => (
             <button key={t.key} onClick={() => { setTab(t.key); setErr(''); }}
-              className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${tab === t.key ? 'border-teal-500 text-teal-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+              className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${tab === t.key ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'}`}>
               {t.label}
             </button>
           ))}
         </div>
 
         <div className="p-8 flex flex-col gap-4 min-h-[200px]">
-          {err && <div className="px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-xs font-bold rounded-xl">{err}</div>}
+          {err && <div className="px-4 py-3 bg-page border border-ink text-ink text-xs font-bold ">{err}</div>}
 
           {tab === 'assign' && (
             <>
               <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Assign To Employee *</label>
+                <label className="text-[10px] font-black text-muted uppercase tracking-widest">Assign To Employee *</label>
                 <select value={employeeId} onChange={e => setEmployeeId(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-teal-500">
+                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent">
                   <option value="">— Select employee —</option>
                   {employees.map(e => <option key={e.id} value={e.id}>{e.fullName} · {e.employeeCode}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Notes</label>
+                <label className="text-[10px] font-black text-muted uppercase tracking-widest">Notes</label>
                 <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Optional handover notes"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-teal-500 resize-none" />
+                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent resize-none" />
               </div>
-              <button onClick={handleAssign} disabled={saving} className="w-full py-3 text-[10px] font-black text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-xl uppercase tracking-widest transition-all">
+              <button onClick={handleAssign} disabled={saving} className="w-full py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent disabled:opacity-50 uppercase tracking-widest transition-all">
                 {saving ? 'Assigning…' : 'Confirm Assignment'}
               </button>
             </>
@@ -232,13 +233,13 @@ function ManageModal({ asset, onClose, onUpdated }: { asset: Asset; onClose: () 
 
           {tab === 'return' && (
             <>
-              <p className="text-xs font-bold text-slate-500">Mark this asset as returned and set it back to Available.</p>
+              <p className="text-xs font-bold text-muted">Mark this asset as returned and set it back to Available.</p>
               <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Return Notes</label>
+                <label className="text-[10px] font-black text-muted uppercase tracking-widest">Return Notes</label>
                 <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Condition notes, damages, etc."
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-teal-500 resize-none" />
+                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent resize-none" />
               </div>
-              <button onClick={handleReturn} disabled={saving} className="w-full py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl uppercase tracking-widest transition-all">
+              <button onClick={handleReturn} disabled={saving} className="w-full py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent disabled:opacity-50 uppercase tracking-widest transition-all">
                 {saving ? 'Processing…' : 'Confirm Return'}
               </button>
             </>
@@ -247,18 +248,18 @@ function ManageModal({ asset, onClose, onUpdated }: { asset: Asset; onClose: () 
           {tab === 'status' && (
             <>
               <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">New Status</label>
+                <label className="text-[10px] font-black text-muted uppercase tracking-widest">New Status</label>
                 <select value={newStatus} onChange={e => setNewStatus(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-teal-500">
+                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent">
                   {['AVAILABLE', 'UNDER_REPAIR', 'RETIRED'].map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Notes</label>
+                <label className="text-[10px] font-black text-muted uppercase tracking-widest">Notes</label>
                 <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Reason for status change"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-teal-500 resize-none" />
+                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent resize-none" />
               </div>
-              <button onClick={handleStatusChange} disabled={saving} className="w-full py-3 text-[10px] font-black text-white bg-slate-800 hover:bg-slate-900 disabled:opacity-50 rounded-xl uppercase tracking-widest transition-all">
+              <button onClick={handleStatusChange} disabled={saving} className="w-full py-3 text-[10px] font-black text-paper bg-shadow hover:bg-shadow disabled:opacity-50 uppercase tracking-widest transition-all">
                 {saving ? 'Updating…' : 'Update Status'}
               </button>
             </>
@@ -267,16 +268,16 @@ function ManageModal({ asset, onClose, onUpdated }: { asset: Asset; onClose: () 
           {tab === 'history' && (
             <div className="flex flex-col gap-2">
               {history.length === 0 ? (
-                <p className="text-xs font-bold text-slate-400 text-center py-8">No assignment history</p>
+                <p className="text-xs font-bold text-muted text-center py-8">No assignment history</p>
               ) : history.map(h => (
-                <div key={h.id} className="flex items-center justify-between px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <div key={h.id} className="flex items-center justify-between px-4 py-3 bg-page border border-rule ">
                   <div>
-                    <p className="text-xs font-black text-slate-800">{h.employeeId}</p>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">
+                    <p className="text-xs font-black text-ink">{h.employeeId}</p>
+                    <p className="text-[9px] font-bold text-muted uppercase mt-0.5">
                       {new Date(h.assignedAt).toLocaleDateString('en-SG')} → {h.returnedAt ? new Date(h.returnedAt).toLocaleDateString('en-SG') : 'Active'}
                     </p>
                   </div>
-                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${h.isActive ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-100 text-slate-400 border-slate-200'}`}>
+                  <span className={`text-[9px] font-black px-2 py-0.5  border uppercase ${h.isActive ? 'bg-page text-accent border-accent' : 'bg-page text-muted border-rule'}`}>
                     {h.isActive ? 'Active' : 'Returned'}
                   </span>
                 </div>
@@ -358,21 +359,21 @@ export default function AssetsPage() {
     <div className="flex flex-col gap-8 max-w-[1400px] mx-auto pb-20 animate-in fade-in duration-700">
 
       {/* Header */}
-      <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6 bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-teal-500/5 rounded-full blur-3xl" />
+      <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6 bg-paper p-10 border border-rule relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-accent " />
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-2 h-2 bg-teal-500 rounded-full" />
-            <span className="text-[10px] font-black text-teal-600 uppercase tracking-[0.4em]">Asset &amp; Logistics Layer</span>
+            <div className="w-2 h-2 bg-accent " />
+            <span className="text-[10px] font-black text-accent uppercase tracking-[0.4em]">Asset &amp; Logistics Layer</span>
           </div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tighter">Asset <span className="text-teal-600">Registry</span></h1>
-          <p className="text-sm font-bold text-slate-400 mt-2 uppercase tracking-widest max-w-xl">
+          <h1 className="text-4xl font-black text-ink tracking-tighter">Asset <span className="text-accent">Registry</span></h1>
+          <p className="text-sm font-bold text-muted mt-2 uppercase tracking-widest max-w-xl">
             Corporate asset register, employee assignments, logistics requests, and inventory management.
           </p>
         </div>
         <div className="flex flex-wrap gap-4 relative z-10">
           <button onClick={() => setRegisterOpen(true)}
-            className="px-8 py-4 bg-teal-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-teal-700 shadow-xl shadow-teal-500/20 transition-all active:scale-95">
+            className="px-8 py-4 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95">
             + Register Asset
           </button>
         </div>
@@ -381,12 +382,12 @@ export default function AssetsPage() {
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: 'Total Assets',      value: loading ? '—' : String(assets.length),                                          color: 'text-slate-900' },
-          { label: 'Assigned',          value: loading ? '—' : String(assets.filter(a => a.status === 'ASSIGNED').length),     color: 'text-indigo-600' },
-          { label: 'Available',         value: loading ? '—' : String(assets.filter(a => a.status === 'AVAILABLE').length),    color: 'text-emerald-600' },
-          { label: 'Total Value (SGD)', value: loading ? '—' : `$${totalValue.toLocaleString()}`,                              color: 'text-teal-600' },
+          { label: 'Total Assets',      value: loading ? '—' : String(assets.length),                                          color: 'text-ink' },
+          { label: 'Assigned',          value: loading ? '—' : String(assets.filter(a => a.status === 'ASSIGNED').length),     color: 'text-accent' },
+          { label: 'Available',         value: loading ? '—' : String(assets.filter(a => a.status === 'AVAILABLE').length),    color: 'text-accent' },
+          { label: 'Total Value (SGD)', value: loading ? '—' : `$${totalValue.toLocaleString()}`,                              color: 'text-accent' },
         ].map(k => (
-          <div key={k.label} className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-2xl shadow-indigo-500/5">
+          <div key={k.label} className="bg-paper p-8 border border-rule ">
             <p className="label-form mb-4">{k.label}</p>
             <h3 className={`text-3xl font-black tracking-tighter ${k.color}`}>{k.value}</h3>
           </div>
@@ -397,8 +398,8 @@ export default function AssetsPage() {
       <div className="flex gap-2 flex-wrap">
         {CATEGORIES.map(c => (
           <button key={c} onClick={() => setFilter(c)}
-            className={`px-5 py-2.5 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all ${
-              filter === c ? 'bg-slate-950 text-white shadow-lg' : 'bg-white border border-slate-200 text-slate-500 hover:border-teal-400 hover:text-teal-600'
+            className={`px-5 py-2.5  text-[9px] font-black uppercase tracking-widest transition-all ${
+              filter === c ? 'bg-shadow text-paper ' : 'bg-paper border border-rule text-muted hover:border-accent hover:text-accent'
             }`}>
             {c}
           </button>
@@ -406,32 +407,32 @@ export default function AssetsPage() {
       </div>
 
       {/* Asset Table */}
-      <section className="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 overflow-hidden">
-        <div className="p-8 border-b border-slate-50 flex items-center justify-between">
+      <section className="bg-paper border border-rule overflow-hidden">
+        <div className="p-8 border-b border-rule flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-2 h-8 bg-teal-500 rounded-full" />
-            <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest">Asset Register</h3>
-            <span className="text-[9px] font-black px-3 py-1 bg-slate-100 text-slate-500 rounded-full uppercase">{filtered.length} items</span>
+            <div className="w-2 h-8 bg-accent " />
+            <h3 className="text-lg font-black text-ink uppercase tracking-widest">Asset Register</h3>
+            <span className="text-[9px] font-black px-3 py-1 bg-page text-muted uppercase">{filtered.length} items</span>
           </div>
-          <button onClick={handleExport} className="px-6 py-3 bg-white border border-slate-200 text-[10px] font-black text-slate-500 uppercase tracking-widest rounded-xl hover:bg-slate-50 hover:border-teal-400 hover:text-teal-600 transition-all">
+          <button onClick={handleExport} className="px-6 py-3 bg-paper border border-rule text-[10px] font-black text-muted uppercase tracking-widest hover:bg-page hover:border-accent hover:text-accent transition-all">
             Export CSV
           </button>
         </div>
         <div className="overflow-x-auto">
           {loading ? (
             <div className="p-8 flex flex-col gap-3">
-              {[1,2,3,4,5].map(i => <div key={i} className="h-14 bg-slate-50 rounded-2xl animate-pulse" />)}
+              {[1,2,3,4,5].map(i => <div key={i} className="h-14 bg-page animate-pulse" />)}
             </div>
           ) : filtered.length === 0 ? (
             <div className="py-20 text-center">
-              <p className="text-sm font-black text-slate-300 uppercase tracking-widest">No assets found</p>
-              <button onClick={() => setRegisterOpen(true)} className="mt-4 px-6 py-2.5 bg-teal-600 text-white text-[10px] font-black rounded-xl uppercase tracking-widest hover:bg-teal-700 transition-all">
+              <p className="text-sm font-black text-muted uppercase tracking-widest">No assets found</p>
+              <button onClick={() => setRegisterOpen(true)} className="mt-4 px-6 py-2.5 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all">
                 Register First Asset
               </button>
             </div>
           ) : (
             <table className="w-full text-left">
-              <thead className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-50">
+              <thead className="text-[10px] font-black text-muted uppercase tracking-[0.2em] border-b border-rule">
                 <tr>
                   {([
                     { col: 'name',     label: 'Asset',       cls: 'px-8 py-6',            align: 'start' },
@@ -441,7 +442,7 @@ export default function AssetsPage() {
                     { col: 'status',   label: 'Status',      cls: 'px-8 py-6',            align: 'start' },
                   ] as const).map(h => (
                     <th key={h.col} className={h.cls}>
-                      <button onClick={() => toggleAssetSort(h.col)} className={`flex items-center hover:text-slate-600 transition-colors ${h.align === 'end' ? 'ml-auto justify-end' : ''}`}>
+                      <button onClick={() => toggleAssetSort(h.col)} className={`flex items-center hover:text-ink transition-colors ${h.align === 'end' ? 'ml-auto justify-end' : ''}`}>
                         {h.label}<AssetSortIcon col={h.col} />
                       </button>
                     </th>
@@ -449,32 +450,32 @@ export default function AssetsPage() {
                   <th className="px-8 py-6 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="divide-y divide-rule">
                 {filtered.map(a => (
-                  <tr key={a.id} className="group hover:bg-slate-50/50 transition-all">
+                  <tr key={a.id} className="group hover:bg-page transition-all">
                     <td className="px-8 py-5">
                       <div className="flex flex-col">
-                        <span className="text-xs font-black text-slate-900 uppercase tracking-tight group-hover:text-teal-600 transition-colors">{a.name}</span>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">{a.assetCode}{a.serialNumber ? ` · ${a.serialNumber}` : ''}</span>
+                        <span className="text-xs font-black text-ink uppercase tracking-tight group-hover:text-accent transition-colors">{a.name}</span>
+                        <span className="text-[9px] font-bold text-muted uppercase mt-0.5">{a.assetCode}{a.serialNumber ? ` · ${a.serialNumber}` : ''}</span>
                       </div>
                     </td>
                     <td className="px-8 py-5">
-                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{a.category}</span>
+                      <span className="text-[10px] font-black text-muted uppercase tracking-widest">{a.category}</span>
                     </td>
                     <td className="px-8 py-5">
-                      <span className="text-[10px] font-black text-slate-400">{a.location || '—'}</span>
+                      <span className="text-[10px] font-black text-muted">{a.location || '—'}</span>
                     </td>
                     <td className="px-8 py-5 text-right">
-                      <span className="text-sm font-black text-slate-900 tracking-tight">${(a.currentValue ?? 0).toLocaleString()}</span>
+                      <span className="text-sm font-black text-ink tracking-tight">${(a.currentValue ?? 0).toLocaleString()}</span>
                     </td>
                     <td className="px-8 py-5">
-                      <span className={`text-[9px] font-black px-3 py-1.5 rounded-full border uppercase tracking-widest ${STATUS_STYLE[a.status]}`}>
+                      <span className={`text-[9px] font-black px-3 py-1.5  border uppercase tracking-widest ${STATUS_STYLE[a.status]}`}>
                         {STATUS_LABEL[a.status]}
                       </span>
                     </td>
                     <td className="px-8 py-5 text-right">
                       <button onClick={() => setManaging(a)}
-                        className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[9px] font-black text-slate-500 uppercase hover:border-teal-500 hover:text-teal-600 hover:bg-teal-50 transition-all">
+                        className="px-4 py-2 bg-paper border border-rule text-[9px] font-black text-muted uppercase hover:border-accent hover:text-accent hover:bg-page transition-all">
                         {a.status === 'AVAILABLE' ? 'Assign' : 'Manage'}
                       </button>
                     </td>

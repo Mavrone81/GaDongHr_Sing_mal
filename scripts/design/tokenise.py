@@ -22,12 +22,18 @@ import sys
 # product) are NOT matched by a plain `border-<hue>` rule. Found the hard way on
 # Wave A, where four spinners survived the pass; 26 other files carry the same
 # pattern.
-SIDES = r'(?:-[tblrxy])?'
+SIDES = r'(-[tblrxy])?'
+
+# Every Tailwind hue. Hand-listing a few is how shadow-violet-500 and
+# from-violet-600 survived into Wave D — the earlier rules named only the hues
+# the screens converted so far happened to use.
+HUES = (r'(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|'
+        r'emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)')
 
 RULES = [
     # ── shadows: removed entirely ─────────────────────────────────────────
     (r'\bshadow-(?:sm|md|lg|xl|2xl|inner|none)\b', ''),
-    (r'\bshadow-(?:slate|indigo|amber|red|emerald|rose|navy|gold)-\d{2,3}(?:/\d+)?\b', ''),
+    (r'\bshadow-' + HUES + r'-\d{2,3}(?:/\d+)?\b', ''),
     (r'\bshadow-(?:black|white)(?:/\d+)?\b', ''),
     (r'\bdrop-shadow(?:-\w+)?\b', ''),
 
@@ -47,26 +53,35 @@ RULES = [
     (r'\bbg-slate-(?:200|300)(?:/\d+)?\b', 'bg-rule'),
     (r'\bbg-slate-(?:50|100)(?:/\d+)?\b', 'bg-page'),
     (r'\bborder' + SIDES + r'-slate-(?:700|800|900|950)(?:/\d+)?\b', 'border-shadow'),
-    (r'\bborder' + SIDES + r'-slate-\d{2,3}(?:/\d+)?\b', 'border-rule'),
+    (r'\bborder' + SIDES + r'-slate-\d{2,3}(?:/\d+)?\b', lambda m, _t='rule': 'border' + (m.group(1) or '') + '-' + _t),
     (r'\bdivide-slate-\d{2,3}(?:/\d+)?\b', 'divide-rule'),
     (r'\bring-slate-\d{2,3}(?:/\d+)?\b', 'ring-rule'),
-    (r'\bfrom-slate-\d{2,3}(?:/\d+)?\b', 'from-page'),
-    (r'\b(?:to|via)-slate-\d{2,3}(?:/\d+)?\b', 'to-page'),
+    # Gradient stops in ANY hue. A decorative gradient has no token to map
+    # onto, so both stops collapse to one flat surface.
+    # Each stop keeps its OWN prefix. Collapsing `from-x to-y` to `to-accent
+    # to-accent` leaves the gradient with no start colour, so it fades in from
+    # transparent — a decorative gradient becomes a rendering bug.
+    # Both stops land on the same token, so the result is a flat surface.
+    (r'\bfrom-' + HUES + r'-(?:50|100|200)(?:/\d+)?\b', 'from-page'),
+    (r'\bvia-'  + HUES + r'-(?:50|100|200)(?:/\d+)?\b', 'via-page'),
+    (r'\bto-'   + HUES + r'-(?:50|100|200)(?:/\d+)?\b', 'to-page'),
+    (r'\bfrom-' + HUES + r'-\d{2,3}(?:/\d+)?\b', 'from-accent'),
+    (r'\bvia-'  + HUES + r'-\d{2,3}(?:/\d+)?\b', 'via-accent'),
+    (r'\bto-'   + HUES + r'-\d{2,3}(?:/\d+)?\b', 'to-accent'),
 
     # ── brand primary -> the single action colour ─────────────────────────
     (r'\btext-indigo-(?:50|100|200)(?:/\d+)?\b', 'text-paper'),
     (r'\btext-indigo-\d{2,3}(?:/\d+)?\b', 'text-accent'),
     (r'\bbg-indigo-(?:50|100|200)(?:/\d+)?\b', 'bg-page'),
     (r'\bbg-indigo-\d{2,3}(?:/\d+)?\b', 'bg-accent'),
-    (r'\bborder' + SIDES + r'-indigo-\d{2,3}(?:/\d+)?\b', 'border-accent'),
+    (r'\bborder' + SIDES + r'-indigo-\d{2,3}(?:/\d+)?\b', lambda m, _t='accent': 'border' + (m.group(1) or '') + '-' + _t),
     (r'\bring-indigo-\d{2,3}(?:/\d+)?\b', 'ring-accent'),
-    (r'\b(?:from|to|via)-indigo-\d{2,3}(?:/\d+)?\b', 'to-accent'),
 
     # ── success -> accent (deep green) ────────────────────────────────────
     (r'\btext-emerald-\d{2,3}(?:/\d+)?\b', 'text-accent'),
     (r'\bbg-emerald-(?:50|100|200)(?:/\d+)?\b', 'bg-page'),
     (r'\bbg-emerald-\d{2,3}(?:/\d+)?\b', 'bg-accent'),
-    (r'\bborder' + SIDES + r'-emerald-\d{2,3}(?:/\d+)?\b', 'border-accent'),
+    (r'\bborder' + SIDES + r'-emerald-\d{2,3}(?:/\d+)?\b', lambda m, _t='accent': 'border' + (m.group(1) or '') + '-' + _t),
     (r'\bring-emerald-\d{2,3}(?:/\d+)?\b', 'ring-accent'),
 
     # ── warning -> highlight, the one sanctioned warning colour ───────────
@@ -74,7 +89,7 @@ RULES = [
     (r'\btext-(?:amber|yellow|orange)-\d{2,3}(?:/\d+)?\b', 'text-ink'),
     (r'\bbg-(?:amber|yellow|orange)-(?:50|100|200)(?:/\d+)?\b', 'bg-page'),
     (r'\bbg-(?:amber|yellow|orange)-\d{2,3}(?:/\d+)?\b', 'bg-highlight'),
-    (r'\bborder' + SIDES + r'-(?:amber|yellow|orange)-\d{2,3}(?:/\d+)?\b', 'border-highlight'),
+    (r'\bborder' + SIDES + r'-(?:amber|yellow|orange)-\d{2,3}(?:/\d+)?\b', lambda m, _t='highlight': 'border' + (m.group(1) or '') + '-' + _t),
     (r'\bdivide-(?:amber|yellow|orange)-\d{2,3}(?:/\d+)?\b', 'divide-rule'),
     (r'\bring-(?:amber|yellow|orange)-\d{2,3}(?:/\d+)?\b', 'ring-highlight'),
 
@@ -82,14 +97,14 @@ RULES = [
     (r'\btext-(?:red|rose|pink)-\d{2,3}(?:/\d+)?\b', 'text-ink'),
     (r'\bbg-(?:red|rose|pink)-(?:50|100|200)(?:/\d+)?\b', 'bg-page'),
     (r'\bbg-(?:red|rose|pink)-\d{2,3}(?:/\d+)?\b', 'bg-ink'),
-    (r'\bborder' + SIDES + r'-(?:red|rose|pink)-\d{2,3}(?:/\d+)?\b', 'border-ink'),
+    (r'\bborder' + SIDES + r'-(?:red|rose|pink)-\d{2,3}(?:/\d+)?\b', lambda m, _t='ink': 'border' + (m.group(1) or '') + '-' + _t),
     (r'\bring-(?:red|rose|pink)-\d{2,3}(?:/\d+)?\b', 'ring-ink'),
 
     # ── informational blues/violets -> accent ─────────────────────────────
     (r'\btext-(?:blue|sky|cyan|violet|purple|fuchsia|teal|lime|green)-\d{2,3}(?:/\d+)?\b', 'text-accent'),
     (r'\bbg-(?:blue|sky|cyan|violet|purple|fuchsia|teal|lime|green)-(?:50|100|200)(?:/\d+)?\b', 'bg-page'),
     (r'\bbg-(?:blue|sky|cyan|violet|purple|fuchsia|teal|lime|green)-\d{2,3}(?:/\d+)?\b', 'bg-accent'),
-    (r'\bborder' + SIDES + r'-(?:blue|sky|cyan|violet|purple|fuchsia|teal|lime|green)-\d{2,3}(?:/\d+)?\b', 'border-accent'),
+    (r'\bborder' + SIDES + r'-(?:blue|sky|cyan|violet|purple|fuchsia|teal|lime|green)-\d{2,3}(?:/\d+)?\b', lambda m, _t='accent': 'border' + (m.group(1) or '') + '-' + _t),
     (r'\bring-(?:blue|sky|cyan|violet|purple|fuchsia|teal|lime|green)-\d{2,3}(?:/\d+)?\b', 'ring-accent'),
 
     # ── accent-color (form controls). Not matched by the text/bg/border
@@ -100,9 +115,31 @@ RULES = [
     (r'\baccent-slate-\d{2,3}\b', 'accent-muted'),
 
     # ── the surface itself ────────────────────────────────────────────────
-    (r'\bbg-white(?:/\d+)?\b', 'bg-paper'),
-    (r'\btext-white\b', 'text-paper'),
-    (r'\bbg-black(?:/\d+)?\b', 'bg-shadow'),
+    # PRESERVE the opacity suffix. `bg-white/5` is a 5% overlay on a dark card;
+    # mapping it to a flat `bg-paper` turns a barely-there sheen into an opaque
+    # cream panel. Dropping the suffix here silently wrecked the dark surfaces
+    # in Waves A-C before it was caught.
+    (r'\bbg-white(/\d+)?\b', lambda m: 'bg-paper' + (m.group(1) or '')),
+    (r'\btext-white(/\d+)?\b', lambda m: 'text-paper' + (m.group(1) or '')),
+    (r'\bborder-white(/\d+)?\b', lambda m: 'border-paper' + (m.group(1) or '')),
+    (r'\bring-white(/\d+)?\b', lambda m: 'ring-paper' + (m.group(1) or '')),
+    (r'\bdivide-white(/\d+)?\b', lambda m: 'divide-rule' + (m.group(1) or '')),
+    (r'\bbg-black(/\d+)?\b', lambda m: 'bg-shadow' + (m.group(1) or '')),
+    (r'\bborder-black(/\d+)?\b', lambda m: 'border-shadow' + (m.group(1) or '')),
+    (r'\btext-black(/\d+)?\b', lambda m: 'text-ink' + (m.group(1) or '')),
+
+    # ── placeholder colour in the older dash syntax ──────────────────────
+    (r'\bplaceholder-' + HUES + r'-\d{2,3}(?:/\d+)?\b', 'placeholder-muted'),
+
+    # ── CATCH-ALL. The rules above enumerate the Tailwind steps (50..950),
+    #    so an off-scale step slips through: `bg-slate-750` is not a real
+    #    class and never rendered, but it still trips the guard. These
+    #    fallbacks mean no hue can survive the pass unnoticed. ─────────────
+    (r'\btext-' + HUES + r'-\d{2,3}(?:/\d+)?\b', 'text-ink'),
+    (r'\bbg-' + HUES + r'-\d{2,3}(?:/\d+)?\b', 'bg-page'),
+    (r'\bborder' + SIDES + r'-' + HUES + r'-\d{2,3}(?:/\d+)?\b',
+     lambda m: 'border' + (m.group(1) or '') + '-rule'),
+    (r'\b(?:ring|divide|fill|stroke|caret|outline|accent)-' + HUES + r'-\d{2,3}(?:/\d+)?\b', 'text-muted'),
 
     # ── decorative blur washes: the gradient overlays the design retires ──
     (r'\bblur-(?:sm|md|lg|xl|2xl|3xl)\b', ''),
@@ -141,10 +178,33 @@ def tidy_classes(text: str) -> str:
     return CLASS_STR.sub(fix, text)
 
 
+SPINNER = re.compile(r'className=(["\'`])([^"\'`]*animate-spin[^"\'`]*)\1')
+
+
+def restore_spinners(before: str, after: str) -> str:
+    """Give `rounded-full` back to loading spinners.
+
+    "Nothing but buttons and seals is rounded" is about CARDS. A spinner is a
+    circle because it rotates; stripping its radius turns it into a spinning
+    square. 58 of them were square before this was caught.
+    """
+    had = {m.group(2) for m in SPINNER.finditer(before) if 'rounded-full' in m.group(2)}
+    if not had:
+        return after
+
+    def fix(m):
+        body = m.group(2)
+        if 'rounded-full' in body:
+            return m.group(0)
+        return m.group(0).replace(body, body.rstrip() + ' rounded-full')
+    return SPINNER.sub(fix, after)
+
+
 def convert(text: str) -> str:
+    original = text
     for pat, rep in COMPILED:
         text = pat.sub(rep, text)
-    return tidy_classes(text)
+    return restore_spinners(original, tidy_classes(text))
 
 
 for path in sys.argv[1:]:

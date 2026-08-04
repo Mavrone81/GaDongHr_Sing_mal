@@ -8,6 +8,7 @@
  */
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { CARD, withoutSpinners } from './helpers/vocabulary';
 
 const dir = join(__dirname, '..', 'src', 'app', '(dashboard)');
 const read = (...p: string[]) => readFileSync(join(dir, ...p), 'utf8');
@@ -28,7 +29,7 @@ const SCREENS: [string, string][] = [
 
 describe.each(SCREENS)('%s speaks the document vocabulary', (_name, src) => {
   it('uses no card vocabulary', () => {
-    expect(src).not.toMatch(/rounded-(lg|xl|2xl|3xl|full)|shadow-(sm|md|lg|xl|2xl)|bg-white/);
+    expect(withoutSpinners(src)).not.toMatch(CARD);
   });
 
   it('uses no legacy palette', () => {

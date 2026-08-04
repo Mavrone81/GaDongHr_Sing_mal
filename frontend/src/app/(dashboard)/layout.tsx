@@ -35,7 +35,7 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
   },
   {
     group: 'WORKFORCE',
-    color: 'text-blue-400',
+    color: 'text-accent',
     items: [
       { name: 'Employees',   path: '/employees',           icon: '◈' },
       { name: 'Recruitment', path: '/recruitment',         icon: '◇' },
@@ -50,7 +50,7 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
   },
   {
     group: 'EMPLOYEE',
-    color: 'text-sky-400',
+    color: 'text-accent',
     items: [
       { name: 'My Attendance', path: '/attendance',          icon: '◉' },
       { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
@@ -90,7 +90,7 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
   },
   {
     group: 'ADMINISTRATION',
-    color: 'text-violet-400',
+    color: 'text-accent',
     items: [
       { name: 'Tenancy & Config',   path: '/settings',          icon: '◎' },
       { name: 'User Management',    path: '/settings/users',    icon: '◪' },
@@ -115,7 +115,7 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
 // HR Admin nav
 const HR_ADMIN_NAV: NavGroup[] = [
   { group: 'COMMAND',    color: 'text-accent',  items: [{ name: 'Dashboard', path: '/', icon: '⬡' }, { name: 'Notifications', path: '/notifications', icon: '◍' }] },
-  { group: 'WORKFORCE',  color: 'text-blue-400',    items: [
+  { group: 'WORKFORCE',  color: 'text-accent',    items: [
     { name: 'Employees',   path: '/employees',           icon: '◈' },
     { name: 'Recruitment', path: '/recruitment',         icon: '◇' },
     { name: 'Attendance',  path: '/attendance/registry', icon: '◉' },
@@ -125,7 +125,7 @@ const HR_ADMIN_NAV: NavGroup[] = [
     { name: 'Performance', path: '/performance',         icon: '▣' },
     { name: 'Training',    path: '/training',            icon: '◑' },
   ]},
-  { group: 'EMPLOYEE',   color: 'text-sky-400',     items: [
+  { group: 'EMPLOYEE',   color: 'text-accent',     items: [
     { name: 'My Attendance', path: '/attendance',          icon: '◉' },
     { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
     { name: 'My Leave',      path: '/leave',               icon: '◌' },
@@ -152,20 +152,20 @@ const HR_ADMIN_NAV: NavGroup[] = [
     { name: 'Surveys',    path: '/surveys',           icon: '◊' },
     { name: 'Succession', path: '/succession',        icon: '◈' },
   ]},
-  { group: 'ADMIN',      color: 'text-violet-400',  items: [{ name: 'User Management', path: '/settings/users', icon: '◪' }] },
+  { group: 'ADMIN',      color: 'text-accent',  items: [{ name: 'User Management', path: '/settings/users', icon: '◪' }] },
   { group: 'SUPPORT',   color: 'text-muted',   items: [{ name: 'Support Inbox', path: '/support/admin', icon: '◇' }] },
 ];
 
 // Payroll Officer nav
 const PAYROLL_OFFICER_NAV: NavGroup[] = [
   { group: 'COMMAND',    color: 'text-accent',  items: [{ name: 'Dashboard', path: '/', icon: '⬡' }, { name: 'Notifications', path: '/notifications', icon: '◍' }] },
-  { group: 'WORKFORCE',  color: 'text-blue-400',    items: [
+  { group: 'WORKFORCE',  color: 'text-accent',    items: [
     { name: 'Employees',  path: '/employees',           icon: '◈' },
     { name: 'Attendance', path: '/attendance/registry', icon: '◉' },
     { name: 'Leave',      path: '/leave/registry',      icon: '◌' },
     { name: 'Claims',     path: '/claims/registry',     icon: '◫' },
   ]},
-  { group: 'EMPLOYEE',   color: 'text-sky-400',     items: [
+  { group: 'EMPLOYEE',   color: 'text-accent',     items: [
     { name: 'My Attendance', path: '/attendance',          icon: '◉' },
     { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
     { name: 'My Leave',      path: '/leave',               icon: '◌' },
@@ -193,13 +193,13 @@ const PAYROLL_OFFICER_NAV: NavGroup[] = [
 // General ADMIN nav — HR-adjacent oversight without payroll or sensitive data
 const ADMIN_NAV: NavGroup[] = [
   { group: 'COMMAND',    color: 'text-accent',  items: [{ name: 'Dashboard', path: '/', icon: '⬡' }, { name: 'Notifications', path: '/notifications', icon: '◍' }] },
-  { group: 'WORKFORCE',  color: 'text-blue-400',    items: [
+  { group: 'WORKFORCE',  color: 'text-accent',    items: [
     { name: 'Employees',  path: '/employees',           icon: '◈' },
     { name: 'Attendance', path: '/attendance/registry', icon: '◉' },
     { name: 'Leave',      path: '/leave/registry',      icon: '◌' },
     { name: 'Claims',     path: '/claims/registry',     icon: '◫' },
   ]},
-  { group: 'EMPLOYEE',   color: 'text-sky-400',     items: [
+  { group: 'EMPLOYEE',   color: 'text-accent',     items: [
     { name: 'My Attendance', path: '/attendance',          icon: '◉' },
     { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
     { name: 'My Leave',      path: '/leave',               icon: '◌' },
@@ -218,7 +218,7 @@ const ADMIN_NAV: NavGroup[] = [
 // IT Admin nav — user/role/settings + asset oversight
 const IT_ADMIN_NAV: NavGroup[] = [
   { group: 'COMMAND',        color: 'text-accent', items: [{ name: 'Dashboard', path: '/', icon: '⬡' }, { name: 'Notifications', path: '/notifications', icon: '◍' }] },
-  { group: 'ADMINISTRATION', color: 'text-violet-400', items: [
+  { group: 'ADMINISTRATION', color: 'text-accent', items: [
     { name: 'User Management',    path: '/settings/users',    icon: '◪' },
     { name: 'Role & Permissions', path: '/settings/roles',    icon: '◧' },
     { name: 'Security (SSO/MFA)', path: '/settings/security', icon: '◰' },
@@ -227,7 +227,7 @@ const IT_ADMIN_NAV: NavGroup[] = [
   ]},
   { group: 'ASSETS',         color: 'text-accent', items: [{ name: 'Assets', path: '/assets', icon: '◧' }] },
   { group: 'COMPLIANCE',     color: 'text-highlight',   items: [{ name: 'Reports', path: '/reports', icon: '▤' }] },
-  { group: 'EMPLOYEE',       color: 'text-sky-400',     items: [
+  { group: 'EMPLOYEE',       color: 'text-accent',     items: [
     { name: 'My Attendance', path: '/attendance', icon: '◉' },
     { name: 'My Leave',      path: '/leave',      icon: '◌' },
     { name: 'My Documents',  path: '/documents',  icon: '◭' },
@@ -248,7 +248,7 @@ const FINANCE_ADMIN_NAV: NavGroup[] = [
     { name: 'Assets',  path: '/assets',          icon: '◧' },
   ]},
   { group: 'COMPLIANCE', color: 'text-highlight',    items: [{ name: 'Reports', path: '/reports', icon: '▤' }] },
-  { group: 'EMPLOYEE',   color: 'text-sky-400',      items: [
+  { group: 'EMPLOYEE',   color: 'text-accent',      items: [
     { name: 'My Attendance', path: '/attendance',          icon: '◉' },
     { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
     { name: 'My Leave',      path: '/leave',               icon: '◌' },
@@ -265,7 +265,7 @@ const FINANCE_ADMIN_NAV: NavGroup[] = [
 // Line Manager nav — team approvals + scheduling
 const LINE_MANAGER_NAV: NavGroup[] = [
   { group: 'COMMAND',     color: 'text-accent', items: [{ name: 'Dashboard', path: '/', icon: '⬡' }, { name: 'Notifications', path: '/notifications', icon: '◍' }] },
-  { group: 'TEAM',        color: 'text-blue-400',   items: [
+  { group: 'TEAM',        color: 'text-accent',   items: [
     { name: 'Team Leave',       path: '/leave/registry',      icon: '◌' },
     { name: 'Team Claims',      path: '/claims/registry',     icon: '◫' },
     { name: 'Team Attendance',  path: '/attendance/registry', icon: '◉' },
@@ -273,7 +273,7 @@ const LINE_MANAGER_NAV: NavGroup[] = [
     { name: 'Assets',           path: '/assets',              icon: '◧' },
     { name: 'Team Succession',  path: '/succession/my-team',  icon: '◈' },
   ]},
-  { group: 'EMPLOYEE',    color: 'text-sky-400',    items: [
+  { group: 'EMPLOYEE',    color: 'text-accent',    items: [
     { name: 'My Attendance', path: '/attendance',          icon: '◉' },
     { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
     { name: 'My Leave',      path: '/leave',               icon: '◌' },
@@ -292,11 +292,11 @@ const LINE_MANAGER_NAV: NavGroup[] = [
 // Recruiter nav — ATS/recruitment only + self-service
 const RECRUITER_NAV: NavGroup[] = [
   { group: 'COMMAND',     color: 'text-accent', items: [{ name: 'Dashboard', path: '/', icon: '⬡' }, { name: 'Notifications', path: '/notifications', icon: '◍' }] },
-  { group: 'RECRUITMENT', color: 'text-blue-400',   items: [
+  { group: 'RECRUITMENT', color: 'text-accent',   items: [
     { name: 'Recruitment', path: '/recruitment', icon: '◇' },
     { name: 'Employees',   path: '/employees',   icon: '◈' },
   ]},
-  { group: 'EMPLOYEE',    color: 'text-sky-400',    items: [
+  { group: 'EMPLOYEE',    color: 'text-accent',    items: [
     { name: 'My Attendance', path: '/attendance',          icon: '◉' },
     { name: 'My Leave',      path: '/leave',               icon: '◌' },
     { name: 'My Claims',     path: '/claims',              icon: '◫' },
@@ -313,12 +313,12 @@ const RECRUITER_NAV: NavGroup[] = [
 // Training Manager nav — training oversight (training-specific perms still pending in seed)
 const TRAINING_MANAGER_NAV: NavGroup[] = [
   { group: 'COMMAND',  color: 'text-accent',   items: [{ name: 'Dashboard', path: '/', icon: '⬡' }, { name: 'Notifications', path: '/notifications', icon: '◍' }] },
-  { group: 'TRAINING', color: 'text-orange-400',   items: [
+  { group: 'TRAINING', color: 'text-ink',   items: [
     { name: 'Training',  path: '/training',  icon: '◑' },
     { name: 'Employees', path: '/employees', icon: '◈' },
   ]},
   { group: 'COMPLIANCE', color: 'text-highlight',  items: [{ name: 'Reports', path: '/reports', icon: '▤' }] },
-  { group: 'EMPLOYEE', color: 'text-sky-400',      items: [
+  { group: 'EMPLOYEE', color: 'text-accent',      items: [
     { name: 'My Attendance', path: '/attendance', icon: '◉' },
     { name: 'My Leave',      path: '/leave',      icon: '◌' },
     { name: 'My Training',   path: '/training?view=me',   icon: '◑' },
@@ -334,7 +334,7 @@ const TRAINING_MANAGER_NAV: NavGroup[] = [
 // Employee ESS nav — default inherited role for all employees
 const EMPLOYEE_NAV: NavGroup[] = [
   { group: 'OVERVIEW',  color: 'text-accent',  items: [{ name: 'Dashboard', path: '/', icon: '⬡' }, { name: 'Notifications', path: '/notifications', icon: '◍' }] },
-  { group: 'EMPLOYEE',  color: 'text-sky-400',     items: [
+  { group: 'EMPLOYEE',  color: 'text-accent',     items: [
     { name: 'My Attendance', path: '/attendance',          icon: '◉' },
     { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
     { name: 'My Leave',      path: '/leave',               icon: '◌' },
@@ -358,15 +358,15 @@ const EMPLOYEE_NAV: NavGroup[] = [
 
 const ROLE_LABELS: Record<string, { label: string; color: string; dot: string }> = {
   SUPER_ADMIN:      { label: 'Super Admin',      color: 'text-accent', dot: 'bg-accent' },
-  ADMIN:            { label: 'Admin',            color: 'text-purple-300', dot: 'bg-purple-500' },
+  ADMIN:            { label: 'Admin',            color: 'text-accent', dot: 'bg-accent' },
   IT_ADMIN:         { label: 'IT Admin',         color: 'text-ink',    dot: 'bg-ink'    },
-  HR_ADMIN:         { label: 'HR Admin',         color: 'text-violet-300', dot: 'bg-violet-500' },
-  HR_MANAGER:       { label: 'HR Manager',       color: 'text-blue-300',   dot: 'bg-blue-500'   },
+  HR_ADMIN:         { label: 'HR Admin',         color: 'text-accent', dot: 'bg-accent' },
+  HR_MANAGER:       { label: 'HR Manager',       color: 'text-accent',   dot: 'bg-accent'   },
   PAYROLL_OFFICER:  { label: 'Payroll Officer',  color: 'text-accent',dot: 'bg-accent'},
-  FINANCE_ADMIN:    { label: 'Finance Admin',    color: 'text-teal-300',   dot: 'bg-teal-500'   },
+  FINANCE_ADMIN:    { label: 'Finance Admin',    color: 'text-accent',   dot: 'bg-accent'   },
   RECRUITER:        { label: 'Recruiter',        color: 'text-highlight',  dot: 'bg-highlight'  },
-  TRAINING_MANAGER: { label: 'Training Mgr',     color: 'text-orange-300', dot: 'bg-orange-500' },
-  LINE_MANAGER:     { label: 'Line Manager',     color: 'text-sky-300',    dot: 'bg-sky-500'    },
+  TRAINING_MANAGER: { label: 'Training Mgr',     color: 'text-highlight', dot: 'bg-highlight' },
+  LINE_MANAGER:     { label: 'Line Manager',     color: 'text-accent',    dot: 'bg-accent'    },
   EMPLOYEE:         { label: 'Employee',         color: 'text-muted',  dot: 'bg-muted'  },
 };
 
@@ -450,8 +450,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="min-h-screen bg-shadow flex items-center justify-center">
         <div className="flex flex-col items-center gap-6">
           <div className="relative w-16 h-16">
-            <div className="absolute inset-0 border-4 border-accent/20 border-t-accent animate-spin"></div>
-            <div className="absolute inset-3 border-4 border-rule border-t-accent animate-spin [animation-direction:reverse] [animation-duration:0.6s]"></div>
+            <div className="absolute inset-0 border-4 border-accent/20 border-t-accent animate-spin rounded-full"></div>
+            <div className="absolute inset-3 border-4 border-rule border-t-accent animate-spin [animation-direction:reverse] [animation-duration:0.6s] rounded-full"></div>
           </div>
           <p className="text-[10px] font-black text-muted uppercase tracking-[0.4em] animate-pulse">Authenticating Identity...</p>
         </div>
@@ -474,8 +474,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="absolute inset-y-0 left-0 lg:left-64 right-0 flex flex-col items-center justify-center gap-4 bg-paper/80 backdrop-blur-[2px]">
             <div className="flex flex-col items-center gap-3">
               <div className="relative w-10 h-10">
-                <div className="absolute inset-0 border-[3px] border-accent border-t-accent animate-spin" />
-                <div className="absolute inset-[5px] border-[2px] border-rule border-t-accent animate-spin [animation-direction:reverse] [animation-duration:0.5s]" />
+                <div className="absolute inset-0 border-[3px] border-accent border-t-accent animate-spin rounded-full" />
+                <div className="absolute inset-[5px] border-[2px] border-rule border-t-accent animate-spin [animation-direction:reverse] [animation-duration:0.5s] rounded-full" />
               </div>
               {navTarget && (
                 <p className="text-[9px] font-black text-muted uppercase tracking-[0.35em]">
@@ -490,7 +490,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-shadow backdrop- lg:hidden"
           onClick={() => setSidebarOpen(false)}
           aria-hidden="true"
         />
@@ -503,7 +503,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }`}
       >
         {/* Brand */}
-        <div className="relative px-5 pt-5 pb-4 border-b border-white/5 flex items-center gap-3">
+        <div className="relative px-5 pt-5 pb-4 border-b border-paper/5 flex items-center gap-3">
           <GaDongMark size={34} stroke="#ffffff" accent="#cda64c" className="shrink-0" />
           <div className="flex flex-col min-w-0">
             <span className="font-black text-paper tracking-[0.18em] uppercase text-sm leading-none">GaDongHR</span>
@@ -516,7 +516,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className={`px-3 py-2 border flex items-center gap-2.5 ${
             isSuperAdmin
               ? 'bg-accent/10 border-accent/20'
-              : 'bg-paper/3 border-white/6'
+              : 'bg-paper/3 border-paper/6'
           }`}>
             <div className={`w-1.5 h-1.5 shrink-0 ${roleInfo.dot} ${isSuperAdmin ? 'animate-pulse' : ''}`} />
             <span className={`text-[9px] font-black uppercase tracking-widest truncate ${roleInfo.color}`}>
@@ -579,8 +579,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
 
         {/* User Footer */}
-        <div className="relative p-3 border-t border-white/5">
-          <div className="flex items-center gap-2.5 p-3 bg-paper/4 border border-white/6 mb-2 cursor-default">
+        <div className="relative p-3 border-t border-paper/5">
+          <div className="flex items-center gap-2.5 p-3 bg-paper/4 border border-paper/6 mb-2 cursor-default">
             <div className={`w-8 h-8 flex items-center justify-center text-[10px] font-black shrink-0 ${
               isSuperAdmin ? 'bg-accent/30 text-accent' : 'bg-paper/10 text-paper'
             }`}>
