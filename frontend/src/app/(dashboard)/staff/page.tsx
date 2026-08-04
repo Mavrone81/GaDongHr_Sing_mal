@@ -22,16 +22,25 @@ function getInitials(name: string) {
   return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 }
 
+/**
+ * Six departments, six distinguishable treatments, three tokens.
+ *
+ * This was six hues (indigo, emerald, rose, purple, amber, sky). Mapped onto
+ * the Official Record palette four of them became the same value, so most
+ * departments stopped being distinguishable. Varying FILL as well as token
+ * restores six distinct chips without inventing colours the system lacks.
+ * The department name is printed in the chip regardless.
+ */
 const DEPT_COLORS: Record<string, string> = {
-  Engineering: 'bg-indigo-50 text-indigo-700 border-indigo-100',
-  Finance: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-  Marketing: 'bg-rose-50 text-rose-700 border-rose-100',
-  'Human Resources': 'bg-purple-50 text-purple-700 border-purple-100',
-  Operations: 'bg-amber-50 text-amber-700 border-amber-100',
-  Sales: 'bg-sky-50 text-sky-700 border-sky-100',
+  Engineering:       'bg-accent text-paper border-accent',
+  Finance:           'bg-paper text-accent border-accent',
+  Marketing:         'bg-ink text-paper border-ink',
+  'Human Resources': 'bg-paper text-ink border-ink',
+  Operations:        'bg-highlight text-ink border-highlight',
+  Sales:             'bg-paper text-ink border-highlight',
 };
 function deptColor(dept: string) {
-  return DEPT_COLORS[dept] ?? 'bg-slate-50 text-slate-700 border-slate-100';
+  return DEPT_COLORS[dept] ?? 'bg-page text-ink border-rule';
 }
 
 export default function StaffDirectoryPage() {
@@ -69,18 +78,18 @@ export default function StaffDirectoryPage() {
     <div className="flex flex-col gap-8 max-w-[1400px] mx-auto pb-20 animate-in fade-in duration-700">
 
       {/* Header */}
-      <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/5 relative overflow-hidden group">
+      <div className="bg-paper p-10 border border-rule relative overflow-hidden group">
         <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-          <div className="w-32 h-32 bg-indigo-600 rounded-full blur-3xl" />
+          <div className="w-32 h-32 bg-accent" />
         </div>
         <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6 relative z-10">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-2 h-2 bg-indigo-600 rounded-full" />
-              <span className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.4em]">Internal Directory</span>
+              <div className="w-2 h-2 bg-accent" />
+              <span className="text-[10px] font-black text-accent uppercase tracking-[0.4em]">Internal Directory</span>
             </div>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tighter">Staff <span className="text-indigo-600">Directory</span></h1>
-            <p className="text-sm font-bold text-slate-400 mt-2 uppercase tracking-widest">
+            <h1 className="text-4xl font-black text-ink tracking-tighter">Staff <span className="text-accent">Directory</span></h1>
+            <p className="text-sm font-bold text-muted mt-2 uppercase tracking-widest">
               {loading ? 'Loading…' : `${filtered.length} of ${employees.length} active personnel`}
             </p>
           </div>
@@ -92,16 +101,16 @@ export default function StaffDirectoryPage() {
                 placeholder="Search name, role, department…"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full sm:w-72 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-xs font-bold text-slate-900 placeholder:text-slate-300 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/5 outline-none transition-all"
+                className="w-full sm:w-72 bg-page border border-rule px-5 py-3.5 text-xs font-bold text-ink placeholder:text-muted focus:border-accent focus:ring-4 focus:ring-accent outline-none transition-all"
               />
-              <svg className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
             <select
               value={deptFilter}
               onChange={e => setDeptFilter(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-xs font-bold text-slate-900 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/5 outline-none transition-all appearance-none"
+              className="bg-page border border-rule px-5 py-3.5 text-xs font-bold text-ink focus:border-accent focus:ring-4 focus:ring-accent outline-none transition-all appearance-none"
             >
               <option value="">All Departments</option>
               {departments.map(d => <option key={d} value={d}>{d}</option>)}
@@ -115,7 +124,7 @@ export default function StaffDirectoryPage() {
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setDeptFilter('')}
-            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${!deptFilter ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-400 border-slate-200 hover:border-indigo-200 hover:text-indigo-600'}`}
+            className={`px-4 py-2  text-[10px] font-black uppercase tracking-widest border transition-all ${!deptFilter ? 'bg-shadow text-paper border-shadow' : 'bg-paper text-muted border-rule hover:border-accent hover:text-accent'}`}
           >
             All
           </button>
@@ -123,7 +132,7 @@ export default function StaffDirectoryPage() {
             <button
               key={d}
               onClick={() => setDeptFilter(prev => prev === d ? '' : d)}
-              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${deptFilter === d ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-200 hover:border-indigo-200 hover:text-indigo-600'}`}
+              className={`px-4 py-2  text-[10px] font-black uppercase tracking-widest border transition-all ${deptFilter === d ? 'bg-accent text-paper border-accent' : 'bg-paper text-muted border-rule hover:border-accent hover:text-accent'}`}
             >
               {d}
             </button>
@@ -135,63 +144,63 @@ export default function StaffDirectoryPage() {
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="bg-white p-8 rounded-[2rem] border border-slate-100 animate-pulse">
+            <div key={i} className="bg-paper p-8 border border-rule animate-pulse">
               <div className="flex items-center gap-4 mb-5">
-                <div className="w-14 h-14 rounded-2xl bg-slate-100" />
+                <div className="w-14 h-14 bg-page" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-3 bg-slate-100 rounded w-3/4" />
-                  <div className="h-2 bg-slate-100 rounded w-1/2" />
+                  <div className="h-3 bg-page w-3/4" />
+                  <div className="h-2 bg-page w-1/2" />
                 </div>
               </div>
-              <div className="space-y-2 pt-4 border-t border-slate-50">
-                <div className="h-2 bg-slate-100 rounded w-full" />
-                <div className="h-2 bg-slate-100 rounded w-2/3" />
+              <div className="space-y-2 pt-4 border-t border-rule">
+                <div className="h-2 bg-page w-full" />
+                <div className="h-2 bg-page w-2/3" />
               </div>
             </div>
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-[2rem] border border-slate-100 py-24 flex flex-col items-center gap-4">
-          <div className="w-16 h-16 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl flex items-center justify-center text-2xl">◎</div>
-          <p className="text-sm font-black text-slate-400 uppercase tracking-widest">No personnel match your filters</p>
-          <button onClick={() => { setSearch(''); setDeptFilter(''); }} className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline">
+        <div className="bg-paper border border-rule py-24 flex flex-col items-center gap-4">
+          <div className="w-16 h-16 bg-page border-2 border-dashed border-rule flex items-center justify-center text-2xl">◎</div>
+          <p className="text-sm font-black text-muted uppercase tracking-widest">No personnel match your filters</p>
+          <button onClick={() => { setSearch(''); setDeptFilter(''); }} className="text-[10px] font-black text-accent uppercase tracking-widest hover:underline">
             Clear filters
           </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {filtered.map(emp => (
-            <Link key={emp.id} href={`/employees/${emp.id}`} className="bg-white p-7 rounded-[2rem] border border-slate-100 shadow-lg shadow-indigo-500/5 group hover:border-indigo-200 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 cursor-pointer block">
+            <Link key={emp.id} href={`/employees/${emp.id}`} className="bg-paper p-7 border border-rule group hover:border-accent hover: hover:-translate-y-0.5 transition-all duration-300 cursor-pointer block">
               <div className="flex items-center gap-4 mb-5">
-                <div className="w-14 h-14 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center text-xs font-black text-indigo-400 group-hover:scale-110 transition-transform duration-500 relative overflow-hidden shrink-0">
+                <div className="w-14 h-14 bg-shadow border border-shadow flex items-center justify-center text-xs font-black text-accent group-hover:scale-110 transition-transform duration-500 relative overflow-hidden shrink-0">
                   {emp.profilePhotoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={emp.profilePhotoUrl} alt={emp.fullName} className="absolute inset-0 w-full h-full object-cover" />
                   ) : (
                     <>
-                      <div className="absolute inset-0 bg-indigo-600/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="absolute inset-0 bg-accent opacity-0 group-hover:opacity-100 transition-opacity" />
                       {getInitials(emp.fullName)}
                     </>
                   )}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-black text-slate-900 uppercase tracking-tight group-hover:text-indigo-600 transition-colors truncate">{emp.fullName}</p>
+                  <p className="text-sm font-black text-ink uppercase tracking-tight group-hover:text-accent transition-colors truncate">{emp.fullName}</p>
                   <p className="label-form mt-1 truncate">{emp.designation || '—'}</p>
                 </div>
               </div>
 
-              <div className="space-y-2.5 pt-4 border-t border-slate-50">
+              <div className="space-y-2.5 pt-4 border-t border-rule">
                 <div className="flex justify-between items-center gap-2">
                   <span className="label-form shrink-0">Dept</span>
-                  <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-lg border ${deptColor(emp.department)}`}>{emp.department || '—'}</span>
+                  <span className={`text-[9px] font-black uppercase px-2.5 py-1  border ${deptColor(emp.department)}`}>{emp.department || '—'}</span>
                 </div>
                 <div className="flex justify-between items-center gap-2">
                   <span className="label-form shrink-0">Employee ID</span>
-                  <span className="text-[9px] font-black text-slate-600 uppercase">{emp.employeeCode}</span>
+                  <span className="text-[9px] font-black text-ink uppercase">{emp.employeeCode}</span>
                 </div>
                 <div className="flex justify-between items-center gap-2">
                   <span className="label-form shrink-0">Contract</span>
-                  <span className="text-[9px] font-bold text-slate-500 uppercase">{emp.employmentType?.replace('_', ' ') ?? '—'}</span>
+                  <span className="text-[9px] font-bold text-muted uppercase">{emp.employmentType?.replace('_', ' ') ?? '—'}</span>
                 </div>
                 {emp.workEmail && (
                   <div className="flex justify-between items-center gap-2">
@@ -199,7 +208,7 @@ export default function StaffDirectoryPage() {
                     <a
                       href={`mailto:${emp.workEmail}`}
                       onClick={e => e.stopPropagation()}
-                      className="text-[9px] font-bold text-indigo-600 hover:underline truncate max-w-[130px]"
+                      className="text-[9px] font-bold text-accent hover:underline truncate max-w-[130px]"
                     >
                       {emp.workEmail}
                     </a>

@@ -92,6 +92,13 @@ RULES = [
     (r'\bborder' + SIDES + r'-(?:blue|sky|cyan|violet|purple|fuchsia|teal|lime|green)-\d{2,3}(?:/\d+)?\b', 'border-accent'),
     (r'\bring-(?:blue|sky|cyan|violet|purple|fuchsia|teal|lime|green)-\d{2,3}(?:/\d+)?\b', 'ring-accent'),
 
+    # ── accent-color (form controls). Not matched by the text/bg/border
+    #    rules; slipped through in Waves B and C before being caught by hand. ─
+    (r'\baccent-(?:indigo|blue|sky|cyan|violet|purple|teal|green|emerald)-\d{2,3}\b', 'accent-accent'),
+    (r'\baccent-(?:amber|yellow|orange)-\d{2,3}\b', 'accent-highlight'),
+    (r'\baccent-(?:red|rose|pink)-\d{2,3}\b', 'accent-ink'),
+    (r'\baccent-slate-\d{2,3}\b', 'accent-muted'),
+
     # ── the surface itself ────────────────────────────────────────────────
     (r'\bbg-white(?:/\d+)?\b', 'bg-paper'),
     (r'\btext-white\b', 'text-paper'),
@@ -123,8 +130,14 @@ def tidy_classes(text: str) -> str:
             return m.group(0)
         if not re.search(r'[ \t]{2,}|^[ \t]|[ \t]$', body):
             return m.group(0)
+        # PRESERVE a single leading/trailing space. A class string is often
+        # CONCATENATED (`const SX = IX + ' cursor-pointer ...'`), and stripping
+        # that space silently fuses two class names into one nonexistent class.
+        # Caught in Wave C; it produced no type error and no test failure.
+        lead = ' ' if body[:1] in ' \t' else ''
+        trail = ' ' if body[-1:] in ' \t' else ''
         cleaned = re.sub(r'[ \t]{2,}', ' ', body).strip()
-        return f"{m.group('q')}{cleaned}{m.group('q')}"
+        return f"{m.group('q')}{lead}{cleaned}{trail}{m.group('q')}"
     return CLASS_STR.sub(fix, text)
 
 
