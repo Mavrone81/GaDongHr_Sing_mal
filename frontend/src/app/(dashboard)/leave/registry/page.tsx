@@ -50,9 +50,9 @@ function Toast({ msg, type, onClose }: { msg: string; type: 'success' | 'error';
   useEffect(() => { const t = setTimeout(onClose, 3500); return () => clearTimeout(t); }, [onClose]);
   return (
     <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-8 duration-300">
-      <div className={`px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-4 ${type === 'success' ? 'bg-slate-900 border border-slate-700' : 'bg-red-900 border border-red-700'}`}>
-        <div className={`w-2 h-2 rounded-full ${type === 'success' ? 'bg-emerald-500' : 'bg-red-400'}`} />
-        <span className="text-[10px] font-black text-white uppercase tracking-widest">{msg}</span>
+      <div className={`px-8 py-4   flex items-center gap-4 ${type === 'success' ? 'bg-shadow border border-shadow' : 'bg-ink border border-ink'}`}>
+        <div className={`w-2 h-2  ${type === 'success' ? 'bg-accent' : 'bg-ink'}`} />
+        <span className="text-[10px] font-black text-paper uppercase tracking-widest">{msg}</span>
       </div>
     </div>
   );
@@ -65,7 +65,7 @@ export default function LeaveRegistryPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-10 h-10 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin" />
+        <div className="w-10 h-10 border-4 border-accent border-accent animate-spin" />
       </div>
     );
   }
@@ -132,18 +132,40 @@ function TeamCalendar({ subordinates }: { subordinates: TeamMember[] }) {
   const prevMonth = () => { if (month === 0) { setMonth(11); setYear(y => y - 1); } else setMonth(m => m - 1); };
   const nextMonth = () => { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); };
 
-  const MEMBER_COLORS = ['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-sky-500', 'bg-purple-500', 'bg-teal-500', 'bg-orange-500'];
+  /**
+   * Eight distinguishable swatches out of three tokens.
+   *
+   * This was an eight-hue palette (indigo, emerald, amber, rose, sky, purple,
+   * teal, orange). Mapped onto the Official Record tokens it collapsed to three
+   * values with five duplicates, so different people on the team calendar
+   * silently began sharing a swatch. Varying FILL as well as hue restores eight
+   * distinct treatments without inventing colours the system does not have.
+   *
+   * The swatch is only a scanning aid in any case — every chip and row prints
+   * the member's name beside it, so nothing depends on telling the shades apart.
+   */
+  const MEMBER_SWATCHES = [
+    'bg-accent text-paper',
+    'bg-ink text-paper',
+    'bg-highlight text-ink',
+    'bg-paper text-ink border border-accent',
+    'bg-paper text-ink border border-ink',
+    'bg-paper text-ink border border-highlight',
+    'bg-muted text-paper',
+    'bg-page text-ink border border-rule',
+  ];
   const colorFor = (empId: string) => {
     const idx = subordinates.findIndex(s => s.id === empId);
-    return MEMBER_COLORS[idx % MEMBER_COLORS.length] ?? 'bg-slate-500';
+    if (idx < 0) return 'bg-muted text-paper';
+    return MEMBER_SWATCHES[idx % MEMBER_SWATCHES.length];
   };
 
   if (subordinates.length === 0) {
     return (
       <div className="py-16 flex flex-col items-center gap-4">
-        <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center text-xl shadow-xl border border-slate-800">👥</div>
-        <p className="text-sm font-black text-slate-400 uppercase tracking-widest">No team members assigned</p>
-        <p className="text-[10px] font-bold text-slate-300 text-center max-w-xs">Assign supervisors to employees from their profile to see team leave here</p>
+        <div className="w-14 h-14 bg-shadow flex items-center justify-center text-xl border border-shadow">👥</div>
+        <p className="text-sm font-black text-muted uppercase tracking-widest">No team members assigned</p>
+        <p className="text-[10px] font-bold text-muted text-center max-w-xs">Assign supervisors to employees from their profile to see team leave here</p>
       </div>
     );
   }
@@ -152,28 +174,28 @@ function TeamCalendar({ subordinates }: { subordinates: TeamMember[] }) {
     <div className="flex flex-col gap-5">
       {/* Navigation */}
       <div className="flex items-center justify-between">
-        <button onClick={prevMonth} className="w-9 h-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-all">‹</button>
-        <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">{MONTH_NAMES[month]} {year}</h3>
-        <button onClick={nextMonth} className="w-9 h-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-all">›</button>
+        <button onClick={prevMonth} className="w-9 h-9 border border-rule flex items-center justify-center text-muted hover:bg-page transition-all">‹</button>
+        <h3 className="text-sm font-black text-ink uppercase tracking-widest">{MONTH_NAMES[month]} {year}</h3>
+        <button onClick={nextMonth} className="w-9 h-9 border border-rule flex items-center justify-center text-muted hover:bg-page transition-all">›</button>
       </div>
 
       {/* Legend */}
       <div className="flex flex-wrap gap-2">
         {subordinates.map((s, i) => (
           <div key={s.id} className="flex items-center gap-1.5">
-            <div className={`w-2.5 h-2.5 rounded-full ${MEMBER_COLORS[i % MEMBER_COLORS.length]}`} />
-            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{s.fullName.split(' ')[0]}</span>
+            <div className={`w-2.5 h-2.5  ${MEMBER_SWATCHES[i % MEMBER_SWATCHES.length]}`} />
+            <span className="text-[9px] font-black text-muted uppercase tracking-widest">{s.fullName.split(' ')[0]}</span>
           </div>
         ))}
       </div>
 
       {/* Calendar grid */}
       {loading ? (
-        <div className="h-40 bg-slate-50 rounded-2xl animate-pulse" />
+        <div className="h-40 bg-page animate-pulse" />
       ) : (
-        <div className="rounded-2xl border border-slate-100 overflow-hidden">
+        <div className="border border-rule overflow-hidden">
           {/* Day labels */}
-          <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-100">
+          <div className="grid grid-cols-7 bg-page border-b border-rule">
             {DAY_LABELS.map(d => (
               <div key={d} className="py-2 text-center label-form">{d}</div>
             ))}
@@ -181,21 +203,21 @@ function TeamCalendar({ subordinates }: { subordinates: TeamMember[] }) {
           {/* Weeks */}
           <div className="grid grid-cols-7">
             {Array.from({ length: firstDay }).map((_, i) => (
-              <div key={`empty-${i}`} className="min-h-[72px] border-b border-r border-slate-50 bg-slate-50/40" />
+              <div key={`empty-${i}`} className="min-h-[72px] border-b border-r border-rule bg-page" />
             ))}
             {calDays.map(day => {
               const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
               const dayLeaves = leaveMap[dateStr] ?? [];
               const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
               return (
-                <div key={day} className={`min-h-[72px] border-b border-r border-slate-50 p-1.5 flex flex-col gap-1 ${isToday ? 'bg-indigo-50/50' : ''}`}>
-                  <span className={`text-[9px] font-black self-start w-5 h-5 flex items-center justify-center rounded-full ${isToday ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>{day}</span>
+                <div key={day} className={`min-h-[72px] border-b border-r border-rule p-1.5 flex flex-col gap-1 ${isToday ? 'bg-page' : ''}`}>
+                  <span className={`text-[9px] font-black self-start w-5 h-5 flex items-center justify-center  ${isToday ? 'bg-accent text-paper' : 'text-muted'}`}>{day}</span>
                   {dayLeaves.slice(0, 3).map(lv => (
-                    <div key={lv.id} title={`${subordinates.find(s => s.id === lv.employeeId)?.fullName}: ${lv.leaveType.name}`} className={`${colorFor(lv.employeeId)} rounded px-1 py-0.5 text-[7px] font-black text-white truncate leading-tight`}>
+                    <div key={lv.id} title={`${subordinates.find(s => s.id === lv.employeeId)?.fullName}: ${lv.leaveType.name}`} className={`${colorFor(lv.employeeId)} px-1 py-0.5 text-[7px] font-black truncate leading-tight`}>
                       {subordinates.find(s => s.id === lv.employeeId)?.fullName.split(' ')[0]}
                     </div>
                   ))}
-                  {dayLeaves.length > 3 && <div className="text-[7px] font-black text-slate-400">+{dayLeaves.length - 3}</div>}
+                  {dayLeaves.length > 3 && <div className="text-[7px] font-black text-muted">+{dayLeaves.length - 3}</div>}
                 </div>
               );
             })}
@@ -210,15 +232,15 @@ function TeamCalendar({ subordinates }: { subordinates: TeamMember[] }) {
           {teamLeaves.map(lv => {
             const member = subordinates.find(s => s.id === lv.employeeId);
             return (
-              <div key={lv.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <div className={`w-2 h-8 rounded-full ${colorFor(lv.employeeId)} shrink-0`} />
+              <div key={lv.id} className="flex items-center gap-3 p-3 bg-page border border-rule">
+                <div className={`w-2 h-8  ${colorFor(lv.employeeId)} shrink-0`} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{member?.fullName}</p>
-                  <p className="text-[9px] font-bold text-slate-400 uppercase">{lv.leaveType.name} · {lv.totalDays} day{lv.totalDays > 1 ? 's' : ''}</p>
+                  <p className="text-[10px] font-black text-ink uppercase tracking-tight">{member?.fullName}</p>
+                  <p className="text-[9px] font-bold text-muted uppercase">{lv.leaveType.name} · {lv.totalDays} day{lv.totalDays > 1 ? 's' : ''}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[9px] font-bold text-slate-500">{new Date(lv.startDate + 'T00:00:00').toLocaleDateString('en-SG', { day: 'numeric', month: 'short' })}</p>
-                  <p className="text-[9px] font-bold text-slate-400">→ {new Date(lv.endDate + 'T00:00:00').toLocaleDateString('en-SG', { day: 'numeric', month: 'short' })}</p>
+                  <p className="text-[9px] font-bold text-muted">{new Date(lv.startDate + 'T00:00:00').toLocaleDateString('en-SG', { day: 'numeric', month: 'short' })}</p>
+                  <p className="text-[9px] font-bold text-muted">→ {new Date(lv.endDate + 'T00:00:00').toLocaleDateString('en-SG', { day: 'numeric', month: 'short' })}</p>
                 </div>
               </div>
             );
@@ -415,47 +437,47 @@ function AdminLeaveView() {
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto pb-12 animate-in fade-in duration-700">
 
-      <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-indigo-500/5 flex justify-between items-center">
+      <div className="bg-paper p-8 border border-rule flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tighter">Leave <span className="text-indigo-600">Management</span></h1>
-          <p className="text-[10px] font-black text-slate-400 mt-1 uppercase tracking-widest">Organizational leave portal · Statutory compliance</p>
+          <h1 className="text-3xl font-black text-ink tracking-tighter">Leave <span className="text-accent">Management</span></h1>
+          <p className="text-[10px] font-black text-muted mt-1 uppercase tracking-widest">Organizational leave portal · Statutory compliance</p>
         </div>
         {activeTab === 'types' && (
-          <button onClick={openNewType} className="px-6 py-2.5 rounded-xl text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 transition-all uppercase tracking-widest">
+          <button onClick={openNewType} className="px-6 py-2.5 text-[10px] font-black text-paper bg-accent hover:bg-accent transition-all uppercase tracking-widest">
             + New Leave Type
           </button>
         )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div className="bg-white p-7 rounded-[1.5rem] border border-slate-100 shadow-lg shadow-indigo-500/5">
+        <div className="bg-paper p-7 border border-rule">
           <p className="eyebrow-tight mb-3">Pending Approval</p>
-          {loadingApprovals ? <div className="h-10 w-16 bg-slate-100 rounded-xl animate-pulse" /> : <p className="text-4xl font-black text-amber-500">{pending.length}</p>}
-          <p className="text-[9px] font-black text-amber-600 mt-4 uppercase tracking-widest flex items-center gap-2">
-            <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
+          {loadingApprovals ? <div className="h-10 w-16 bg-page animate-pulse" /> : <p className="text-4xl font-black text-ink">{pending.length}</p>}
+          <p className="text-[9px] font-black text-ink mt-4 uppercase tracking-widest flex items-center gap-2">
+            <span className="w-1.5 h-1.5 bg-highlight animate-pulse" />
             Awaiting decision
           </p>
         </div>
-        <div className="bg-slate-900 p-7 rounded-[1.5rem] border border-slate-800 shadow-xl">
-          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">Leave Types Active</p>
-          <p className="text-4xl font-black text-white">{leaveTypes.filter(t => t.isActive).length || '—'}</p>
-          <p className="text-[9px] font-black text-slate-500 mt-4 uppercase tracking-widest italic">Configured types</p>
+        <div className="bg-shadow p-7 border border-shadow">
+          <p className="text-[10px] font-black text-accent uppercase tracking-widest mb-3">Leave Types Active</p>
+          <p className="text-4xl font-black text-paper">{leaveTypes.filter(t => t.isActive).length || '—'}</p>
+          <p className="text-[9px] font-black text-muted mt-4 uppercase tracking-widest italic">Configured types</p>
         </div>
-        <div className="bg-emerald-50/60 p-7 rounded-[1.5rem] border border-emerald-100">
-          <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-3 text-center">Total Submissions</p>
-          <p className="text-4xl font-black text-emerald-800 text-center">{loadingApprovals ? '—' : pending.length}</p>
+        <div className="bg-page p-7 border border-accent">
+          <p className="text-[10px] font-black text-accent uppercase tracking-widest mb-3 text-center">Total Submissions</p>
+          <p className="text-4xl font-black text-accent text-center">{loadingApprovals ? '—' : pending.length}</p>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-100 rounded-[2rem] shadow-xl shadow-indigo-500/5 overflow-hidden">
-        <div className="border-b border-slate-100 px-8 flex gap-8 bg-slate-50/50">
+      <div className="bg-paper border border-rule overflow-hidden">
+        <div className="border-b border-rule px-8 flex gap-8 bg-page">
           {([
             { key: 'approvals', label: `Authorization Queue (${loadingApprovals ? '…' : pending.length})` },
             { key: 'types', label: 'Leave Types' },
             { key: 'calendar', label: 'Team Calendar' },
           ] as const).map(tab => (
             <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-              className={`py-5 text-[11px] font-black uppercase tracking-widest border-b-2 transition-all ${activeTab === tab.key ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+              className={`py-5 text-[11px] font-black uppercase tracking-widest border-b-2 transition-all ${activeTab === tab.key ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'}`}>
               {tab.label}
             </button>
           ))}
@@ -466,33 +488,33 @@ function AdminLeaveView() {
           {activeTab === 'approvals' && (
             <div className="flex flex-col gap-3">
               {loadingApprovals ? (
-                [1,2,3].map(i => <div key={i} className="h-20 bg-slate-50 rounded-2xl animate-pulse" />)
+                [1,2,3].map(i => <div key={i} className="h-20 bg-page animate-pulse" />)
               ) : pending.length === 0 ? (
                 <div className="py-16 text-center">
-                  <p className="text-sm font-black text-slate-300 uppercase tracking-widest">No pending leave applications</p>
+                  <p className="text-sm font-black text-muted uppercase tracking-widest">No pending leave applications</p>
                 </div>
               ) : pending.map(req => (
                 <div
                   key={req.id}
                   onClick={() => setDetailId(req.id)}
-                  className="flex items-center gap-5 p-5 rounded-2xl border bg-slate-50/50 border-slate-100 hover:border-indigo-200 hover:bg-white hover:shadow-md transition-all cursor-pointer"
+                  className="flex items-center gap-5 p-5 border bg-page border-rule hover:border-accent hover:bg-paper hover: transition-all cursor-pointer"
                 >
-                  <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-[11px] font-black text-white shrink-0">
+                  <div className="w-10 h-10 bg-shadow flex items-center justify-center text-[11px] font-black text-paper shrink-0">
                     {req.employeeName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-black text-slate-900 uppercase tracking-tight text-sm">{req.employeeName}</p>
-                      {req.employeeCode && <span className="text-[8px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md uppercase tracking-widest">{req.employeeCode}</span>}
-                      {req.hasAttachment && <span className="text-[8px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-md uppercase tracking-widest flex items-center gap-1">📎 Attachment</span>}
+                      <p className="font-black text-ink uppercase tracking-tight text-sm">{req.employeeName}</p>
+                      {req.employeeCode && <span className="text-[8px] font-black bg-page text-muted px-2 py-0.5 uppercase tracking-widest">{req.employeeCode}</span>}
+                      {req.hasAttachment && <span className="text-[8px] font-black bg-page text-accent border border-accent px-2 py-0.5 uppercase tracking-widest flex items-center gap-1">📎 Attachment</span>}
                     </div>
-                    <p className="text-[10px] font-bold text-slate-500 mt-0.5 uppercase tracking-widest">{req.dept} · {req.leaveTypeName} · {req.days} day{req.days > 1 ? 's' : ''}</p>
-                    <p className="text-[10px] font-bold text-slate-400 mt-0.5">{fmtDate(req.from)} → {fmtDate(req.to)}</p>
-                    {req.reason && <p className="text-[9px] font-bold text-slate-400 mt-0.5 truncate">&quot;{req.reason}&quot;</p>}
+                    <p className="text-[10px] font-bold text-muted mt-0.5 uppercase tracking-widest">{req.dept} · {req.leaveTypeName} · {req.days} day{req.days > 1 ? 's' : ''}</p>
+                    <p className="text-[10px] font-bold text-muted mt-0.5">{fmtDate(req.from)} → {fmtDate(req.to)}</p>
+                    {req.reason && <p className="text-[9px] font-bold text-muted mt-0.5 truncate">&quot;{req.reason}&quot;</p>}
                   </div>
                   <div className="flex gap-3 shrink-0" onClick={e => e.stopPropagation()}>
-                    <button onClick={() => handleReject(req.id)} className="px-5 py-2 bg-red-50 text-red-600 border border-red-100 text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-red-100 transition-all">Reject</button>
-                    <button onClick={() => handleApprove(req.id)} className="px-5 py-2 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-500/15 transition-all">Approve</button>
+                    <button onClick={() => handleReject(req.id)} className="px-5 py-2 bg-page text-ink border border-ink text-[9px] font-black uppercase tracking-widest hover:bg-page transition-all">Reject</button>
+                    <button onClick={() => handleApprove(req.id)} className="px-5 py-2 bg-accent text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent transition-all">Approve</button>
                   </div>
                 </div>
               ))}
@@ -503,17 +525,17 @@ function AdminLeaveView() {
           {activeTab === 'types' && (
             <div className="flex flex-col gap-4">
               {loadingTypes ? (
-                [1,2,3,4].map(i => <div key={i} className="h-16 bg-slate-50 rounded-2xl animate-pulse" />)
+                [1,2,3,4].map(i => <div key={i} className="h-16 bg-page animate-pulse" />)
               ) : leaveTypes.length === 0 ? (
                 <div className="py-16 text-center">
-                  <p className="text-sm font-black text-slate-300 uppercase tracking-widest">No leave types configured</p>
-                  <button onClick={openNewType} className="mt-4 px-6 py-2.5 bg-indigo-600 text-white text-[10px] font-black rounded-xl uppercase tracking-widest hover:bg-indigo-700 transition-all">Create First Leave Type</button>
+                  <p className="text-sm font-black text-muted uppercase tracking-widest">No leave types configured</p>
+                  <button onClick={openNewType} className="mt-4 px-6 py-2.5 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all">Create First Leave Type</button>
                 </div>
               ) : (
-                <div className="overflow-hidden border border-slate-200 rounded-2xl">
+                <div className="overflow-hidden border border-rule">
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 label-form">
+                      <tr className="bg-page border-b border-rule label-form">
                         {([
                           { col: 'code',        label: 'Code' },
                           { col: 'name',        label: 'Name' },
@@ -525,7 +547,7 @@ function AdminLeaveView() {
                           { col: 'status',      label: 'Status' },
                         ] as const).map(h => (
                           <th key={h.col} className="px-5 py-3">
-                            <button onClick={() => toggleTypeSort(h.col)} className="flex items-center hover:text-slate-600 transition-colors">
+                            <button onClick={() => toggleTypeSort(h.col)} className="flex items-center hover:text-ink transition-colors">
                               {h.label}<TypeSortIcon col={h.col} />
                             </button>
                           </th>
@@ -533,38 +555,38 @@ function AdminLeaveView() {
                         <th className="px-5 py-3"></th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
+                    <tbody className="divide-y divide-rule text-xs font-bold text-ink">
                       {sortedLeaveTypes.map(t => (
-                        <tr key={t.id} className={`hover:bg-slate-50 transition-all ${!t.isActive ? 'opacity-50' : ''}`}>
-                          <td className="px-5 py-3"><span className="font-mono text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded uppercase">{t.code}</span></td>
-                          <td className="px-5 py-3 font-black text-slate-800">{t.name}</td>
+                        <tr key={t.id} className={`hover:bg-page transition-all ${!t.isActive ? 'opacity-50' : ''}`}>
+                          <td className="px-5 py-3"><span className="font-mono text-[10px] bg-page text-accent border border-accent px-2 py-0.5 uppercase">{t.code}</span></td>
+                          <td className="px-5 py-3 font-black text-ink">{t.name}</td>
                           <td className="px-5 py-3">
                             {(!t.isPaid || t.annualEntitlement === 0)
-                              ? <span className="text-[9px] font-black px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100 uppercase">No Limit</span>
+                              ? <span className="text-[9px] font-black px-2 py-0.5 bg-page text-ink border border-highlight uppercase">No Limit</span>
                               : `${t.annualEntitlement} days`
                             }
                           </td>
                           <td className="px-5 py-3">{t.maxCarryForward > 0 ? `${t.maxCarryForward} days` : '—'}</td>
                           <td className="px-5 py-3">
-                            <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${t.isPaid ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>
+                            <span className={`text-[9px] font-black px-2 py-0.5  uppercase ${t.isPaid ? 'bg-page text-accent border border-accent' : 'bg-page text-muted border border-rule'}`}>
                               {t.isPaid ? 'Paid' : 'Unpaid'}
                             </span>
                           </td>
                           <td className="px-5 py-3">
-                            {t.isStatutory ? <span className="text-[9px] font-black px-2 py-0.5 rounded uppercase bg-amber-50 text-amber-700 border border-amber-100">Statutory</span> : <span className="text-slate-300">—</span>}
+                            {t.isStatutory ? <span className="text-[9px] font-black px-2 py-0.5 uppercase bg-page text-ink border border-highlight">Statutory</span> : <span className="text-muted">—</span>}
                           </td>
                           <td className="px-5 py-3">
-                            {t.requiresDocument ? <span className="text-[9px] font-black px-2 py-0.5 rounded uppercase bg-sky-50 text-sky-700 border border-sky-100">Yes</span> : <span className="text-slate-300">—</span>}
+                            {t.requiresDocument ? <span className="text-[9px] font-black px-2 py-0.5 uppercase bg-page text-accent border border-accent">Yes</span> : <span className="text-muted">—</span>}
                           </td>
                           <td className="px-5 py-3">
-                            <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${t.isActive ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-slate-100 text-slate-400 border border-slate-200'}`}>
+                            <span className={`text-[9px] font-black px-2 py-0.5  uppercase ${t.isActive ? 'bg-page text-accent border border-accent' : 'bg-page text-muted border border-rule'}`}>
                               {t.isActive ? 'Active' : 'Inactive'}
                             </span>
                           </td>
                           <td className="px-5 py-3">
                             <div className="flex gap-2">
-                              <button onClick={() => openEditType(t)} className="px-3 py-1.5 text-[9px] font-black text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg hover:bg-indigo-100 uppercase tracking-widest transition-all">Edit</button>
-                              <button onClick={() => handleDeactivate(t)} className={`px-3 py-1.5 text-[9px] font-black rounded-lg uppercase tracking-widest transition-all border ${t.isActive ? 'text-red-600 bg-red-50 border-red-100 hover:bg-red-100' : 'text-emerald-600 bg-emerald-50 border-emerald-100 hover:bg-emerald-100'}`}>
+                              <button onClick={() => openEditType(t)} className="px-3 py-1.5 text-[9px] font-black text-accent bg-page border border-accent hover:bg-page uppercase tracking-widest transition-all">Edit</button>
+                              <button onClick={() => handleDeactivate(t)} className={`px-3 py-1.5 text-[9px] font-black  uppercase tracking-widest transition-all border ${t.isActive ? 'text-ink bg-page border-ink hover:bg-page' : 'text-accent bg-page border-accent hover:bg-page'}`}>
                                 {t.isActive ? 'Deactivate' : 'Activate'}
                               </button>
                             </div>
@@ -584,21 +606,21 @@ function AdminLeaveView() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="eyebrow-tight">Your Team</p>
-                  <p className="text-sm font-black text-slate-900 mt-0.5">{loadingSubordinates ? '…' : `${subordinates.length} direct report${subordinates.length !== 1 ? 's' : ''}`}</p>
+                  <p className="text-sm font-black text-ink mt-0.5">{loadingSubordinates ? '…' : `${subordinates.length} direct report${subordinates.length !== 1 ? 's' : ''}`}</p>
                 </div>
                 {subordinates.length > 0 && (
                   <div className="flex -space-x-2">
                     {subordinates.slice(0, 6).map(s => (
-                      <div key={s.id} className="w-8 h-8 rounded-full bg-slate-900 border-2 border-white flex items-center justify-center text-[9px] font-black text-indigo-400">
+                      <div key={s.id} className="w-8 h-8 bg-shadow border-2 border-white flex items-center justify-center text-[9px] font-black text-accent">
                         {s.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                       </div>
                     ))}
-                    {subordinates.length > 6 && <div className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-[9px] font-black text-slate-500">+{subordinates.length - 6}</div>}
+                    {subordinates.length > 6 && <div className="w-8 h-8 bg-rule border-2 border-white flex items-center justify-center text-[9px] font-black text-muted">+{subordinates.length - 6}</div>}
                   </div>
                 )}
               </div>
               {loadingSubordinates ? (
-                <div className="h-40 bg-slate-50 rounded-2xl animate-pulse" />
+                <div className="h-40 bg-page animate-pulse" />
               ) : (
                 <TeamCalendar subordinates={subordinates} />
               )}
@@ -609,43 +631,43 @@ function AdminLeaveView() {
 
       {/* ── LEAVE TYPE MODAL ── */}
       {typeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <div className="w-full max-w-lg bg-white rounded-[2rem] shadow-2xl flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
+          <div className="w-full max-w-lg bg-paper flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-8 py-6 border-b border-rule">
               <div>
-                <h2 className="text-lg font-black text-slate-900 tracking-tighter">{editingType ? 'Edit Leave Type' : 'New Leave Type'}</h2>
+                <h2 className="text-lg font-black text-ink tracking-tighter">{editingType ? 'Edit Leave Type' : 'New Leave Type'}</h2>
                 <p className="eyebrow-tight mt-0.5">{editingType ? `Editing ${editingType.code}` : 'Create a new leave policy'}</p>
               </div>
-              <button onClick={() => setTypeModal(false)} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all text-lg">✕</button>
+              <button onClick={() => setTypeModal(false)} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page transition-all text-lg">✕</button>
             </div>
             <div className="p-8 flex flex-col gap-5 overflow-y-auto max-h-[70vh]">
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Code *</label>
+                  <label className="text-[10px] font-black text-muted uppercase tracking-widest">Code *</label>
                   <input value={typeForm.code} onChange={e => tf('code', e.target.value)} disabled={!!editingType}
                     placeholder="e.g. AL, SL, ML"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 uppercase disabled:opacity-50" />
+                    className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent uppercase disabled:opacity-50" />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Name *</label>
+                  <label className="text-[10px] font-black text-muted uppercase tracking-widest">Name *</label>
                   <input value={typeForm.name} onChange={e => tf('name', e.target.value)}
                     placeholder="e.g. Annual Leave"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10" />
+                    className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent" />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Annual Entitlement (days)</label>
+                  <label className="text-[10px] font-black text-muted uppercase tracking-widest">Annual Entitlement (days)</label>
                   <input type="number" min={0} max={365} value={typeForm.annualEntitlement} onChange={e => tf('annualEntitlement', parseFloat(e.target.value) || 0)}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10" />
+                    className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent" />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Max Carry Forward (days)</label>
+                  <label className="text-[10px] font-black text-muted uppercase tracking-widest">Max Carry Forward (days)</label>
                   <input type="number" min={0} max={365} value={typeForm.maxCarryForward} onChange={e => tf('maxCarryForward', parseFloat(e.target.value) || 0)}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10" />
+                    className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent" />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Min Notice Days</label>
+                  <label className="text-[10px] font-black text-muted uppercase tracking-widest">Min Notice Days</label>
                   <input type="number" min={0} max={90} value={typeForm.minNoticeDays} onChange={e => tf('minNoticeDays', parseInt(e.target.value) || 0)}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10" />
+                    className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -655,17 +677,17 @@ function AdminLeaveView() {
                   { key: 'isGovtPaid', label: 'Govt-Paid' },
                   { key: 'requiresDocument', label: 'Requires Document' },
                 ] as const).map(({ key, label }) => (
-                  <label key={key} className="flex items-center gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:border-indigo-300 transition-all">
+                  <label key={key} className="flex items-center gap-3 px-4 py-3 bg-page border border-rule cursor-pointer hover:border-accent transition-all">
                     <input type="checkbox" checked={typeForm[key] as boolean} onChange={e => tf(key, e.target.checked)}
-                      className="w-4 h-4 accent-indigo-600" />
-                    <span className="text-[11px] font-black text-slate-700 uppercase tracking-widest">{label}</span>
+                      className="w-4 h-4 accent-accent" />
+                    <span className="text-[11px] font-black text-ink uppercase tracking-widest">{label}</span>
                   </label>
                 ))}
               </div>
             </div>
-            <div className="flex gap-3 px-8 py-5 border-t border-slate-100 bg-slate-50/50">
-              <button onClick={() => setTypeModal(false)} className="flex-1 py-3 text-[10px] font-black text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-100 uppercase tracking-widest transition-all">Cancel</button>
-              <button onClick={handleSaveType} disabled={savingType} className="flex-1 py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl uppercase tracking-widest transition-all">
+            <div className="flex gap-3 px-8 py-5 border-t border-rule bg-page">
+              <button onClick={() => setTypeModal(false)} className="flex-1 py-3 text-[10px] font-black text-muted border border-rule hover:bg-page uppercase tracking-widest transition-all">Cancel</button>
+              <button onClick={handleSaveType} disabled={savingType} className="flex-1 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent disabled:opacity-50 uppercase tracking-widest transition-all">
                 {savingType ? 'Saving…' : editingType ? 'Save Changes' : 'Create Leave Type'}
               </button>
             </div>
@@ -675,41 +697,41 @@ function AdminLeaveView() {
 
       {/* ── DETAIL MODAL ── */}
       {detailId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={() => setDetailId(null)}>
-          <div className="w-full max-w-3xl bg-white rounded-[2rem] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-" onClick={() => setDetailId(null)}>
+          <div className="w-full max-w-3xl bg-paper flex flex-col max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-8 py-6 border-b border-rule">
               <div>
-                <h2 className="text-lg font-black text-slate-900 tracking-tighter">Leave Application</h2>
+                <h2 className="text-lg font-black text-ink tracking-tighter">Leave Application</h2>
                 <p className="eyebrow-tight mt-0.5">
                   {loadingDetail ? 'Loading…' : detail ? `${detail.leaveType?.name ?? '—'} · ${detail.totalDays} day${detail.totalDays !== 1 ? 's' : ''}` : ''}
                 </p>
               </div>
-              <button onClick={() => setDetailId(null)} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all text-lg">✕</button>
+              <button onClick={() => setDetailId(null)} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page transition-all text-lg">✕</button>
             </div>
 
             <div className="p-8 flex flex-col gap-6 overflow-y-auto">
               {loadingDetail ? (
-                <div className="h-40 bg-slate-50 rounded-2xl animate-pulse" />
+                <div className="h-40 bg-page animate-pulse" />
               ) : !detail ? (
-                <p className="text-sm font-black text-slate-400 text-center py-12">Unable to load application</p>
+                <p className="text-sm font-black text-muted text-center py-12">Unable to load application</p>
               ) : (
                 <>
                   {/* Employee */}
-                  <div className="flex items-center gap-4 p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                    <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center text-sm font-black text-white shrink-0">
+                  <div className="flex items-center gap-4 p-5 bg-page border border-rule">
+                    <div className="w-14 h-14 bg-shadow flex items-center justify-center text-sm font-black text-paper shrink-0">
                       {(detail.employee?.fullName ?? '?').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-base font-black text-slate-900 truncate">{detail.employee?.fullName ?? detail.employeeId}</p>
-                      <p className="text-[10px] font-bold text-slate-500 mt-0.5 uppercase tracking-widest">
+                      <p className="text-base font-black text-ink truncate">{detail.employee?.fullName ?? detail.employeeId}</p>
+                      <p className="text-[10px] font-bold text-muted mt-0.5 uppercase tracking-widest">
                         {detail.employee?.designation ?? '—'} · {detail.employee?.department ?? '—'}
                       </p>
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                         {detail.employee?.employeeCode && (
-                          <span className="text-[9px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded uppercase tracking-widest">EMP {detail.employee.employeeCode}</span>
+                          <span className="text-[9px] font-black bg-page text-accent border border-accent px-2 py-0.5 uppercase tracking-widest">EMP {detail.employee.employeeCode}</span>
                         )}
                         {detail.employee?.workEmail && (
-                          <a href={`mailto:${detail.employee.workEmail}`} className="text-[9px] font-bold text-indigo-600 hover:underline">{detail.employee.workEmail}</a>
+                          <a href={`mailto:${detail.employee.workEmail}`} className="text-[9px] font-bold text-accent hover:underline">{detail.employee.workEmail}</a>
                         )}
                       </div>
                     </div>
@@ -717,32 +739,32 @@ function AdminLeaveView() {
 
                   {/* Leave summary */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="p-4 bg-white border border-slate-100 rounded-xl">
+                    <div className="p-4 bg-paper border border-rule">
                       <p className="label-form">Leave Type</p>
-                      <p className="text-sm font-black text-slate-900 mt-1">{detail.leaveType?.name ?? '—'}</p>
+                      <p className="text-sm font-black text-ink mt-1">{detail.leaveType?.name ?? '—'}</p>
                       {detail.leaveType && (
-                        <p className="text-[9px] font-bold text-slate-400 mt-0.5">{detail.leaveType.isPaid ? 'Paid' : 'Unpaid'}</p>
+                        <p className="text-[9px] font-bold text-muted mt-0.5">{detail.leaveType.isPaid ? 'Paid' : 'Unpaid'}</p>
                       )}
                     </div>
-                    <div className="p-4 bg-white border border-slate-100 rounded-xl">
+                    <div className="p-4 bg-paper border border-rule">
                       <p className="label-form">Start</p>
-                      <p className="text-sm font-black text-slate-900 mt-1">{fmtDate(detail.startDate.slice(0, 10))}</p>
+                      <p className="text-sm font-black text-ink mt-1">{fmtDate(detail.startDate.slice(0, 10))}</p>
                     </div>
-                    <div className="p-4 bg-white border border-slate-100 rounded-xl">
+                    <div className="p-4 bg-paper border border-rule">
                       <p className="label-form">End</p>
-                      <p className="text-sm font-black text-slate-900 mt-1">{fmtDate(detail.endDate.slice(0, 10))}</p>
+                      <p className="text-sm font-black text-ink mt-1">{fmtDate(detail.endDate.slice(0, 10))}</p>
                     </div>
-                    <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
-                      <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Total</p>
-                      <p className="text-sm font-black text-indigo-800 mt-1">{detail.totalDays} day{detail.totalDays !== 1 ? 's' : ''}{detail.isHalfDay ? ` (${detail.halfDaySlot ?? 'half'})` : ''}</p>
+                    <div className="p-4 bg-page border border-accent">
+                      <p className="text-[9px] font-black text-accent uppercase tracking-widest">Total</p>
+                      <p className="text-sm font-black text-accent mt-1">{detail.totalDays} day{detail.totalDays !== 1 ? 's' : ''}{detail.isHalfDay ? ` (${detail.halfDaySlot ?? 'half'})` : ''}</p>
                     </div>
                   </div>
 
                   {/* Reason */}
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                  <div className="p-4 bg-page border border-rule">
                     <p className="label-form mb-2">Reason</p>
-                    <p className="text-sm font-bold text-slate-700 leading-relaxed whitespace-pre-wrap">
-                      {detail.reason?.trim() ? detail.reason : <span className="text-slate-400 italic">No reason provided</span>}
+                    <p className="text-sm font-bold text-ink leading-relaxed whitespace-pre-wrap">
+                      {detail.reason?.trim() ? detail.reason : <span className="text-muted italic">No reason provided</span>}
                     </p>
                   </div>
 
@@ -751,46 +773,46 @@ function AdminLeaveView() {
                     <div className="flex items-center justify-between">
                       <p className="label-form">Supporting Document</p>
                       {detail.attachment && (
-                        <button onClick={downloadAttachment} className="text-[9px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest">
+                        <button onClick={downloadAttachment} className="text-[9px] font-black text-accent hover:text-accent uppercase tracking-widest">
                           Download ↓
                         </button>
                       )}
                     </div>
                     {!detail.attachment ? (
-                      <div className="p-6 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No attachment provided</p>
+                      <div className="p-6 bg-page border border-dashed border-rule text-center">
+                        <p className="text-[10px] font-bold text-muted uppercase tracking-widest">No attachment provided</p>
                       </div>
                     ) : detail.attachment.mimeType.startsWith('image/') ? (
-                      <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
+                      <div className="border border-rule overflow-hidden bg-page">
                         {attachmentObjectUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={attachmentObjectUrl} alt={detail.attachment.fileName} className="w-full max-h-[400px] object-contain" />
                         ) : (
                           <div className="h-40 flex items-center justify-center eyebrow-tight animate-pulse">Loading image…</div>
                         )}
-                        <p className="text-[9px] font-bold text-slate-500 text-center py-2 border-t border-slate-100">{detail.attachment.fileName}</p>
+                        <p className="text-[9px] font-bold text-muted text-center py-2 border-t border-rule">{detail.attachment.fileName}</p>
                       </div>
                     ) : detail.attachment.mimeType === 'application/pdf' ? (
-                      <div className="flex items-center justify-between gap-4 p-4 bg-rose-50 border border-rose-100 rounded-xl">
+                      <div className="flex items-center justify-between gap-4 p-4 bg-page border border-ink">
                         <div className="flex items-center gap-3 min-w-0">
                           <span className="text-2xl">📄</span>
                           <div className="min-w-0">
-                            <p className="text-[11px] font-black text-rose-800 truncate">{detail.attachment.fileName}</p>
-                            <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest">PDF Document</p>
+                            <p className="text-[11px] font-black text-ink truncate">{detail.attachment.fileName}</p>
+                            <p className="text-[9px] font-bold text-ink uppercase tracking-widest">PDF Document</p>
                           </div>
                         </div>
-                        <button onClick={downloadAttachment} className="px-4 py-2 bg-rose-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-rose-700 transition-all">Open</button>
+                        <button onClick={downloadAttachment} className="px-4 py-2 bg-ink text-paper text-[9px] font-black uppercase tracking-widest hover:bg-ink transition-all">Open</button>
                       </div>
                     ) : (
-                      <div className="flex items-center justify-between gap-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                      <div className="flex items-center justify-between gap-4 p-4 bg-page border border-rule">
                         <div className="flex items-center gap-3 min-w-0">
                           <span className="text-2xl">📎</span>
                           <div className="min-w-0">
-                            <p className="text-[11px] font-black text-slate-800 truncate">{detail.attachment.fileName}</p>
-                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{detail.attachment.mimeType}</p>
+                            <p className="text-[11px] font-black text-ink truncate">{detail.attachment.fileName}</p>
+                            <p className="text-[9px] font-bold text-muted uppercase tracking-widest">{detail.attachment.mimeType}</p>
                           </div>
                         </div>
-                        <button onClick={downloadAttachment} className="px-4 py-2 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-slate-800 transition-all">Download</button>
+                        <button onClick={downloadAttachment} className="px-4 py-2 bg-shadow text-paper text-[9px] font-black uppercase tracking-widest hover:bg-shadow transition-all">Download</button>
                       </div>
                     )}
                   </div>
@@ -800,10 +822,10 @@ function AdminLeaveView() {
                     <div className="flex flex-col gap-2">
                       <p className="label-form">Approval Trail</p>
                       {detail.approvalSteps.map(s => (
-                        <div key={s.step} className="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
-                          <span className="text-[9px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded">Step {s.step}</span>
-                          <span className="text-[10px] font-bold text-emerald-700">{new Date(s.approvedAt).toLocaleString('en-SG')}</span>
-                          <span className="text-[9px] font-bold text-slate-500 ml-auto">{s.approvedByEmpId.slice(0, 8)}</span>
+                        <div key={s.step} className="flex items-center gap-3 p-3 bg-page border border-accent">
+                          <span className="text-[9px] font-black bg-accent text-paper px-2 py-0.5">Step {s.step}</span>
+                          <span className="text-[10px] font-bold text-accent">{new Date(s.approvedAt).toLocaleString('en-SG')}</span>
+                          <span className="text-[9px] font-bold text-muted ml-auto">{s.approvedByEmpId.slice(0, 8)}</span>
                         </div>
                       ))}
                     </div>
@@ -814,18 +836,18 @@ function AdminLeaveView() {
 
             {/* Action footer (only when status is PENDING) */}
             {detail?.status === 'PENDING' && (
-              <div className="flex gap-3 px-8 py-5 border-t border-slate-100 bg-slate-50/50">
+              <div className="flex gap-3 px-8 py-5 border-t border-rule bg-page">
                 <button
                   onClick={() => handleReject(detail.id)}
                   disabled={decisionBusy}
-                  className="flex-1 py-3 text-[10px] font-black text-red-600 bg-red-50 border border-red-100 rounded-xl hover:bg-red-100 uppercase tracking-widest transition-all disabled:opacity-50"
+                  className="flex-1 py-3 text-[10px] font-black text-ink bg-page border border-ink hover:bg-page uppercase tracking-widest transition-all disabled:opacity-50"
                 >
                   Reject
                 </button>
                 <button
                   onClick={() => handleApprove(detail.id)}
                   disabled={decisionBusy}
-                  className="flex-1 py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50"
+                  className="flex-1 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent uppercase tracking-widest transition-all disabled:opacity-50"
                 >
                   {decisionBusy ? 'Working…' : 'Approve'}
                 </button>
