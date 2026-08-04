@@ -42,13 +42,13 @@ export default function CompanySetupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
-      <form onSubmit={submit} className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-500">Step 1 of 1</div>
-        <h1 className="mt-1 text-2xl font-black text-slate-900">Set up your company</h1>
-        <p className="mt-1 text-sm text-slate-500">A few details so we can tailor payroll & statutory config to {form.country}.</p>
+    <div className="min-h-screen flex items-center justify-center bg-page p-6">
+      <form onSubmit={submit} className="w-full max-w-xl border border-rule bg-paper p-8 ">
+        <div className="text-xs font-black uppercase tracking-[0.2em] text-accent">Step 1 of 1</div>
+        <h1 className="mt-1 text-2xl font-black text-ink">Set up your company</h1>
+        <p className="mt-1 text-sm text-muted">A few details so we can tailor payroll & statutory config to {form.country}.</p>
 
-        {error && <div className="mt-4 rounded-lg bg-rose-50 border border-rose-200 px-4 py-2.5 text-sm text-rose-700">{error}</div>}
+        {error && <div className="mt-4 bg-page border border-ink px-4 py-2.5 text-sm text-ink">{error}</div>}
 
         <div className="mt-6 grid grid-cols-2 gap-4">
           <Field label="Legal company name" required full>
@@ -76,10 +76,10 @@ export default function CompanySetupPage() {
           </Field>
         </div>
 
-        <button type="submit" disabled={loading} className="mt-6 w-full rounded-lg bg-indigo-600 py-3 font-bold text-white hover:bg-indigo-700 disabled:opacity-60">
+        <button type="submit" disabled={loading} className="mt-6 w-full bg-accent py-3 font-bold text-paper hover:bg-accent disabled:opacity-60">
           {loading ? 'Saving…' : 'Finish & enter dashboard'}
         </button>
-        <button type="button" onClick={() => router.push('/')} className="mt-2 w-full rounded-lg py-2 text-sm font-semibold text-slate-500 hover:text-slate-700">
+        <button type="button" onClick={() => router.push('/')} className="mt-2 w-full py-2 text-sm font-semibold text-muted hover:text-ink">
           Skip for now
         </button>
       </form>
@@ -87,12 +87,12 @@ export default function CompanySetupPage() {
   );
 }
 
-const INPUT = 'w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500';
+const INPUT = 'w-full border border-rule px-3 py-2.5 text-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent';
 
 function Field({ label, required, full, children }: { label: string; required?: boolean; full?: boolean; children: React.ReactNode }) {
   return (
     <label className={`block ${full ? 'col-span-2' : ''}`}>
-      <span className="mb-1 block text-xs font-semibold text-slate-600">{label}{required && <span className="text-rose-500"> *</span>}</span>
+      <span className="mb-1 block text-xs font-semibold text-ink">{label}{required && <span className="text-ink"> *</span>}</span>
       {children}
     </label>
   );

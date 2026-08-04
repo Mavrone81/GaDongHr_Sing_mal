@@ -55,29 +55,29 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-stretch bg-slate-50">
+    <div className="min-h-screen flex items-stretch bg-page">
       {/* Left brand panel */}
-      <div className="hidden lg:flex w-1/2 flex-col justify-between bg-gradient-to-br from-indigo-600 to-violet-700 p-12 text-white">
+      <div className="hidden lg:flex w-1/2 flex-col justify-between bg-gradient-to-br from-accent to-accent p-12 text-paper">
         <div className="text-2xl font-black tracking-tight">GADONGHR</div>
         <div>
           <h1 className="text-4xl font-black leading-tight">Run your whole HR in one place.</h1>
-          <p className="mt-4 text-indigo-100 text-lg">Payroll, leave, claims, attendance, appraisals — set up your company in minutes.</p>
-          <ul className="mt-8 space-y-3 text-indigo-50">
+          <p className="mt-4 text-paper text-lg">Payroll, leave, claims, attendance, appraisals — set up your company in minutes.</p>
+          <ul className="mt-8 space-y-3 text-paper">
             <li>✓ 14-day free trial</li>
             <li>✓ No credit card required</li>
             <li>✓ Your own isolated, secure workspace</li>
           </ul>
         </div>
-        <div className="text-indigo-200 text-sm">© {new Date().getFullYear()} GaDongHR</div>
+        <div className="text-paper text-sm">© {new Date().getFullYear()} GaDongHR</div>
       </div>
 
       {/* Right form */}
       <div className="flex w-full lg:w-1/2 items-center justify-center p-6">
         <form onSubmit={submit} className="w-full max-w-md">
-          <h2 className="text-2xl font-black text-slate-900">Register your company</h2>
-          <p className="mt-1 text-sm text-slate-500">Start your free trial — no credit card needed.</p>
+          <h2 className="text-2xl font-black text-ink">Register your company</h2>
+          <p className="mt-1 text-sm text-muted">Start your free trial — no credit card needed.</p>
 
-          {error && <div className="mt-4 rounded-lg bg-rose-50 border border-rose-200 px-4 py-2.5 text-sm text-rose-700">{error}</div>}
+          {error && <div className="mt-4 bg-page border border-ink px-4 py-2.5 text-sm text-ink">{error}</div>}
 
           <div className="mt-6 space-y-4">
             <Field label="Company name" required>
@@ -112,12 +112,12 @@ export default function RegisterPage() {
             </Field>
           </div>
 
-          <button type="submit" disabled={loading} className="mt-6 w-full rounded-lg bg-indigo-600 py-3 font-bold text-white hover:bg-indigo-700 disabled:opacity-60">
+          <button type="submit" disabled={loading} className="mt-6 w-full bg-accent py-3 font-bold text-paper hover:bg-accent disabled:opacity-60">
             {loading ? 'Creating your workspace…' : 'Start free trial'}
           </button>
 
-          <p className="mt-4 text-center text-sm text-slate-500">
-            Already have an account? <a href="/login" className="font-semibold text-indigo-600 hover:underline">Sign in</a>
+          <p className="mt-4 text-center text-sm text-muted">
+            Already have an account? <a href="/login" className="font-semibold text-accent hover:underline">Sign in</a>
           </p>
         </form>
       </div>
@@ -125,12 +125,12 @@ export default function RegisterPage() {
   );
 }
 
-const INPUT = 'w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500';
+const INPUT = 'w-full border border-rule px-3 py-2.5 text-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent';
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-semibold text-slate-600">{label}{required && <span className="text-rose-500"> *</span>}</span>
+      <span className="mb-1 block text-xs font-semibold text-ink">{label}{required && <span className="text-ink"> *</span>}</span>
       {children}
     </label>
   );

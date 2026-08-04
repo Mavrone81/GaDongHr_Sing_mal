@@ -504,10 +504,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       >
         {/* Brand */}
         <div className="relative px-5 pt-5 pb-4 border-b border-paper/5 flex items-center gap-3">
-          <GaDongMark size={34} stroke="#ffffff" accent="#cda64c" className="shrink-0" />
+          <GaDongMark size={34} className="shrink-0" />
           <div className="flex flex-col min-w-0">
             <span className="font-black text-paper tracking-[0.18em] uppercase text-sm leading-none">GaDongHR</span>
-            <span className="text-[8px] font-black text-gold-400/80 mt-1 tracking-[0.25em] uppercase truncate">CRM · HR · Payroll</span>
+            <span className="text-[8px] font-black text-highlight/80 mt-1 tracking-[0.25em] uppercase truncate">CRM · HR · Payroll</span>
           </div>
         </div>
 
@@ -649,7 +649,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             />
             <div className="hidden lg:flex flex-col items-end">
               <p className="text-[8px] font-black text-muted uppercase tracking-[0.15em] leading-none">v1.1.0</p>
-              <p className="text-[7px] font-bold text-gold-500 mt-0.5 uppercase tracking-widest leading-none">SG Compliance</p>
+              <p className="text-[7px] font-bold text-highlight mt-0.5 uppercase tracking-widest leading-none">SG Compliance</p>
             </div>
           </div>
         </header>

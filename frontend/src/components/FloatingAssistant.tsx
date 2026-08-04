@@ -69,7 +69,7 @@ export default function FloatingAssistant() {
         <button
           onClick={() => setOpen(true)}
           aria-label="Open HR assistant"
-          className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-indigo-300"
+          className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center bg-accent text-paper transition hover:bg-accent hover: focus:outline-none focus:ring-4 focus:ring-accent"
         >
           <ChatIcon className="h-6 w-6" />
         </button>
@@ -77,38 +77,38 @@ export default function FloatingAssistant() {
 
       {/* Chat panel */}
       {open && (
-        <div className="fixed bottom-5 right-5 z-50 flex h-[min(560px,80vh)] w-[min(380px,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="fixed bottom-5 right-5 z-50 flex h-[min(560px,80vh)] w-[min(380px,calc(100vw-2.5rem))] flex-col overflow-hidden border border-rule bg-paper ">
           {/* Header */}
-          <div className="flex items-center justify-between bg-indigo-600 px-4 py-3 text-white">
+          <div className="flex items-center justify-between bg-accent px-4 py-3 text-paper">
             <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
+              <span className="flex h-8 w-8 items-center justify-center bg-paper/20">
                 <ChatIcon className="h-4 w-4" />
               </span>
               <div className="leading-tight">
                 <p className="text-sm font-semibold">Vork</p>
-                <p className="text-[11px] text-indigo-100">HR Assistant</p>
+                <p className="text-[11px] text-paper">HR Assistant</p>
               </div>
             </div>
             <div className="flex items-center gap-0.5">
-              <button onClick={() => setOpen(false)} aria-label="Minimize" title="Minimize" className="rounded p-1 hover:bg-white/15 focus:outline-none">
+              <button onClick={() => setOpen(false)} aria-label="Minimize" title="Minimize" className=" p-1 hover:bg-paper/15 focus:outline-none">
                 <MinimizeIcon className="h-5 w-5" />
               </button>
-              <button onClick={() => { setMessages([GREETING]); setOpen(false); }} aria-label="Close and clear chat" title="Close & clear" className="rounded p-1 hover:bg-white/15 focus:outline-none">
+              <button onClick={() => { setMessages([GREETING]); setOpen(false); }} aria-label="Close and clear chat" title="Close & clear" className=" p-1 hover:bg-paper/15 focus:outline-none">
                 <CloseIcon className="h-5 w-5" />
               </button>
             </div>
           </div>
 
           {/* Messages */}
-          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-3">
+          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto bg-page p-3">
             {messages.map((m, i) => (
               <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
                 <div
                   className={
-                    'max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm ' +
+                    'max-w-[85%] whitespace-pre-wrap px-3 py-2 text-sm ' +
                     (m.role === 'user'
-                      ? 'rounded-br-sm bg-indigo-600 text-white'
-                      : 'rounded-bl-sm border border-slate-200 bg-white text-slate-800')
+                      ? ' bg-accent text-paper'
+                      : ' border border-rule bg-paper text-ink')
                   }
                 >
                   {m.content}
@@ -117,7 +117,7 @@ export default function FloatingAssistant() {
             ))}
             {loading && (
               <div className="flex justify-start">
-                <div className="flex items-center gap-1 rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-3 py-2.5">
+                <div className="flex items-center gap-1 border border-rule bg-paper px-3 py-2.5">
                   <Dot /> <Dot delay="150ms" /> <Dot delay="300ms" />
                 </div>
               </div>
@@ -125,7 +125,7 @@ export default function FloatingAssistant() {
           </div>
 
           {/* Input */}
-          <div className="border-t border-slate-200 bg-white p-2">
+          <div className="border-t border-rule bg-paper p-2">
             <div className="flex items-end gap-2">
               <input
                 ref={inputRef}
@@ -133,18 +133,18 @@ export default function FloatingAssistant() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKeyDown}
                 placeholder="Ask about your leave, claims, payslip…"
-                className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                className="flex-1 border border-rule px-3 py-2 text-sm focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
               />
               <button
                 onClick={send}
                 disabled={loading || !input.trim()}
                 aria-label="Send"
-                className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white transition hover:bg-indigo-700 disabled:opacity-40"
+                className="flex h-9 w-9 items-center justify-center bg-accent text-paper transition hover:bg-accent disabled:opacity-40"
               >
                 <SendIcon className="h-4 w-4" />
               </button>
             </div>
-            <p className="mt-1 px-1 text-[10px] text-slate-400">Answers are limited to what your role can access.</p>
+            <p className="mt-1 px-1 text-[10px] text-muted">Answers are limited to what your role can access.</p>
           </div>
         </div>
       )}
@@ -153,7 +153,7 @@ export default function FloatingAssistant() {
 }
 
 function Dot({ delay = '0ms' }: { delay?: string }) {
-  return <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: delay }} />;
+  return <span className="h-1.5 w-1.5 animate-bounce bg-muted" style={{ animationDelay: delay }} />;
 }
 
 function ChatIcon({ className }: { className?: string }) {

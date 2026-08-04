@@ -11,11 +11,11 @@
 
 /** Any Tailwind hue that is not one of the Official Record tokens. */
 export const LEGACY_HUE =
-  /\b(?:bg|text|border|ring|divide|from|via|to|accent|fill|stroke|shadow|placeholder|caret|outline)(?:-[tblrxyse])?-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b/;
+  /\b(?:bg|text|border|ring|divide|from|via|to|accent|fill|stroke|shadow|placeholder|caret|outline)(?:-[tblrxyse])?-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|navy|gold|cream)-\d{2,3}\b/;
 
 /** Card vocabulary: floating tiles with radius and drop shadow. */
 export const CARD =
-  /rounded-(?:sm|md|lg|xl|2xl|3xl|full)|shadow-(?:sm|md|lg|xl|2xl)|bg-white/;
+  /rounded-(?:sm|md|lg|xl|2xl|3xl|full)|shadow-(?:sm|md|lg|xl|2xl|card|primary|soft|glow)|bg-white/;
 
 const SPINNER_CLASSES = /className=(["'`])[^"'`]*animate-spin[^"'`]*\1/g;
 

@@ -120,35 +120,35 @@ export default function PlatformConsole() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100">
-      <header className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
+    <div className="min-h-screen bg-shadow text-paper">
+      <header className="flex items-center justify-between border-b border-shadow px-6 py-4">
         <div>
           <span className="font-black tracking-tight">GADONGHR</span>
-          <span className="ml-2 text-xs font-bold uppercase tracking-[0.2em] text-indigo-400">Platform Operator</span>
+          <span className="ml-2 text-xs font-bold uppercase tracking-[0.2em] text-accent">Platform Operator</span>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={openPricing} className="rounded-lg bg-slate-700 px-3 py-1.5 text-sm font-bold text-slate-100 hover:bg-slate-600">Pricing</button>
-          <button onClick={openAdmins} className="rounded-lg bg-slate-700 px-3 py-1.5 text-sm font-bold text-slate-100 hover:bg-slate-600">Admins</button>
-          <button onClick={() => { setCreated(null); setShowCreate(true); }} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-indigo-500">+ New company</button>
-          <button onClick={() => { localStorage.removeItem('gadonghr_platform_token'); router.push('/platform/login'); }} className="text-sm text-slate-400 hover:text-white">Sign out</button>
+          <button onClick={openPricing} className=" bg-muted px-3 py-1.5 text-sm font-bold text-paper hover:bg-muted">Pricing</button>
+          <button onClick={openAdmins} className=" bg-muted px-3 py-1.5 text-sm font-bold text-paper hover:bg-muted">Admins</button>
+          <button onClick={() => { setCreated(null); setShowCreate(true); }} className=" bg-accent px-3 py-1.5 text-sm font-bold text-paper hover:bg-accent">+ New company</button>
+          <button onClick={() => { localStorage.removeItem('gadonghr_platform_token'); router.push('/platform/login'); }} className="text-sm text-muted hover:text-paper">Sign out</button>
         </div>
       </header>
 
-      {err && <div className="m-4 rounded bg-rose-950 border border-rose-800 px-4 py-2 text-sm text-rose-300">{err}</div>}
+      {err && <div className="m-4 bg-ink border border-ink px-4 py-2 text-sm text-ink">{err}</div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6">
         {/* Tenants */}
         <div className="lg:col-span-2">
-          <h2 className="mb-3 text-sm font-black uppercase tracking-wider text-slate-400">Companies ({tenants.length})</h2>
-          <div className="overflow-hidden rounded-xl border border-slate-800">
+          <h2 className="mb-3 text-sm font-black uppercase tracking-wider text-muted">Companies ({tenants.length})</h2>
+          <div className="overflow-hidden border border-shadow">
             <table className="w-full text-sm">
-              <thead className="bg-slate-800/50 text-xs uppercase text-slate-400">
+              <thead className="bg-shadow text-xs uppercase text-muted">
                 <tr><th className="px-4 py-2 text-left">Company</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Users</th><th className="px-3 py-2">Trial ends</th><th className="px-3 py-2">Actions</th></tr>
               </thead>
               <tbody>
                 {tenants.map((t) => (
-                  <tr key={t.id} className={`border-t border-slate-800 ${sel === t.id ? 'bg-slate-800/40' : ''}`}>
-                    <td className="px-4 py-2.5"><button onClick={() => openDetail(t.id)} className="font-semibold hover:text-indigo-300">{t.name}</button><div className="text-xs text-slate-500">{t.slug} · {t.country}</div></td>
+                  <tr key={t.id} className={`border-t border-shadow ${sel === t.id ? 'bg-shadow' : ''}`}>
+                    <td className="px-4 py-2.5"><button onClick={() => openDetail(t.id)} className="font-semibold hover:text-accent">{t.name}</button><div className="text-xs text-muted">{t.slug} · {t.country}</div></td>
                     <td className="px-3 py-2.5 text-center"><Badge status={t.status} /></td>
                     <td className="px-3 py-2.5 text-center">{t.users}</td>
                     <td className="px-3 py-2.5 text-center">
@@ -160,7 +160,7 @@ export default function PlatformConsole() {
                         onFocus={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
                         title="Click to open the calendar"
                         style={{ colorScheme: 'dark' }}
-                        className="cursor-pointer rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:border-indigo-500 focus:border-indigo-400 focus:outline-none"
+                        className="cursor-pointer border border-rule bg-shadow px-2 py-1 text-xs text-paper hover:border-accent focus:border-accent focus:outline-none"
                       />
                     </td>
                     <td className="px-3 py-2.5 text-center text-xs">
@@ -180,36 +180,36 @@ export default function PlatformConsole() {
 
           {/* Detail: module toggles */}
           {sel && detail && (
-            <div className="mt-6 rounded-xl border border-slate-800 p-4">
-              <h3 className="mb-2 text-sm font-black uppercase tracking-wider text-slate-400">Trial — {tenants.find((t) => t.id === sel)?.name}</h3>
+            <div className="mt-6 border border-shadow p-4">
+              <h3 className="mb-2 text-sm font-black uppercase tracking-wider text-muted">Trial — {tenants.find((t) => t.id === sel)?.name}</h3>
               <div className="mb-5 flex flex-wrap items-center gap-2">
                 <input type="date" value={trialDate} onChange={(e) => setTrialDate(e.target.value)}
                   onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
                   style={{ colorScheme: 'dark' }}
-                  className="cursor-pointer rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white focus:border-indigo-400 focus:outline-none" />
+                  className="cursor-pointer border border-rule bg-shadow px-3 py-2 text-sm text-paper focus:border-accent focus:outline-none" />
                 <button onClick={() => trialDate && action(sel!, '/extend-trial', { date: trialDate })}
-                  className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-bold text-white hover:bg-indigo-500">Set trial end date</button>
+                  className=" bg-accent px-3 py-2 text-sm font-bold text-paper hover:bg-accent">Set trial end date</button>
                 <button onClick={() => action(sel!, '/extend-trial', { days: 14 })}
-                  className="rounded-lg bg-slate-700 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-600">+14 days</button>
+                  className=" bg-muted px-3 py-2 text-sm font-semibold text-paper hover:bg-muted">+14 days</button>
               </div>
 
-              <h3 className="mb-2 text-sm font-black uppercase tracking-wider text-slate-400">AI Assistant</h3>
+              <h3 className="mb-2 text-sm font-black uppercase tracking-wider text-muted">AI Assistant</h3>
               <div className="mb-5 flex gap-2">
-                <button onClick={() => setAi(sel!, 'ollama')} className={`flex-1 rounded-lg border px-3 py-2 text-left text-xs ${detail.aiProvider !== 'claude' ? 'border-emerald-700 bg-emerald-950/40 text-emerald-300' : 'border-slate-700 bg-slate-800/40 text-slate-400'}`}>
+                <button onClick={() => setAi(sel!, 'ollama')} className={`flex-1  border px-3 py-2 text-left text-xs ${detail.aiProvider !== 'claude' ? 'border-accent bg-accent text-accent' : 'border-shadow bg-shadow text-muted'}`}>
                   <div className="font-semibold">Ollama · local</div><div>private · no data leaves the host · default</div>
                 </button>
-                <button onClick={() => setAi(sel!, 'claude')} className={`flex-1 rounded-lg border px-3 py-2 text-left text-xs ${detail.aiProvider === 'claude' ? 'border-indigo-600 bg-indigo-950/40 text-indigo-300' : 'border-slate-700 bg-slate-800/40 text-slate-400'}`}>
+                <button onClick={() => setAi(sel!, 'claude')} className={`flex-1  border px-3 py-2 text-left text-xs ${detail.aiProvider === 'claude' ? 'border-accent bg-accent text-accent' : 'border-shadow bg-shadow text-muted'}`}>
                   <div className="font-semibold">Claude · Anthropic</div><div>cloud · higher quality · PII masked before send</div>
                 </button>
               </div>
-              <h3 className="mb-3 text-sm font-black uppercase tracking-wider text-slate-400">Modules</h3>
+              <h3 className="mb-3 text-sm font-black uppercase tracking-wider text-muted">Modules</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {allModules.map((m) => {
                   const off = isDisabled(m.code);
                   return (
                     <button key={m.code} disabled={m.isCore}
                       onClick={() => action(sel!, `/modules/${m.code}/toggle`, { enabled: !!off })}
-                      className={`rounded-lg border px-3 py-2 text-left text-xs ${m.isCore ? 'border-slate-700 bg-slate-800/40 opacity-60 cursor-not-allowed' : off ? 'border-rose-800 bg-rose-950/40 text-rose-300' : 'border-emerald-800 bg-emerald-950/30 text-emerald-300'}`}>
+                      className={` border px-3 py-2 text-left text-xs ${m.isCore ? 'border-shadow bg-shadow opacity-60 cursor-not-allowed' : off ? 'border-ink bg-ink text-ink' : 'border-accent bg-accent text-accent'}`}>
                       <div className="font-semibold">{m.name}</div>
                       <div>{m.isCore ? 'core · always on' : off ? 'disabled' : 'enabled'}</div>
                     </button>
@@ -222,36 +222,36 @@ export default function PlatformConsole() {
 
         {/* Audit */}
         <div>
-          <h2 className="mb-3 text-sm font-black uppercase tracking-wider text-slate-400">Recent platform audit</h2>
+          <h2 className="mb-3 text-sm font-black uppercase tracking-wider text-muted">Recent platform audit</h2>
           <div className="space-y-2">
             {audit.slice(0, 25).map((a, i) => (
-              <div key={i} className="rounded-lg border border-slate-800 px-3 py-2 text-xs">
-                <span className="font-mono font-semibold text-indigo-300">{a.action}</span>
-                <div className="text-slate-500">{new Date(a.createdAt).toLocaleString()}{a.tenantId ? ` · ${a.tenantId.slice(0, 8)}` : ''}</div>
+              <div key={i} className=" border border-shadow px-3 py-2 text-xs">
+                <span className="font-mono font-semibold text-accent">{a.action}</span>
+                <div className="text-muted">{new Date(a.createdAt).toLocaleString()}{a.tenantId ? ` · ${a.tenantId.slice(0, 8)}` : ''}</div>
               </div>
             ))}
-            {!audit.length && <div className="text-xs text-slate-600">No audit entries yet.</div>}
+            {!audit.length && <div className="text-xs text-ink">No audit entries yet.</div>}
           </div>
         </div>
       </div>
 
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => { setShowCreate(false); setCreated(null); }}>
-          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow/60 p-4" onClick={() => { setShowCreate(false); setCreated(null); }}>
+          <div className="w-full max-w-md border border-shadow bg-shadow p-6" onClick={(e) => e.stopPropagation()}>
             {created ? (
               <div>
-                <h3 className="text-lg font-black text-white">Company created 🎉</h3>
-                <p className="mt-1 text-sm text-slate-400">Share these one-time owner credentials with <b className="text-slate-200">{created.company}</b> (they sign in at the normal login):</p>
+                <h3 className="text-lg font-black text-paper">Company created 🎉</h3>
+                <p className="mt-1 text-sm text-muted">Share these one-time owner credentials with <b className="text-paper">{created.company}</b> (they sign in at the normal login):</p>
                 <div className="mt-4 space-y-2 text-sm">
-                  <div className="rounded-lg bg-slate-800 px-3 py-2"><span className="text-slate-500">Email: </span><span className="font-mono text-indigo-300">{created.email}</span></div>
-                  <div className="rounded-lg bg-slate-800 px-3 py-2"><span className="text-slate-500">Temp password: </span><span className="font-mono text-indigo-300">{created.tempPassword}</span></div>
+                  <div className=" bg-shadow px-3 py-2"><span className="text-muted">Email: </span><span className="font-mono text-accent">{created.email}</span></div>
+                  <div className=" bg-shadow px-3 py-2"><span className="text-muted">Temp password: </span><span className="font-mono text-accent">{created.tempPassword}</span></div>
                 </div>
-                <button onClick={() => { setShowCreate(false); setCreated(null); }} className="mt-5 w-full rounded-lg bg-indigo-600 py-2.5 font-bold text-white hover:bg-indigo-500">Done</button>
+                <button onClick={() => { setShowCreate(false); setCreated(null); }} className="mt-5 w-full bg-accent py-2.5 font-bold text-paper hover:bg-accent">Done</button>
               </div>
             ) : (
               <form onSubmit={createCompany}>
-                <h3 className="text-lg font-black text-white">Create a company</h3>
-                <p className="mt-1 text-xs text-slate-500">Provisions an isolated workspace + owner with full RBAC, on a 14-day trial.</p>
+                <h3 className="text-lg font-black text-paper">Create a company</h3>
+                <p className="mt-1 text-xs text-muted">Provisions an isolated workspace + owner with full RBAC, on a 14-day trial.</p>
                 <div className="mt-4 space-y-3">
                   <input className={MINPUT} placeholder="Company name" value={cf.companyName} onChange={(e) => setCf({ ...cf, companyName: e.target.value })} required />
                   <input className={MINPUT} placeholder="Owner full name" value={cf.fullName} onChange={(e) => setCf({ ...cf, fullName: e.target.value })} required />
@@ -266,8 +266,8 @@ export default function PlatformConsole() {
                   </div>
                 </div>
                 <div className="mt-5 flex gap-2">
-                  <button type="button" onClick={() => setShowCreate(false)} className="flex-1 rounded-lg bg-slate-700 py-2.5 font-bold text-slate-200 hover:bg-slate-600">Cancel</button>
-                  <button type="submit" disabled={creating} className="flex-1 rounded-lg bg-indigo-600 py-2.5 font-bold text-white hover:bg-indigo-500 disabled:opacity-60">{creating ? 'Creating…' : 'Create'}</button>
+                  <button type="button" onClick={() => setShowCreate(false)} className="flex-1 bg-muted py-2.5 font-bold text-paper hover:bg-muted">Cancel</button>
+                  <button type="submit" disabled={creating} className="flex-1 bg-accent py-2.5 font-bold text-paper hover:bg-accent disabled:opacity-60">{creating ? 'Creating…' : 'Create'}</button>
                 </div>
               </form>
             )}
@@ -276,31 +276,31 @@ export default function PlatformConsole() {
       )}
 
       {showAdmins && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShowAdmins(false)}>
-          <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-black text-white">Platform admins</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow/60 p-4" onClick={() => setShowAdmins(false)}>
+          <div className="w-full max-w-lg border border-shadow bg-shadow p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-black text-paper">Platform admins</h3>
             <div className="mt-3 max-h-56 space-y-2 overflow-y-auto">
               {admins.map((a) => (
-                <div key={a.id} className="flex items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-sm">
+                <div key={a.id} className="flex items-center justify-between bg-shadow px-3 py-2 text-sm">
                   <div>
-                    <div className="font-semibold text-slate-100">{a.name} <span className="text-xs font-normal text-slate-500">· {a.role}</span></div>
-                    <div className="text-xs text-slate-500">{a.email} · MFA {a.mfaEnabled ? 'on' : 'pending'}{a.isActive ? '' : ' · disabled'}</div>
+                    <div className="font-semibold text-paper">{a.name} <span className="text-xs font-normal text-muted">· {a.role}</span></div>
+                    <div className="text-xs text-muted">{a.email} · MFA {a.mfaEnabled ? 'on' : 'pending'}{a.isActive ? '' : ' · disabled'}</div>
                   </div>
-                  <button onClick={() => toggleAdmin(a.id, a.isActive)} className={`rounded px-2 py-1 text-xs font-semibold ${a.isActive ? 'bg-rose-900/60 text-rose-300 hover:bg-rose-900' : 'bg-emerald-900/60 text-emerald-300 hover:bg-emerald-900'}`}>{a.isActive ? 'Disable' : 'Enable'}</button>
+                  <button onClick={() => toggleAdmin(a.id, a.isActive)} className={` px-2 py-1 text-xs font-semibold ${a.isActive ? 'bg-ink text-ink hover:bg-ink' : 'bg-accent text-accent hover:bg-accent'}`}>{a.isActive ? 'Disable' : 'Enable'}</button>
                 </div>
               ))}
             </div>
 
             {newAdmin ? (
-              <div className="mt-4 rounded-lg border border-emerald-800 bg-emerald-950/30 p-3 text-sm">
-                <div className="font-semibold text-emerald-300">Admin created — share these one-time credentials:</div>
-                <div className="mt-1 font-mono text-xs text-emerald-200">{newAdmin.email}</div>
-                <div className="font-mono text-xs text-emerald-200">{newAdmin.tempPassword}</div>
-                <div className="mt-1 text-xs text-slate-400">They enrol MFA on first login.</div>
+              <div className="mt-4 border border-accent bg-accent p-3 text-sm">
+                <div className="font-semibold text-accent">Admin created — share these one-time credentials:</div>
+                <div className="mt-1 font-mono text-xs text-accent">{newAdmin.email}</div>
+                <div className="font-mono text-xs text-accent">{newAdmin.tempPassword}</div>
+                <div className="mt-1 text-xs text-muted">They enrol MFA on first login.</div>
               </div>
             ) : (
-              <form onSubmit={addAdmin} className="mt-4 border-t border-slate-800 pt-4">
-                <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Add a platform admin</div>
+              <form onSubmit={addAdmin} className="mt-4 border-t border-shadow pt-4">
+                <div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">Add a platform admin</div>
                 <div className="grid grid-cols-2 gap-2">
                   <input className={MINPUT} placeholder="Full name" value={adminForm.name} onChange={(e) => setAdminForm({ ...adminForm, name: e.target.value })} required />
                   <input className={MINPUT} type="email" placeholder="Email" value={adminForm.email} onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })} required />
@@ -309,23 +309,23 @@ export default function PlatformConsole() {
                     <option value="BILLING">BILLING — payments & plans</option>
                     <option value="SUPPORT">SUPPORT — read + impersonate</option>
                   </select>
-                  <button type="submit" disabled={addingAdmin} className="rounded-lg bg-indigo-600 py-2 font-bold text-white hover:bg-indigo-500 disabled:opacity-60">{addingAdmin ? 'Creating…' : 'Create admin'}</button>
+                  <button type="submit" disabled={addingAdmin} className=" bg-accent py-2 font-bold text-paper hover:bg-accent disabled:opacity-60">{addingAdmin ? 'Creating…' : 'Create admin'}</button>
                 </div>
               </form>
             )}
-            <button onClick={() => setShowAdmins(false)} className="mt-4 w-full rounded-lg bg-slate-700 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-600">Close</button>
+            <button onClick={() => setShowAdmins(false)} className="mt-4 w-full bg-muted py-2 text-sm font-semibold text-paper hover:bg-muted">Close</button>
           </div>
         </div>
       )}
 
       {showPricing && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4" onClick={() => setShowPricing(false)}>
-          <div className="my-6 w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-900 p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-black text-white">Pricing plans</h3>
-            <p className="mt-1 text-xs text-slate-500">The single source of truth for the in-app billing page (/settings/billing). Edit and save — it updates everywhere instantly. Mirror these on your marketing site.</p>
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-shadow/60 p-4" onClick={() => setShowPricing(false)}>
+          <div className="my-6 w-full max-w-3xl border border-shadow bg-shadow p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-black text-paper">Pricing plans</h3>
+            <p className="mt-1 text-xs text-muted">The single source of truth for the in-app billing page (/settings/billing). Edit and save — it updates everywhere instantly. Mirror these on your marketing site.</p>
             <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
               {pricing.map((p, i) => (
-                <div key={i} className="rounded-xl border border-slate-700 p-3">
+                <div key={i} className=" border border-shadow p-3">
                   <input className={MINPUT + ' mb-2 font-bold'} value={p.name || ''} onChange={(e) => setPlanField(i, 'name', e.target.value)} placeholder="Plan name" />
                   <div className="mb-2 flex gap-2">
                     <input className={MINPUT} value={p.price || ''} onChange={(e) => setPlanField(i, 'price', e.target.value)} placeholder="S$5" />
@@ -333,7 +333,7 @@ export default function PlatformConsole() {
                   </div>
                   <input className={MINPUT + ' mb-2'} value={p.tagline || ''} onChange={(e) => setPlanField(i, 'tagline', e.target.value)} placeholder="Tagline" />
                   <textarea className={MINPUT + ' mb-2 h-24'} value={(p.features || []).join('\n')} onChange={(e) => setPlanField(i, 'features', e.target.value.split('\n').map((x) => x.trim()).filter(Boolean))} placeholder="One feature per line" />
-                  <div className="flex flex-wrap gap-3 text-xs text-slate-300">
+                  <div className="flex flex-wrap gap-3 text-xs text-muted">
                     <label className="flex items-center gap-1"><input type="checkbox" checked={!!p.popular} onChange={(e) => setPlanField(i, 'popular', e.target.checked)} /> Popular</label>
                     <label className="flex items-center gap-1"><input type="checkbox" checked={!!p.contact} onChange={(e) => setPlanField(i, 'contact', e.target.checked)} /> Contact-sales</label>
                     <label className="flex items-center gap-1"><input type="checkbox" checked={p.active !== false} onChange={(e) => setPlanField(i, 'active', e.target.checked)} /> Active</label>
@@ -342,8 +342,8 @@ export default function PlatformConsole() {
               ))}
             </div>
             <div className="mt-5 flex gap-2">
-              <button onClick={() => setShowPricing(false)} className="flex-1 rounded-lg bg-slate-700 py-2.5 font-bold text-slate-200 hover:bg-slate-600">Cancel</button>
-              <button onClick={savePricing} disabled={savingPricing} className="flex-1 rounded-lg bg-indigo-600 py-2.5 font-bold text-white hover:bg-indigo-500 disabled:opacity-60">{savingPricing ? 'Saving…' : 'Save pricing'}</button>
+              <button onClick={() => setShowPricing(false)} className="flex-1 bg-muted py-2.5 font-bold text-paper hover:bg-muted">Cancel</button>
+              <button onClick={savePricing} disabled={savingPricing} className="flex-1 bg-accent py-2.5 font-bold text-paper hover:bg-accent disabled:opacity-60">{savingPricing ? 'Saving…' : 'Save pricing'}</button>
             </div>
           </div>
         </div>
@@ -352,12 +352,12 @@ export default function PlatformConsole() {
   );
 }
 
-const MINPUT = 'w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white focus:border-indigo-400 focus:outline-none';
+const MINPUT = 'w-full border border-rule bg-shadow px-3 py-2 text-sm text-paper focus:border-accent focus:outline-none';
 
 function Badge({ status }: { status: string }) {
-  const c: Record<string, string> = { ACTIVE: 'bg-emerald-900 text-emerald-300', TRIALING: 'bg-indigo-900 text-indigo-300', SUSPENDED: 'bg-rose-900 text-rose-300', PAST_DUE: 'bg-amber-900 text-amber-300', CANCELED: 'bg-slate-700 text-slate-300' };
-  return <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${c[status] || 'bg-slate-700'}`}>{status}</span>;
+  const c: Record<string, string> = { ACTIVE: 'bg-accent text-accent', TRIALING: 'bg-accent text-accent', SUSPENDED: 'bg-ink text-ink', PAST_DUE: 'bg-highlight text-highlight', CANCELED: 'bg-muted text-muted' };
+  return <span className={` px-2 py-0.5 text-[10px] font-bold ${c[status] || 'bg-muted'}`}>{status}</span>;
 }
 function Btn({ children, onClick, danger }: { children: React.ReactNode; onClick: () => void; danger?: boolean }) {
-  return <button onClick={onClick} className={`rounded px-2 py-1 font-semibold ${danger ? 'bg-rose-900/60 text-rose-300 hover:bg-rose-900' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}>{children}</button>;
+  return <button onClick={onClick} className={` px-2 py-1 font-semibold ${danger ? 'bg-ink text-ink hover:bg-ink' : 'bg-muted text-paper hover:bg-muted'}`}>{children}</button>;
 }

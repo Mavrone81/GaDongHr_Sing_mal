@@ -165,7 +165,7 @@ export default function OnboardPage() {
   function field(key: keyof FormData, label: string, opts?: { type?: string; placeholder?: string; required?: boolean }) {
     return (
       <div className="flex flex-col gap-1.5">
-        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+        <label className="text-[9px] font-black text-muted uppercase tracking-widest">
           {label}{opts?.required !== false ? ' *' : ''}
         </label>
         <input
@@ -173,24 +173,24 @@ export default function OnboardPage() {
           value={form[key]}
           onChange={e => { setForm(p => ({ ...p, [key]: e.target.value })); setErrors(p => ({ ...p, [key]: undefined })); }}
           placeholder={opts?.placeholder}
-          className={`border rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${errors[key] ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}
+          className={`border  px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent ${errors[key] ? 'border-ink bg-page' : 'border-rule'}`}
         />
-        {errors[key] && <p className="text-[9px] font-bold text-red-500">{errors[key]}</p>}
+        {errors[key] && <p className="text-[9px] font-bold text-ink">{errors[key]}</p>}
       </div>
     );
   }
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="bg-white rounded-[2rem] shadow-2xl p-12 flex flex-col items-center gap-5">
-          <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center">
-            <svg className="w-6 h-6 text-indigo-600 animate-spin rounded-full" fill="none" viewBox="0 0 24 24">
+      <div className="min-h-screen bg-page flex items-center justify-center">
+        <div className="bg-paper p-12 flex flex-col items-center gap-5">
+          <div className="w-12 h-12 bg-page flex items-center justify-center">
+            <svg className="w-6 h-6 text-accent animate-spin rounded-full" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
           </div>
-          <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Verifying invite…</p>
+          <p className="text-sm font-black text-muted uppercase tracking-widest">Verifying invite…</p>
         </div>
       </div>
     );
@@ -198,12 +198,12 @@ export default function OnboardPage() {
 
   if (status === 'invalid') {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <div className="bg-white rounded-[2rem] shadow-2xl p-10 w-full max-w-sm text-center flex flex-col items-center gap-5">
-          <div className="w-14 h-14 bg-red-50 border-2 border-red-200 rounded-2xl flex items-center justify-center text-2xl">✕</div>
+      <div className="min-h-screen bg-page flex items-center justify-center p-6">
+        <div className="bg-paper p-10 w-full max-w-sm text-center flex flex-col items-center gap-5">
+          <div className="w-14 h-14 bg-page border-2 border-ink flex items-center justify-center text-2xl">✕</div>
           <div>
-            <h2 className="text-base font-black text-slate-900 tracking-tighter">Invalid or Expired Link</h2>
-            <p className="text-xs font-bold text-slate-500 mt-2 leading-relaxed">This invite link is invalid or has expired. Please contact HR to request a new invitation.</p>
+            <h2 className="text-base font-black text-ink tracking-tighter">Invalid or Expired Link</h2>
+            <p className="text-xs font-bold text-muted mt-2 leading-relaxed">This invite link is invalid or has expired. Please contact HR to request a new invitation.</p>
           </div>
         </div>
       </div>
@@ -212,22 +212,22 @@ export default function OnboardPage() {
 
   if (status === 'submitted') {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <div className="bg-white rounded-[2rem] shadow-2xl p-10 w-full max-w-sm text-center flex flex-col items-center gap-6">
-          <div className="w-16 h-16 bg-emerald-50 border-2 border-emerald-200 rounded-2xl flex items-center justify-center text-3xl">✓</div>
+      <div className="min-h-screen bg-page flex items-center justify-center p-6">
+        <div className="bg-paper p-10 w-full max-w-sm text-center flex flex-col items-center gap-6">
+          <div className="w-16 h-16 bg-page border-2 border-accent flex items-center justify-center text-3xl">✓</div>
           <div>
-            <h2 className="text-lg font-black text-slate-900 tracking-tighter">Profile Submitted!</h2>
-            <p className="text-xs font-bold text-slate-500 mt-2 leading-relaxed">
+            <h2 className="text-lg font-black text-ink tracking-tighter">Profile Submitted!</h2>
+            <p className="text-xs font-bold text-muted mt-2 leading-relaxed">
               Thank you, {form.fullName}. Your profile has been submitted for HR review. You will be notified once your employee account is activated.
             </p>
           </div>
-          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 w-full text-left">
+          <div className="bg-page border border-rule p-4 w-full text-left">
             <p className="label-form mb-2">What happens next?</p>
             <ul className="flex flex-col gap-2">
               {['HR reviews your profile', 'Employee record is created', 'You receive confirmation email', 'Access full HR system'].map((s, i) => (
                 <li key={s} className="flex items-center gap-3">
-                  <div className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center text-[9px] font-black text-white flex-shrink-0">{i + 1}</div>
-                  <span className="text-xs font-bold text-slate-600">{s}</span>
+                  <div className="w-5 h-5 bg-accent flex items-center justify-center text-[9px] font-black text-paper flex-shrink-0">{i + 1}</div>
+                  <span className="text-xs font-bold text-ink">{s}</span>
                 </li>
               ))}
             </ul>
@@ -240,53 +240,53 @@ export default function OnboardPage() {
   const STEP_LABELS = ['Personal Details', 'Contact & ID', 'Employment'];
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen bg-page flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-lg">
         {/* Header */}
-        <div className="bg-indigo-600 rounded-t-[2rem] p-8 text-white">
-          <p className="text-[9px] font-black uppercase tracking-[0.2em] text-indigo-200">Employee Onboarding</p>
+        <div className="bg-accent rounded-t-[2rem] p-8 text-paper">
+          <p className="text-[9px] font-black uppercase tracking-[0.2em] text-paper">Employee Onboarding</p>
           <h1 className="text-xl font-black tracking-tighter mt-1">Complete Your Profile</h1>
-          <p className="text-xs font-bold text-indigo-200 mt-1">Welcome, {userInfo?.name} · {userInfo?.email}</p>
+          <p className="text-xs font-bold text-paper mt-1">Welcome, {userInfo?.name} · {userInfo?.email}</p>
           {/* Encryption badge */}
           {rawToken && (
-            <div className="mt-3 inline-flex items-center gap-1.5 bg-indigo-500/40 border border-indigo-400/40 rounded-lg px-3 py-1.5">
-              <svg className="w-3 h-3 text-indigo-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <div className="mt-3 inline-flex items-center gap-1.5 bg-accent border border-accent px-3 py-1.5">
+              <svg className="w-3 h-3 text-paper" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
-              <span className="text-[9px] font-black text-indigo-200 uppercase tracking-widest">End-to-end encrypted</span>
+              <span className="text-[9px] font-black text-paper uppercase tracking-widest">End-to-end encrypted</span>
             </div>
           )}
           {/* Progress */}
           <div className="flex items-center gap-2 mt-4">
             {STEP_LABELS.map((label, i) => (
               <div key={label} className="flex items-center gap-2">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black transition-all ${step > i + 1 ? 'bg-white text-indigo-600' : step === i + 1 ? 'bg-white text-indigo-600' : 'bg-indigo-500 text-indigo-200'}`}>
+                <div className={`w-6 h-6  flex items-center justify-center text-[9px] font-black transition-all ${step > i + 1 ? 'bg-paper text-accent' : step === i + 1 ? 'bg-paper text-accent' : 'bg-accent text-paper'}`}>
                   {step > i + 1 ? '✓' : i + 1}
                 </div>
-                <span className={`text-[9px] font-black uppercase tracking-widest ${step === i + 1 ? 'text-white' : 'text-indigo-300'}`}>{label}</span>
-                {i < STEP_LABELS.length - 1 && <div className="w-6 h-px bg-indigo-400 mx-1" />}
+                <span className={`text-[9px] font-black uppercase tracking-widest ${step === i + 1 ? 'text-paper' : 'text-accent'}`}>{label}</span>
+                {i < STEP_LABELS.length - 1 && <div className="w-6 h-px bg-accent mx-1" />}
               </div>
             ))}
           </div>
         </div>
 
         {/* Form */}
-        <div className="bg-white rounded-b-[2rem] shadow-2xl p-8">
+        <div className="bg-paper rounded-b-[2rem] p-8">
           {step === 1 && (
             <div className="flex flex-col gap-4">
-              <p className="label-form border-b border-slate-100 pb-3">Step 1 · Personal Details</p>
+              <p className="label-form border-b border-rule pb-3">Step 1 · Personal Details</p>
               {field('fullName', 'Full Legal Name', { placeholder: 'As per NRIC/FIN' })}
               {field('preferredName', 'Preferred / Display Name', { required: false, placeholder: 'Optional' })}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Gender *</label>
+                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Gender *</label>
                 <select value={form.gender} onChange={e => { setForm(p => ({ ...p, gender: e.target.value })); setErrors(p => ({ ...p, gender: undefined })); }}
-                  className={`border rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${errors.gender ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}>
+                  className={`border  px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent ${errors.gender ? 'border-ink bg-page' : 'border-rule'}`}>
                   <option value="">Select gender</option>
                   <option value="MALE">Male</option>
                   <option value="FEMALE">Female</option>
                   <option value="PREFER_NOT_TO_SAY">Prefer not to say</option>
                 </select>
-                {errors.gender && <p className="text-[9px] font-bold text-red-500">{errors.gender}</p>}
+                {errors.gender && <p className="text-[9px] font-bold text-ink">{errors.gender}</p>}
               </div>
               {field('dateOfBirth', 'Date of Birth', { type: 'date' })}
               {field('nationality', 'Nationality', { placeholder: 'e.g. Singaporean' })}
@@ -295,14 +295,14 @@ export default function OnboardPage() {
 
           {step === 2 && (
             <div className="flex flex-col gap-4">
-              <p className="label-form border-b border-slate-100 pb-3">Step 2 · Contact & Identity</p>
-              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 flex items-start gap-2.5">
-                <svg className="w-4 h-4 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <p className="label-form border-b border-rule pb-3">Step 2 · Contact & Identity</p>
+              <div className="bg-page border border-accent p-3 flex items-start gap-2.5">
+                <svg className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
                 <div>
-                  <p className="text-[9px] font-black text-indigo-700 uppercase tracking-widest">AES-256-GCM Encrypted</p>
-                  <p className="text-[10px] font-bold text-indigo-600 mt-0.5">Your personal data is encrypted in your browser before being sent. Only authorised HR personnel can access it.</p>
+                  <p className="text-[9px] font-black text-accent uppercase tracking-widest">AES-256-GCM Encrypted</p>
+                  <p className="text-[10px] font-bold text-accent mt-0.5">Your personal data is encrypted in your browser before being sent. Only authorised HR personnel can access it.</p>
                 </div>
               </div>
               {field('nricFin', 'NRIC / FIN Number', { placeholder: 'S1234567A' })}
@@ -315,14 +315,14 @@ export default function OnboardPage() {
 
           {step === 3 && (
             <div className="flex flex-col gap-4">
-              <p className="label-form border-b border-slate-100 pb-3">Step 3 · Employment Details</p>
-              <p className="text-[10px] font-bold text-slate-500">Fill in what you know — HR will confirm the final details.</p>
+              <p className="label-form border-b border-rule pb-3">Step 3 · Employment Details</p>
+              <p className="text-[10px] font-bold text-muted">Fill in what you know — HR will confirm the final details.</p>
               {field('department', 'Department', { required: false, placeholder: 'e.g. Engineering, Sales' })}
               {field('designation', 'Designation / Job Title', { required: false, placeholder: 'e.g. Software Engineer' })}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Employment Type</label>
+                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Employment Type</label>
                 <select value={form.employmentType} onChange={e => setForm(p => ({ ...p, employmentType: e.target.value }))}
-                  className="border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                  className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent">
                   <option value="FULL_TIME">Full Time</option>
                   <option value="PART_TIME">Part Time</option>
                   <option value="CONTRACT">Contract</option>
@@ -330,10 +330,10 @@ export default function OnboardPage() {
               </div>
               {field('startDate', 'Start Date', { type: 'date', required: false })}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Additional Notes</label>
+                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Additional Notes</label>
                 <textarea rows={3} value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
                   placeholder="Anything HR should know about you or your employment arrangement..."
-                  className="border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
+                  className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent resize-none" />
               </div>
             </div>
           )}
@@ -342,19 +342,19 @@ export default function OnboardPage() {
           <div className="flex items-center justify-between mt-8">
             {step > 1 ? (
               <button onClick={() => setStep(s => s - 1)}
-                className="px-5 py-2.5 text-[10px] font-black text-slate-600 bg-slate-50 border border-slate-200 rounded-xl uppercase tracking-widest hover:bg-slate-100 transition-all">
+                className="px-5 py-2.5 text-[10px] font-black text-ink bg-page border border-rule uppercase tracking-widest hover:bg-page transition-all">
                 ← Back
               </button>
             ) : <div />}
             {step < 3 ? (
               <button onClick={nextStep}
-                className="px-6 py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl uppercase tracking-widest shadow-lg shadow-indigo-500/20 transition-all">
+                className="px-6 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent uppercase tracking-widest transition-all">
                 Continue →
               </button>
             ) : (
               <button onClick={submit} disabled={submitting}
-                className="px-6 py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl uppercase tracking-widest shadow-lg shadow-indigo-500/20 disabled:opacity-50 transition-all flex items-center gap-2">
-                {submitting && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-paper rounded-full animate-spin" />}
+                className="px-6 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent uppercase tracking-widest disabled:opacity-50 transition-all flex items-center gap-2">
+                {submitting && <span className="w-3.5 h-3.5 border-2 border-paper/30 border-t-paper animate-spin rounded-full" />}
                 {submitting ? 'Encrypting & Submitting…' : 'Submit Profile'}
               </button>
             )}

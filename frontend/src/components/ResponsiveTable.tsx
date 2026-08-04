@@ -64,9 +64,9 @@ export function ResponsiveTable<T = any>({
 }: ResponsiveTableProps<T>) {
   if (!data || data.length === 0) {
     return (
-      <div className={`bg-white rounded-2xl border border-slate-200 p-8 text-center ${className}`}>
+      <div className={`bg-paper  border border-rule p-8 text-center ${className}`}>
         {caption && <div className="mb-4">{caption}</div>}
-        <p className="text-sm text-slate-500">{emptyText}</p>
+        <p className="text-sm text-muted">{emptyText}</p>
       </div>
     );
   }
@@ -79,15 +79,15 @@ export function ResponsiveTable<T = any>({
       {caption && <div className="mb-3">{caption}</div>}
 
       {/* ── DESKTOP TABLE ────────────────────────────────────────────────── */}
-      <div className={`hidden md:block bg-white rounded-2xl border border-slate-200 overflow-hidden ${className}`}>
+      <div className={`hidden md:block bg-paper  border border-rule overflow-hidden ${className}`}>
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-page border-b border-rule">
               <tr>
                 {columns.map(col => (
                   <th
                     key={col.key}
-                    className={`px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest ${ALIGN_CLASS[col.align || 'left']} ${col.width || ''}`}
+                    className={`px-4 py-3 text-[10px] font-black text-muted uppercase tracking-widest ${ALIGN_CLASS[col.align || 'left']} ${col.width || ''}`}
                   >
                     {col.header}
                   </th>
@@ -99,12 +99,12 @@ export function ResponsiveTable<T = any>({
                 <tr
                   key={rowKey ? rowKey(row) : i}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  className={`border-b border-slate-100 last:border-0 ${onRowClick ? 'cursor-pointer hover:bg-slate-50/50 transition-colors' : ''}`}
+                  className={`border-b border-rule last:border-0 ${onRowClick ? 'cursor-pointer hover:bg-page transition-colors' : ''}`}
                 >
                   {columns.map(col => {
                     const v = getValue(row, col.key);
                     return (
-                      <td key={col.key} className={`px-4 py-3 text-sm text-slate-700 ${ALIGN_CLASS[col.align || 'left']}`}>
+                      <td key={col.key} className={`px-4 py-3 text-sm text-ink ${ALIGN_CLASS[col.align || 'left']}`}>
                         {col.render ? col.render(v, row) : (v ?? '—')}
                       </td>
                     );
@@ -122,17 +122,17 @@ export function ResponsiveTable<T = any>({
           <div
             key={rowKey ? rowKey(row) : i}
             onClick={onRowClick ? () => onRowClick(row) : undefined}
-            className={`bg-white rounded-2xl border border-slate-200 p-4 ${onRowClick ? 'cursor-pointer active:bg-slate-50 transition-colors' : ''}`}
+            className={`bg-paper  border border-rule p-4 ${onRowClick ? 'cursor-pointer active:bg-page transition-colors' : ''}`}
           >
             {/* Primary row */}
             {primaryCols.length > 0 && (
               <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
-                <div className="flex items-center gap-2 flex-wrap text-sm font-black text-slate-900 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap text-sm font-black text-ink min-w-0">
                   {primaryCols.map((col, idx) => {
                     const v = getValue(row, col.key);
                     return (
                       <React.Fragment key={col.key}>
-                        {idx > 0 && <span className="text-slate-300">·</span>}
+                        {idx > 0 && <span className="text-muted">·</span>}
                         <span>{col.render ? col.render(v, row) : (v ?? '—')}</span>
                       </React.Fragment>
                     );
@@ -147,8 +147,8 @@ export function ResponsiveTable<T = any>({
                   const v = getValue(row, col.key);
                   return (
                     <div key={col.key} className="min-w-0">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-0.5">{col.header}</p>
-                      <div className="text-slate-700 break-words">
+                      <p className="text-[10px] font-black text-muted uppercase tracking-wider mb-0.5">{col.header}</p>
+                      <div className="text-ink break-words">
                         {col.render ? col.render(v, row) : (v ?? '—')}
                       </div>
                     </div>

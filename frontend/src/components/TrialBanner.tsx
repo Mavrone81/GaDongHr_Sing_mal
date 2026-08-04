@@ -20,13 +20,13 @@ export default function TrialBanner() {
   const days = sub.trialDaysLeft ?? 0;
 
   return (
-    <div className={`flex items-center justify-center gap-3 px-4 py-2 text-sm font-semibold ${expired ? 'bg-rose-600 text-white' : days <= 3 ? 'bg-amber-500 text-white' : 'bg-indigo-600 text-white'}`}>
+    <div className={`flex items-center justify-center gap-3 px-4 py-2 text-sm font-semibold ${expired ? 'bg-ink text-paper' : days <= 3 ? 'bg-highlight text-paper' : 'bg-accent text-paper'}`}>
       <span>
         {expired
           ? 'Your free trial has ended — upgrade to restore full access.'
           : `${days} day${days === 1 ? '' : 's'} left in your free trial.`}
       </span>
-      <a href="/settings/billing" className="rounded bg-white/20 px-3 py-1 font-bold hover:bg-white/30">Upgrade</a>
+      <a href="/settings/billing" className=" bg-paper/20 px-3 py-1 font-bold hover:bg-paper/30">Upgrade</a>
     </div>
   );
 }

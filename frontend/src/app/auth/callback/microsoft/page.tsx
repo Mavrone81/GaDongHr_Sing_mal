@@ -79,15 +79,15 @@ export default function MicrosoftCallbackPage() {
 
   if (status === 'error') {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-2xl p-10 w-full max-w-sm text-center flex flex-col items-center gap-5">
-          <div className="w-14 h-14 bg-red-50 border-2 border-red-200 rounded-2xl flex items-center justify-center text-2xl">✕</div>
+      <div className="min-h-screen bg-page flex items-center justify-center p-6">
+        <div className="bg-paper border border-rule p-10 w-full max-w-sm text-center flex flex-col items-center gap-5">
+          <div className="w-14 h-14 bg-page border-2 border-ink flex items-center justify-center text-2xl">✕</div>
           <div>
-            <h2 className="text-sm font-black text-slate-900 tracking-tighter mb-1">Sign-In Failed</h2>
-            <p className="text-xs font-bold text-slate-500">{errorMsg}</p>
+            <h2 className="text-sm font-black text-ink tracking-tighter mb-1">Sign-In Failed</h2>
+            <p className="text-xs font-bold text-muted">{errorMsg}</p>
           </div>
           <button onClick={() => router.replace('/login')}
-            className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl uppercase tracking-widest transition-all">
+            className="px-6 py-3 bg-accent hover:bg-accent text-paper text-xs font-black uppercase tracking-widest transition-all">
             Back to Login
           </button>
         </div>
@@ -96,17 +96,17 @@ export default function MicrosoftCallbackPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-      <div className="bg-white rounded-[2rem] border border-slate-100 shadow-2xl p-10 w-full max-w-sm text-center flex flex-col items-center gap-5">
-        <div className="w-14 h-14 bg-blue-50 border-2 border-blue-200 rounded-2xl flex items-center justify-center">
-          <svg className="w-6 h-6 text-blue-600 animate-spin rounded-full" fill="none" viewBox="0 0 24 24">
+    <div className="min-h-screen bg-page flex items-center justify-center p-6">
+      <div className="bg-paper border border-rule p-10 w-full max-w-sm text-center flex flex-col items-center gap-5">
+        <div className="w-14 h-14 bg-page border-2 border-accent flex items-center justify-center">
+          <svg className="w-6 h-6 text-accent animate-spin rounded-full" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
         </div>
         <div>
-          <h2 className="text-sm font-black text-slate-900 tracking-tighter mb-1">Completing Sign-In</h2>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Verifying your Microsoft account…</p>
+          <h2 className="text-sm font-black text-ink tracking-tighter mb-1">Completing Sign-In</h2>
+          <p className="text-xs font-bold text-muted uppercase tracking-widest">Verifying your Microsoft account…</p>
         </div>
       </div>
     </div>

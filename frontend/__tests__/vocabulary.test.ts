@@ -14,7 +14,16 @@ import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 import { CARD, LEGACY_HUE, withoutSpinners, spinnerClasses } from './helpers/vocabulary';
 
-const ROOT = join(__dirname, '..', 'src', 'app', '(dashboard)');
+const ROOT = join(__dirname, '..', 'src');
+
+/**
+ * Walked over ALL of src, not just app/(dashboard).
+ *
+ * Scoping this to the dashboard route group was itself a gap: the dashboard
+ * home renders `components/dashboard/EmployeeDashboard.tsx`, which carried 71
+ * violations while every screen that mounts it was reported clean. A component
+ * is as visible as the page that renders it.
+ */
 
 function screens(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
@@ -26,9 +35,9 @@ function screens(dir: string): string[] {
 
 const FILES = screens(ROOT).map((f) => [f.slice(ROOT.length + 1), readFileSync(f, 'utf8')] as const);
 
-describe('every (dashboard) screen speaks the document vocabulary', () => {
+describe('every screen and component speaks the document vocabulary', () => {
   it('finds screens to check — the walk is not vacuously empty', () => {
-    expect(FILES.length).toBeGreaterThan(30);
+    expect(FILES.length).toBeGreaterThan(80);
   });
 
   it.each(FILES)('%s uses no legacy hue', (_name, src) => {
