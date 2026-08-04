@@ -280,15 +280,38 @@ These are the first thing a prospect sees, and the platform console is operator-
 
 ## Task 8: Stage 2 verification
 
-- [ ] **Repo-wide exit criteria**
+- [x] **Repo-wide exit criteria** — widened from `frontend/src/app` to all of
+      `frontend/src`: the dashboard home renders `components/dashboard/*`, which
+      carried 71 violations while every screen mounting it was reported clean.
 
 ```bash
+
 cd frontend/src
-grep -rlE "rounded-(lg|xl|2xl|full)|shadow-(sm|md|lg|xl)" --include='*.tsx' . | wc -l   # → 0
-grep -rlE "indigo-|slate-[0-9]|emerald-|amber-" --include='*.tsx' . | wc -l             # → 0
+# every Tailwind hue outside the eight tokens, plus the retired navy/gold/cream
+grep -rlE '(bg|text|border|ring|divide|from|via|to|accent|fill|stroke|shadow|placeholder)(-[tblrxy])?-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|navy|gold|cream)-[0-9]{2,3}' --include='*.tsx' . | wc -l   # → 0
+grep -rlE 'shadow-(card|primary|soft|glow)' --include='*.tsx' . | wc -l   # → 0
 ```
 
-- [ ] **Delete the legacy palette** from `globals.css` — the block labelled "being retired" in Stage 1. Nothing should reference it once every screen is converted.
+- [x] **Delete the legacy palette** from `globals.css` — the block labelled "being retired" in Stage 1.
+
+> **What deleting it actually revealed.** The block was not inert. It re-declared
+>
+> ```css
+> :root { --accent: var(--gold-500); }
+> ```
+>
+> *after* the Official Record tokens, so it won the cascade. Every `bg-accent` in
+> the product — five waves of conversion — had been rendering **gold `#b8893d`
+> instead of the intended `#1B4A3C`**. The same block still set
+> `body { @apply bg-slate-50 text-slate-900 }`, the ground of every page.
+>
+> Neither was visible to any guard, because every check in the suite read `.tsx`
+> and this is a `.css` file. `frontend/__tests__/globals-css.test.ts` now covers
+> it, and was verified to fail when the redefinition is reintroduced.
+>
+> The block also held radius, spacing and type scales that the component classes
+> still use. Those are measurements rather than palette, so they were kept under
+> a `METRICS` heading; only colour was deleted.
 - [ ] Frontend suite green; `tsc --noEmit` clean
 - [ ] Backend unchanged: 1,920 tests, UTC and Asia/Singapore
 - [ ] `seal-reservation.test.ts` still green — the reservation survived 74 screens
