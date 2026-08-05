@@ -799,6 +799,38 @@ services:
         reservations:
           memory: 64m
 
+  # Malaysian statutory computation (EPF, SOCSO, EIS, PCB, HRD Corp) — the
+  # sibling the SG block above anticipated. Same four-endpoint contract, so
+  # payroll-service routes by the legal entity's country and consumes one
+  # interface (ENT-002).
+  #
+  # Its own database: a country's rate revision must never be able to touch
+  # another country's tables.
+  statutory-my-service:
+    build:
+      context: .
+      dockerfile: services/statutory-my-service/Dockerfile
+    container_name: hrms-statutory-my
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${STATUTORY_MY_SERVICE_PORT:-4022}:4022"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=4022
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/hrms_statutory_my
+      # Service-to-service only — no JWT path into this service at all.
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 64m
+
   db-backup:
     build:
       context: ./backup

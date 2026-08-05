@@ -21,5 +21,6 @@ module.exports = {
     '<rootDir>/services/loans-service',
     '<rootDir>/services/survey-service',
     '<rootDir>/services/statutory-sg-service',
+    '<rootDir>/services/statutory-my-service',
   ],
 };
