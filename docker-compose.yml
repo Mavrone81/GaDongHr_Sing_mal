@@ -194,6 +194,10 @@ services:
       - LEAVE_SERVICE_URL=http://leave-service:4004
       - ATTENDANCE_SERVICE_URL=http://attendance-service:4007
       - NOTIFICATION_SERVICE_URL=http://notification-service:4009
+      # Per-country statutory upstreams. payroll-service picks one by the legal
+      # entity's country and never learns what CPF or EPF is (ENT-002).
+      - STATUTORY_SG_SERVICE_URL=http://statutory-sg-service:4021
+      - STATUTORY_MY_SERVICE_URL=http://statutory-my-service:4022
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
       - DISABLE_MAKER_CHECKER=${DISABLE_MAKER_CHECKER:-true}
       - COMPANY_NAME=${COMPANY_NAME:-GADONGHR PTE LTD}

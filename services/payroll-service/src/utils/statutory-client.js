@@ -25,7 +25,7 @@ class StatutoryUnavailableError extends Error {
 function serviceUrlFor(country) {
   const urls = {
     SG: process.env.STATUTORY_SG_SERVICE_URL || 'http://statutory-sg-service:4021',
-    MY: process.env.STATUTORY_MY_SERVICE_URL || null, // P2
+    MY: process.env.STATUTORY_MY_SERVICE_URL || 'http://statutory-my-service:4022',
   };
   return urls[country] || null;
 }
