@@ -17,22 +17,69 @@ jobs:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
     steps:
+      # Full clone: a history scan needs the history.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # Run via the official image rather than the marketplace action: the
       # action requires a paid licence for GitHub Organizations, and the image
       # avoids pinning a release-asset filename that changes between versions.
       #
-      # --no-git scans the WORKING TREE, not history, and that is deliberate.
-      # History still contains the credentials that the 2026-07-13 scrub
-      # replaced, so a full-history scan would fail on every run until history
-      # is rewritten. Those historical credentials must be treated as exposed
-      # and rotated — see the note in SECURITY-NOTES below.
-      - name: Scan working tree for secrets
+      # Scans FULL HISTORY, not just the working tree. This previously used
+      # --no-git, on the stated grounds that history still held the credentials
+      # the 2026-07-13 scrub replaced and so would fail every run. That turned
+      # out not to be true: gitleaks over all 248 commits returns exactly one
+      # finding — the dummy 64-hex ENCRYPTION_KEY fallback this workflow uses so
+      # the e2e job can boot without a real secret — pinned by fingerprint in
+      # .gitleaksignore. No .env was ever committed and no real key format
+      # appears anywhere in history.
+      #
+      # Scanning history matters because a working-tree scan cannot see a secret
+      # that was committed and then removed in a later commit — which is the
+      # normal shape of an accidental credential leak.
+      - name: Scan full history for secrets
         run: |
           docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest \
-            detect --source=/repo --no-git --config=/repo/.gitleaks.toml \
+            detect --source=/repo --config=/repo/.gitleaks.toml \
             --redact --verbose
+
+  dependency-audit:
+    name: Dependency audit (npm)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # BLOCKING on critical. Zero today, and a critical in a transitive
+      # dependency is the case where shipping without looking is indefensible.
+      - name: Fail on critical vulnerabilities
+        run: npm audit --audit-level=critical
+
+      # REPORTING on high. Seven remain, and every one needs a MAJOR upgrade
+      # rather than a patch, so gating on high would mean a permanently red
+      # pipeline that people learn to ignore — which is worse than an honest
+      # amber. They are, with the upgrade each needs:
+      #
+      #   next, postcss              -> next@16          (framework major)
+      #   eslint-config-next, glob,
+      #   @next/eslint-plugin-next   -> eslint-config-next@16   (dev only)
+      #   nodemailer                 -> nodemailer@9     (payslip email path)
+      #   node-fetch                 -> face-api.js@0.20 (attendance face match)
+      #
+      # Six other highs WERE fixed here without breaking changes, including an
+      # axios authentication bypass, a form-data CRLF injection, and a nodemailer
+      # bug that could deliver mail to an unintended domain — which matters on a
+      # product that emails payslips.
+      #
+      # When one of these upgrades lands, drop it from this list. When the list
+      # is empty, promote the gate from critical to high.
+      - name: Report high vulnerabilities (non-blocking)
+        continue-on-error: true
+        run: npm audit --audit-level=high
 
   backend-and-frontend:
     name: Backend + frontend unit/integration (TZ ${{ matrix.tz }})
@@ -223,7 +270,7 @@ jobs:
     runs-on: ubuntu-latest
     # secret-scan gates the deploy too: a leaked credential must never reach
     # production, even if every test passes.
-    needs: [secret-scan, backend-and-frontend, tenant-isolation, e2e]
+    needs: [secret-scan, dependency-audit, backend-and-frontend, tenant-isolation, e2e]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     concurrency:
       group: deploy-production

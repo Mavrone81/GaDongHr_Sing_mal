@@ -1,0 +1,18 @@
+# Findings deliberately accepted, by fingerprint (commit:path:rule:line).
+#
+# Everything here must be justified. A fingerprint pins ONE finding in ONE
+# historical commit — it cannot silence a new secret, because a new secret
+# produces a different fingerprint.
+
+# The workflow's dummy 64-hex ENCRYPTION_KEY fallback, which lets the e2e job
+# boot the stack without a real secret. (Deliberately not quoted here — writing
+# the value into a comment is itself enough to trip the scanner, as this file
+# discovered.) It is not a production credential, and no runtime code carries a
+# comparable default:
+# shared/crypto reads ENCRYPTION_KEY from the environment and yields undefined
+# when unset, rather than falling back.
+#
+# The current tree carries `# gitleaks:allow` on this line; this entry covers
+# the historical commit, which predates that marker. Pinning it is what lets CI
+# scan FULL HISTORY instead of only the working tree.
+a43068353c88cd966342bc6ced255fd55ed8c6e5:.github/workflows/pr-tests.yml:generic-api-key:34
