@@ -55,3 +55,9 @@ GRANT ALL PRIVILEGES ON DATABASE hrms_training    TO hrms;
 -- Singapore statutory rate tables (global, platform-managed — no tenantId).
 CREATE DATABASE hrms_statutory_sg;
 GRANT ALL PRIVILEGES ON DATABASE hrms_statutory_sg TO hrms;
+
+-- Malaysian statutory rate tables (global, platform-managed — no tenantId).
+-- Separate database from the Singapore sibling: the tables share no rows and a
+-- country's rate revision must never be able to touch another country's data.
+CREATE DATABASE hrms_statutory_my;
+GRANT ALL PRIVILEGES ON DATABASE hrms_statutory_my TO hrms;
