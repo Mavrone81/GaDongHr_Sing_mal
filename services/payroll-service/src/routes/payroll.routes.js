@@ -23,8 +23,38 @@ const { buildPayslipPdf, splitLineItems } = require('../engines/pdf.engine');
 const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:4009';
 const EMPLOYEE_SERVICE_URL     = process.env.EMPLOYEE_SERVICE_URL     || 'http://employee-service:4002';
 
-async function fireAndForget(fn) {
-  try { await fn(); } catch (err) { console.error('[fire-and-forget]', err.message); }
+/**
+ * Background work that must NOT block the HTTP response.
+ *
+ * Publishing a payroll run should not wait on the notification fan-out — if
+ * notification-service is slow or down, the run is still published. That part
+ * is deliberate and unchanged.
+ *
+ * What changed is that the promise is now RETAINED. Previously it was orphaned,
+ * so a test that published a run returned while the fan-out was still in
+ * flight; Jest then tore the module down underneath it, producing
+ * "Cannot log after tests are done" and — because the work kept running into
+ * the next suite — intermittent failures in unrelated services. It surfaced as
+ * ~1 run in 8 with three extra failures scattered across benefits, performance
+ * and attendance, which is the worst kind of flake: it never points at its
+ * cause.
+ *
+ * Production never calls drainBackgroundWork(); tests await it between cases.
+ */
+const inFlight = new Set();
+
+function fireAndForget(fn) {
+  const task = (async () => {
+    try { await fn(); } catch (err) { console.error('[fire-and-forget]', err.message); }
+  })();
+  inFlight.add(task);
+  task.finally(() => inFlight.delete(task));
+  return task;
+}
+
+/** Settle any background work this module started. Test-only. */
+async function drainBackgroundWork() {
+  while (inFlight.size) await Promise.allSettled([...inFlight]);
 }
 
 const prisma = require('../utils/prisma');
@@ -2409,3 +2439,4 @@ module.exports = router;
 module.exports.resolveGiroCompanyName = resolveGiroCompanyName;
 module.exports.runPayslipSlaSweep = runPayslipSlaSweep;
 module.exports.sendPublishNotifications = sendPublishNotifications;
+module.exports.drainBackgroundWork = drainBackgroundWork;

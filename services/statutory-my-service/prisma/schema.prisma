@@ -1,0 +1,153 @@
+// Malaysian statutory rate tables.
+//
+// GLOBAL — deliberately NO tenantId on any model (ENT-004), for the same reason
+// as the Singapore sibling: these are national figures published by KWSP,
+// PERKESO, LHDN and HRD Corp. They are identical for every tenant, so a
+// per-tenant copy is both wasted storage and a compliance hazard.
+//
+// STRUCTURE, NOT PERCENTAGES. EPF, SOCSO and EIS are all published as WAGE-BAND
+// tables giving exact ringgit amounts per band — not as percentages to multiply
+// out. Computing 11% of wages and rounding will disagree with the published
+// table at many bands, and the employer is liable for the difference. So the
+// bands are the data and the engine is a lookup (PRD MYP-001..003).
+//
+// Rows are versioned by RateVersion and pinned onto every payslip line (ENT-006)
+// so a figure stays reproducible after the tables move on.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model RateVersion {
+  id            String   @id @default(uuid())
+  country       String   @default("MY")
+  version       String   @unique // e.g. "MY-2026.1"
+  effectiveFrom DateTime
+
+  // ── Provenance (PRD §A7.1) ────────────────────────────────────────────────
+  // A7.1 requires every seeded figure to be traceable to a named official
+  // publication with its retrieval date. Recording that is not enough on its
+  // own — a field nobody reads is a comment. So `verifiedAt` is a RUNTIME GATE:
+  // the compute endpoint refuses to run on a version that has not been checked
+  // against its source, which makes shipping unverified Malaysian rates a 503
+  // rather than a plausible, wrong payslip.
+  source        String   // e.g. "KWSP Third Schedule (Act 452), 2026 edition"
+  sourceUrl     String?
+  retrievedAt   DateTime
+  verifiedBy    String? // who reconciled the tables against the publication
+  verifiedAt    DateTime? // null = NOT verified; compute refuses to use it
+
+  isActive      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([country, effectiveFrom])
+  @@map("rate_versions")
+}
+
+/// KWSP Third Schedule (EPF Act 1991). Amounts are per wage band, in MYR.
+model EpfBand {
+  id             String  @id @default(uuid())
+  rateVersion    String
+  wageFrom       Float
+  wageTo         Float? // null = open-ended top band
+  ageBand        String // BELOW_60 | AGE_60_PLUS
+  citizenship    String // CITIZEN | PR | FOREIGNER
+  employeeAmount Float? // published amount; null when the band uses percentages
+  employerAmount Float?
+  // Above the Third Schedule's upper bound the statutory PERCENTAGES apply
+  // directly rather than a table amount (MYP-001).
+  employeeRate   Float?
+  employerRate   Float?
+  createdAt      DateTime @default(now())
+
+  @@unique([rateVersion, ageBand, citizenship, wageFrom])
+  @@index([rateVersion])
+  @@map("epf_bands")
+}
+
+/// PERKESO Second Schedule (Employees' Social Security Act 1969).
+/// Category 1 = below 60: Employment Injury + Invalidity.
+/// Category 2 = 60 or above, and foreign workers: Employment Injury only,
+/// employer contribution only (MYP-002).
+model SocsoBand {
+  id             String  @id @default(uuid())
+  rateVersion    String
+  wageFrom       Float
+  wageTo         Float?
+  category       Int // 1 | 2
+  employeeAmount Float
+  employerAmount Float
+  createdAt      DateTime @default(now())
+
+  @@unique([rateVersion, category, wageFrom])
+  @@index([rateVersion])
+  @@map("socso_bands")
+}
+
+/// Employment Insurance System (Act 800). Excludes age 60+ and foreign
+/// workers entirely — those produce zero, not a band lookup (MYP-003).
+model EisBand {
+  id             String  @id @default(uuid())
+  rateVersion    String
+  wageFrom       Float
+  wageTo         Float?
+  employeeAmount Float
+  employerAmount Float
+  createdAt      DateTime @default(now())
+
+  @@unique([rateVersion, wageFrom])
+  @@index([rateVersion])
+  @@map("eis_bands")
+}
+
+/// LHDN MTD bands for the computerised calculation method (MYP-004).
+/// M = band floor, R = rate, B = cumulative tax at the floor.
+model PcbBand {
+  id             String  @id @default(uuid())
+  rateVersion    String
+  chargeableFrom Float // M
+  chargeableTo   Float?
+  rate           Float // R, as a fraction (0.08 = 8%)
+  cumulativeTax  Float // B
+  // B differs by MTD category at some bands (category 3 carries the child
+  // rebate), so the band row is keyed by category too.
+  category       Int // 1 = single, 2 = married/spouse not working, 3 = married/spouse working
+  createdAt      DateTime @default(now())
+
+  @@unique([rateVersion, category, chargeableFrom])
+  @@index([rateVersion])
+  @@map("pcb_bands")
+}
+
+/// Annual relief amounts used to derive chargeable income P (MYP-004).
+model PcbRelief {
+  id          String  @id @default(uuid())
+  rateVersion String
+  code        String // INDIVIDUAL | SPOUSE | CHILD | EPF_LIFE_CAP | ...
+  amount      Float
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@unique([rateVersion, code])
+  @@index([rateVersion])
+  @@map("pcb_reliefs")
+}
+
+/// HRD Corp levy (PSMB Act 2001) — employer levy, banded by headcount (MYP-005).
+model HrdLevyRate {
+  id           String  @id @default(uuid())
+  rateVersion  String
+  minEmployees Int
+  maxEmployees Int?
+  rate         Float // fraction of wages
+  createdAt    DateTime @default(now())
+
+  @@unique([rateVersion, minEmployees])
+  @@index([rateVersion])
+  @@map("hrd_levy_rates")
+}
