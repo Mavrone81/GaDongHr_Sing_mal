@@ -28,6 +28,7 @@ import { test, expect, request, APIRequestContext } from '@playwright/test';
 import { TEST_USERS } from '../lib/testUsers';
 import { signJwt } from '../lib/jwt';
 import { Role } from '../lib/roles';
+import { primaryLegalEntityId } from './helpers/legal-entity';
 
 const API_BASE = process.env.E2E_API_URL ?? 'http://localhost:4000';
 
@@ -69,7 +70,7 @@ async function cancelRun(admin: APIRequestContext, runId: string) {
 }
 
 async function makeFinalisedRun(admin: APIRequestContext, period: string, employees: any[]): Promise<string> {
-  const create = await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } });
+  const create = await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } });
   expect(create.status(), await create.text()).toBe(201);
   const run = await create.json();
 
@@ -215,7 +216,7 @@ test('GIRO non-FINALISED run → 400', async () => {
   const admin = await ctxAs('SUPER_ADMIN');
   const period = uniquePeriod(5);
   // Create a DRAFT — never advance it.
-  const create = await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } });
+  const create = await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } });
   expect(create.status()).toBe(201);
   const run = await create.json();
   try {
