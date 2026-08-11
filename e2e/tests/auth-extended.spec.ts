@@ -126,7 +126,7 @@ test.describe('AUTH-03 account lockout', () => {
     const counterBefore = authExec(`
       const { PrismaClient } = require('@prisma/client');
       const p = new PrismaClient();
-      p.user.findUnique({ where: { email: '${email}' }, select: { failedLogins: true } })
+      p.user.findFirst({ where: { email: '${email}' }, select: { failedLogins: true } })
         .then(u => { process.stdout.write(String(u.failedLogins)); return p.$disconnect(); })
         .then(() => process.exit(0));
     `);
