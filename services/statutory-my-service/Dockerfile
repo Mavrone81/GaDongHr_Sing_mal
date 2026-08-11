@@ -16,5 +16,5 @@ COPY services/statutory-my-service/package*.json ./
 RUN npm install --omit=dev
 COPY services/statutory-my-service/ ./
 RUN npx prisma generate
-EXPOSE 4021
+EXPOSE 4022
 CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node src/index.js"]
