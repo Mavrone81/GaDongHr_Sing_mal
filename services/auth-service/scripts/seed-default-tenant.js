@@ -44,6 +44,31 @@ const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
       },
     });
 
+    // ENT-001: a tenant must have at least one legal entity, because a payroll
+    // run belongs to exactly one and POST /payroll/runs requires it. Without
+    // this a FRESH stack — CI, a new dev machine, a new deployment — has a
+    // tenant that cannot run payroll at all, and the only thing that created an
+    // entity was scripts/migrate-legal-entities.js, a one-off backfill for
+    // EXISTING installs that a fresh boot never runs.
+    //
+    // The Default tenant stands for the pre-multitenancy Singapore deployment,
+    // so its primary entity is SG/SGD. Upserted on (tenantId, code) so repeated
+    // boots are a no-op and an operator's edits to name/registrationNo survive.
+    await prisma.legalEntity.upsert({
+      where: { tenantId_code: { tenantId: DEFAULT_TENANT_ID, code: 'DEFAULT' } },
+      update: {},
+      create: {
+        tenantId: DEFAULT_TENANT_ID,
+        name: 'Default Entity',
+        code: 'DEFAULT',
+        country: 'SG',
+        currency: 'SGD',
+        timezone: 'Asia/Singapore',
+        isPrimary: true,
+        isActive: true,
+      },
+    });
+
     // Defensive backfill: stamp any rows that somehow carry a NULL tenantId
     // (the column default covers existing rows on db push, but this makes the
     // script safe to run against partially-migrated data).
@@ -52,7 +77,7 @@ const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
     await prisma.$executeRawUnsafe(`UPDATE audit_logs   SET "tenantId" = '${DEFAULT_TENANT_ID}' WHERE "tenantId" IS NULL;`);
     await prisma.$executeRawUnsafe(`UPDATE otp_tokens   SET "tenantId" = '${DEFAULT_TENANT_ID}' WHERE "tenantId" IS NULL;`);
 
-    console.log('[seed-default-tenant] Default tenant ensured:', DEFAULT_TENANT_ID);
+    console.log('[seed-default-tenant] Default tenant + primary legal entity ensured:', DEFAULT_TENANT_ID);
     await prisma.$disconnect();
     process.exit(0);
   } catch (e) {

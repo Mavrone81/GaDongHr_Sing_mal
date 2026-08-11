@@ -13,7 +13,14 @@ export interface TestUser {
   id: string;       // matches users.id in hrms_auth
   email: string;
   employeeId?: string | null;
+  tenantId?: string;
 }
+
+/**
+ * The fixed "Default" tenant that seed-default-tenant.js creates, and that every
+ * seeded user and employee belongs to.
+ */
+export const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
 
 export interface TokenOptions {
   expiresIn?: string;
@@ -35,6 +42,17 @@ export function signJwt(user: TestUser, role: Role, opts: TokenOptions = {}): st
     role,
     employeeId: user.employeeId ?? null,
     permissions: ROLE_PERMS[role],
+    // Real login tokens carry tenantId (auth.routes.js signs it into every
+    // access token), so a minted test token must too or it is not standing in
+    // for the thing it claims to replace.
+    //
+    // Most endpoints did not notice: shared/auth-middleware falls back to the
+    // Default tenant when a token has none, for back-compat with tokens issued
+    // before multi-tenancy. But entities.routes.js reads req.user.tenantId
+    // directly and 403s without it, which is why every payroll spec failed with
+    // "Could not list legal entities (403)" once they started resolving a legal
+    // entity. That divergence between the two is worth knowing about.
+    tenantId: user.tenantId ?? DEFAULT_TENANT_ID,
   };
   const expiresIn = opts.expiresIn ?? '60m';
   const payloadJson = JSON.stringify(payload).replace(/'/g, "\\'");
