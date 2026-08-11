@@ -104,6 +104,23 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
+
+      # @prisma/client THROWS ON IMPORT until a client has been generated, so a
+      # cold checkout fails before a single assertion runs. Two unit suites
+      # import modules that transitively reach it
+      # (payroll giro-company-name, statutory-sg health) and both reported
+      # "Test suite failed to run" with 0 test failures — which is easy to
+      # misread as flakiness rather than a missing build step.
+      #
+      # Generating ONE schema is enough here: these suites mock their models, so
+      # which schema produced the client does not matter, only that the package
+      # is initialised. The DB-backed isolation job below generates per-service
+      # in its own step, because there the schema very much does matter —
+      # @prisma/client is hoisted in this workspace, so generating for one
+      # service overwrites every other service's client.
+      - name: Generate a Prisma client so @prisma/client can be imported
+        run: npx prisma generate --schema services/payroll-service/prisma/schema.prisma
+
       - run: npm run test:backend
       - run: npm run test:frontend
 
