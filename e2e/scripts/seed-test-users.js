@@ -32,7 +32,14 @@ function mintSuperAdminToken() {
     const { PrismaClient } = require('@prisma/client');
     const prisma = new PrismaClient();
     (async () => {
-      const u = await prisma.user.findUnique({
+      // findFirst, not findUnique. Email stopped being unique on its own when
+      // multi-tenancy landed - User is now unique on (tenantId, email) - and
+      // findUnique rejects a where-clause that is not a full unique key, which
+      // is what broke the e2e seed. This script has no tenantId to hand, and a
+      // freshly seeded CI stack has exactly one tenant, so findFirst is both
+      // correct and sufficient. No backticks in here: this whole block is
+      // embedded in a template literal and then shell-escaped into docker exec.
+      const u = await prisma.user.findFirst({
         where: { email: 'admin@hrms.com' },
         include: { role: { include: { permissions: { include: { permission: true } } } } }
       });
