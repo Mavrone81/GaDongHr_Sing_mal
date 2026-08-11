@@ -818,7 +818,12 @@ services:
     init: true
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${STATUTORY_MY_SERVICE_PORT:-4022}:4022"
+      # Host 4023, container 4022. benefits-service already publishes host
+      # 4022 (mapped to its container 4016), so claiming 4022 here made the
+      # whole stack fail to boot: "Bind for 127.0.0.1:4022 failed: port is
+      # already allocated". The CONTAINER port stays 4022, so the internal
+      # URL statutory-my-service:4022 is unaffected.
+      - "127.0.0.1:${STATUTORY_MY_SERVICE_PORT:-4023}:4022"
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4022
