@@ -188,6 +188,7 @@ import { test, expect, request, APIRequestContext } from '@playwright/test';
 import { TEST_USERS } from '../lib/testUsers';
 import { signJwt } from '../lib/jwt';
 import { Role } from '../lib/roles';
+import { primaryLegalEntityId } from './helpers/legal-entity';
 
 const API_BASE = process.env.E2E_API_URL ?? 'http://localhost:4000';
 
@@ -343,7 +344,7 @@ test('SYSTEM: DRAFT → compute → APPROVE → FINALISE → [CPF-ESUBMIT] file 
   const empId = `e2e-lc-${Date.now()}`;
 
   // Create
-  const create = await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } });
+  const create = await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } });
   expect(create.status(), 'create run').toBe(201);
   const run = await create.json();
   expect(run.status).toBe('DRAFT');
@@ -394,7 +395,7 @@ test('[CPF-RATES-2026] SC age 35, OW 5000 → employee 20% = $1000, employer 17%
   const period = uniquePeriod(1);
   const empId = `e2e-sc-${Date.now()}`;
 
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/compute`, {
       data: { employees: [emp({ employeeId: empId, ow: 5000, citizenStatus: 'SC', age: 35 })] },
@@ -430,7 +431,7 @@ test('[CPF-RATES-2026] SC age 57 → 55–60 bracket: employee 18%, employer 16%
   const admin = await ctxAs('SUPER_ADMIN');
   const period = uniquePeriod(14);
   const empId = `e2e-sc57-${Date.now()}`;
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/compute`, {
       data: { employees: [emp({ employeeId: empId, ow: 5000, citizenStatus: 'SC', age: 57 })] },
@@ -449,7 +450,7 @@ test('[CPF-RATES-2026] SC age 62 → 60–65 bracket: employee 12.5%, employer 1
   const admin = await ctxAs('SUPER_ADMIN');
   const period = uniquePeriod(15);
   const empId = `e2e-sc62-${Date.now()}`;
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/compute`, {
       data: { employees: [emp({ employeeId: empId, ow: 5000, citizenStatus: 'SC', age: 62 })] },
@@ -468,7 +469,7 @@ test('[CPF-RATES-2026] SC age 67 → 65–70 bracket: employee 7.5%, employer 9%
   const admin = await ctxAs('SUPER_ADMIN');
   const period = uniquePeriod(16);
   const empId = `e2e-sc67-${Date.now()}`;
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/compute`, {
       data: { employees: [emp({ employeeId: empId, ow: 5000, citizenStatus: 'SC', age: 67 })] },
@@ -487,7 +488,7 @@ test('[CPF-RATES-2026] SC age 72 → 70+ bracket: employee 5%, employer 7.5%', a
   const admin = await ctxAs('SUPER_ADMIN');
   const period = uniquePeriod(17);
   const empId = `e2e-sc72-${Date.now()}`;
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/compute`, {
       data: { employees: [emp({ employeeId: empId, ow: 5000, citizenStatus: 'SC', age: 72 })] },
@@ -507,7 +508,7 @@ test('[CPF-RATES-2026] OW above SGD 8,000 monthly ceiling is capped (SC, OW 1000
   const period = uniquePeriod(2);
   const empId = `e2e-ceil-${Date.now()}`;
 
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/compute`, {
       // OW 10000 — $2,000 over the Jan 2026 ceiling of $8,000
@@ -532,7 +533,7 @@ test('[CPF-FOREIGNER] CPF Act s.7 — foreigners exempt; OW 4500 → CPF $0 both
   const period = uniquePeriod(3);
   const empId = `e2e-fgn-${Date.now()}`;
 
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/compute`, {
       data: { employees: [emp({ employeeId: empId, ow: 4500, citizenStatus: 'FOREIGNER', age: 40 })] },
@@ -553,7 +554,7 @@ test('[CPF-PR-GRAD] PR Year 2 graduated — employee 15%, employer 9% (OW 4000 �
   const period = uniquePeriod(18);
   const empId = `e2e-pr2-${Date.now()}`;
 
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/compute`, {
       data: { employees: [emp({ employeeId: empId, ow: 4000, citizenStatus: 'PR_YEAR2', age: 30 })] },
@@ -578,7 +579,7 @@ test('[CPF-RATES-2026] AW within annual ceiling — both OW and AW get full CPF 
   const period = uniquePeriod(11);
   const empId = `e2e-aw-low-${Date.now()}`;
 
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     // Early-year scenario: ytdOw=0, this month OW=5000, plus AW bonus of 10000.
     // AW remaining = 102000 − 0 − 5000 = 97000 ; AW subject = min(10000, 97000) = 10000
@@ -606,7 +607,7 @@ test('[CPF-RATES-2026] AW partially capped — ytdOw consumes annual room (only 
   const period = uniquePeriod(12);
   const empId = `e2e-aw-cap-${Date.now()}`;
 
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     // Year-end senior: ytdOw=88,000, OW=8000 (at 2026 ceiling), AW=20000 bonus
     //   awCeilingRemaining = max(102000 − 88000 − 8000, 0) = 6000
@@ -633,7 +634,7 @@ test('[CPF-RATES-2026] AW exhausted — ytdOw + this-month OW = annual ceiling, 
   const period = uniquePeriod(13);
   const empId = `e2e-aw-exh-${Date.now()}`;
 
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     // Very high earner: ytdOw=94000 + this month OW=8000 = 102000 (= annual ceiling)
     //   awCeilingRemaining = max(102000 − 94000 − 8000, 0) = 0
@@ -662,7 +663,7 @@ test('[CPF-PR-GRAD] PR Year 1 graduated — employee 5%, employer 4% (OW 4000 �
   const period = uniquePeriod(4);
   const empId = `e2e-pr1-${Date.now()}`;
 
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/compute`, {
       data: { employees: [emp({ employeeId: empId, ow: 4000, citizenStatus: 'PR_YEAR1', age: 30 })] },
@@ -684,7 +685,7 @@ test('[SDL-ACT] SDL bounds: floor $2.00, linear $5.00, max $11.25 at SGD 4,500 c
   const empMid = `e2e-sdl-mid-${Date.now()}`;
   const empHi  = `e2e-sdl-hi-${Date.now()}`;
 
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/compute`, {
       data: {
@@ -717,7 +718,7 @@ test('[SDL-ACT] zero-gross exemption: gross = $0 → SDL = $0 (not the $2.00 flo
   const admin = await ctxAs('SUPER_ADMIN');
   const period = uniquePeriod(19);
   const empId = `e2e-sdl-zero-${Date.now()}`;
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     // Use FOREIGNER so OW doesn't trigger CPF; ow=0 means zero gross
     await admin.post(`/api/payroll/runs/${run.id}/compute`, {
@@ -736,7 +737,7 @@ test('[SDL-ACT] cap boundary precision: gross = SGD 4,500 → SDL = $11.25; gros
   const period = uniquePeriod(20);
   const empAtCap     = `e2e-sdl-at-${Date.now()}`;
   const empJustBelow = `e2e-sdl-jb-${Date.now()}`;
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/compute`, {
       data: {
@@ -769,7 +770,7 @@ test('[CPF-RATES-2026] AW capped by 102000 − ytdAw branch (independent of ytdO
   const admin = await ctxAs('SUPER_ADMIN');
   const period = uniquePeriod(21);
   const empId = `e2e-aw-ytdaw-${Date.now()}`;
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     // ytdOw=0 (low earner whose pay is mostly bonus-driven), ytdAw=100000 already
     //   awCeilingRemaining   = 102000 − 0 − 5000   = 97000  (lots of room from this side)
@@ -797,7 +798,7 @@ test('[CPF-RATES-2026] AW + OW interactions — exec scenario with OW ceiling AN
   const admin = await ctxAs('SUPER_ADMIN');
   const period = uniquePeriod(22);
   const empId = `e2e-aw-exec-${Date.now()}`;
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     // Senior exec under Jan 2026 rates: OW=10000 (capped to 8000), AW=30000 year-end bonus,
     // ytdOw=80000 from earlier months
@@ -827,16 +828,16 @@ test('SYSTEM: duplicate run (same period + runType) returns 409', async () => {
   const admin = await ctxAs('SUPER_ADMIN');
   const period = uniquePeriod(6);
 
-  const first = await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } });
+  const first = await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } });
   expect(first.status()).toBe(201);
   const run = await first.json();
   try {
-    const dup = await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } });
+    const dup = await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } });
     expect(dup.status(), 'second MONTHLY for same period must 409').toBe(409);
     expect((await dup.json()).error).toMatch(/already exists/i);
 
     // ADHOC for same period is allowed (supplemental run)
-    const adhoc = await admin.post('/api/payroll/runs', { data: { period, runType: 'ADHOC' } });
+    const adhoc = await admin.post('/api/payroll/runs', { data: { period, runType: 'ADHOC', legalEntityId: await primaryLegalEntityId(admin) } });
     expect(adhoc.status(), 'ADHOC supplemental for same period is allowed').toBe(201);
     await cancelRun(admin, (await adhoc.json()).id);
   } finally {
@@ -851,7 +852,7 @@ test('SYSTEM: state-machine guards — cannot compute FINALISED, cannot finalise
   const period = uniquePeriod(7);
   const empId = `e2e-guard-${Date.now()}`;
 
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     // Cannot finalise DRAFT (not yet APPROVED)
     const finDraft = await admin.post(`/api/payroll/runs/${run.id}/finalise`);
@@ -892,7 +893,7 @@ test('SYSTEM: employee fetches their own published payslip via /payslips/me', as
   expect(realEmp, 'need at least one real employee').toBeTruthy();
 
   const period = uniquePeriod(8);
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/compute`, {
       data: { employees: [emp({ employeeId: realEmp.id, ow: 5500, citizenStatus: 'SC', age: 35 })] },
@@ -942,7 +943,7 @@ test('[EA-SECT-20] mid-month STARTER — salary pro-rated by (worked / total) wo
   const expectedSalary = proRatedSalary(monthly, workedWd, totalWd);
   const ctx = `[period=${period} totalWd=${totalWd} workedWd=${workedWd} (re-run with E2E_PAYROLL_SEED=${process.env.E2E_PAYROLL_SEED ?? Math.floor(Date.now() / 86_400_000)})]`;
 
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/compute`, {
       data: { employees: [emp({
@@ -978,7 +979,7 @@ test('[EA-SECT-20] mid-month LEAVER — pro-rated to working days before exit', 
   const expectedSalary = proRatedSalary(monthly, workedWd, totalWd);
   const ctx = `[period=${period} totalWd=${totalWd} workedWd=${workedWd}]`;
 
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/compute`, {
       data: { employees: [emp({
@@ -1014,7 +1015,7 @@ test('[EA-SECT-20] same-period joiner AND leaver — short stint pro-rated to wo
   const expectedSalary = proRatedSalary(monthly, workedWd, totalWd);
   const ctx = `[period=${period} totalWd=${totalWd} workedWd=${workedWd}]`;
 
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/compute`, {
       data: { employees: [emp({
@@ -1055,7 +1056,7 @@ test('[EA-SECT-20] WORKING-TYPE CHANGE mid-period (FT → PT) — terminate + re
   const expectedFt = proRatedSalary(ftMonthly, ftWorked, totalWd);
   const expectedPt = proRatedSalary(ptMonthly, ptWorked, totalWd);
 
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/compute`, {
       data: {
@@ -1123,7 +1124,7 @@ test('[EA-SECT-38] OT paycode is wages — flows into OW base, gross, and CPF', 
   // ≈ (60000 / 52 / 44) × 1.5 × 10 ≈ $393.36
 
   const otComponent = await findComponent(admin, 'OT_PAY');
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     // Step 1 — add OT paycode (must precede compute so the line item exists when compute runs)
     const addPaycode = await admin.post(`/api/payroll/runs/${run.id}/paycodes`, {
@@ -1165,7 +1166,7 @@ test('[EA-SECT-38] OT + basic above Jan 2026 SGD 8,000 ceiling → CPF capped at
   const basic   = 7500;
   const otAmt   = 1000;
   const otComp  = await findComponent(admin, 'OT_PAY');
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/paycodes`, {
       data: { employeeId: empId, componentId: otComp.id, description: 'Weekday OT', amount: otAmt },
@@ -1216,7 +1217,7 @@ test('[CPF-WAGES-DEF] OIL cash-out is wages → subject to CPF as OW (compliance
   const oilAmt = 100;  // assumed to be a CASH PAYMENT for accrued OIL hours
   const oilComp = await findComponent(admin, 'OIL');
 
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/paycodes`, {
       data: { employeeId: empId, componentId: oilComp.id, description: 'OIL cash-out', amount: oilAmt },
@@ -1257,7 +1258,7 @@ test('[CPF-WAGES-DEF] DEDUCTION (staff loan) reduces net only — gross + CPF ba
   const loanComp = await findComponent(admin, 'STAFF_LOAN');
   expect((loanComp as any).wageType, 'STAFF_LOAN must be wageType=DEDUCTION').toBe('DEDUCTION');
 
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/paycodes`, {
       data: { employeeId: empId, componentId: loanComp.id, description: 'Staff loan #2', amount: loanAmt },
@@ -1290,7 +1291,7 @@ test('SYSTEM: DEDUCTION absolute-value safeguard — negative input still deduct
   const basic = 4000;
   const loanComp = await findComponent(admin, 'STAFF_LOAN');
 
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     // Deliberately enter the amount as NEGATIVE
     await admin.post(`/api/payroll/runs/${run.id}/paycodes`, {
@@ -1326,7 +1327,7 @@ test('[IRAS-EMP-INCOME] REIMBURSEMENT (medical) is not income — net pay only, 
   expect((reimbComp as any).wageType, 'MED_REIMB must be wageType=REIMBURSEMENT').toBe('REIMBURSEMENT');
   expect((reimbComp as any).isCpfApplicable, 'reimbursements are not CPF-applicable').toBe(false);
 
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/paycodes`, {
       data: { employeeId: empId, componentId: reimbComp.id, description: 'GP visit reimbursement', amount: reimbAmt },
@@ -1365,7 +1366,7 @@ test('[COMPOSITE] OT + DEDUCTION + REIMBURSEMENT in one payslip — statutory ru
   const loanComp  = await findComponent(admin, 'STAFF_LOAN');
   const medComp   = await findComponent(admin, 'MED_REIMB');
 
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     for (const [comp, amount, desc] of [
       [otComp,   otAmt,   'OT (mixed test)'],
@@ -1413,7 +1414,7 @@ test('SYSTEM RBAC: EMPLOYEE cannot create a run; RECRUITER cannot finalise', asy
   const admin = await ctxAs('SUPER_ADMIN');
   const period = uniquePeriod(10);
   const empId = `e2e-rbac-${Date.now()}`;
-  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY' } })).json();
+  const run = await (await admin.post('/api/payroll/runs', { data: { period, runType: 'MONTHLY', legalEntityId: await primaryLegalEntityId(admin) } })).json();
   try {
     await admin.post(`/api/payroll/runs/${run.id}/compute`, {
       data: { employees: [emp({ employeeId: empId, ow: 3000, citizenStatus: 'SC', age: 30 })] },
