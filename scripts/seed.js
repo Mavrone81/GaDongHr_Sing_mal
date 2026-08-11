@@ -234,9 +234,29 @@ async function seedPayroll() {
         ['2025-12-25', 'Christmas Day'],
       ];
       for (const [date, name] of phs) {
+        // NOT `ON CONFLICT (date)`. payroll's public_holidays became
+        // @@unique([tenantId, legalEntityId, date]) when holidays went
+        // per-entity, so the old single-column inference matches no constraint
+        // and Postgres rejects the statement outright:
+        //   "there is no unique or exclusion constraint matching the
+        //    ON CONFLICT specification"
+        //
+        // Nor can the composite simply be named instead: legalEntityId is NULL
+        // for these national holidays, and Postgres treats NULLs as DISTINCT in
+        // a unique index, so the conflict would never fire and every re-run
+        // would insert duplicates. An explicit existence check is idempotent
+        // regardless of NULL semantics.
+        //
+        // leave-service still has @@unique([date]) and seeds fine — the two
+        // schemas have diverged, which is worth knowing when they are next
+        // reconciled.
         await db.query(
-          `INSERT INTO public_holidays (id, date, name, year) VALUES ($1,$2,$3,2025)
-           ON CONFLICT (date) DO NOTHING`,
+          `INSERT INTO public_holidays (id, date, name, year)
+           SELECT $1,$2,$3,2025
+           WHERE NOT EXISTS (
+             SELECT 1 FROM public_holidays
+             WHERE date = $2::date AND "legalEntityId" IS NULL
+           )`,
           [uuidv4(), date, name]
         );
       }

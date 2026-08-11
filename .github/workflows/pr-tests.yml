@@ -192,6 +192,12 @@ jobs:
       # SUPER_ADMIN to be admin@hrms.com, so seed:admin must create that email.
       ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL || 'admin@hrms.com' }}
       ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD || 'CiAdmin#2026!' }}
+      # scripts/seed-employees.js REQUIRES this and deliberately has no fallback
+      # literal, so CI must supply one. Without it the employee seed threw, the
+      # step swallowed it (`|| echo "::warning::"`), and every spec that needs an
+      # employee failed much later with "must have at least one employee" —
+      # attendance ATT-01/07/08, the claims suite and parts of payroll.
+      SEED_EMPLOYEE_PASSWORD: ${{ secrets.SEED_EMPLOYEE_PASSWORD || 'CiSeedEmp#2026!' }}
       NEXT_PUBLIC_API_URL: http://localhost:4000/api
       SMTP_USER: ${{ secrets.SMTP_USER || '' }}
       SMTP_PASS: ${{ secrets.SMTP_PASS || '' }}
