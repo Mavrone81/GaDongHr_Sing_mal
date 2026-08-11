@@ -17,4 +17,7 @@ RUN npm install --omit=dev
 COPY services/statutory-sg-service/ ./
 RUN npx prisma generate
 EXPOSE 4021
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node src/index.js"]
+# Seed the canonical rate version after the schema exists. Idempotent, and
+# NOT optional: compute-batch fails closed without an active rate version,
+# so a fresh deployment that skipped this could not run payroll at all.
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node scripts/seed-rates.js && node src/index.js"]
