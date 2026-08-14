@@ -85,7 +85,7 @@ app.post('/offboarding/initiate', authenticate, authorize(ROLES.SUPER_ADMIN, ROL
     const { employeeId, employeeName, department, reason, lastWorkingDate, noticeGivenDate, noticePeriodDays, isForeignEmployee } = req.body;
     if (!employeeId || !reason || !lastWorkingDate) return res.status(400).json({ error: 'employeeId, reason, lastWorkingDate required' });
 
-    const existing = await prisma.offboardingCase.findUnique({ where: { employeeId } });
+    const existing = await prisma.offboardingCase.findFirst({ where: { employeeId } });
     if (existing) return res.status(409).json({ error: 'Offboarding case already exists for this employee' });
 
     const isForeign = !!isForeignEmployee;

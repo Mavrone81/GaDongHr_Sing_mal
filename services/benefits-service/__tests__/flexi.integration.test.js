@@ -97,11 +97,11 @@ jest.mock('@prisma/client', () => ({
     openEnrollmentPeriod: { create: jest.fn(), findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]), update: jest.fn() },
     // BEN-002 mocks
     flexiCategory: {
-      create: mockCatCreate, findUnique: mockCatFindUnique,
+      create: mockCatCreate, findUnique: mockCatFindUnique, findFirst: mockCatFindUnique,
       findMany: mockCatFindMany, update: mockCatUpdate,
     },
     flexiWalletConfig: {
-      findMany: mockCfgFindMany, findUnique: mockCfgFindUnique, upsert: mockCfgUpsert,
+      findMany: mockCfgFindMany, findUnique: mockCfgFindUnique, findFirst: mockCfgFindUnique, upsert: mockCfgUpsert,
     },
     flexiWallet: {
       findUnique: mockWalletFindUnique, findMany: mockWalletFindMany,

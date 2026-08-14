@@ -47,7 +47,7 @@ jest.mock('@prisma/client', () => ({
     attendanceAnomaly: { findMany: mockAnomalyFindMany, findUnique: mockAnomalyFindUnique, update: mockAnomalyUpdate, upsert: mockAnomalyUpsert },
     attendanceRecord:  { findMany: mockRecordFindMany, findUnique: jest.fn(), upsert: jest.fn(), update: jest.fn(), findFirst: jest.fn() },
     rosterEntry:       { findMany: mockRosterFindMany, findUnique: mockRosterFindUnique },
-    attendancePeriod:  { findUnique: jest.fn(), findMany: jest.fn(), upsert: jest.fn(), update: jest.fn() },
+    attendancePeriod:  { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), upsert: jest.fn(), update: jest.fn() },
     auditLog:          { create: mockAuditCreate },
     employeeWorkLocation: { findMany: jest.fn().mockResolvedValue([]) },
     shiftTemplate: { findMany: jest.fn().mockResolvedValue([]) },

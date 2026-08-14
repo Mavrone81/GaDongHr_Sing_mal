@@ -95,7 +95,7 @@ jest.mock('@prisma/client', () => ({
     payrollComponent: { findMany: jest.fn().mockResolvedValue([]) },
     payrollOverride: { findMany: jest.fn().mockResolvedValue([]) },
     payComponent: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn() },
-    payrollPeriodConfig: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn() },
+    payrollPeriodConfig: { findUnique: jest.fn(), findFirst: jest.fn().mockResolvedValue(null), upsert: jest.fn() },
     publicHoliday: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn(), delete: jest.fn() },
   })),
 }));

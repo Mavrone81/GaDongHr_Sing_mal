@@ -97,7 +97,7 @@ jest.mock('@prisma/client', () => ({
     payrollComponent: { findMany: jest.fn().mockResolvedValue([]) },
     payrollOverride: { findMany: mockPayrollOverrideFindMany },
     payComponent: { findMany: jest.fn().mockResolvedValue([]), findUnique: mockPayComponentFindUnique },
-    payrollPeriodConfig: { findUnique: mockPeriodConfigFindUnique, upsert: mockPeriodConfigUpsert },
+    payrollPeriodConfig: { findUnique: mockPeriodConfigFindUnique, findFirst: mockPeriodConfigFindUnique, upsert: mockPeriodConfigUpsert },
     publicHoliday: { findMany: mockPublicHolidayFindMany, create: mockPublicHolidayCreate, delete: mockPublicHolidayDelete },
   })),
 }));

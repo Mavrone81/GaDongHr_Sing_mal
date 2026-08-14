@@ -31,8 +31,8 @@ const mockDb = {
   interviewRound: { create: jest.fn(), update: jest.fn() },
   policyDocument: { findMany: jest.fn().mockResolvedValue([]) },
   policyAcknowledgement: { createMany: jest.fn() },
-  buddyAssignment: { upsert: jest.fn(), findUnique: jest.fn() },
-  offerLetter: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+  buddyAssignment: { upsert: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn() },
+  offerLetter: { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
   $transaction: jest.fn(async (ops) => {
     if (Array.isArray(ops)) return Promise.all(ops);
     return ops(mockDb);
@@ -77,7 +77,7 @@ beforeEach(() => {
 // ── OL-01 POST — creates offer letter for OFFER-stage candidate ───────────────
 test('OL-01 POST /candidates/:id/offer-letter creates offer letter', async () => {
   mockDb.candidate.findUnique.mockResolvedValue(CANDIDATE_OFFER);
-  mockDb.offerLetter.findUnique.mockResolvedValue(null);
+  mockDb.offerLetter.findFirst.mockResolvedValue(null);
   mockDb.offerLetter.create.mockResolvedValue(OFFER_LETTER);
 
   const res = await request(app).post('/recruitment/candidates/cand-001/offer-letter').send({
@@ -106,7 +106,7 @@ test('OL-03 POST offer-letter returns 400 when candidate not at OFFER stage', as
 // ── OL-04 POST — updates existing letter (upsert) ────────────────────────────
 test('OL-04 POST offer-letter upserts existing letter', async () => {
   mockDb.candidate.findUnique.mockResolvedValue(CANDIDATE_OFFER);
-  mockDb.offerLetter.findUnique.mockResolvedValue(OFFER_LETTER);
+  mockDb.offerLetter.findFirst.mockResolvedValue(OFFER_LETTER);
   const updated = { ...OFFER_LETTER, offeredSalary: 7000 };
   mockDb.offerLetter.update.mockResolvedValue(updated);
 
@@ -120,7 +120,7 @@ test('OL-04 POST offer-letter upserts existing letter', async () => {
 // ── OL-05 POST — dispatches e-sign when sendForEsign=true ────────────────────
 test('OL-05 POST offer-letter dispatches e-sign request when sendForEsign=true', async () => {
   mockDb.candidate.findUnique.mockResolvedValue(CANDIDATE_OFFER);
-  mockDb.offerLetter.findUnique.mockResolvedValue(null);
+  mockDb.offerLetter.findFirst.mockResolvedValue(null);
   mockDb.offerLetter.create.mockResolvedValue(OFFER_LETTER);
   mockDb.offerLetter.update.mockResolvedValue({ ...OFFER_LETTER, esignRequestId: 'esign-001', status: 'SENT' });
 
@@ -143,7 +143,7 @@ test('OL-05 POST offer-letter dispatches e-sign request when sendForEsign=true',
 // ── OL-06 POST — e-sign failure is non-blocking ───────────────────────────────
 test('OL-06 POST offer-letter succeeds even when e-sign service is down', async () => {
   mockDb.candidate.findUnique.mockResolvedValue(CANDIDATE_OFFER);
-  mockDb.offerLetter.findUnique.mockResolvedValue(null);
+  mockDb.offerLetter.findFirst.mockResolvedValue(null);
   mockDb.offerLetter.create.mockResolvedValue(OFFER_LETTER);
   global.fetch = jest.fn().mockRejectedValue(new Error('ECONNREFUSED'));
 
@@ -157,7 +157,7 @@ test('OL-06 POST offer-letter succeeds even when e-sign service is down', async 
 
 // ── OL-07 GET /candidates/:id/offer-letter — returns letter ──────────────────
 test('OL-07 GET /candidates/:id/offer-letter returns existing letter', async () => {
-  mockDb.offerLetter.findUnique.mockResolvedValue(OFFER_LETTER);
+  mockDb.offerLetter.findFirst.mockResolvedValue(OFFER_LETTER);
   const res = await request(app).get('/recruitment/candidates/cand-001/offer-letter');
   expect(res.status).toBe(200);
   expect(res.body.status).toBe('DRAFT');
@@ -165,14 +165,14 @@ test('OL-07 GET /candidates/:id/offer-letter returns existing letter', async () 
 
 // ── OL-08 GET — 404 when no letter exists ────────────────────────────────────
 test('OL-08 GET /candidates/:id/offer-letter returns 404 when not found', async () => {
-  mockDb.offerLetter.findUnique.mockResolvedValue(null);
+  mockDb.offerLetter.findFirst.mockResolvedValue(null);
   const res = await request(app).get('/recruitment/candidates/cand-001/offer-letter');
   expect(res.status).toBe(404);
 });
 
 // ── OL-09 PUT — update status to SIGNED ──────────────────────────────────────
 test('OL-09 PUT /candidates/:id/offer-letter marks SIGNED', async () => {
-  mockDb.offerLetter.findUnique.mockResolvedValue(OFFER_LETTER);
+  mockDb.offerLetter.findFirst.mockResolvedValue(OFFER_LETTER);
   mockDb.offerLetter.update.mockResolvedValue({ ...OFFER_LETTER, status: 'SIGNED', signedAt: new Date() });
 
   const res = await request(app).put('/recruitment/candidates/cand-001/offer-letter').send({ status: 'SIGNED' });
@@ -182,7 +182,7 @@ test('OL-09 PUT /candidates/:id/offer-letter marks SIGNED', async () => {
 
 // ── OL-10 PUT — update status to DECLINED with reason ────────────────────────
 test('OL-10 PUT /candidates/:id/offer-letter marks DECLINED with reason', async () => {
-  mockDb.offerLetter.findUnique.mockResolvedValue(OFFER_LETTER);
+  mockDb.offerLetter.findFirst.mockResolvedValue(OFFER_LETTER);
   mockDb.offerLetter.update.mockResolvedValue({ ...OFFER_LETTER, status: 'DECLINED', declinedReason: 'Counter offer accepted' });
 
   const res = await request(app).put('/recruitment/candidates/cand-001/offer-letter').send({
@@ -201,14 +201,14 @@ test('OL-11 PUT /candidates/:id/offer-letter 400 on invalid status', async () =>
 
 // ── OL-12 PUT — 404 when no letter exists ────────────────────────────────────
 test('OL-12 PUT /candidates/:id/offer-letter returns 404 when no letter', async () => {
-  mockDb.offerLetter.findUnique.mockResolvedValue(null);
+  mockDb.offerLetter.findFirst.mockResolvedValue(null);
   const res = await request(app).put('/recruitment/candidates/cand-001/offer-letter').send({ status: 'SIGNED' });
   expect(res.status).toBe(404);
 });
 
 // ── OL-13 GET PDF — streams PDF bytes ────────────────────────────────────────
 test('OL-13 GET /candidates/:id/offer-letter/pdf streams PDF content', async () => {
-  mockDb.offerLetter.findUnique.mockResolvedValue(OFFER_LETTER);
+  mockDb.offerLetter.findFirst.mockResolvedValue(OFFER_LETTER);
   mockDb.candidate.findUnique.mockResolvedValue({ ...CANDIDATE_OFFER, job: JOB });
 
   const res = await request(app).get('/recruitment/candidates/cand-001/offer-letter/pdf');
@@ -219,7 +219,7 @@ test('OL-13 GET /candidates/:id/offer-letter/pdf streams PDF content', async () 
 
 // ── OL-14 GET PDF — 404 when no letter ───────────────────────────────────────
 test('OL-14 GET /candidates/:id/offer-letter/pdf returns 404 when no letter', async () => {
-  mockDb.offerLetter.findUnique.mockResolvedValue(null);
+  mockDb.offerLetter.findFirst.mockResolvedValue(null);
   const res = await request(app).get('/recruitment/candidates/cand-001/offer-letter/pdf');
   expect(res.status).toBe(404);
 });

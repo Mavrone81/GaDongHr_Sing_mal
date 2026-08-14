@@ -50,7 +50,7 @@ const mockAuditCreate      = jest.fn().mockResolvedValue({});
 
 jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({
-    attendancePeriod: { findMany: mockPeriodFindMany, findUnique: mockPeriodFindUnique, upsert: mockPeriodUpsert, update: mockPeriodUpdate },
+    attendancePeriod: { findMany: mockPeriodFindMany, findUnique: mockPeriodFindUnique, findFirst: mockPeriodFindUnique, upsert: mockPeriodUpsert, update: mockPeriodUpdate },
     attendanceRecord: { findMany: mockRecordFindMany, findUnique: mockRecordFindUnique, update: mockRecordUpdate, upsert: jest.fn(), findFirst: jest.fn() },
     rosterEntry:      { findUnique: mockRosterFindUnique, findMany: jest.fn().mockResolvedValue([]) },
     auditLog:         { create: mockAuditCreate },

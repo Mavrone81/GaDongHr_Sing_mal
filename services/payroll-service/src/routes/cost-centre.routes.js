@@ -246,7 +246,7 @@ router.post('/payroll/runs/:id/journal', authenticate, authorize(...WRITE_ROLES)
 
 router.get('/payroll/runs/:id/journal', authenticate, authorize(...READ_ROLES), async (req, res, next) => {
   try {
-    const journal = await prisma.payrollJournal.findUnique({
+    const journal = await prisma.payrollJournal.findFirst({
       where: { runId: req.params.id },
       include: { entries: { include: { costCentre: true } } },
     });
@@ -271,7 +271,7 @@ router.get('/payroll/runs/:id/journal/export', authenticate, authorize(...READ_R
       return res.status(400).json({ error: `format must be one of: ${supported.join(', ')}` });
     }
 
-    const journal = await prisma.payrollJournal.findUnique({
+    const journal = await prisma.payrollJournal.findFirst({
       where: { runId: req.params.id },
       include: { entries: { include: { costCentre: true } } },
     });

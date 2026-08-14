@@ -58,7 +58,7 @@ jest.mock('@prisma/client', () => ({
     cpfSubmission:   { findMany: jest.fn().mockResolvedValue([]) },
     auditLog:        { create: jest.fn(), findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
     payslipSlaAlert: { upsert: jest.fn(), findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0), updateMany: jest.fn() },
-    payrollPeriodConfig: { findUnique: jest.fn().mockResolvedValue(null), findFirst: jest.fn().mockResolvedValue(null) },
+    payrollPeriodConfig: { findUnique: jest.fn(), findFirst: jest.fn().mockResolvedValue(null),},
     publicHoliday:   { findMany: jest.fn().mockResolvedValue([]) },
     payComponent:    { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
     cpfRate:         { count: jest.fn().mockResolvedValue(0), updateMany: jest.fn(), createMany: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },

@@ -261,7 +261,7 @@ router.get('/sfc/balance/:employeeId', authenticate, async (req, res, next) => {
     if (!isAdmin && requesterEmpId !== req.params.employeeId) {
       return res.status(403).json({ error: 'Cannot view another employee\'s SFC balance' });
     }
-    const bal = await prisma.employeeSfcBalance.findUnique({ where: { employeeId: req.params.employeeId } });
+    const bal = await prisma.employeeSfcBalance.findFirst({ where: { employeeId: req.params.employeeId } });
     if (!bal) {
       return res.json({
         employeeId: req.params.employeeId,
@@ -320,7 +320,7 @@ router.post('/sfc/declarations', authenticate, async (req, res, next) => {
     if (!enrollment) return res.status(404).json({ error: 'Enrollment not found' });
     if (enrollment.employeeId !== employeeId) return res.status(400).json({ error: 'Enrollment does not belong to employee' });
 
-    const bal = await prisma.employeeSfcBalance.findUnique({ where: { employeeId } });
+    const bal = await prisma.employeeSfcBalance.findFirst({ where: { employeeId } });
     const currentBalance = bal?.balanceAmount || 0;
     const check = validateSfcDeclaration(amount, currentBalance);
     if (!check.ok) return res.status(400).json({ error: check.error, available: check.available, requested: check.requested });

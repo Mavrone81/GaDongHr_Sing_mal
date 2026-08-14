@@ -298,7 +298,7 @@ router.get('/org-chart', authenticate, async (req, res, next) => {
 // ── GET /code/:code ───────────────────────────────────────────────────────────
 router.get('/code/:code', authenticate, authorize('employee:view', ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
   try {
-    const emp = await prisma.employee.findUnique({
+    const emp = await prisma.employee.findFirst({
       where: { employeeCode: req.params.code },
       include: { emergencyContacts: true, documents: { select: { id: true, docType: true, fileName: true, createdAt: true, expiryDate: true } } },
     });
@@ -357,7 +357,7 @@ router.post('/applications/prefill', authenticate, authorize('employee:manage', 
     } = req.body;
     if (!userId || !email || !fullName) return res.status(400).json({ error: 'userId, email, fullName required' });
 
-    const existing = await prisma.employeeApplication.findUnique({ where: { userId } });
+    const existing = await prisma.employeeApplication.findFirst({ where: { userId } });
     if (existing) {
       // Only overwrite a field if HR actually provided a value — don't blank out data the employee filled
       const patch = {};
@@ -1116,7 +1116,7 @@ router.post('/apply', async (req, res, next) => {
 
     if (!fields.fullName) return res.status(400).json({ error: 'fullName is required' });
 
-    const existing = await prisma.employeeApplication.findUnique({ where: { userId } });
+    const existing = await prisma.employeeApplication.findFirst({ where: { userId } });
 
     // Step 4: Consume token (marks invite as used so it can't be replayed)
     // Only consume if the token is still valid — for prefill-created applications the

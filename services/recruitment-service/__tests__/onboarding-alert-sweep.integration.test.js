@@ -40,7 +40,7 @@ const mockDb = {
   onboardingTask:     { createMany: jest.fn(), create: jest.fn(), findMany: mockTaskFindMany, update: jest.fn() },
   interviewRound:     { create: jest.fn(), update: jest.fn() },
   workPass:           { findMany: jest.fn().mockResolvedValue([]) },
-  buddyAssignment:    { findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+  buddyAssignment:    { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
   $transaction:       jest.fn(),
 };
 
