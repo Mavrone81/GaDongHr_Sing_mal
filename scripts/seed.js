@@ -251,11 +251,15 @@ async function seedPayroll() {
         // schemas have diverged, which is worth knowing when they are next
         // reconciled.
         await db.query(
+          // $2 must carry an explicit cast at BOTH uses: with a bare $2 in the
+          // SELECT list and $2::date in the subquery, Postgres reports
+          // "inconsistent types deduced for parameter $2" and the phase fails.
+          // (Caught by the seed step the day it became fail-loud.)
           `INSERT INTO public_holidays (id, date, name, year)
-           SELECT $1,$2,$3,2025
+           SELECT $1, $2::timestamp, $3, 2025
            WHERE NOT EXISTS (
              SELECT 1 FROM public_holidays
-             WHERE date = $2::date AND "legalEntityId" IS NULL
+             WHERE date = $2::timestamp AND "legalEntityId" IS NULL
            )`,
           [uuidv4(), date, name]
         );
