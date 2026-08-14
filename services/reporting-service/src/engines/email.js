@@ -25,7 +25,9 @@ function getTransporter() {
   _transporter = nodemailer.createTransport({
     host,
     port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: process.env.SMTP_SECURE === 'true',
+    // Same rule as notification-service: explicit flag, or implied by port 465.
+    secure: process.env.SMTP_SECURE === 'true'
+            || parseInt(process.env.SMTP_PORT || '587', 10) === 465,
     auth: process.env.SMTP_USER
       ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
       : undefined,
