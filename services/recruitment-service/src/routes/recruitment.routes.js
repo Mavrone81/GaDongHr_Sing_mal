@@ -664,7 +664,7 @@ router.post('/onboarding/policy-documents/seed',
     try {
       let created = 0, skipped = 0;
       for (const doc of REQUIRED_DOCS) {
-        const existing = await prisma.policyDocument.findUnique({ where: { code: doc.code } });
+        const existing = await prisma.policyDocument.findFirst({ where: { code: doc.code } });
         if (existing) { skipped++; continue; }
         await prisma.policyDocument.create({
           data: { id: uuidv4(), ...doc, createdBy: req.user.sub },
@@ -776,7 +776,7 @@ router.post('/onboarding/:employeeId/buddy', authenticate, authorize(ROLES.SUPER
     const startDate   = newHireEmp?.startDate ? new Date(newHireEmp.startDate) : null;
 
     // Upsert — HR can reassign the buddy at any time
-    const existing = await prisma.buddyAssignment.findUnique({ where: { employeeId } });
+    const existing = await prisma.buddyAssignment.findFirst({ where: { employeeId } });
     let assignment;
     if (existing) {
       assignment = await prisma.buddyAssignment.update({
@@ -834,7 +834,7 @@ router.post('/onboarding/:employeeId/buddy', authenticate, authorize(ROLES.SUPER
 // GET /onboarding/:employeeId/buddy — retrieve buddy assignment for a new hire
 router.get('/onboarding/:employeeId/buddy', authenticate, async (req, res, next) => {
   try {
-    const assignment = await prisma.buddyAssignment.findUnique({ where: { employeeId: req.params.employeeId } });
+    const assignment = await prisma.buddyAssignment.findFirst({ where: { employeeId: req.params.employeeId } });
     if (!assignment) return res.status(404).json({ error: 'No buddy assigned for this employee' });
     res.json(assignment);
   } catch (err) { next(err); }
@@ -843,7 +843,7 @@ router.get('/onboarding/:employeeId/buddy', authenticate, async (req, res, next)
 // DELETE /onboarding/:employeeId/buddy — remove buddy assignment (HR Admin only)
 router.delete('/onboarding/:employeeId/buddy', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN), async (req, res, next) => {
   try {
-    const existing = await prisma.buddyAssignment.findUnique({ where: { employeeId: req.params.employeeId } });
+    const existing = await prisma.buddyAssignment.findFirst({ where: { employeeId: req.params.employeeId } });
     if (!existing) return res.status(404).json({ error: 'No buddy assignment found' });
     await prisma.buddyAssignment.delete({ where: { employeeId: req.params.employeeId } });
     res.status(204).send();
@@ -1331,7 +1331,7 @@ router.post('/candidates/:id/offer-letter',
       });
 
       // Upsert OfferLetter record
-      const existing = await prisma.offerLetter.findUnique({ where: { candidateId: candidate.id } });
+      const existing = await prisma.offerLetter.findFirst({ where: { candidateId: candidate.id } });
 
       let letter;
       if (existing) {
@@ -1417,7 +1417,7 @@ router.get('/candidates/:id/offer-letter',
   authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN),
   async (req, res, next) => {
     try {
-      const letter = await prisma.offerLetter.findUnique({ where: { candidateId: req.params.id } });
+      const letter = await prisma.offerLetter.findFirst({ where: { candidateId: req.params.id } });
       if (!letter) return res.status(404).json({ error: 'No offer letter found for this candidate' });
       res.json(letter);
     } catch (err) { next(err); }
@@ -1430,7 +1430,7 @@ router.get('/candidates/:id/offer-letter/pdf',
   authorize(ROLES.SUPER_ADMIN, ROLES.HR_ADMIN),
   async (req, res, next) => {
     try {
-      const letter = await prisma.offerLetter.findUnique({ where: { candidateId: req.params.id } });
+      const letter = await prisma.offerLetter.findFirst({ where: { candidateId: req.params.id } });
       if (!letter) return res.status(404).json({ error: 'No offer letter found for this candidate' });
 
       const candidate = await prisma.candidate.findUnique({
@@ -1530,7 +1530,7 @@ router.put('/candidates/:id/offer-letter',
         return res.status(400).json({ error: `status must be one of ${VALID.join(', ')}` });
       }
 
-      const existing = await prisma.offerLetter.findUnique({ where: { candidateId: req.params.id } });
+      const existing = await prisma.offerLetter.findFirst({ where: { candidateId: req.params.id } });
       if (!existing) return res.status(404).json({ error: 'No offer letter found for this candidate' });
 
       const updated = await prisma.offerLetter.update({

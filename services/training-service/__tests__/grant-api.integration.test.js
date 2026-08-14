@@ -45,7 +45,7 @@ const mockDb = {
     findUnique: jest.fn(), findMany: jest.fn(), update: jest.fn(), create: jest.fn(), upsert: jest.fn(), count: jest.fn(),
   },
   employeeSfcBalance: {
-    findUnique: jest.fn(), upsert: jest.fn(), update: jest.fn(),
+    findUnique: jest.fn(), findFirst: jest.fn(), upsert: jest.fn(), update: jest.fn(),
   },
   sfecLedger: {
     findUnique: jest.fn(), upsert: jest.fn(), update: jest.fn(),
@@ -215,7 +215,7 @@ test('G8 — GET /grants/ets/report aggregates ETS-eligible completions', async 
 
 // ── G9 ────────────────────────────────────────────────────────────────────────
 test('G9 — GET /sfc/balance/:employeeId returns 0 when not set', async () => {
-  mockDb.employeeSfcBalance.findUnique.mockResolvedValueOnce(null);
+  mockDb.employeeSfcBalance.findFirst.mockResolvedValueOnce(null);
 
   const res = await request(app)
     .get('/training/sfc/balance/emp-1')
@@ -254,7 +254,7 @@ test('G12 — POST /sfc/declarations decrements balance and writes SFC claim', a
   mockDb.trainingEnrollment.findUnique.mockResolvedValueOnce({
     id: 'enr-1', employeeId: 'emp-1', programId: 'prog-1', sfcDeclaredAmount: 0,
   });
-  mockDb.employeeSfcBalance.findUnique.mockResolvedValueOnce({
+  mockDb.employeeSfcBalance.findFirst.mockResolvedValueOnce({
     id: 'bal-1', employeeId: 'emp-1', balanceAmount: 500, lifetimeUsed: 0,
   });
   mockDb.employeeSfcBalance.upsert.mockResolvedValueOnce({
@@ -278,7 +278,7 @@ test('G13 — SFC declaration rejected when amount > balance', async () => {
   mockDb.trainingEnrollment.findUnique.mockResolvedValueOnce({
     id: 'enr-1', employeeId: 'emp-1', programId: 'prog-1',
   });
-  mockDb.employeeSfcBalance.findUnique.mockResolvedValueOnce({ balanceAmount: 100 });
+  mockDb.employeeSfcBalance.findFirst.mockResolvedValueOnce({ balanceAmount: 100 });
 
   const res = await request(app)
     .post('/training/sfc/declarations')

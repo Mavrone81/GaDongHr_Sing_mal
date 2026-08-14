@@ -715,7 +715,7 @@ app.post('/benefits/flexi-categories/seed', authenticate, authorize(...HR_ROLES)
   try {
     const results = { created: 0, skipped: 0 };
     for (const cat of WALLET_CATEGORIES) {
-      const exists = await prisma.flexiCategory.findUnique({ where: { code: cat.code } });
+      const exists = await prisma.flexiCategory.findFirst({ where: { code: cat.code } });
       if (exists) { results.skipped += 1; continue; }
       await prisma.flexiCategory.create({
         data: { id: uuidv4(), ...cat, createdBy: req.user.sub },
@@ -1052,7 +1052,7 @@ app.post('/benefits/flexi-claims', authenticate, async (req, res, next) => {
     }
 
     // Determine if auto-approve applies
-    const config = await prisma.flexiWalletConfig.findUnique({ where: { grade: wallet.employeeGrade || '' } }).catch(() => null);
+    const config = await prisma.flexiWalletConfig.findFirst({ where: { grade: wallet.employeeGrade || '' } }).catch(() => null);
     const autoApprove = shouldAutoApprove(amt, config);
 
     const claimData = {

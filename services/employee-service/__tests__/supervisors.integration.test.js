@@ -44,7 +44,7 @@ const mockEmpSupervisorDeleteMany = jest.fn();
 jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({
     employee: {
-      findUnique: mockFindUnique,
+      findUnique: mockFindUnique, findFirst: mockFindUnique,
       findMany: mockFindMany,
       findFirst: mockFindFirst,
       count: mockCount,

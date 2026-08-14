@@ -41,11 +41,11 @@ const mockDb = {
   payComponent:     { findUnique: jest.fn().mockResolvedValue(null) },
   payslipSlaAlert:  { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
   employeeCostCentre:  { findMany: jest.fn().mockResolvedValue([]) },
-  payrollJournal:      { findUnique: jest.fn(), delete: jest.fn(), create: jest.fn() },
+  payrollJournal:      { findUnique: jest.fn(), findFirst: jest.fn(), delete: jest.fn(), create: jest.fn() },
   payrollJournalEntry: { createMany: jest.fn() },
   $transaction: jest.fn(async (fn) => {
     if (typeof fn === 'function') return fn({
-      payrollJournal:      { findUnique: jest.fn(), delete: jest.fn(), create: jest.fn().mockResolvedValue({ id: 'j1' }) },
+      payrollJournal:      { findUnique: jest.fn(), findFirst: jest.fn(), delete: jest.fn(), create: jest.fn().mockResolvedValue({ id: 'j1' }) },
       payrollJournalEntry: { createMany: jest.fn() },
     });
     return Promise.all(fn);

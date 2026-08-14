@@ -65,7 +65,7 @@ jest.mock('@prisma/client', () => {
     if (typeof arg === 'function') {
       // Provide a tx client with the same surface as the main client
       return arg({
-        payrollJournal: { findUnique: mockJournalFindUnique, create: mockJournalCreate, delete: mockJournalDelete, update: mockJournalUpdate },
+        payrollJournal: { findUnique: mockJournalFindUnique, findFirst: mockJournalFindUnique, create: mockJournalCreate, delete: mockJournalDelete, update: mockJournalUpdate },
         payrollJournalEntry: { createMany: mockJournalEntryCreateMany },
         employeeCostCentre: { deleteMany: mockAllocDeleteMany, createMany: mockAllocCreateMany, findMany: mockAllocFindMany },
       });
@@ -85,7 +85,7 @@ jest.mock('@prisma/client', () => {
         deleteMany: mockAllocDeleteMany, createMany: mockAllocCreateMany,
       },
       payrollJournal: {
-        findUnique: mockJournalFindUnique, create: mockJournalCreate,
+        findUnique: mockJournalFindUnique, findFirst: mockJournalFindUnique, create: mockJournalCreate,
         delete: mockJournalDelete, update: mockJournalUpdate,
       },
       payrollJournalEntry: { createMany: mockJournalEntryCreateMany },
@@ -100,7 +100,7 @@ jest.mock('@prisma/client', () => {
       payrollComponent: { findMany: jest.fn().mockResolvedValue([]) },
       payrollOverride: { findMany: jest.fn().mockResolvedValue([]) },
       payComponent: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn() },
-      payrollPeriodConfig: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn() },
+      payrollPeriodConfig: { findUnique: jest.fn(), findFirst: jest.fn().mockResolvedValue(null), upsert: jest.fn() },
       publicHoliday: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn(), delete: jest.fn() },
       bikItem: { findMany: jest.fn().mockResolvedValue([]) },
       stockOptionExercise: { findMany: jest.fn().mockResolvedValue([]) },

@@ -30,7 +30,7 @@ const mockUpdate    = jest.fn();
 
 jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({
-    employee:           { findMany: mockFindMany, count: mockCount, findUnique: mockFindUnique, create: mockCreate, update: mockUpdate },
+    employee:           { findMany: mockFindMany, count: mockCount, findUnique: mockFindUnique, findFirst: mockFindUnique, create: mockCreate, update: mockUpdate },
     auditLog:           { create: jest.fn().mockResolvedValue({}) },
     employeeApplication: { findMany: jest.fn().mockResolvedValue([]) },
     salaryHistory:      { findMany: jest.fn().mockResolvedValue([]) },

@@ -318,7 +318,7 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
 
     // ── Fetch period config + public holidays for working-day pro-rating (MOM EA s.20) ──
     const [periodConfig, periodHolidays] = await Promise.all([
-      prisma.payrollPeriodConfig.findUnique({ where: { period: run.period } }),
+      prisma.payrollPeriodConfig.findFirst({ where: { period: run.period } }),
       prisma.publicHoliday.findMany({
         where: { date: { gte: periodStart, lte: periodEnd } },
         select: { date: true },
@@ -1749,7 +1749,7 @@ router.get('/period-config/:period', authenticate, authorize(ROLES.SUPER_ADMIN, 
     const pEnd   = new Date(y, m,     0);
 
     const [config, holidays] = await Promise.all([
-      prisma.payrollPeriodConfig.findUnique({ where: { period } }),
+      prisma.payrollPeriodConfig.findFirst({ where: { period } }),
       prisma.publicHoliday.findMany({
         where: { date: { gte: pStart, lte: pEnd } },
         select: { id: true, date: true, name: true },

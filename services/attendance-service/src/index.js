@@ -881,7 +881,7 @@ app.get('/attendance/periods', authenticate, authorize(...ADMIN_LOCK_ROLES, ROLE
 app.get('/attendance/periods/:period', authenticate, authorize(...ADMIN_LOCK_ROLES, ROLES.PAYROLL_OFFICER), async (req, res, next) => {
   try {
     if (!PERIOD_RX.test(req.params.period)) return res.status(400).json({ error: 'Invalid period — use YYYY-MM' });
-    const row = await prisma.attendancePeriod.findUnique({ where: { period: req.params.period } });
+    const row = await prisma.attendancePeriod.findFirst({ where: { period: req.params.period } });
     res.json(row || { period: req.params.period, status: 'OPEN' });
   } catch (err) { next(err); }
 });
@@ -891,7 +891,7 @@ app.post('/attendance/periods/:period/lock', authenticate, authorize(...ADMIN_LO
   try {
     const period = req.params.period;
     if (!PERIOD_RX.test(period)) return res.status(400).json({ error: 'Invalid period — use YYYY-MM' });
-    const existing = await prisma.attendancePeriod.findUnique({ where: { period } });
+    const existing = await prisma.attendancePeriod.findFirst({ where: { period } });
     if (existing && existing.status !== 'OPEN') {
       return res.status(409).json({ error: `Cannot lock from status ${existing.status}` });
     }
@@ -918,7 +918,7 @@ app.post('/attendance/periods/:period/unlock', authenticate, authorize(ROLES.SUP
   try {
     const period = req.params.period;
     if (!PERIOD_RX.test(period)) return res.status(400).json({ error: 'Invalid period — use YYYY-MM' });
-    const existing = await prisma.attendancePeriod.findUnique({ where: { period } });
+    const existing = await prisma.attendancePeriod.findFirst({ where: { period } });
     if (!existing) return res.status(404).json({ error: 'Period not found' });
     if (existing.status === 'OPEN') return res.status(409).json({ error: 'Period is already OPEN' });
     const row = await prisma.attendancePeriod.update({
@@ -935,7 +935,7 @@ app.post('/attendance/periods/:period/approve-for-payroll', authenticate, author
   try {
     const period = req.params.period;
     if (!PERIOD_RX.test(period)) return res.status(400).json({ error: 'Invalid period — use YYYY-MM' });
-    const existing = await prisma.attendancePeriod.findUnique({ where: { period } });
+    const existing = await prisma.attendancePeriod.findFirst({ where: { period } });
     if (!existing) return res.status(404).json({ error: 'Period must be LOCKED before approval' });
     if (existing.status !== 'LOCKED') {
       return res.status(409).json({ error: `Cannot approve from status ${existing.status} — period must be LOCKED first` });
@@ -1037,7 +1037,7 @@ app.get('/attendance/internal/period-summary/:period', async (req, res, next) =>
     if (!key || key !== internalKey()) return res.status(403).json({ error: 'Forbidden' });
     const period = req.params.period;
     const { start, end } = periodBounds(period);
-    const periodRow = await prisma.attendancePeriod.findUnique({ where: { period } });
+    const periodRow = await prisma.attendancePeriod.findFirst({ where: { period } });
     const records = await prisma.attendanceRecord.findMany({
       where: { date: { gte: start, lte: end } },
     });
