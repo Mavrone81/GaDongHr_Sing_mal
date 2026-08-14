@@ -58,7 +58,11 @@ function smtpHostError(host) {
 function buildTransporter() {
   return nodemailer.createTransport({
     host: smtpConfig.host, port: smtpConfig.port,
-    secure: smtpConfig.port === 465,
+    // Implicit TLS on 465, STARTTLS on 587. Derived from the port AND honouring
+    // an explicit SMTP_SECURE, because reporting-service reads the env var and
+    // this one read only the port: with Zoho on 465 that meant one service
+    // negotiated TLS and the other did not, from identical configuration.
+    secure: process.env.SMTP_SECURE === 'true' || smtpConfig.port === 465,
     auth: { user: smtpConfig.user, pass: smtpConfig.pass },
   });
 }

@@ -391,11 +391,12 @@ services:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
       - JWT_PUBLIC_KEY_PATH=/app/certs/public.pem
-      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_HOST=${SMTP_HOST}
       - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASS=${SMTP_PASS}
-      - SMTP_FROM=${SMTP_FROM:-noreply@gadonghr.sg}
+      - SMTP_FROM=${SMTP_FROM}
     volumes:
       - shared_certs:/app/certs:ro
     depends_on:
@@ -418,6 +419,15 @@ services:
     ports:
       - "127.0.0.1:${REPORTING_SERVICE_PORT:-4010}:4010"
     environment:
+      # reporting-service sends the scheduled report emails but was never given
+      # these, and engines/email.js returns null when SMTP_HOST is unset — so it
+      # reported {skipped:true} and no scheduled report has ever been delivered.
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_FROM=${SMTP_FROM}
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=4010
       - DATABASE_URL=postgresql://${POSTGRES_USER:-hrms}:${POSTGRES_PASSWORD}@postgres:5432/${REPORTING_DB:-hrms_reporting}
