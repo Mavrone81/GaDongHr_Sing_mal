@@ -264,8 +264,14 @@ jobs:
           # users come from seed-test-users). Non-fatal so the rest of the suite
           # still runs even if a seed phase has trouble — failures show as warnings.
           echo "Seeding domain reference data + employees..."
-          SEED_SKIP_AUTH=1 node scripts/seed.js || echo "::warning::scripts/seed.js had a failing phase"
-          node scripts/seed-employees.js || echo "::warning::scripts/seed-employees.js failed"
+          # These fail the JOB now. Both used to be `|| echo "::warning::"`,
+          # which cost two full debugging cycles: a broken payroll seed phase
+          # and a never-ran employee seed each surfaced only as unrelated spec
+          # failures much later, while the seed step itself looked green. A
+          # seed that did not seed is not a warning — nothing downstream means
+          # anything without the data.
+          SEED_SKIP_AUTH=1 node scripts/seed.js
+          node scripts/seed-employees.js
 
       - name: Install Playwright browsers
         run: cd e2e && npx playwright install --with-deps chromium
