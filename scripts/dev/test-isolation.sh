@@ -51,8 +51,14 @@ fi
 failed=()
 for svc in "${SERVICES[@]}"; do
   dir="services/${svc}-service"
+  # Runs BOTH DB-backed suites: tenant isolation, and the db-contract tests
+  # (real Prisma client + real queries through the route stack — the suites
+  # that catch invalid queries the mock-only job answers happily).
   test_file="$dir/__tests__/tenant-isolation.test.js"
-  [ -f "$test_file" ] || { echo "skip ${svc}: no tenant-isolation.test.js"; continue; }
+  contract_file="$dir/__tests__/db-contract.test.js"
+  if [ ! -f "$test_file" ] && [ ! -f "$contract_file" ]; then
+    echo "skip ${svc}: no DB-backed suites"; continue
+  fi
 
   db="hrms_${svc}"
   echo ""
@@ -68,7 +74,7 @@ for svc in "${SERVICES[@]}"; do
   ( cd "$dir" && DATABASE_URL="$url" npx prisma db push --skip-generate --accept-data-loss >/dev/null 2>&1 ) \
     || { echo "  db push FAILED"; failed+=("$svc(push)"); continue; }
 
-  if ( cd "$dir" && DATABASE_URL="$url" npx jest --runInBand tenant-isolation 2>&1 | tail -20 ); then
+  if ( cd "$dir" && DATABASE_URL="$url" npx jest --runInBand "tenant-isolation|db-contract" 2>&1 | tail -20 ); then
     :
   else
     failed+=("$svc")

@@ -381,6 +381,14 @@ async function main() {
     catch (err) { failed++; console.error(`⚠️  ${name} seed failed: ${err.message}`); }
   }
   console.log(`\n${failed ? '⚠️' : '✅'} Seed complete (${phases.length - failed} ok, ${failed} failed).\n`);
+  // A failed phase fails the RUN. This used to exit 0 with a warning glyph,
+  // and the CI step wrapped the call in `|| echo "::warning::"` on top — two
+  // layers of swallowing. The result: the payroll phase was broken for weeks
+  // (ON CONFLICT against a constraint that no longer existed) and the employee
+  // seed didn't run at all (missing SEED_EMPLOYEE_PASSWORD), while every seed
+  // step reported success. The e2e specs then failed 90 seconds later with
+  // messages that pointed nowhere near the cause.
+  if (failed) process.exitCode = 1;
 }
 
 main().catch(err => {

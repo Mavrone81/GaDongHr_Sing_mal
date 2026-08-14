@@ -13,7 +13,7 @@
     "down": "docker-compose down",
     "logs": "docker-compose logs -f",
     "seed": "node scripts/seed.js",
-    "test:backend": "jest --maxWorkers=2 --testPathIgnorePatterns=/node_modules/ --testPathIgnorePatterns=frontend --testPathIgnorePatterns=e2e --testPathIgnorePatterns=tenant-isolation",
+    "test:backend": "jest --maxWorkers=2 --testPathIgnorePatterns=/node_modules/ --testPathIgnorePatterns=frontend --testPathIgnorePatterns=e2e --testPathIgnorePatterns=tenant-isolation --testPathIgnorePatterns=db-contract",
     "test:isolation": "scripts/dev/test-isolation.sh",
     "test:frontend": "jest --maxWorkers=2 --projects frontend",
     "test:e2e": "cd e2e && npm test",
