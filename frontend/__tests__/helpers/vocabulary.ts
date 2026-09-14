@@ -13,9 +13,18 @@
 export const LEGACY_HUE =
   /\b(?:bg|text|border|ring|divide|from|via|to|accent|fill|stroke|shadow|placeholder|caret|outline)(?:-[tblrxyse])?-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|navy|gold|cream)-\d{2,3}\b/;
 
-/** Card vocabulary: floating tiles with radius and drop shadow. */
+/**
+ * Ad-hoc surface vocabulary.
+ *
+ * 2026-09 redesign: cards ARE rounded now (12px) and controls too (8px), but
+ * only through the named radii `rounded-card` / `rounded-control`, plus
+ * `rounded-full` for pills and avatars, and the single `shadow-card`. What
+ * stays forbidden is the Tailwind scale of arbitrary radii and shadows — that
+ * is how surfaces drift from the system one class at a time — and `bg-white`,
+ * because the surface colour is `bg-paper` (it follows the theme; white does not).
+ */
 export const CARD =
-  /rounded-(?:sm|md|lg|xl|2xl|3xl|full)|shadow-(?:sm|md|lg|xl|2xl|card|primary|soft|glow)|bg-white/;
+  /\brounded-(?:sm|md|lg|xl|2xl|3xl)\b|\bshadow-(?:sm|md|lg|xl|2xl|primary|soft|glow)\b|\bbg-white\b/;
 
 const SPINNER_CLASSES = /className=(["'`])[^"'`]*animate-spin[^"'`]*\1/g;
 

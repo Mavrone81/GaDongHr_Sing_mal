@@ -1,11 +1,13 @@
-import { Inter } from 'next/font/google'
+import { Manrope } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/context/AuthContext'
 
-const inter = Inter({
+// 2026-09 redesign: Manrope replaces Inter. The CSS variable feeds --font-sans
+// in globals.css and the Tailwind `font-sans` family.
+const manrope = Manrope({
   subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700', '800', '900'],
-  variable: '--font-inter',
+  weight: ['500', '600', '700', '800'],
+  variable: '--font-manrope',
 })
 
 export const metadata = {
@@ -51,7 +53,7 @@ export default function RootLayout({
 })();
         `}} />
       </head>
-      <body className={inter.className}>
+      <body className={`${manrope.variable} font-sans`}>
         <AuthProvider>
           {children}
         </AuthProvider>

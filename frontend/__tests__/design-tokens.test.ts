@@ -10,15 +10,26 @@ import { join } from 'path';
 
 const CSS = readFileSync(join(__dirname, '..', 'src', 'app', 'globals.css'), 'utf8');
 
+/**
+ * 2026-09 redesign ("Clean workspace", approved 2026-09-15): the same names
+ * carry the new values, plus five state tokens. See docs/redesign/README.md.
+ */
 const TOKENS: Record<string, string> = {
-  '--paper': '#FCFBF7',
-  '--ink': '#171614',
-  '--rule': '#DBD5C6',
+  '--page': '#F6F6F3',
+  '--paper': '#FFFFFF',
+  '--ink': '#1A1A18',
+  '--rule': '#E5E3DD',
   '--seal': '#A8322A',
   '--accent': '#1B4A3C',
   '--highlight': '#C08A3E',
-  '--muted': '#6E685C',
+  '--muted': '#6B6960',
   '--shadow': '#102A22',
+  '--tint': '#E7EFEA',
+  '--pill': '#F3F2EE',
+  '--faint': '#9C9A91',
+  '--danger': '#B42318',
+  '--warn': '#B54708',
+  '--ok': '#067647',
 };
 
 describe('Official Record tokens', () => {

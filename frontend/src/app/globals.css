@@ -12,23 +12,38 @@
    buttons and seals use 2px and nothing else is rounded.
    ───────────────────────────────────────────────────────────────────── */
 
+/* ─────────────────────────────────────────────────────────────────────
+   2026-09 REDESIGN ("Clean workspace") — approved by Samuel 2026-09-15.
+   Same token NAMES so every existing screen keeps rendering; the VALUES move
+   to the new system: near-white ground, white surfaces, one green accent,
+   brass reserved for the logo. New tokens (--tint, --faint, --danger, --warn,
+   --ok) carry the states the old eight had no word for. Spec + screen types:
+   docs/redesign/README.md; mockups: the "GaDongHR Workspace Redesign" canvas.
+   ───────────────────────────────────────────────────────────────────── */
+
 :root {
-  --paper:     #FCFBF7;   /* every surface — never pure white, it glares    */
-  --ink:       #171614;   /* body text, and the 2px rule under a section    */
-  --rule:      #DBD5C6;   /* the hairline between fields — most-used token  */
+  --page:      #F6F6F3;   /* the ground every screen sits on                */
+  --paper:     #FFFFFF;   /* cards, sidebar, top bar, inputs                */
+  --ink:       #1A1A18;   /* body text                                      */
+  --rule:      #E5E3DD;   /* hairlines and card borders                     */
   --seal:      #A8322A;   /* RESERVED — authority citations ONLY            */
-  --accent:    #1B4A3C;   /* primary actions, current-page marker           */
-  --highlight: #C08A3E;   /* sparing emphasis — fails contrast at body size */
-  --muted:     #6E685C;   /* secondary text and labels                      */
-  --shadow:    #102A22;   /* dark surfaces only — a header bar, a kiosk     */
-  --page:      #F2F1EC;   /* the ground the paper sits on                   */
+  --accent:    #1B4A3C;   /* primary actions, current-page marker, links    */
+  --highlight: #C08A3E;   /* brass — the logo's "HR" and display sizes only */
+  --muted:     #6B6960;   /* secondary text and field labels                */
+  --shadow:    #102A22;   /* dark surfaces: sign-in brand panel, kiosk      */
+  --tint:      #E7EFEA;   /* accent at 10% — selected nav, soft emphasis    */
+  --pill:      #F3F2EE;   /* neutral chip / table-header ground             */
+  --faint:     #9C9A91;   /* placeholders, tertiary text, disabled          */
+  --danger:    #B42318;   /* errors, destructive actions, overdue           */
+  --warn:      #B54708;   /* attention, expiring, late                      */
+  --ok:        #067647;   /* success, verified, active                      */
 }
 
 @media (prefers-color-scheme: dark) {
-  :root { --page:#12100D; --paper:#1A1815; --ink:#EDE9E0; --rule:#332F28; --muted:#9A9384; }
+  :root { --page:#0F1512; --paper:#171F1B; --ink:#E8ECE9; --rule:#27322C; --muted:#8E9A93; --tint:#1A2620; --pill:#1F2924; --faint:#5F6B65; --accent:#3FA07C; --danger:#E5735F; --warn:#E2A94A; --ok:#3FA07C; }
 }
-:root[data-theme="dark"]  { --page:#12100D; --paper:#1A1815; --ink:#EDE9E0; --rule:#332F28; --muted:#9A9384; }
-:root[data-theme="light"] { --page:#F2F1EC; --paper:#FCFBF7; --ink:#171614; --rule:#DBD5C6; --muted:#6E685C; }
+:root[data-theme="dark"]  { --page:#0F1512; --paper:#171F1B; --ink:#E8ECE9; --rule:#27322C; --muted:#8E9A93; --tint:#1A2620; --pill:#1F2924; --faint:#5F6B65; --accent:#3FA07C; --danger:#E5735F; --warn:#E2A94A; --ok:#3FA07C; }
+:root[data-theme="light"] { --page:#F6F6F3; --paper:#FFFFFF; --ink:#1A1A18; --rule:#E5E3DD; --muted:#6B6960; --tint:#E7EFEA; --pill:#F3F2EE; --faint:#9C9A91; --accent:#1B4A3C; --danger:#B42318; --warn:#B54708; --ok:#067647; }
 
 /* Thai marks sit above and below the baseline. At Latin leading they clip —
    illegible to a native reader, invisible to anyone testing in English. The
@@ -60,8 +75,18 @@
   --space-8: 32px;
 
   /* ── TYPOGRAPHY ─────────────────────────────────────────────────── */
-  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  --font-manrope: 'Manrope';   /* fallback; next/font overrides it on <body> */
+  --font-sans: var(--font-manrope), 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-feature-settings: "tnum";
+  /* Redesign type scale — nothing user-facing below 12px; labels are sentence case. */
+  --fs-body:    14px;
+  --fs-caption: 12.5px;
+  --fs-h1:      26px;
+  --fs-h2:      15.5px;
+  --radius:     12px;   /* cards */
+  --radius-sm:  8px;    /* controls, chips */
+  --shadow-card:    0 1px 2px rgba(20, 20, 18, 0.04);   /* the only card shadow */
+  --shadow-primary: 0 1px 2px rgba(16, 42, 34, 0.18);   /* primary button lift */
 
   --fw-black:   900;
 
@@ -96,18 +121,19 @@
   .form-group {
     @apply flex flex-col gap-1.5;
   }
+  /* Redesign: labels are sentence case at a readable size — the tracked
+     all-caps eyebrow is retired. Legacy screens pick this up automatically. */
   .form-label {
-    font-size: var(--fs-eyebrow);
-    font-weight: var(--fw-black);
-    letter-spacing: var(--tracking-mega);
-    text-transform: uppercase;
+    font-size: var(--fs-caption);
+    font-weight: 600;
     color: var(--muted);
   }
   .form-input {
     @apply w-full border bg-paper outline-none transition-all hover:border-accent;
     border-color: var(--rule);
-        padding: 10px 16px;
-    font-size: var(--fs-body-sm);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-size: var(--fs-body);
   }
   .form-input:focus {
     border-color: var(--accent);

@@ -59,15 +59,23 @@ const config: Config = {
         // ── Official Record — GaDong house design system ──────────────
         // Eight tokens. --seal is RESERVED for authority citations and is
         // enforced by frontend/__tests__/seal-reservation.test.ts.
-        paper:     '#FCFBF7',
-        ink:       '#171614',
-        rule:      '#DBD5C6',
+        // 2026-09 redesign: values follow the CSS variables so dark mode and
+        // the theme switch work; names unchanged so existing screens keep rendering.
+        paper:     'var(--paper)',
+        ink:       'var(--ink)',
+        rule:      'var(--rule)',
         seal:      '#A8322A',
-        accent:    '#1B4A3C',
+        accent:    'var(--accent)',
         highlight: '#C08A3E',
-        muted:     '#6E685C',
+        muted:     'var(--muted)',
         shadow:    '#102A22',
-        page:      '#F2F1EC',
+        page:      'var(--page)',
+        tint:      'var(--tint)',
+        pill:      'var(--pill)',
+        faint:     'var(--faint)',
+        danger:    'var(--danger)',
+        warn:      'var(--warn)',
+        ok:        'var(--ok)',
 
         // The 2026 `indigo: navy` remap is RETIRED, not repointed. It made
         // brand colour arrive through a class named "indigo" — a lie in the
@@ -95,6 +103,13 @@ const config: Config = {
       },
       fontSize: {
         '2xs': '0.65rem',
+      },
+      fontFamily: {
+        sans: ['var(--font-manrope)', 'Manrope', 'Segoe UI', 'system-ui', 'sans-serif'],
+      },
+      borderRadius: {
+        card: '12px',
+        control: '8px',
       },
       boxShadow: {
         card: 'var(--shadow-card)',
