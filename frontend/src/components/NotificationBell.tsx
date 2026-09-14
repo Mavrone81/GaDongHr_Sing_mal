@@ -131,7 +131,7 @@ export default function NotificationBell() {
       >
         <Icon name="bell" size={20} />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-danger text-white text-xs font-bold flex items-center justify-center leading-none">
+          <span className="absolute -top-0.5 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-danger text-on-accent text-xs font-bold flex items-center justify-center leading-none">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}

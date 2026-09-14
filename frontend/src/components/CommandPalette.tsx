@@ -33,7 +33,7 @@ export default function CommandPalette({ open, onClose, items }: { open: boolean
   return (
     <div className="fixed inset-0 z-[70] flex items-start justify-center pt-[12vh] px-4 bg-ink/40" onMouseDown={onClose} role="dialog" aria-modal="true" aria-label="Jump to a page">
       <div className="w-full max-w-xl bg-paper border border-rule rounded-card shadow-card overflow-hidden" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="flex items-center gap-3 px-4 h-14 border-b border-rule">
+        <div className="flex items-center gap-3 px-4 h-14 border-b border-rule focus-within:border-accent">
           <Icon name="search" size={18} className="text-muted" />
           <input
             ref={inputRef}

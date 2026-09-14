@@ -101,7 +101,7 @@ export default function RegisterPage() {
         </div>
 
         <button type="submit" disabled={loading} className={AUTH_PRIMARY}>
-          {loading ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white animate-spin rounded-full" />Creating your workspace…</> : 'Create company and continue'}
+          {loading ? <><div className="w-4 h-4 border-2 border-on-accent/30 border-t-on-accent animate-spin rounded-full" />Creating your workspace…</> : 'Create company and continue'}
         </button>
 
         <div className="flex flex-wrap gap-x-[18px] gap-y-2 text-[13px] text-muted">

@@ -305,7 +305,7 @@ export default function LoginPage() {
               <a href="/auth/forgot-password" className="text-accent font-semibold hover:underline">Forgot password?</a>
             </div>
             <button type="submit" disabled={loading} className={AUTH_PRIMARY}>
-              {loading ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white animate-spin rounded-full" />Signing in…</> : 'Sign in'}
+              {loading ? <><div className="w-4 h-4 border-2 border-on-accent/30 border-t-on-accent animate-spin rounded-full" />Signing in…</> : 'Sign in'}
             </button>
           </form>
 
