@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { apiFetch } from '@/lib/api';
+import { apiFetchRaw } from '@/lib/api';
 import { Seal } from '@/components/official';
 
 interface ClearanceItem {
@@ -104,7 +104,7 @@ function InitiateModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
   });
 
   useEffect(() => {
-    apiFetch('/api/employees?isActive=true&limit=500')
+    apiFetchRaw('/employees?isActive=true&limit=500')
       .then(r => r.json())
       .then(d => setEmployees(d.employees || []))
       .catch(() => {})
@@ -117,7 +117,7 @@ function InitiateModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
     if (!form.employeeId || !form.lastWorkingDate) { setError('Please select an employee and last working date.'); return; }
     setSubmitting(true); setError('');
     try {
-      const res = await apiFetch('/api/offboarding/initiate', {
+      const res = await apiFetchRaw('/offboarding/initiate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -247,7 +247,7 @@ function ManageModal({ caseId, onClose, onUpdate }: { caseId: string; onClose: (
 
   const load = useCallback(async () => {
     try {
-      const res = await apiFetch(`/api/offboarding/${caseId}`);
+      const res = await apiFetchRaw(`/offboarding/${caseId}`);
       const data = await res.json();
       setOffCase(data);
       setExitForm({
@@ -257,7 +257,7 @@ function ManageModal({ caseId, onClose, onUpdate }: { caseId: string; onClose: (
       });
       if (data.finalPayData) setFinalPayData(data.finalPayData);
       // Load employee assets
-      const aRes = await apiFetch(`/api/assets/employee/${data.employeeId}`);
+      const aRes = await apiFetchRaw(`/assets/employee/${data.employeeId}`);
       const assets = await aRes.json();
       setEmpAssets(Array.isArray(assets) ? assets : []);
     } catch {}
@@ -271,7 +271,7 @@ function ManageModal({ caseId, onClose, onUpdate }: { caseId: string; onClose: (
   async function markItemDone(itemId: string) {
     setCompletingItem(itemId);
     try {
-      const res = await apiFetch(`/api/offboarding/${caseId}/checklist/${itemId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notes: '' }) });
+      const res = await apiFetchRaw(`/offboarding/${caseId}/checklist/${itemId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notes: '' }) });
       if (res.ok) { showToast('Item marked as complete'); await load(); onUpdate(); }
     } catch {}
     finally { setCompletingItem(null); }
@@ -280,7 +280,7 @@ function ManageModal({ caseId, onClose, onUpdate }: { caseId: string; onClose: (
   async function saveExitInterview() {
     setExitSubmitting(true); setExitSaved(false);
     try {
-      const res = await apiFetch(`/api/offboarding/${caseId}/exit-interview`, {
+      const res = await apiFetchRaw(`/offboarding/${caseId}/exit-interview`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -297,7 +297,7 @@ function ManageModal({ caseId, onClose, onUpdate }: { caseId: string; onClose: (
   async function computeFinalPay() {
     setComputingFinalPay(true);
     try {
-      const res = await apiFetch(`/api/offboarding/${caseId}/compute-final-pay`, {
+      const res = await apiFetchRaw(`/offboarding/${caseId}/compute-final-pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ noticeServed }),
@@ -312,7 +312,7 @@ function ManageModal({ caseId, onClose, onUpdate }: { caseId: string; onClose: (
   async function createFinalPayRun() {
     setCreatingRun(true);
     try {
-      const res = await apiFetch(`/api/offboarding/${caseId}/create-final-pay-run`, {
+      const res = await apiFetchRaw(`/offboarding/${caseId}/create-final-pay-run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -327,7 +327,7 @@ function ManageModal({ caseId, onClose, onUpdate }: { caseId: string; onClose: (
   async function returnAsset(assetId: string, assetName: string) {
     setReturningAsset(assetId);
     try {
-      const res = await apiFetch(`/api/assets/${assetId}/return`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notes: 'Returned during offboarding' }) });
+      const res = await apiFetchRaw(`/assets/${assetId}/return`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notes: 'Returned during offboarding' }) });
       if (res.ok) { showToast(`${assetName} returned`); await load(); onUpdate(); }
       else { const d = await res.json(); showToast(d.error || 'Failed to return asset'); }
     } catch { showToast('Network error'); }
@@ -618,7 +618,7 @@ export default function OffboardingPage() {
 
   const loadCases = useCallback(async () => {
     try {
-      const res = await apiFetch('/api/offboarding');
+      const res = await apiFetchRaw('/offboarding');
       const data = await res.json();
       setCases(Array.isArray(data) ? data : []);
     } catch {}
