@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { TONES } from '@/lib/statusTone';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { apiFetch } from '@/lib/api';
+import { apiFetchRaw } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
 const HR_ROLES = ['HR_ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'];
@@ -42,19 +42,19 @@ export default function SurveyDetailPage() {
   async function load() {
     setLoading(true);
     try {
-      const res = await apiFetch(`/surveys/${id}`);
+      const res = await apiFetchRaw(`/surveys/${id}`);
       if (!res.ok) { const e = await res.json(); setError(e.error || 'Failed'); return; }
       const s = await res.json();
       setSurvey(s);
       if (isHr) {
         const [dashRes, actRes] = await Promise.all([
-          apiFetch(`/surveys/${id}/dashboard`).then(r => r.json()).catch(() => null),
-          apiFetch(`/surveys/${id}/actions`).then(r => r.json()).catch(() => ({ actions: [] })),
+          apiFetchRaw(`/surveys/${id}/dashboard`).then(r => r.json()).catch(() => null),
+          apiFetchRaw(`/surveys/${id}/actions`).then(r => r.json()).catch(() => ({ actions: [] })),
         ]);
         setDashboard(dashRes);
         setActions(actRes.actions || []);
       } else {
-        const actRes = await apiFetch(`/surveys/${id}/actions`).then(r => r.json()).catch(() => ({ actions: [] }));
+        const actRes = await apiFetchRaw(`/surveys/${id}/actions`).then(r => r.json()).catch(() => ({ actions: [] }));
         setActions(actRes.actions || []);
       }
     } catch { setError('Network error'); }
@@ -64,17 +64,17 @@ export default function SurveyDetailPage() {
 
   async function publish() {
     if (!confirm('Publish this survey? Employees will be able to respond.')) return;
-    const res = await apiFetch(`/surveys/${id}/publish`, { method: 'POST' });
+    const res = await apiFetchRaw(`/surveys/${id}/publish`, { method: 'POST' });
     if (res.ok) load(); else alert((await res.json()).error || 'Failed');
   }
   async function close() {
     if (!confirm('Close this survey? No further responses will be accepted.')) return;
-    const res = await apiFetch(`/surveys/${id}/close`, { method: 'POST' });
+    const res = await apiFetchRaw(`/surveys/${id}/close`, { method: 'POST' });
     if (res.ok) load(); else alert((await res.json()).error || 'Failed');
   }
   async function deleteQuestion(qid: string) {
     if (!confirm('Delete this question?')) return;
-    const res = await apiFetch(`/surveys/${id}/questions/${qid}`, { method: 'DELETE' });
+    const res = await apiFetchRaw(`/surveys/${id}/questions/${qid}`, { method: 'DELETE' });
     if (res.ok) load(); else alert((await res.json()).error || 'Failed');
   }
 
@@ -402,7 +402,7 @@ function QuestionModal({ surveyId, onClose, onSuccess }: { surveyId: string; onC
     if (form.type === 'MULTI_CHOICE') {
       body.choices = form.choices.split('\n').map(s => s.trim()).filter(Boolean);
     }
-    const res = await apiFetch(`/surveys/${surveyId}/questions`, {
+    const res = await apiFetchRaw(`/surveys/${surveyId}/questions`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
     if (res.ok) onSuccess();
@@ -452,7 +452,7 @@ function ActionModal({ surveyId, onClose, onSuccess }: { surveyId: string; onClo
     setSaving(true); setError('');
     const body: any = { title: form.title, description: form.description, department: form.department || null };
     if (form.dueDate) body.dueDate = form.dueDate;
-    const res = await apiFetch(`/surveys/${surveyId}/actions`, {
+    const res = await apiFetchRaw(`/surveys/${surveyId}/actions`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
     if (res.ok) onSuccess();

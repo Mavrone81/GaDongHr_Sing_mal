@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { apiFetch } from '@/lib/api';
+import { apiFetchRaw } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
 interface SignRequest {
@@ -56,7 +56,7 @@ export default function SignDocumentPage() {
 
   useEffect(() => {
     if (!id) return;
-    apiFetch(`/esign/requests/${id}`)
+    apiFetchRaw(`/esign/requests/${id}`)
       .then(res => res.json())
       .then(data => {
         if (data.error) { setError(data.error); return; }
@@ -84,7 +84,7 @@ export default function SignDocumentPage() {
     setSigning(true);
     setSignError('');
     try {
-      const res = await apiFetch(`/esign/requests/${id}/sign`, {
+      const res = await apiFetchRaw(`/esign/requests/${id}/sign`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ signatoryName: signatoryName.trim() }),
@@ -105,7 +105,7 @@ export default function SignDocumentPage() {
     setDeclining(true);
     setDeclineError('');
     try {
-      const res = await apiFetch(`/esign/requests/${id}/decline`, {
+      const res = await apiFetchRaw(`/esign/requests/${id}/decline`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ declineReason: declineReason.trim() }),
