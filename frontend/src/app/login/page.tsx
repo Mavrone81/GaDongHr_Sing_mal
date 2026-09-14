@@ -308,7 +308,7 @@ export default function LoginPage() {
             ))}
           </div>
         </div>
-        <div className="relative z-10 text-[10px] text-ink font-black tracking-[0.3em] uppercase">
+        <div className="relative z-10 text-[10px] text-paper/60 font-black tracking-[0.3em] uppercase">
           © 2026 Bevora Technologies • BT-HRMS-001 • v1.1.0-STABLE
         </div>
       </div>
