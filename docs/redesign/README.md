@@ -40,6 +40,10 @@ unmigrated screens and is deleted at the end.
 Focus is the global `:focus-visible` outline in globals.css; never
 `outline-none` without a visible replacement.
 
+`Modal` handles focus itself: it captures the opener before children mount,
+leaves focus on a child that already has it, and returns focus on close. Do
+not manage focus around it; `autoFocus` on a first field is allowed.
+
 ## Declaring a batch done
 
 Append your route prefixes to `frontend/__tests__/helpers/migrated.ts` in the
