@@ -3,6 +3,9 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
+import { Badge, Icon } from '@/components/ui';
+
+type BadgeTone = 'neutral' | 'ok' | 'warn' | 'danger' | 'accent' | 'brass';
 
 interface Notification {
   id: string;
@@ -26,15 +29,15 @@ interface Notification {
  * thing the eye lands on first. The category name is printed inside every
  * chip regardless, so nothing rests on telling the shades apart.
  */
-const CATEGORY_COLORS: Record<string, string> = {
-  COMPLIANCE:  'bg-ink text-paper',
-  PAYROLL:     'bg-accent text-paper',
-  LEAVE:       'bg-paper text-accent border border-accent',
-  ATTENDANCE:  'bg-paper text-ink border border-ink',
-  CLAIMS:      'bg-paper text-ink border border-highlight',
-  PERFORMANCE: 'bg-highlight text-ink',
-  ONBOARDING:  'bg-page text-accent',
-  SYSTEM:      'bg-page text-muted border border-rule',
+const CATEGORY_TONES: Record<string, BadgeTone> = {
+  COMPLIANCE:  'danger',
+  PAYROLL:     'accent',
+  LEAVE:       'ok',
+  ATTENDANCE:  'neutral',
+  CLAIMS:      'warn',
+  PERFORMANCE: 'brass',
+  ONBOARDING:  'accent',
+  SYSTEM:      'neutral',
 };
 
 function timeAgo(iso: string): string {
@@ -120,83 +123,62 @@ export default function NotificationBell() {
 
   return (
     <div ref={dropdownRef} className="relative">
-      {/* Bell button */}
       <button
         onClick={openDropdown}
-        className="relative w-8 h-8 flex items-center justify-center hover:bg-page transition-colors"
-        aria-label="Notifications"
+        className="relative w-9 h-9 flex items-center justify-center rounded-control text-ink hover:bg-page transition-colors"
+        aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+        aria-expanded={isOpen}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-        </svg>
+        <Icon name="bell" size={20} />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 bg-ink text-paper text-[9px] font-black flex items-center justify-center leading-none">
+          <span className="absolute -top-0.5 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-danger text-white text-xs font-bold flex items-center justify-center leading-none">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
       </button>
 
-      {/* Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 top-10 w-80 bg-paper border border-rule z-50 overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-rule">
+        <div className="absolute right-0 top-11 w-[360px] max-w-[calc(100vw-2rem)] bg-paper border border-rule rounded-card shadow-card z-50 overflow-hidden">
+          <div className="flex items-center justify-between px-4 h-12 border-b border-rule">
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-black text-ink uppercase tracking-widest">Notifications</span>
-              {unreadCount > 0 && (
-                <span className="text-[9px] font-black px-1.5 py-0.5 bg-ink text-paper ">
-                  {unreadCount} new
-                </span>
-              )}
+              <span className="text-sm font-bold text-ink">Notifications</span>
+              {unreadCount > 0 && <Badge tone="danger">{unreadCount} new</Badge>}
             </div>
-            <div className="flex items-center gap-2">
-              {unreadCount > 0 && (
-                <button
-                  onClick={markAllRead}
-                  className="text-[9px] font-bold text-accent hover:text-accent uppercase tracking-wide"
-                >
-                  Mark all read
-                </button>
-              )}
-            </div>
+            {unreadCount > 0 && (
+              <button onClick={markAllRead} className="text-[13px] font-semibold text-accent hover:underline">
+                Mark all read
+              </button>
+            )}
           </div>
 
-          {/* Notification list */}
-          <div className="max-h-80 overflow-y-auto">
+          <div className="max-h-96 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-8">
-                <div className="w-5 h-5 border-2 border-accent border-t-accent animate-spin rounded-full" />
+                <div className="w-5 h-5 border-2 border-rule border-t-accent animate-spin rounded-full" />
               </div>
             ) : notifications.length === 0 ? (
-              <div className="py-8 text-center">
-                <p className="text-[11px] font-bold text-muted uppercase tracking-widest">No notifications</p>
+              <div className="py-10 px-6 text-center">
+                <p className="text-sm font-semibold text-ink">You&apos;re all caught up</p>
+                <p className="text-[13px] text-muted mt-1">New approvals, payroll and compliance notices will appear here.</p>
               </div>
             ) : (
               notifications.map(notif => (
                 <button
                   key={notif.id}
                   onClick={() => markRead(notif)}
-                  className={`w-full text-left px-4 py-3 border-b border-rule hover:bg-page transition-colors group ${
-                    !notif.isRead ? 'bg-page' : ''
-                  }`}
+                  className={`w-full text-left px-4 py-3 border-b border-rule hover:bg-page transition-colors ${!notif.isRead ? 'bg-tint/40' : ''}`}
                 >
                   <div className="flex items-start gap-2.5">
-                    {/* Unread dot */}
-                    <div className={`mt-1.5 w-1.5 h-1.5  shrink-0 ${!notif.isRead ? 'bg-accent' : 'bg-transparent'}`} />
+                    <div className={`mt-2 w-2 h-2 rounded-full shrink-0 ${!notif.isRead ? 'bg-accent' : 'bg-transparent'}`} aria-hidden="true" />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                        {notif.category && (
-                          <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5  ${CATEGORY_COLORS[notif.category] ?? CATEGORY_COLORS.SYSTEM}`}>
-                            {notif.category}
-                          </span>
-                        )}
-                        <span className="text-[8px] text-muted ml-auto shrink-0">{timeAgo(notif.createdAt)}</span>
+                      <div className="flex items-center gap-2 mb-1">
+                        {notif.category && <Badge tone={CATEGORY_TONES[notif.category] ?? 'neutral'}>{notif.category.charAt(0) + notif.category.slice(1).toLowerCase()}</Badge>}
+                        <span className="text-xs text-faint ml-auto shrink-0">{timeAgo(notif.createdAt)}</span>
                       </div>
-                      <p className={`text-[11px] leading-snug truncate ${!notif.isRead ? 'font-black text-ink' : 'font-normal text-muted'}`}>
+                      <p className={`text-sm leading-snug truncate ${!notif.isRead ? 'font-bold text-ink' : 'font-medium text-ink'}`}>
                         {notif.title}
                       </p>
-                      <p className="text-[10px] text-muted leading-snug mt-0.5 line-clamp-2">
+                      <p className="text-[13px] text-muted leading-snug mt-0.5 line-clamp-2">
                         {notif.body}
                       </p>
                     </div>
@@ -206,13 +188,12 @@ export default function NotificationBell() {
             )}
           </div>
 
-          {/* Footer */}
-          <div className="px-4 py-2.5 bg-page border-t border-rule">
+          <div className="px-4 h-11 flex items-center bg-page border-t border-rule">
             <button
               onClick={() => { setIsOpen(false); router.push('/notifications'); }}
-              className="w-full text-center text-[10px] font-black text-accent hover:text-accent uppercase tracking-widest py-0.5"
+              className="w-full flex items-center justify-center gap-1.5 text-[13px] font-semibold text-accent hover:underline"
             >
-              View all notifications →
+              View all notifications <Icon name="arrowRight" size={14} />
             </button>
           </div>
         </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
@@ -8,13 +8,15 @@ import NotificationBell from '@/components/NotificationBell';
 import FloatingAssistant from '@/components/FloatingAssistant';
 import TrialBanner from '@/components/TrialBanner';
 import GaDongLogo from '@/components/GaDongLogo';
+import CommandPalette from '@/components/CommandPalette';
+import { Icon, Badge, type IconName } from '@/components/ui';
 
 // ─── RBAC Navigation Matrix — Section 2, GaDongHR_RBAC_Workflow_Reference.pdf ──
 // SA = Superadmin (full, unrestricted access to ALL modules)
 interface NavItem {
   name: string;
   path: string;
-  icon: string;
+  icon: IconName;
   badge?: string;
 }
 
@@ -29,345 +31,354 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
     group: 'COMMAND',
     color: 'text-accent',
     items: [
-      { name: 'Dashboard',     path: '/',               icon: '⬡' },
-      { name: 'Notifications', path: '/notifications',  icon: '◍' },
+      { name: 'Dashboard',     path: '/',               icon: 'home' },
+      { name: 'Notifications', path: '/notifications',  icon: 'bell' },
     ]
   },
   {
     group: 'WORKFORCE',
     color: 'text-accent',
     items: [
-      { name: 'Employees',   path: '/employees',           icon: '◈' },
-      { name: 'Recruitment', path: '/recruitment',         icon: '◇' },
-      { name: 'Attendance',  path: '/attendance/registry', icon: '◉' },
-      { name: 'Leave',       path: '/leave/registry',      icon: '◌' },
-      { name: 'Claims',      path: '/claims/registry',     icon: '◫' },
-      { name: 'Movements',   path: '/movements',           icon: '↹' },
-      { name: 'Performance', path: '/performance',         icon: '▣' },
-      { name: 'Training',    path: '/training',            icon: '◑' },
-      { name: 'Offboarding', path: '/offboarding',         icon: '◐' },
+      { name: 'Employees',   path: '/employees',           icon: 'users' },
+      { name: 'Recruitment', path: '/recruitment',         icon: 'briefcase' },
+      { name: 'Attendance',  path: '/attendance/registry', icon: 'clock' },
+      { name: 'Leave',       path: '/leave/registry',      icon: 'calendar' },
+      { name: 'Claims',      path: '/claims/registry',     icon: 'receipt' },
+      { name: 'Movements',   path: '/movements',           icon: 'shuffle' },
+      { name: 'Performance', path: '/performance',         icon: 'award' },
+      { name: 'Training',    path: '/training',            icon: 'graduation' },
+      { name: 'Offboarding', path: '/offboarding',         icon: 'userMinus' },
     ]
   },
   {
     group: 'EMPLOYEE',
     color: 'text-accent',
     items: [
-      { name: 'My Attendance', path: '/attendance',          icon: '◉' },
-      { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
-      { name: 'My Leave',      path: '/leave',               icon: '◌' },
-      { name: 'My Claims',     path: '/claims',              icon: '◫' },
-      { name: 'My Training',   path: '/training?view=me',            icon: '◑' },
-      { name: 'My Appraisal',  path: '/performance?view=me',         icon: '▣' },
-      { name: 'My Payslips',   path: '/payroll/me',          icon: '◆' },
-      { name: 'My Documents',  path: '/documents',           icon: '◭' },
-      { name: 'My Benefits',   path: '/benefits',            icon: '⊕' },
-      { name: 'My Cases',      path: '/hr-cases',            icon: '⚖' },
-      { name: 'My Loans',       path: '/loans',              icon: '$' },
-      { name: 'My Surveys',     path: '/surveys',             icon: '◊' },
+      { name: 'My Attendance', path: '/attendance',          icon: 'clock' },
+      { name: 'My Schedule',   path: '/attendance/schedule', icon: 'calendar' },
+      { name: 'My Leave',      path: '/leave',               icon: 'calendar' },
+      { name: 'My Claims',     path: '/claims',              icon: 'receipt' },
+      { name: 'My Training',   path: '/training?view=me',            icon: 'graduation' },
+      { name: 'My Appraisal',  path: '/performance?view=me',         icon: 'award' },
+      { name: 'My Payslips',   path: '/payroll/me',          icon: 'wallet' },
+      { name: 'My Documents',  path: '/documents',           icon: 'file' },
+      { name: 'My Benefits',   path: '/benefits',            icon: 'gift' },
+      { name: 'My Cases',      path: '/hr-cases',            icon: 'scale' },
+      { name: 'My Loans',       path: '/loans',              icon: 'dollar' },
+      { name: 'My Surveys',     path: '/surveys',             icon: 'clipboard' },
     ]
   },
   {
     group: 'FINANCIAL',
     color: 'text-accent',
     items: [
-      { name: 'Payroll',  path: '/payroll',  icon: '◆', badge: 'Action' },
-      { name: 'Benefits', path: '/benefits', icon: '⊕' },
-      { name: 'Loans',    path: '/loans',    icon: '$' },
-      { name: 'Assets',   path: '/assets',   icon: '◧' },
+      { name: 'Payroll',  path: '/payroll',  icon: 'wallet', badge: 'Action' },
+      { name: 'Benefits', path: '/benefits', icon: 'gift' },
+      { name: 'Loans',    path: '/loans',    icon: 'dollar' },
+      { name: 'Assets',   path: '/assets',   icon: 'grid' },
     ]
   },
   {
     group: 'COMPLIANCE',
     color: 'text-highlight',
     items: [
-      { name: 'Reports',     path: '/reports',           icon: '▤' },
-      { name: 'Analytics',   path: '/reports/analytics', icon: '◧' },
-      { name: 'Documents',   path: '/documents',         icon: '◭' },
-      { name: 'HR Cases',    path: '/hr-cases',          icon: '⚖' },
-      { name: 'Surveys',     path: '/surveys',           icon: '◊' },
-      { name: 'Succession',  path: '/succession',        icon: '◈' },
+      { name: 'Reports',     path: '/reports',           icon: 'chart' },
+      { name: 'Analytics',   path: '/reports/analytics', icon: 'chart' },
+      { name: 'Documents',   path: '/documents',         icon: 'file' },
+      { name: 'HR Cases',    path: '/hr-cases',          icon: 'scale' },
+      { name: 'Surveys',     path: '/surveys',           icon: 'clipboard' },
+      { name: 'Succession',  path: '/succession',        icon: 'users' },
     ]
   },
   {
     group: 'ADMINISTRATION',
     color: 'text-accent',
     items: [
-      { name: 'Tenancy & Config',   path: '/settings',          icon: '◎' },
-      { name: 'User Management',    path: '/settings/users',    icon: '◪' },
-      { name: 'Role & Permissions', path: '/settings/roles',    icon: '◧' },
-      { name: 'Security (SSO/MFA)', path: '/settings/security', icon: '◰' },
-      { name: 'Audit Logs',         path: '/settings/audit',    icon: '▤' },
-      { name: 'Statutory Tables',   path: '/settings/rates',    icon: '▦' },
-      { name: 'API & Webhooks',     path: '/settings/api',      icon: '◱' },
-      { name: 'PDPA Compliance',    path: '/settings/pdpa',     icon: '▩' },
-      { name: 'System Overrides',   path: '/settings/overrides',icon: '◒' },
+      { name: 'Tenancy & Config',   path: '/settings',          icon: 'settings' },
+      { name: 'User Management',    path: '/settings/users',    icon: 'user' },
+      { name: 'Role & Permissions', path: '/settings/roles',    icon: 'key' },
+      { name: 'Security (SSO/MFA)', path: '/settings/security', icon: 'shield' },
+      { name: 'Audit Logs',         path: '/settings/audit',    icon: 'list' },
+      { name: 'Statutory Tables',   path: '/settings/rates',    icon: 'list' },
+      { name: 'API & Webhooks',     path: '/settings/api',      icon: 'key' },
+      { name: 'PDPA Compliance',    path: '/settings/pdpa',     icon: 'shield' },
+      { name: 'System Overrides',   path: '/settings/overrides',icon: 'sliders' },
     ]
   },
   {
     group: 'SUPPORT',
     color: 'text-muted',
     items: [
-      { name: 'Support Inbox', path: '/support/admin', icon: '◇' },
+      { name: 'Support Inbox', path: '/support/admin', icon: 'lifeBuoy' },
     ]
   },
 ];
 
 // HR Admin nav
 const HR_ADMIN_NAV: NavGroup[] = [
-  { group: 'COMMAND',    color: 'text-accent',  items: [{ name: 'Dashboard', path: '/', icon: '⬡' }, { name: 'Notifications', path: '/notifications', icon: '◍' }] },
+  { group: 'COMMAND',    color: 'text-accent',  items: [{ name: 'Dashboard', path: '/', icon: 'home' }, { name: 'Notifications', path: '/notifications', icon: 'bell' }] },
   { group: 'WORKFORCE',  color: 'text-accent',    items: [
-    { name: 'Employees',   path: '/employees',           icon: '◈' },
-    { name: 'Recruitment', path: '/recruitment',         icon: '◇' },
-    { name: 'Attendance',  path: '/attendance/registry', icon: '◉' },
-    { name: 'Leave',       path: '/leave/registry',      icon: '◌' },
-    { name: 'Claims',      path: '/claims/registry',     icon: '◫' },
-    { name: 'Movements',   path: '/movements',           icon: '↹' },
-    { name: 'Performance', path: '/performance',         icon: '▣' },
-    { name: 'Training',    path: '/training',            icon: '◑' },
+    { name: 'Employees',   path: '/employees',           icon: 'users' },
+    { name: 'Recruitment', path: '/recruitment',         icon: 'briefcase' },
+    { name: 'Attendance',  path: '/attendance/registry', icon: 'clock' },
+    { name: 'Leave',       path: '/leave/registry',      icon: 'calendar' },
+    { name: 'Claims',      path: '/claims/registry',     icon: 'receipt' },
+    { name: 'Movements',   path: '/movements',           icon: 'shuffle' },
+    { name: 'Performance', path: '/performance',         icon: 'award' },
+    { name: 'Training',    path: '/training',            icon: 'graduation' },
   ]},
   { group: 'EMPLOYEE',   color: 'text-accent',     items: [
-    { name: 'My Attendance', path: '/attendance',          icon: '◉' },
-    { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
-    { name: 'My Leave',      path: '/leave',               icon: '◌' },
-    { name: 'My Claims',     path: '/claims',              icon: '◫' },
-    { name: 'My Training',   path: '/training?view=me',            icon: '◑' },
-    { name: 'My Appraisal',  path: '/performance?view=me',         icon: '▣' },
-    { name: 'My Payslips',   path: '/payroll/me',          icon: '◆' },
-    { name: 'My Documents',  path: '/documents',           icon: '◭' },
-    { name: 'My Benefits',   path: '/benefits',            icon: '⊕' },
-    { name: 'My Cases',      path: '/hr-cases',            icon: '⚖' },
-    { name: 'My Loans',       path: '/loans',              icon: '$' },
-    { name: 'My Surveys',     path: '/surveys',             icon: '◊' },
+    { name: 'My Attendance', path: '/attendance',          icon: 'clock' },
+    { name: 'My Schedule',   path: '/attendance/schedule', icon: 'calendar' },
+    { name: 'My Leave',      path: '/leave',               icon: 'calendar' },
+    { name: 'My Claims',     path: '/claims',              icon: 'receipt' },
+    { name: 'My Training',   path: '/training?view=me',            icon: 'graduation' },
+    { name: 'My Appraisal',  path: '/performance?view=me',         icon: 'award' },
+    { name: 'My Payslips',   path: '/payroll/me',          icon: 'wallet' },
+    { name: 'My Documents',  path: '/documents',           icon: 'file' },
+    { name: 'My Benefits',   path: '/benefits',            icon: 'gift' },
+    { name: 'My Cases',      path: '/hr-cases',            icon: 'scale' },
+    { name: 'My Loans',       path: '/loans',              icon: 'dollar' },
+    { name: 'My Surveys',     path: '/surveys',             icon: 'clipboard' },
   ]},
   { group: 'FINANCIAL',  color: 'text-accent', items: [
-    { name: 'Payroll',  path: '/payroll',  icon: '◆' },
-    { name: 'Benefits', path: '/benefits', icon: '⊕' },
-    { name: 'Loans',    path: '/loans',    icon: '$' },
+    { name: 'Payroll',  path: '/payroll',  icon: 'wallet' },
+    { name: 'Benefits', path: '/benefits', icon: 'gift' },
+    { name: 'Loans',    path: '/loans',    icon: 'dollar' },
   ]},
   { group: 'COMPLIANCE', color: 'text-highlight',   items: [
-    { name: 'Reports',    path: '/reports',           icon: '▤' },
-    { name: 'Analytics',  path: '/reports/analytics', icon: '◧' },
-    { name: 'Documents',  path: '/documents',         icon: '◭' },
-    { name: 'HR Cases',   path: '/hr-cases',          icon: '⚖' },
-    { name: 'Surveys',    path: '/surveys',           icon: '◊' },
-    { name: 'Succession', path: '/succession',        icon: '◈' },
+    { name: 'Reports',    path: '/reports',           icon: 'chart' },
+    { name: 'Analytics',  path: '/reports/analytics', icon: 'chart' },
+    { name: 'Documents',  path: '/documents',         icon: 'file' },
+    { name: 'HR Cases',   path: '/hr-cases',          icon: 'scale' },
+    { name: 'Surveys',    path: '/surveys',           icon: 'clipboard' },
+    { name: 'Succession', path: '/succession',        icon: 'users' },
   ]},
-  { group: 'ADMIN',      color: 'text-accent',  items: [{ name: 'User Management', path: '/settings/users', icon: '◪' }] },
-  { group: 'SUPPORT',   color: 'text-muted',   items: [{ name: 'Support Inbox', path: '/support/admin', icon: '◇' }] },
+  { group: 'ADMIN',      color: 'text-accent',  items: [{ name: 'User Management', path: '/settings/users', icon: 'user' }] },
+  { group: 'SUPPORT',   color: 'text-muted',   items: [{ name: 'Support Inbox', path: '/support/admin', icon: 'lifeBuoy' }] },
 ];
 
 // Payroll Officer nav
 const PAYROLL_OFFICER_NAV: NavGroup[] = [
-  { group: 'COMMAND',    color: 'text-accent',  items: [{ name: 'Dashboard', path: '/', icon: '⬡' }, { name: 'Notifications', path: '/notifications', icon: '◍' }] },
+  { group: 'COMMAND',    color: 'text-accent',  items: [{ name: 'Dashboard', path: '/', icon: 'home' }, { name: 'Notifications', path: '/notifications', icon: 'bell' }] },
   { group: 'WORKFORCE',  color: 'text-accent',    items: [
-    { name: 'Employees',  path: '/employees',           icon: '◈' },
-    { name: 'Attendance', path: '/attendance/registry', icon: '◉' },
-    { name: 'Leave',      path: '/leave/registry',      icon: '◌' },
-    { name: 'Claims',     path: '/claims/registry',     icon: '◫' },
+    { name: 'Employees',  path: '/employees',           icon: 'users' },
+    { name: 'Attendance', path: '/attendance/registry', icon: 'clock' },
+    { name: 'Leave',      path: '/leave/registry',      icon: 'calendar' },
+    { name: 'Claims',     path: '/claims/registry',     icon: 'receipt' },
   ]},
   { group: 'EMPLOYEE',   color: 'text-accent',     items: [
-    { name: 'My Attendance', path: '/attendance',          icon: '◉' },
-    { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
-    { name: 'My Leave',      path: '/leave',               icon: '◌' },
-    { name: 'My Claims',     path: '/claims',              icon: '◫' },
-    { name: 'My Training',   path: '/training?view=me',            icon: '◑' },
-    { name: 'My Appraisal',  path: '/performance?view=me',         icon: '▣' },
-    { name: 'My Payslips',   path: '/payroll/me',          icon: '◆' },
-    { name: 'My Documents',  path: '/documents',           icon: '◭' },
-    { name: 'My Benefits',   path: '/benefits',            icon: '⊕' },
-    { name: 'My Cases',      path: '/hr-cases',            icon: '⚖' },
-    { name: 'My Loans',       path: '/loans',              icon: '$' },
-    { name: 'My Surveys',     path: '/surveys',             icon: '◊' },
+    { name: 'My Attendance', path: '/attendance',          icon: 'clock' },
+    { name: 'My Schedule',   path: '/attendance/schedule', icon: 'calendar' },
+    { name: 'My Leave',      path: '/leave',               icon: 'calendar' },
+    { name: 'My Claims',     path: '/claims',              icon: 'receipt' },
+    { name: 'My Training',   path: '/training?view=me',            icon: 'graduation' },
+    { name: 'My Appraisal',  path: '/performance?view=me',         icon: 'award' },
+    { name: 'My Payslips',   path: '/payroll/me',          icon: 'wallet' },
+    { name: 'My Documents',  path: '/documents',           icon: 'file' },
+    { name: 'My Benefits',   path: '/benefits',            icon: 'gift' },
+    { name: 'My Cases',      path: '/hr-cases',            icon: 'scale' },
+    { name: 'My Loans',       path: '/loans',              icon: 'dollar' },
+    { name: 'My Surveys',     path: '/surveys',             icon: 'clipboard' },
   ]},
   { group: 'FINANCIAL',  color: 'text-accent', items: [
-    { name: 'Payroll', path: '/payroll', icon: '◆', badge: 'Action' },
+    { name: 'Payroll', path: '/payroll', icon: 'wallet', badge: 'Action' },
   ]},
   { group: 'COMPLIANCE', color: 'text-highlight',   items: [
-    { name: 'Reports', path: '/reports', icon: '▤' },
+    { name: 'Reports', path: '/reports', icon: 'chart' },
   ]},
   { group: 'SUPPORT',   color: 'text-muted',   items: [
-    { name: 'Help & Support', path: '/support', icon: '◇' },
+    { name: 'Help & Support', path: '/support', icon: 'lifeBuoy' },
   ]},
 ];
 
 // General ADMIN nav — HR-adjacent oversight without payroll or sensitive data
 const ADMIN_NAV: NavGroup[] = [
-  { group: 'COMMAND',    color: 'text-accent',  items: [{ name: 'Dashboard', path: '/', icon: '⬡' }, { name: 'Notifications', path: '/notifications', icon: '◍' }] },
+  { group: 'COMMAND',    color: 'text-accent',  items: [{ name: 'Dashboard', path: '/', icon: 'home' }, { name: 'Notifications', path: '/notifications', icon: 'bell' }] },
   { group: 'WORKFORCE',  color: 'text-accent',    items: [
-    { name: 'Employees',  path: '/employees',           icon: '◈' },
-    { name: 'Attendance', path: '/attendance/registry', icon: '◉' },
-    { name: 'Leave',      path: '/leave/registry',      icon: '◌' },
-    { name: 'Claims',     path: '/claims/registry',     icon: '◫' },
+    { name: 'Employees',  path: '/employees',           icon: 'users' },
+    { name: 'Attendance', path: '/attendance/registry', icon: 'clock' },
+    { name: 'Leave',      path: '/leave/registry',      icon: 'calendar' },
+    { name: 'Claims',     path: '/claims/registry',     icon: 'receipt' },
   ]},
   { group: 'EMPLOYEE',   color: 'text-accent',     items: [
-    { name: 'My Attendance', path: '/attendance',          icon: '◉' },
-    { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
-    { name: 'My Leave',      path: '/leave',               icon: '◌' },
-    { name: 'My Claims',     path: '/claims',              icon: '◫' },
-    { name: 'My Training',   path: '/training?view=me',            icon: '◑' },
-    { name: 'My Documents',  path: '/documents',           icon: '◭' },
-    { name: 'My Benefits',   path: '/benefits',            icon: '⊕' },
-    { name: 'My Cases',      path: '/hr-cases',            icon: '⚖' },
-    { name: 'My Loans',       path: '/loans',              icon: '$' },
-    { name: 'My Surveys',     path: '/surveys',             icon: '◊' },
+    { name: 'My Attendance', path: '/attendance',          icon: 'clock' },
+    { name: 'My Schedule',   path: '/attendance/schedule', icon: 'calendar' },
+    { name: 'My Leave',      path: '/leave',               icon: 'calendar' },
+    { name: 'My Claims',     path: '/claims',              icon: 'receipt' },
+    { name: 'My Training',   path: '/training?view=me',            icon: 'graduation' },
+    { name: 'My Documents',  path: '/documents',           icon: 'file' },
+    { name: 'My Benefits',   path: '/benefits',            icon: 'gift' },
+    { name: 'My Cases',      path: '/hr-cases',            icon: 'scale' },
+    { name: 'My Loans',       path: '/loans',              icon: 'dollar' },
+    { name: 'My Surveys',     path: '/surveys',             icon: 'clipboard' },
   ]},
-  { group: 'COMPLIANCE', color: 'text-highlight',   items: [{ name: 'Reports', path: '/reports', icon: '▤' }] },
-  { group: 'SUPPORT',    color: 'text-muted',   items: [{ name: 'Help & Support', path: '/support', icon: '◇' }] },
+  { group: 'COMPLIANCE', color: 'text-highlight',   items: [{ name: 'Reports', path: '/reports', icon: 'chart' }] },
+  { group: 'SUPPORT',    color: 'text-muted',   items: [{ name: 'Help & Support', path: '/support', icon: 'lifeBuoy' }] },
 ];
 
 // IT Admin nav — user/role/settings + asset oversight
 const IT_ADMIN_NAV: NavGroup[] = [
-  { group: 'COMMAND',        color: 'text-accent', items: [{ name: 'Dashboard', path: '/', icon: '⬡' }, { name: 'Notifications', path: '/notifications', icon: '◍' }] },
+  { group: 'COMMAND',        color: 'text-accent', items: [{ name: 'Dashboard', path: '/', icon: 'home' }, { name: 'Notifications', path: '/notifications', icon: 'bell' }] },
   { group: 'ADMINISTRATION', color: 'text-accent', items: [
-    { name: 'User Management',    path: '/settings/users',    icon: '◪' },
-    { name: 'Role & Permissions', path: '/settings/roles',    icon: '◧' },
-    { name: 'Security (SSO/MFA)', path: '/settings/security', icon: '◰' },
-    { name: 'Audit Logs',         path: '/settings/audit',    icon: '▤' },
-    { name: 'Tenancy & Config',   path: '/settings',          icon: '◎' },
+    { name: 'User Management',    path: '/settings/users',    icon: 'user' },
+    { name: 'Role & Permissions', path: '/settings/roles',    icon: 'key' },
+    { name: 'Security (SSO/MFA)', path: '/settings/security', icon: 'shield' },
+    { name: 'Audit Logs',         path: '/settings/audit',    icon: 'list' },
+    { name: 'Tenancy & Config',   path: '/settings',          icon: 'settings' },
   ]},
-  { group: 'ASSETS',         color: 'text-accent', items: [{ name: 'Assets', path: '/assets', icon: '◧' }] },
-  { group: 'COMPLIANCE',     color: 'text-highlight',   items: [{ name: 'Reports', path: '/reports', icon: '▤' }] },
+  { group: 'ASSETS',         color: 'text-accent', items: [{ name: 'Assets', path: '/assets', icon: 'grid' }] },
+  { group: 'COMPLIANCE',     color: 'text-highlight',   items: [{ name: 'Reports', path: '/reports', icon: 'chart' }] },
   { group: 'EMPLOYEE',       color: 'text-accent',     items: [
-    { name: 'My Attendance', path: '/attendance', icon: '◉' },
-    { name: 'My Leave',      path: '/leave',      icon: '◌' },
-    { name: 'My Documents',  path: '/documents',  icon: '◭' },
-    { name: 'My Benefits',   path: '/benefits',   icon: '⊕' },
-    { name: 'My Cases',      path: '/hr-cases',   icon: '⚖' },
-    { name: 'My Loans',       path: '/loans',              icon: '$' },
-    { name: 'My Surveys',     path: '/surveys',             icon: '◊' },
+    { name: 'My Attendance', path: '/attendance', icon: 'clock' },
+    { name: 'My Leave',      path: '/leave',      icon: 'calendar' },
+    { name: 'My Documents',  path: '/documents',  icon: 'file' },
+    { name: 'My Benefits',   path: '/benefits',   icon: 'gift' },
+    { name: 'My Cases',      path: '/hr-cases',   icon: 'scale' },
+    { name: 'My Loans',       path: '/loans',              icon: 'dollar' },
+    { name: 'My Surveys',     path: '/surveys',             icon: 'clipboard' },
   ]},
 ];
 
 // Finance Admin nav — claims approval + payroll visibility + financial reports
 const FINANCE_ADMIN_NAV: NavGroup[] = [
-  { group: 'COMMAND',    color: 'text-accent',   items: [{ name: 'Dashboard', path: '/', icon: '⬡' }, { name: 'Notifications', path: '/notifications', icon: '◍' }] },
+  { group: 'COMMAND',    color: 'text-accent',   items: [{ name: 'Dashboard', path: '/', icon: 'home' }, { name: 'Notifications', path: '/notifications', icon: 'bell' }] },
   { group: 'FINANCIAL',  color: 'text-accent',  items: [
-    { name: 'Claims',  path: '/claims/registry', icon: '◫' },
-    { name: 'Payroll', path: '/payroll',         icon: '◆' },
-    { name: 'Loans',   path: '/loans',           icon: '$' },
-    { name: 'Assets',  path: '/assets',          icon: '◧' },
+    { name: 'Claims',  path: '/claims/registry', icon: 'receipt' },
+    { name: 'Payroll', path: '/payroll',         icon: 'wallet' },
+    { name: 'Loans',   path: '/loans',           icon: 'dollar' },
+    { name: 'Assets',  path: '/assets',          icon: 'grid' },
   ]},
-  { group: 'COMPLIANCE', color: 'text-highlight',    items: [{ name: 'Reports', path: '/reports', icon: '▤' }] },
+  { group: 'COMPLIANCE', color: 'text-highlight',    items: [{ name: 'Reports', path: '/reports', icon: 'chart' }] },
   { group: 'EMPLOYEE',   color: 'text-accent',      items: [
-    { name: 'My Attendance', path: '/attendance',          icon: '◉' },
-    { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
-    { name: 'My Leave',      path: '/leave',               icon: '◌' },
-    { name: 'My Claims',     path: '/claims',              icon: '◫' },
-    { name: 'My Payslips',   path: '/payroll/me',          icon: '◆' },
-    { name: 'My Documents',  path: '/documents',           icon: '◭' },
-    { name: 'My Benefits',   path: '/benefits',            icon: '⊕' },
-    { name: 'My Cases',      path: '/hr-cases',            icon: '⚖' },
-    { name: 'My Loans',       path: '/loans',              icon: '$' },
-    { name: 'My Surveys',     path: '/surveys',             icon: '◊' },
+    { name: 'My Attendance', path: '/attendance',          icon: 'clock' },
+    { name: 'My Schedule',   path: '/attendance/schedule', icon: 'calendar' },
+    { name: 'My Leave',      path: '/leave',               icon: 'calendar' },
+    { name: 'My Claims',     path: '/claims',              icon: 'receipt' },
+    { name: 'My Payslips',   path: '/payroll/me',          icon: 'wallet' },
+    { name: 'My Documents',  path: '/documents',           icon: 'file' },
+    { name: 'My Benefits',   path: '/benefits',            icon: 'gift' },
+    { name: 'My Cases',      path: '/hr-cases',            icon: 'scale' },
+    { name: 'My Loans',       path: '/loans',              icon: 'dollar' },
+    { name: 'My Surveys',     path: '/surveys',             icon: 'clipboard' },
   ]},
 ];
 
 // Line Manager nav — team approvals + scheduling
 const LINE_MANAGER_NAV: NavGroup[] = [
-  { group: 'COMMAND',     color: 'text-accent', items: [{ name: 'Dashboard', path: '/', icon: '⬡' }, { name: 'Notifications', path: '/notifications', icon: '◍' }] },
+  { group: 'COMMAND',     color: 'text-accent', items: [{ name: 'Dashboard', path: '/', icon: 'home' }, { name: 'Notifications', path: '/notifications', icon: 'bell' }] },
   { group: 'TEAM',        color: 'text-accent',   items: [
-    { name: 'Team Leave',       path: '/leave/registry',      icon: '◌' },
-    { name: 'Team Claims',      path: '/claims/registry',     icon: '◫' },
-    { name: 'Team Attendance',  path: '/attendance/registry', icon: '◉' },
-    { name: 'Shift Scheduler',  path: '/attendance/schedule', icon: '▦' },
-    { name: 'Assets',           path: '/assets',              icon: '◧' },
-    { name: 'Team Succession',  path: '/succession/my-team',  icon: '◈' },
+    { name: 'Team Leave',       path: '/leave/registry',      icon: 'calendar' },
+    { name: 'Team Claims',      path: '/claims/registry',     icon: 'receipt' },
+    { name: 'Team Attendance',  path: '/attendance/registry', icon: 'clock' },
+    { name: 'Shift Scheduler',  path: '/attendance/schedule', icon: 'calendar' },
+    { name: 'Assets',           path: '/assets',              icon: 'grid' },
+    { name: 'Team Succession',  path: '/succession/my-team',  icon: 'users' },
   ]},
   { group: 'EMPLOYEE',    color: 'text-accent',    items: [
-    { name: 'My Attendance', path: '/attendance',          icon: '◉' },
-    { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
-    { name: 'My Leave',      path: '/leave',               icon: '◌' },
-    { name: 'My Claims',     path: '/claims',              icon: '◫' },
-    { name: 'My Training',   path: '/training?view=me',            icon: '◑' },
-    { name: 'My Appraisal',  path: '/performance?view=me',         icon: '▣' },
-    { name: 'My Payslips',   path: '/payroll/me',          icon: '◆' },
-    { name: 'My Documents',  path: '/documents',           icon: '◭' },
-    { name: 'My Benefits',   path: '/benefits',            icon: '⊕' },
-    { name: 'My Cases',      path: '/hr-cases',            icon: '⚖' },
-    { name: 'My Loans',       path: '/loans',              icon: '$' },
-    { name: 'My Surveys',     path: '/surveys',             icon: '◊' },
+    { name: 'My Attendance', path: '/attendance',          icon: 'clock' },
+    { name: 'My Schedule',   path: '/attendance/schedule', icon: 'calendar' },
+    { name: 'My Leave',      path: '/leave',               icon: 'calendar' },
+    { name: 'My Claims',     path: '/claims',              icon: 'receipt' },
+    { name: 'My Training',   path: '/training?view=me',            icon: 'graduation' },
+    { name: 'My Appraisal',  path: '/performance?view=me',         icon: 'award' },
+    { name: 'My Payslips',   path: '/payroll/me',          icon: 'wallet' },
+    { name: 'My Documents',  path: '/documents',           icon: 'file' },
+    { name: 'My Benefits',   path: '/benefits',            icon: 'gift' },
+    { name: 'My Cases',      path: '/hr-cases',            icon: 'scale' },
+    { name: 'My Loans',       path: '/loans',              icon: 'dollar' },
+    { name: 'My Surveys',     path: '/surveys',             icon: 'clipboard' },
   ]},
 ];
 
 // Recruiter nav — ATS/recruitment only + self-service
 const RECRUITER_NAV: NavGroup[] = [
-  { group: 'COMMAND',     color: 'text-accent', items: [{ name: 'Dashboard', path: '/', icon: '⬡' }, { name: 'Notifications', path: '/notifications', icon: '◍' }] },
+  { group: 'COMMAND',     color: 'text-accent', items: [{ name: 'Dashboard', path: '/', icon: 'home' }, { name: 'Notifications', path: '/notifications', icon: 'bell' }] },
   { group: 'RECRUITMENT', color: 'text-accent',   items: [
-    { name: 'Recruitment', path: '/recruitment', icon: '◇' },
-    { name: 'Employees',   path: '/employees',   icon: '◈' },
+    { name: 'Recruitment', path: '/recruitment', icon: 'briefcase' },
+    { name: 'Employees',   path: '/employees',   icon: 'users' },
   ]},
   { group: 'EMPLOYEE',    color: 'text-accent',    items: [
-    { name: 'My Attendance', path: '/attendance',          icon: '◉' },
-    { name: 'My Leave',      path: '/leave',               icon: '◌' },
-    { name: 'My Claims',     path: '/claims',              icon: '◫' },
-    { name: 'My Training',   path: '/training?view=me',            icon: '◑' },
-    { name: 'My Payslips',   path: '/payroll/me',          icon: '◆' },
-    { name: 'My Documents',  path: '/documents',           icon: '◭' },
-    { name: 'My Benefits',   path: '/benefits',            icon: '⊕' },
-    { name: 'My Cases',      path: '/hr-cases',            icon: '⚖' },
-    { name: 'My Loans',       path: '/loans',              icon: '$' },
-    { name: 'My Surveys',     path: '/surveys',             icon: '◊' },
+    { name: 'My Attendance', path: '/attendance',          icon: 'clock' },
+    { name: 'My Leave',      path: '/leave',               icon: 'calendar' },
+    { name: 'My Claims',     path: '/claims',              icon: 'receipt' },
+    { name: 'My Training',   path: '/training?view=me',            icon: 'graduation' },
+    { name: 'My Payslips',   path: '/payroll/me',          icon: 'wallet' },
+    { name: 'My Documents',  path: '/documents',           icon: 'file' },
+    { name: 'My Benefits',   path: '/benefits',            icon: 'gift' },
+    { name: 'My Cases',      path: '/hr-cases',            icon: 'scale' },
+    { name: 'My Loans',       path: '/loans',              icon: 'dollar' },
+    { name: 'My Surveys',     path: '/surveys',             icon: 'clipboard' },
   ]},
 ];
 
 // Training Manager nav — training oversight (training-specific perms still pending in seed)
 const TRAINING_MANAGER_NAV: NavGroup[] = [
-  { group: 'COMMAND',  color: 'text-accent',   items: [{ name: 'Dashboard', path: '/', icon: '⬡' }, { name: 'Notifications', path: '/notifications', icon: '◍' }] },
+  { group: 'COMMAND',  color: 'text-accent',   items: [{ name: 'Dashboard', path: '/', icon: 'home' }, { name: 'Notifications', path: '/notifications', icon: 'bell' }] },
   { group: 'TRAINING', color: 'text-ink',   items: [
-    { name: 'Training',  path: '/training',  icon: '◑' },
-    { name: 'Employees', path: '/employees', icon: '◈' },
+    { name: 'Training',  path: '/training',  icon: 'graduation' },
+    { name: 'Employees', path: '/employees', icon: 'users' },
   ]},
-  { group: 'COMPLIANCE', color: 'text-highlight',  items: [{ name: 'Reports', path: '/reports', icon: '▤' }] },
+  { group: 'COMPLIANCE', color: 'text-highlight',  items: [{ name: 'Reports', path: '/reports', icon: 'chart' }] },
   { group: 'EMPLOYEE', color: 'text-accent',      items: [
-    { name: 'My Attendance', path: '/attendance', icon: '◉' },
-    { name: 'My Leave',      path: '/leave',      icon: '◌' },
-    { name: 'My Training',   path: '/training?view=me',   icon: '◑' },
-    { name: 'My Payslips',   path: '/payroll/me', icon: '◆' },
-    { name: 'My Documents',  path: '/documents',  icon: '◭' },
-    { name: 'My Benefits',   path: '/benefits',   icon: '⊕' },
-    { name: 'My Cases',      path: '/hr-cases',   icon: '⚖' },
-    { name: 'My Loans',       path: '/loans',              icon: '$' },
-    { name: 'My Surveys',     path: '/surveys',             icon: '◊' },
+    { name: 'My Attendance', path: '/attendance', icon: 'clock' },
+    { name: 'My Leave',      path: '/leave',      icon: 'calendar' },
+    { name: 'My Training',   path: '/training?view=me',   icon: 'graduation' },
+    { name: 'My Payslips',   path: '/payroll/me', icon: 'wallet' },
+    { name: 'My Documents',  path: '/documents',  icon: 'file' },
+    { name: 'My Benefits',   path: '/benefits',   icon: 'gift' },
+    { name: 'My Cases',      path: '/hr-cases',   icon: 'scale' },
+    { name: 'My Loans',       path: '/loans',              icon: 'dollar' },
+    { name: 'My Surveys',     path: '/surveys',             icon: 'clipboard' },
   ]},
 ];
 
 // Employee ESS nav — default inherited role for all employees
 const EMPLOYEE_NAV: NavGroup[] = [
-  { group: 'OVERVIEW',  color: 'text-accent',  items: [{ name: 'Dashboard', path: '/', icon: '⬡' }, { name: 'Notifications', path: '/notifications', icon: '◍' }] },
+  { group: 'OVERVIEW',  color: 'text-accent',  items: [{ name: 'Dashboard', path: '/', icon: 'home' }, { name: 'Notifications', path: '/notifications', icon: 'bell' }] },
   { group: 'EMPLOYEE',  color: 'text-accent',     items: [
-    { name: 'My Attendance', path: '/attendance',          icon: '◉' },
-    { name: 'My Schedule',   path: '/attendance/schedule', icon: '▦' },
-    { name: 'My Leave',      path: '/leave',               icon: '◌' },
-    { name: 'My Claims',     path: '/claims',              icon: '◫' },
-    { name: 'My Training',   path: '/training?view=me',            icon: '◑' },
-    { name: 'My Appraisal',  path: '/performance?view=me',         icon: '▣' },
-    { name: 'My Documents',  path: '/documents',           icon: '◭' },
-    { name: 'My Benefits',   path: '/benefits',            icon: '⊕' },
-    { name: 'My Cases',      path: '/hr-cases',            icon: '⚖' },
-    { name: 'My Loans',       path: '/loans',              icon: '$' },
-    { name: 'My Surveys',     path: '/surveys',             icon: '◊' },
+    { name: 'My Attendance', path: '/attendance',          icon: 'clock' },
+    { name: 'My Schedule',   path: '/attendance/schedule', icon: 'calendar' },
+    { name: 'My Leave',      path: '/leave',               icon: 'calendar' },
+    { name: 'My Claims',     path: '/claims',              icon: 'receipt' },
+    { name: 'My Training',   path: '/training?view=me',            icon: 'graduation' },
+    { name: 'My Appraisal',  path: '/performance?view=me',         icon: 'award' },
+    { name: 'My Documents',  path: '/documents',           icon: 'file' },
+    { name: 'My Benefits',   path: '/benefits',            icon: 'gift' },
+    { name: 'My Cases',      path: '/hr-cases',            icon: 'scale' },
+    { name: 'My Loans',       path: '/loans',              icon: 'dollar' },
+    { name: 'My Surveys',     path: '/surveys',             icon: 'clipboard' },
   ]},
   { group: 'PAYSLIPS',  color: 'text-accent', items: [
-    { name: 'My Payslips', path: '/payroll/me', icon: '◆' },
+    { name: 'My Payslips', path: '/payroll/me', icon: 'wallet' },
   ]},
   { group: 'SUPPORT',   color: 'text-muted',   items: [
-    { name: 'Staff Directory', path: '/staff',   icon: '◈' },
-    { name: 'Help & Support',  path: '/support', icon: '◇' },
+    { name: 'Staff Directory', path: '/staff',   icon: 'user' },
+    { name: 'Help & Support',  path: '/support', icon: 'lifeBuoy' },
   ]},
 ];
 
-const ROLE_LABELS: Record<string, { label: string; color: string; dot: string }> = {
-  SUPER_ADMIN:      { label: 'Super Admin',      color: 'text-accent', dot: 'bg-accent' },
-  ADMIN:            { label: 'Admin',            color: 'text-accent', dot: 'bg-accent' },
-  IT_ADMIN:         { label: 'IT Admin',         color: 'text-ink',    dot: 'bg-ink'    },
-  HR_ADMIN:         { label: 'HR Admin',         color: 'text-accent', dot: 'bg-accent' },
-  HR_MANAGER:       { label: 'HR Manager',       color: 'text-accent',   dot: 'bg-accent'   },
-  PAYROLL_OFFICER:  { label: 'Payroll Officer',  color: 'text-accent',dot: 'bg-accent'},
-  FINANCE_ADMIN:    { label: 'Finance Admin',    color: 'text-accent',   dot: 'bg-accent'   },
-  RECRUITER:        { label: 'Recruiter',        color: 'text-highlight',  dot: 'bg-highlight'  },
-  TRAINING_MANAGER: { label: 'Training Mgr',     color: 'text-highlight', dot: 'bg-highlight' },
-  LINE_MANAGER:     { label: 'Line Manager',     color: 'text-accent',    dot: 'bg-accent'    },
-  EMPLOYEE:         { label: 'Employee',         color: 'text-muted',  dot: 'bg-muted'  },
+const ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN:      'Super admin',
+  ADMIN:            'Admin',
+  IT_ADMIN:         'IT admin',
+  HR_ADMIN:         'HR admin',
+  HR_MANAGER:       'HR manager',
+  PAYROLL_OFFICER:  'Payroll officer',
+  FINANCE_ADMIN:    'Finance admin',
+  RECRUITER:        'Recruiter',
+  TRAINING_MANAGER: 'Training manager',
+  LINE_MANAGER:     'Line manager',
+  EMPLOYEE:         'Employee',
+};
+
+// The RBAC matrices above keep their internal group keys; this is what the
+// sidebar prints for each (sentence case, plain words — the redesign IA).
+const GROUP_LABELS: Record<string, string> = {
+  COMMAND: 'Overview', OVERVIEW: 'Overview', WORKFORCE: 'Workforce', EMPLOYEE: 'My workspace',
+  FINANCIAL: 'Money', PAYSLIPS: 'Money', COMPLIANCE: 'Compliance', ADMINISTRATION: 'Administration',
+  ADMIN: 'Administration', SUPPORT: 'Support', TEAM: 'Team', RECRUITMENT: 'Recruitment',
+  TRAINING: 'Training', ASSETS: 'Assets',
 };
 
 function getNavGroups(role: string, _email: string, cached: boolean) {
@@ -383,6 +394,13 @@ function getNavGroups(role: string, _email: string, cached: boolean) {
   if (r === 'RECRUITER')        return RECRUITER_NAV;
   if (r === 'TRAINING_MANAGER') return TRAINING_MANAGER_NAV;
   return EMPLOYEE_NAV;
+}
+
+// Bottom bar on phones: the first four of these the role can reach, then "More".
+const BOTTOM_BAR_ORDER = ['/', '/attendance', '/leave', '/claims', '/payroll/me', '/employees', '/payroll', '/notifications'];
+
+function titleCase(seg: string) {
+  return seg.replace(/-/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -431,230 +449,237 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Auto-close drawer on route change
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
-  const authErrorBanner = null;
+  // ⌘K palette + user menu
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPaletteOpen((v) => !v); }
+    };
+    const onClick = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false); };
+    window.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onClick);
+    return () => { window.removeEventListener('keydown', onKey); document.removeEventListener('mousedown', onClick); };
+  }, []);
+  useEffect(() => { setMenuOpen(false); }, [pathname]);
 
   const effectiveRole = liveRole;
-  const roleInfo = ROLE_LABELS[effectiveRole] || ROLE_LABELS['EMPLOYEE'];
+  const roleLabel = ROLE_LABELS[effectiveRole] || ROLE_LABELS['EMPLOYEE'];
 
   const navGroups = getNavGroups(effectiveRole, '', isSuperAdmin);
+  const flatNav = navGroups.flatMap((g) => g.items.map((it) => ({ ...it, group: GROUP_LABELS[g.group] || titleCase(g.group.toLowerCase()) })));
 
-  // Page title from path
-  const getPageTitle = () => {
-    const seg = pathname.split('/').filter(Boolean);
-    if (!seg.length) return 'Command Centre';
-    return seg[seg.length - 1].replace(/-/g, ' ').replace(/\//g, ' › ').toUpperCase();
+  const isItemActive = (item: NavItem) => {
+    const itemBase = item.path.split('?')[0];
+    const itemMy = item.path.includes('view=me');
+    const dual = itemBase === '/training' || itemBase === '/performance';
+    const baseMatch = pathname === itemBase || (itemBase !== '/' && pathname.startsWith(itemBase));
+    return baseMatch && (!dual || itemMy === isMyView);
+  };
+
+  // Breadcrumb from the path: the matching nav item's name where there is
+  // one, otherwise the segment in sentence case.
+  const crumbs = (() => {
+    const segs = pathname.split('/').filter(Boolean);
+    if (!segs.length) return ['Dashboard'];
+    return segs.map((_, i) => {
+      const p = '/' + segs.slice(0, i + 1).join('/');
+      const hit = flatNav.find((it) => it.path.split('?')[0] === p);
+      return hit ? hit.name : titleCase(segs[i]);
+    });
+  })();
+
+  const bottomBar = BOTTOM_BAR_ORDER
+    .map((p) => flatNav.find((it) => it.path === p))
+    .filter((it): it is NonNullable<typeof it> => Boolean(it))
+    .slice(0, 4);
+
+  const initials = (user?.name || '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || (isSuperAdmin ? 'SA' : 'U');
+
+  const doLogout = () => {
+    localStorage.removeItem('gadonghr_admin_confirmed');
+    localStorage.removeItem('gadonghr_user_role');
+    logout();
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-shadow flex items-center justify-center">
-        <div className="flex flex-col items-center gap-6">
-          <div className="relative w-16 h-16">
-            <div className="absolute inset-0 border-4 border-accent/20 border-t-accent animate-spin rounded-full"></div>
-            <div className="absolute inset-3 border-4 border-rule border-t-accent animate-spin [animation-direction:reverse] [animation-duration:0.6s] rounded-full"></div>
-          </div>
-          <p className="text-[10px] font-black text-muted uppercase tracking-[0.4em] animate-pulse">Authenticating Identity...</p>
+      <div className="min-h-screen bg-page flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-9 h-9 border-[3px] border-rule border-t-accent animate-spin rounded-full" />
+          <p className="text-sm text-muted">Signing you in…</p>
         </div>
       </div>
     );
   }
 
+  const navLink = (item: NavItem, onNavigate?: () => void) => {
+    const isActive = isItemActive(item);
+    return (
+      <Link
+        key={item.path}
+        href={item.path}
+        aria-current={isActive ? 'page' : undefined}
+        onClick={() => {
+          onNavigate?.();
+          if (!isActive) { setIsNavigating(true); setNavTarget(item.name); }
+        }}
+        className={`flex items-center gap-[11px] h-[38px] px-3 rounded-control text-[13.5px] transition-colors ${
+          isActive ? 'bg-tint text-accent font-bold' : 'text-muted font-medium hover:bg-page hover:text-ink'
+        }`}
+      >
+        <Icon name={item.icon} size={17} className={isActive ? 'text-accent' : 'text-faint'} />
+        <span className="flex-1 truncate">{item.name}</span>
+        {item.badge && <Badge tone="brass">{item.badge}</Badge>}
+      </Link>
+    );
+  };
+
+  const sidebarBody = (
+    <>
+      <div className="flex items-center gap-2.5 px-2 pt-1 pb-3">
+        <GaDongLogo variant="light" markSize={30} className="min-w-0" />
+      </div>
+      <nav className="flex-1 overflow-y-auto custom-scrollbar -mx-1 px-1" aria-label="Main">
+        {navGroups.map((group) => (
+          <div key={group.group} className="flex flex-col gap-px">
+            <div className="px-3 pt-3 pb-1.5 text-xs font-bold uppercase tracking-[0.06em] text-faint">
+              {GROUP_LABELS[group.group] || titleCase(group.group.toLowerCase())}
+            </div>
+            {group.items.map((item) => navLink(item))}
+          </div>
+        ))}
+      </nav>
+      <div className="flex items-center gap-2.5 pt-3 mt-2 px-2 border-t border-rule">
+        <div className="w-8 h-8 rounded-full bg-accent text-white flex items-center justify-center text-xs font-bold shrink-0">{initials}</div>
+        <div className="flex flex-col min-w-0">
+          <div className="text-[13px] font-bold text-ink truncate">{user?.name || (isSuperAdmin ? 'Administrator' : 'User')}</div>
+          <div className="text-xs text-muted truncate">{roleLabel}</div>
+        </div>
+      </div>
+    </>
+  );
+
   return (
-    <div className="flex h-screen bg-paper font-sans overflow-hidden selection:bg-accent selection:text-accent relative">
-      {authErrorBanner}
+    <div className="flex h-screen bg-page font-sans overflow-hidden relative">
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={flatNav} />
 
       {/* Navigation loading overlay */}
       {isNavigating && (
         <div className="fixed inset-0 z-[60] pointer-events-none">
-          {/* Thin progress bar at top */}
           <div className="absolute top-0 left-0 right-0 h-0.5 bg-accent/20 overflow-hidden">
             <div className="h-full bg-accent w-3/5" style={{ animation: 'navprogress 1.2s ease-in-out infinite' }} />
           </div>
-          {/* Content area overlay with destination label */}
-          <div className="absolute inset-y-0 left-0 lg:left-64 right-0 flex flex-col items-center justify-center gap-4 bg-paper/80 backdrop-blur-[2px]">
-            <div className="flex flex-col items-center gap-3">
-              <div className="relative w-10 h-10">
-                <div className="absolute inset-0 border-[3px] border-accent border-t-accent animate-spin rounded-full" />
-                <div className="absolute inset-[5px] border-[2px] border-rule border-t-accent animate-spin [animation-direction:reverse] [animation-duration:0.5s] rounded-full" />
-              </div>
-              {navTarget && (
-                <p className="text-[9px] font-black text-muted uppercase tracking-[0.35em]">
-                  Loading {navTarget}…
-                </p>
-              )}
-            </div>
+          <div className="absolute inset-y-0 left-0 lg:left-60 right-0 flex flex-col items-center justify-center gap-3 bg-page/70 backdrop-blur-[2px]">
+            <div className="w-8 h-8 border-[3px] border-rule border-t-accent animate-spin rounded-full" />
+            {navTarget && <p className="text-[13px] text-muted">Opening {navTarget}…</p>}
           </div>
         </div>
       )}
 
-      {/* Mobile sidebar backdrop */}
+      {/* Mobile drawer */}
       {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-shadow backdrop- lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-          aria-hidden="true"
-        />
+        <div className="fixed inset-0 z-40 bg-ink/40 lg:hidden" onClick={() => setSidebarOpen(false)} aria-hidden="true" />
       )}
-
-      {/* ── SIDEBAR ─────────────────────────────────────────────────────────── */}
       <aside
-        className={`w-64 bg-[#0a1628] flex flex-col z-50 shrink-0 fixed lg:relative inset-y-0 left-0 transition-transform duration-300 lg:translate-x-0 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        className={`w-60 bg-paper border-r border-rule flex flex-col z-50 shrink-0 fixed inset-y-0 left-0 px-3 pt-[18px] pb-3.5 transition-transform duration-200 lg:hidden ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
+        aria-hidden={!sidebarOpen}
       >
-        {/* Brand */}
-        <div className="relative px-5 pt-5 pb-4 border-b border-paper/5 flex items-center gap-3">
-          <GaDongLogo variant="dark" markSize={34} className="min-w-0" />
-        </div>
-
-        {/* Role badge */}
-        <div className="relative mx-3 mt-3">
-          <div className={`px-3 py-2 border flex items-center gap-2.5 ${
-            isSuperAdmin
-              ? 'bg-accent/10 border-accent/20'
-              : 'bg-paper/3 border-paper/6'
-          }`}>
-            <div className={`w-1.5 h-1.5 shrink-0 ${roleInfo.dot} ${isSuperAdmin ? 'animate-pulse' : ''}`} />
-            <span className={`text-[9px] font-black uppercase tracking-widest truncate ${roleInfo.color}`}>
-              {isSuperAdmin ? 'Full System Access' : roleInfo.label}
-            </span>
-          </div>
-        </div>
-
-        {/* Navigation */}
-        <nav className="relative flex-1 overflow-y-auto py-3 px-2.5 space-y-4 custom-scrollbar mt-1">
-          {navGroups.map((group) => (
-            <div key={group.group}>
-              {/* Group label */}
-              <div className="flex items-center gap-2 px-2 mb-1">
-                <span className={`text-[7.5px] font-black uppercase tracking-[0.3em] ${group.color} opacity-70`}>{group.group}</span>
-                <div className="flex-1 h-px bg-paper/5" />
-              </div>
-              {/* Items */}
-              <div className="space-y-0.5">
-                {group.items.map((item) => {
-                  const itemBase = item.path.split('?')[0];
-                  const itemMy = item.path.includes('view=me');
-                  const dual = itemBase === '/training' || itemBase === '/performance';
-                  const baseMatch = pathname === itemBase || (itemBase !== '/' && pathname.startsWith(itemBase));
-                  const isActive = baseMatch && (!dual || itemMy === isMyView);
-                  return (
-                    <Link
-                      key={item.path}
-                      href={item.path}
-                      onClick={() => {
-                        if (!isActive) {
-                          setIsNavigating(true);
-                          setNavTarget(item.name);
-                        }
-                      }}
-                      className={`flex items-center gap-2.5 px-3 py-2.5 text-[11px] font-bold tracking-wide transition-all duration-200 group relative ${
-                        isActive
-                          ? 'border-l-2 border-accent bg-paper/5 text-paper'
-                          : 'text-muted hover:bg-paper/5 hover:text-paper'
-                      }`}
-                    >
-                      {isActive && (
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-paper/60" />
-                      )}
-                      <span className={`text-xs shrink-0 w-5 text-center transition-colors ${isActive ? 'text-paper' : 'text-muted group-hover:text-accent'}`}>
-                        {item.icon}
-                      </span>
-                      <span className="flex-1 truncate">{item.name}</span>
-                      {item.badge && (
-                        <span className="text-[7px] font-black px-1.5 py-0.5 bg-highlight text-ink uppercase tracking-wide shrink-0">
-                          {item.badge}
-                        </span>
-                      )}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </nav>
-
-        {/* User Footer */}
-        <div className="relative p-3 border-t border-paper/5">
-          <div className="flex items-center gap-2.5 p-3 bg-paper/4 border border-paper/6 mb-2 cursor-default">
-            <div className={`w-8 h-8 flex items-center justify-center text-[10px] font-black shrink-0 ${
-              isSuperAdmin ? 'bg-accent/30 text-accent' : 'bg-paper/10 text-paper'
-            }`}>
-              {user?.name?.substring(0, 2).toUpperCase() || (isSuperAdmin ? 'SA' : 'U')}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-bold text-paper truncate">
-                {user?.name || (isSuperAdmin ? 'Administrator' : 'User')}
-              </p>
-              <p className="text-[8px] text-muted truncate mt-0.5 uppercase tracking-wider">
-                {user?.email || ''}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              localStorage.removeItem('gadonghr_admin_confirmed');
-              localStorage.removeItem('gadonghr_user_role');
-              logout();
-            }}
-            className="w-full py-2 text-[8px] font-black text-muted hover:text-ink transition-all uppercase tracking-[0.3em] border border-rule hover:bg-ink/5 hover:border-ink/20 active:scale-95"
-          >
-            ⬡ Terminate Session
-          </button>
-        </div>
+        {sidebarBody}
       </aside>
 
-      {/* ── MAIN CONTENT ─────────────────────────────────────────────────────── */}
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex w-60 bg-paper border-r border-rule flex-col shrink-0 px-3 pt-[18px] pb-3.5">
+        {sidebarBody}
+      </aside>
+
+      {/* ── MAIN ─────────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Bar */}
-        <header className="h-14 bg-paper border-b border-rule px-4 lg:px-8 flex items-center justify-between sticky top-0 z-30 shrink-0">
-          <div className="flex items-center gap-3 lg:gap-4 min-w-0">
+        <header className="h-[60px] bg-paper border-b border-rule px-4 lg:px-8 flex items-center justify-between sticky top-0 z-30 shrink-0 gap-3">
+          <div className="flex items-center gap-2 min-w-0">
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden w-9 h-9 flex items-center justify-center hover:bg-paper active:bg-muted transition-all"
+              className="lg:hidden w-9 h-9 -ml-2 flex items-center justify-center rounded-control text-muted hover:bg-page"
               aria-label="Open navigation menu"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-muted">
-                <line x1="4" y1="6" x2="20" y2="6"/>
-                <line x1="4" y1="12" x2="20" y2="12"/>
-                <line x1="4" y1="18" x2="20" y2="18"/>
-              </svg>
+              <Icon name="menu" size={20} />
             </button>
-            <div className="hidden lg:block w-0.5 h-5 bg-accent" />
-            <h2 className="text-[11px] font-black text-ink uppercase tracking-[0.25em] truncate">{getPageTitle()}</h2>
-            {isSuperAdmin && (
-              <span className="hidden sm:inline text-[7px] font-black px-2.5 py-1 bg-accent text-accent border border-accent uppercase tracking-widest shrink-0">
-                Super Admin · Full Access
-              </span>
-            )}
+            <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[13.5px] min-w-0">
+              {crumbs.map((c, i) => (
+                <React.Fragment key={i}>
+                  {i > 0 && <Icon name="chevronRight" size={14} className="text-faint" />}
+                  <span className={`truncate ${i === crumbs.length - 1 ? 'text-ink font-bold' : 'text-muted font-medium'}`}>{c}</span>
+                </React.Fragment>
+              ))}
+            </nav>
           </div>
-          <div className="flex items-center gap-3 lg:gap-5 shrink-0">
-            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-paper border border-rule">
-              <div className="w-1.5 h-1.5 bg-accent animate-pulse" />
-              <span className="text-[8px] font-black text-muted uppercase tracking-widest">System: <span className="text-accent">Online</span></span>
-            </div>
-            <div className="hidden lg:block h-4 w-px bg-muted" />
+          <div className="flex items-center gap-2 lg:gap-4 shrink-0">
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              className="hidden md:flex items-center gap-2.5 h-10 w-[300px] px-3 rounded-control bg-page border border-rule text-muted hover:border-accent text-left"
+              aria-label="Search or jump to a page"
+            >
+              <Icon name="search" size={16} />
+              <span className="flex-1 text-[13.5px] text-faint">Search or jump to…</span>
+              <span className="text-xs px-1.5 py-0.5 border border-rule rounded text-faint">⌘K</span>
+            </button>
+            <button type="button" onClick={() => setPaletteOpen(true)} className="md:hidden w-9 h-9 flex items-center justify-center rounded-control text-muted hover:bg-page" aria-label="Search">
+              <Icon name="search" size={19} />
+            </button>
             <NotificationBell />
-            <div className="hidden lg:block h-4 w-px bg-muted" />
-            {/* Brand lockup on the light top bar. Was an <img> of /gadonghr-logo.jpg,
-                a file that never existed in public/ — every dashboard page showed a
-                broken image here. Now the shared carapace lockup, drawn inline. */}
-            <GaDongLogo variant="light" markSize={26} className="hidden lg:flex" />
-            <div className="hidden lg:flex flex-col items-end">
-              <p className="text-[8px] font-black text-muted uppercase tracking-[0.15em] leading-none">v1.1.0</p>
-              <p className="text-[7px] font-bold text-highlight mt-0.5 uppercase tracking-widest leading-none">SG Compliance</p>
+            <div ref={menuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setMenuOpen((v) => !v)}
+                className="w-9 h-9 rounded-full bg-accent text-white flex items-center justify-center text-xs font-bold"
+                aria-label="Account menu"
+                aria-expanded={menuOpen}
+              >
+                {initials}
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 top-11 w-64 bg-paper border border-rule rounded-card shadow-card z-50 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-rule">
+                    <div className="text-sm font-bold text-ink truncate">{user?.name || 'User'}</div>
+                    <div className="text-xs text-muted truncate">{user?.email || ''}</div>
+                    <div className="mt-1.5"><Badge tone={isSuperAdmin ? 'accent' : 'neutral'}>{roleLabel}</Badge></div>
+                  </div>
+                  <Link href="/settings" className="flex items-center gap-2.5 px-4 h-10 text-sm text-ink hover:bg-page"><Icon name="settings" size={16} className="text-muted" />Settings</Link>
+                  <button type="button" onClick={doLogout} className="w-full flex items-center gap-2.5 px-4 h-10 text-sm text-ink hover:bg-page text-left"><Icon name="logout" size={16} className="text-muted" />Sign out</button>
+                </div>
+              )}
             </div>
           </div>
         </header>
 
-        {/* Page Content */}
-        <main className="flex-1 overflow-y-auto custom-scrollbar bg-paper">
+        <main className="flex-1 overflow-y-auto custom-scrollbar bg-page pb-16 lg:pb-0">
           <TrialBanner />
-          <div className="max-w-[1500px] mx-auto p-3 sm:p-4 lg:p-8">
+          <div className="max-w-[1400px] mx-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-[26px]">
             {children}
           </div>
         </main>
+
+        {/* Phone bottom bar */}
+        <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 h-16 bg-paper border-t border-rule grid grid-cols-5" aria-label="Quick navigation">
+          {bottomBar.map((item) => {
+            const on = isItemActive(item);
+            return (
+              <Link key={item.path} href={item.path} aria-current={on ? 'page' : undefined} className={`flex flex-col items-center justify-center gap-1 text-xs font-semibold ${on ? 'text-accent' : 'text-muted'}`}>
+                <Icon name={item.icon} size={20} />
+                <span className="truncate max-w-full px-1">{item.name.replace(/^My /, '')}</span>
+              </Link>
+            );
+          })}
+          <button type="button" onClick={() => setSidebarOpen(true)} className="flex flex-col items-center justify-center gap-1 text-xs font-semibold text-muted">
+            <Icon name="more" size={20} />
+            <span>More</span>
+          </button>
+        </nav>
       </div>
       <FloatingAssistant />
     </div>
