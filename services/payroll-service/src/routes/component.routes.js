@@ -94,7 +94,9 @@ router.put('/sdl-config', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.PAYRO
 router.post('/seed-defaults', authenticate, authorize(ROLES.SUPER_ADMIN), async (req, res, next) => {
   try {
     const effectiveDate = new Date('2026-01-01');
-    const owCeiling = 7400;
+    // CPF Ordinary Wage ceiling: S$7,400 from 1 Jan 2025, S$8,000 from 1 Jan 2026 (final step of
+    // the Budget 2023 schedule, cpf.gov.sg). Must match statutory-sg-service/src/seed/sg-2026-1.js.
+    const owCeiling = 8000;
     const awCeiling = 102000;
 
     const cpfDefaults = [
