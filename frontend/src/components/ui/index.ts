@@ -14,6 +14,8 @@
  *   - Focus is the global :focus-visible outline; never remove it without a visible ring.
  *   - A page = <PageHeader> then content. Lists = <DataTable> (give mobileCard).
  *     Forms = <Field>. Processes = <Stepper>. Inboxes = <SplitPane>.
+ *   - A row-click DataTable carries no action column (a button inside a button is
+ *     invalid HTML); put actions on the detail screen or a row menu.
  *     Confirmations = <Modal>. Feedback = useToast(). The list half of an
  *     inbox = <InboxList> (a DataTable is too wide for the SplitPane column).
  *
@@ -38,7 +40,7 @@ export { Modal } from './Modal';
 export { ToastProvider, useToast } from './Toast';
 export type { ToastTone } from './Toast';
 export { Stepper } from './Stepper';
-export type { StepState } from './Stepper';
+export type { StepState, Step } from './Stepper';
 export { Avatar } from './Avatar';
 export { SplitPane } from './SplitPane';
 export { InboxList } from './InboxList';
