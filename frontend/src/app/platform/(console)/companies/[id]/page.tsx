@@ -101,7 +101,7 @@ export default function CompanyPage() {
                   aria-checked={on}
                   disabled={m.isCore}
                   onClick={() => action(`/modules/${m.code}/toggle`, { enabled: !on })}
-                  className={`flex items-center justify-between gap-2.5 rounded-control border border-rule px-3.5 py-3 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${on ? 'bg-tint' : 'bg-paper'} ${m.isCore ? 'cursor-not-allowed' : 'hover:border-accent'}`}
+                  className={`flex items-center justify-between gap-2.5 rounded-control border border-rule px-3.5 py-3 text-left transition-colors ${on ? 'bg-tint' : 'bg-paper'} ${m.isCore ? 'cursor-not-allowed' : 'hover:border-accent'}`}
                 >
                   <div className="flex min-w-0 flex-col gap-0.5">
                     <div className="truncate text-[13.5px] font-semibold text-ink">{m.name}</div>
@@ -137,7 +137,7 @@ export default function CompanyPage() {
               ].map((p) => {
                 const on = (detail?.aiProvider ?? 'ollama') === p.id;
                 return (
-                  <button key={p.id} type="button" role="radio" aria-checked={on} onClick={() => setAi(p.id)} className={`flex items-start gap-3 rounded-control border px-3.5 py-3 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${on ? 'border-accent bg-tint' : 'border-rule bg-paper hover:border-accent'}`}>
+                  <button key={p.id} type="button" role="radio" aria-checked={on} onClick={() => setAi(p.id)} className={`flex items-start gap-3 rounded-control border px-3.5 py-3 text-left transition-colors ${on ? 'border-accent bg-tint' : 'border-rule bg-paper hover:border-accent'}`}>
                     <span aria-hidden="true" className={`mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2 ${on ? 'border-accent bg-accent' : 'border-faint'}`} />
                     <span className="flex flex-col gap-0.5">
                       <span className="text-[13.5px] font-semibold text-ink">{p.name}</span>

@@ -23,7 +23,7 @@ export function CodeInput({ value, onChange, autoFocus }: { value: string; onCha
           maxLength={1}
           aria-label={`Digit ${i + 1}`}
           autoFocus={autoFocus && i === 0}
-          className="h-12 w-full min-w-0 rounded-control border border-rule bg-paper text-center font-mono text-xl text-ink outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20"
+          className="h-12 w-full min-w-0 rounded-control border border-rule bg-paper text-center font-mono text-xl text-ink transition-colors focus:border-accent"
           onChange={(e) => {
             const v = e.target.value.replace(/\D/g, '');
             if (!v) { const n = [...digits]; n[i] = ''; set(n); return; }

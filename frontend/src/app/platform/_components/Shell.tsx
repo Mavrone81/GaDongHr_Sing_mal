@@ -63,7 +63,7 @@ export function Shell({ title, children }: { title: string; children: ReactNode 
                 key={n.href}
                 href={n.href}
                 aria-current={on ? 'page' : undefined}
-                className={`flex h-[38px] items-center gap-[11px] rounded-control px-3 text-[13.5px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${on ? 'bg-tint font-semibold text-ink' : 'font-medium text-muted hover:bg-pill hover:text-ink'}`}
+                className={`flex h-[38px] items-center gap-[11px] rounded-control px-3 text-[13.5px] transition-colors ${on ? 'bg-tint font-semibold text-ink' : 'font-medium text-muted hover:bg-pill hover:text-ink'}`}
               >
                 <Icon name={n.icon} size={17} className={on ? 'text-accent' : 'text-faint'} />
                 {n.label}
