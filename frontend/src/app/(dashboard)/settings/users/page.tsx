@@ -4,12 +4,10 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { pwStrength } from '@/lib/passwordReset';
-import { Badge, Button, Card, EmptyState, Field, Icon, Input, SearchInput, Select, Tabs, type Column } from '@/components/ui';
+import { Avatar, Badge, Button, Card, DataTable, EmptyState, Field, Icon, Input, Modal, SearchInput, Select, Tabs, type Column } from '@/components/ui';
 import { SectionHeader } from '../_components/SectionHeader';
-import { ResponsiveTable } from '../_components/ResponsiveTable';
-import { Notice } from '../_components/Notice';
-import { Dialog } from '../_components/Dialog';
-import { initialsOf, sentenceCase } from '../_components/format';
+import { Notice, type NoticeMsg } from '../_components/Notice';
+import { sentenceCase } from '../_components/format';
 
 interface User {
   id: string;
@@ -36,14 +34,6 @@ const STRENGTH_BAR = ['', 'bg-danger', 'bg-warn', 'bg-warn', 'bg-ok', 'bg-ok'];
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
 
-function Avatar({ name, size = 'md' }: { name: string; size?: 'md' | 'lg' }) {
-  return (
-    <div className={`flex shrink-0 items-center justify-center rounded-full bg-tint font-bold text-accent ${size === 'lg' ? 'h-12 w-12 text-sm' : 'h-9 w-9 text-xs'}`}>
-      {initialsOf(name)}
-    </div>
-  );
-}
-
 function StatusBadge({ active }: { active: boolean }) {
   return <Badge tone={active ? 'ok' : 'danger'}>{active ? 'Active' : 'Locked'}</Badge>;
 }
@@ -69,7 +59,7 @@ function AdjustPanel({
   // Role tab
   const [updateRole, setUpdateRole]   = useState(user.role);
   const [roleLoading, setRoleLoading] = useState(false);
-  const [roleMsg, setRoleMsg]         = useState('');
+  const [roleMsg, setRoleMsg]         = useState<NoticeMsg>(null);
 
   // Password tab
   const [pw, setPw]             = useState('');
@@ -81,29 +71,29 @@ function AdjustPanel({
 
   // MFA tab
   const [mfaLoading, setMfaLoading] = useState(false);
-  const [mfaMsg, setMfaMsg]         = useState('');
+  const [mfaMsg, setMfaMsg]         = useState<NoticeMsg>(null);
   const [mfaConfirm, setMfaConfirm] = useState(false);
 
   const handleRoleSave = async () => {
-    setRoleLoading(true); setRoleMsg('');
+    setRoleLoading(true); setRoleMsg(null);
     try {
       await apiFetch(`/users/${user.id}`, {
         method: 'PUT',
         body: JSON.stringify({ role: updateRole }),
       });
-      setRoleMsg('✓ Role updated successfully.');
+      setRoleMsg({ tone: 'ok', text: 'Role updated successfully.' });
       onRefresh();
-    } catch (e) { setRoleMsg(`✗ ${(e as Error).message || 'Update failed.'}`); }
+    } catch (e) { setRoleMsg({ tone: 'danger', text: (e as Error).message || 'Update failed.' }); }
     setRoleLoading(false);
   };
 
   const handleToggleActive = async () => {
-    setRoleLoading(true); setRoleMsg('');
+    setRoleLoading(true); setRoleMsg(null);
     try {
       await apiFetch(`/users/${user.id}/toggle-active`, { method: 'PATCH' });
-      setRoleMsg(`✓ Account ${user.isActive ? 'locked' : 'unlocked'}.`);
+      setRoleMsg({ tone: 'ok', text: `Account ${user.isActive ? 'locked' : 'unlocked'}.` });
       onRefresh();
-    } catch (e) { setRoleMsg(`✗ ${(e as Error).message || 'Failed.'}`); }
+    } catch (e) { setRoleMsg({ tone: 'danger', text: (e as Error).message || 'Failed.' }); }
     setRoleLoading(false);
   };
 
@@ -117,19 +107,19 @@ function AdjustPanel({
         method: 'POST',
         body: JSON.stringify({ newPassword: pw }),
       });
-      setPwMsg('✓ Password reset. All active sessions invalidated.');
+      setPwMsg('Password reset. All active sessions invalidated.');
       setPw(''); setPwConfirm('');
-    } catch (e) { setPwError((e as Error).message || '✗ Reset failed.'); }
+    } catch (e) { setPwError((e as Error).message || 'Reset failed.'); }
     setPwLoading(false);
   };
 
   const handleMfaReset = async () => {
-    setMfaLoading(true); setMfaMsg('');
+    setMfaLoading(true); setMfaMsg(null);
     try {
       await apiFetch(`/users/${user.id}/reset-mfa`, { method: 'POST' });
-      setMfaMsg('✓ MFA cleared. User must re-enrol on next login.');
+      setMfaMsg({ tone: 'ok', text: 'MFA cleared. User must re-enrol on next login.' });
       setMfaConfirm(false); onRefresh();
-    } catch (e) { setMfaMsg(`✗ ${(e as Error).message || 'Reset failed.'}`); }
+    } catch (e) { setMfaMsg({ tone: 'danger', text: (e as Error).message || 'Reset failed.' }); }
     setMfaLoading(false);
   };
 
@@ -145,7 +135,7 @@ function AdjustPanel({
   const spinner = <svg className="w-4 h-4 animate-spin rounded-full" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-stretch justify-end bg-shadow/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-stretch justify-end bg-ink/40" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
@@ -155,7 +145,7 @@ function AdjustPanel({
       >
         {/* Identity band */}
         <div className="flex shrink-0 items-center gap-4 border-b border-rule px-6 py-5">
-          <Avatar name={user.name} size="lg" />
+          <Avatar name={user.name} size={48} tone="soft" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-[15.5px] font-bold text-ink">{user.name}</p>
             <p className="truncate text-[13px] text-muted">{user.email}</p>
@@ -164,7 +154,7 @@ function AdjustPanel({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="flex h-9 w-9 items-center justify-center rounded-control text-muted hover:bg-pill hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            className="flex h-9 w-9 items-center justify-center rounded-control text-muted hover:bg-pill hover:text-ink"
           >
             <Icon name="x" size={18} />
           </button>
@@ -203,7 +193,7 @@ function AdjustPanel({
                 )}
               </div>
 
-              {roleMsg && <Notice>{roleMsg}</Notice>}
+              {roleMsg && <Notice tone={roleMsg.tone}>{roleMsg.text}</Notice>}
 
               <div className="flex flex-col gap-3 border-t border-rule pt-5">
                 <span className="text-[12.5px] font-semibold text-muted">Account status</span>
@@ -249,7 +239,7 @@ function AdjustPanel({
                   <button
                     type="button"
                     onClick={() => setShowPw(s => !s)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-control px-2 py-1 text-[13px] font-semibold text-accent hover:bg-tint focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-control px-2 py-1 text-[13px] font-semibold text-accent hover:bg-tint"
                   >
                     {showPw ? 'Hide' : 'Show'}
                   </button>
@@ -364,7 +354,7 @@ function AdjustPanel({
                 </div>
               )}
 
-              {mfaMsg && <Notice>{mfaMsg}</Notice>}
+              {mfaMsg && <Notice tone={mfaMsg.tone}>{mfaMsg.text}</Notice>}
             </div>
           )}
         </div>
@@ -401,6 +391,10 @@ export default function UserManagementPage() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Stable identity: Modal re-runs its focus effect whenever onClose changes,
+  // which would pull focus out of the inputs on every keystroke.
+  const closeCreate = useCallback(() => { setIsCreateOpen(false); setCreateError(''); }, []);
 
   const handleCreateUser = async () => {
     if (!newUser.name || !newUser.email || !newUser.password) return;
@@ -468,12 +462,14 @@ export default function UserManagementPage() {
     </Card>
   );
 
+  const missingRequired = !newUser.name || !newUser.email || !newUser.password;
+
   const columns: Column<User>[] = [
     {
       key: 'name', label: <SortHeader col="name" label="User" />, width: 'minmax(0, 1.8fr)',
       render: (u) => (
         <div className="flex items-center gap-3">
-          <Avatar name={u.name} />
+          <Avatar name={u.name} size={36} tone="soft" />
           <div className="flex min-w-0 flex-col">
             <span className="truncate font-semibold text-ink">{u.name}</span>
             <span className="truncate text-[12.5px] text-muted">{u.email}</span>
@@ -507,7 +503,8 @@ export default function UserManagementPage() {
         className="sm:max-w-sm"
       />
 
-      <ResponsiveTable
+      <DataTable
+        aria-label="Users"
         columns={columns}
         rows={filtered}
         rowKey={(u) => u.id}
@@ -519,10 +516,10 @@ export default function UserManagementPage() {
           />
         }
         footer={<span><span className="tabular-nums">{filtered.length}</span> of <span className="tabular-nums">{users.length}</span> shown</span>}
-        mobileRow={(u) => (
+        mobileCard={(u) => (
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-3">
-              <Avatar name={u.name} />
+              <Avatar name={u.name} size={36} tone="soft" />
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm font-semibold text-ink">{u.name}</span>
                 <span className="truncate text-[12.5px] text-muted">{u.email}</span>
@@ -552,23 +549,21 @@ export default function UserManagementPage() {
       )}
 
       {/* Create user */}
-      {isCreateOpen && (
-        <Dialog
-          title="New user"
-          caption="Create a sign-in for someone in this workspace."
-          onClose={() => { setIsCreateOpen(false); setCreateError(''); }}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => { setIsCreateOpen(false); setCreateError(''); }}>Cancel</Button>
-              <Button
-                onClick={handleCreateUser}
-                disabled={createLoading || !newUser.name || !newUser.email || !newUser.password}
-              >
-                {createLoading ? 'Creating…' : 'Create user'}
-              </Button>
-            </>
-          }
-        >
+      <Modal
+        open={isCreateOpen}
+        onClose={closeCreate}
+        title="New user"
+        caption="Create a sign-in for someone in this workspace."
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeCreate}>Cancel</Button>
+            <Button onClick={handleCreateUser} disabled={createLoading || missingRequired}>
+              {createLoading ? 'Creating…' : 'Create user'}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
           {[
             { label: 'Full name', key: 'name',     type: 'text',     placeholder: 'Jane Smith' },
             { label: 'Email',     key: 'email',    type: 'email',    placeholder: 'jane@company.com' },
@@ -588,12 +583,12 @@ export default function UserManagementPage() {
               {roles.map(r => <option key={r.id} value={r.name}>{sentenceCase(r.name)}</option>)}
             </Select>
           </Field>
-          {!createLoading && (!newUser.name || !newUser.email || !newUser.password) && (
+          {!createLoading && missingRequired && (
             <p className="text-xs text-muted">Name, email and password are required to create the user.</p>
           )}
           {createError && <Notice tone="danger">{createError}</Notice>}
-        </Dialog>
-      )}
+        </div>
+      </Modal>
     </>
   );
 }

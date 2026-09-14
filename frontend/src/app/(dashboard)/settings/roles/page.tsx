@@ -1,12 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { Badge, Button, Card, EmptyState, Field, Icon, Input, type IconName } from '@/components/ui';
+import { Badge, Button, Card, EmptyState, Field, Icon, Input, Modal, useToast, type IconName } from '@/components/ui';
 import { SectionHeader } from '../_components/SectionHeader';
-import { Dialog } from '../_components/Dialog';
-import { Toast } from '../_components/Toast';
 import { sentenceCase } from '../_components/format';
 
 interface Permission {
@@ -46,7 +44,7 @@ export default function RoleManagementPage() {
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const { toast } = useToast();
 
   // Create custom role modal state
   const [showCreate, setShowCreate] = useState(false);
@@ -54,12 +52,16 @@ export default function RoleManagementPage() {
   const [newRoleDesc, setNewRoleDesc] = useState('');
   const [creating, setCreating] = useState(false);
 
+  // Same call shape as before; the shared toast (root layout) does the display and timing.
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3500);
+    toast(msg, type === 'success' ? 'ok' : 'danger');
   };
 
   useEffect(() => { fetchAll(); }, []);
+
+  // Stable identity: Modal re-runs its focus effect whenever onClose changes,
+  // which would pull focus out of the inputs on every keystroke.
+  const closeCreate = useCallback(() => { setShowCreate(false); setNewRoleName(''); setNewRoleDesc(''); }, []);
 
   const fetchAll = async () => {
     try {
@@ -141,15 +143,12 @@ export default function RoleManagementPage() {
     </Card>
   );
 
-  const closeCreate = () => { setShowCreate(false); setNewRoleName(''); setNewRoleDesc(''); };
 
   return (
     <>
-      <Toast toast={toast} />
-
       {/* Create role */}
-      {showCreate && (
-        <Dialog
+      <Modal
+          open={showCreate}
           title="New role"
           caption="Name it now; grant permissions right after it is created."
           onClose={closeCreate}
@@ -162,6 +161,7 @@ export default function RoleManagementPage() {
             </>
           }
         >
+          <div className="flex flex-col gap-4">
           <Field
             label="Role name"
             required
@@ -185,8 +185,8 @@ export default function RoleManagementPage() {
               placeholder="What this role is responsible for"
             />
           </Field>
-        </Dialog>
-      )}
+          </div>
+      </Modal>
 
       <SectionHeader
         title="Roles and permissions"

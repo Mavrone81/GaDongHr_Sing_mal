@@ -2,10 +2,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
-import { Button, Card, CardHeader, EmptyState, Icon, Tabs } from '@/components/ui';
+import { Button, Card, CardHeader, EmptyState, Icon, Tabs, useToast } from '@/components/ui';
 import { SectionHeader } from '../_components/SectionHeader';
 import { Notice } from '../_components/Notice';
-import { Toast } from '../_components/Toast';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -136,7 +135,7 @@ export default function RatesPage() {
   const [fwlRates, setFwlRates] = useState<FwlRate[]>([]);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const { toast } = useToast();
   const [cpfSort, setCpfSort] = useState<{ col: 'age' | 'emp' | 'ert' | 'tot' | 'ow'; dir: 'asc' | 'desc' }>({ col: 'age', dir: 'asc' });
   const [fwlSort, setFwlSort] = useState<{ col: 'sector' | 'tier' | 'daily'; dir: 'asc' | 'desc' }>({ col: 'sector', dir: 'asc' });
 
@@ -181,8 +180,8 @@ export default function RatesPage() {
   }
 
   const showToast = (msg: string, ok = true) => {
-    setToast({ msg, ok });
-    setTimeout(() => setToast(null), 3500);
+    // Same call shape as before; the shared toast (root layout) does the display and timing.
+    toast(msg, ok ? 'ok' : 'danger');
   };
 
   const load = useCallback(async () => {
@@ -248,8 +247,6 @@ export default function RatesPage() {
 
   return (
     <>
-      <Toast toast={toast ? { msg: toast.msg, type: toast.ok ? 'success' : 'error' } : null} />
-
       <SectionHeader
         title="Statutory tables"
         description="Singapore 2026 CPF, SDL and foreign worker levy rates. Super Admin only."
