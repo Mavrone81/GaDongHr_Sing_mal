@@ -1,14 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, PageHeader } from '@/components/ui';
+import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, PageHeader, Textarea } from '@/components/ui';
 import { usePlatformApi } from '../../_lib/api';
 
 // Plan rows come straight from /platform/pricing and go back with PUT unchanged in shape.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Plan = Record<string, any>;
-
-const TEXTAREA = 'w-full rounded-control border border-rule bg-paper px-3 py-2.5 text-sm text-ink placeholder:text-faint outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20';
 
 export default function PricingPage() {
   const api = usePlatformApi();
@@ -47,7 +45,7 @@ export default function PricingPage() {
           <Button onClick={save} disabled={saving || !dirty}>{saving ? 'Saving…' : 'Save pricing'}</Button>
         </>}
       />
-      {err && <div className="rounded-control border border-rule bg-danger-soft px-4 py-2.5 text-sm text-danger" role="alert">{err}</div>}
+      {err && <div className="rounded-control border border-rule bg-danger-bg px-4 py-2.5 text-sm text-danger" role="alert">{err}</div>}
       {saved && !dirty && <div className="rounded-control border border-rule bg-tint px-4 py-2.5 text-sm text-ok" role="status">Pricing saved.</div>}
 
       {loaded && !plans.length && <Card><EmptyState icon="tag" title="No plans returned" description="The pricing endpoint returned nothing to edit." /></Card>}
@@ -67,7 +65,7 @@ export default function PricingPage() {
               </div>
               <Field label="Tagline"><Input value={p.tagline || ''} onChange={(e) => setField(i, 'tagline', e.target.value)} placeholder="For growing teams that need payroll and compliance." /></Field>
               <Field label="Features" help="One per line.">
-                <textarea className={`${TEXTAREA} h-28 resize-y`} value={(p.features || []).join('\n')} onChange={(e) => setField(i, 'features', e.target.value.split('\n').map((x) => x.trim()).filter(Boolean))} />
+                <Textarea className="h-28 resize-y" value={(p.features || []).join('\n')} onChange={(e) => setField(i, 'features', e.target.value.split('\n').map((x) => x.trim()).filter(Boolean))} />
               </Field>
               <div className="flex flex-wrap gap-x-4 gap-y-2 text-[13px] text-ink">
                 <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-accent" checked={!!p.popular} onChange={(e) => setField(i, 'popular', e.target.checked)} />Most popular</label>

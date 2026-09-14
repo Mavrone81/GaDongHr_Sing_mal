@@ -25,9 +25,16 @@ export default function ModulesPage() {
     <>
       <PageHeader title="Modules" subtitle={loaded ? `${modules.length} in the catalogue · ${core} core, always on · ${modules.length - core} optional, switched per company` : 'Loading…'} />
       <DataTable
+        aria-label="Modules"
         columns={columns}
         rows={modules}
         rowKey={(m) => m.code}
+        mobileCard={(m) => (
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0"><div className="font-semibold text-ink">{m.name}</div><div className="font-mono text-xs text-muted">{m.code}</div></div>
+            {m.isCore ? <Badge tone="accent">Core</Badge> : <Badge tone="neutral">Optional</Badge>}
+          </div>
+        )}
         rowHeight={48}
         footer={<span>Switch optional modules on a company's page.</span>}
         empty={loaded ? <EmptyState icon="grid" title="No modules returned" description="The module catalogue endpoint returned nothing." /> : 'Loading…'}

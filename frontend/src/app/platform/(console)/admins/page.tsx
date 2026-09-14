@@ -60,13 +60,26 @@ export default function AdminsPage() {
   return (
     <>
       <PageHeader title="Platform admins" subtitle="Bevora operators who can sign in to this console. Every operator must set up MFA on first sign-in." />
-      {err && <div className="rounded-control border border-rule bg-danger-soft px-4 py-2.5 text-sm text-danger" role="alert">{err}</div>}
+      {err && <div className="rounded-control border border-rule bg-danger-bg px-4 py-2.5 text-sm text-danger" role="alert">{err}</div>}
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
         <DataTable
+          aria-label="Platform admins"
           columns={columns}
           rows={admins}
           rowKey={(a) => a.id}
+          mobileCard={(a) => (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0"><div className="truncate font-semibold text-ink">{a.name}</div><div className="truncate font-mono text-xs text-muted">{a.email}</div></div>
+                {a.isActive ? <Badge tone="accent">Active</Badge> : <Badge tone="neutral">Disabled</Badge>}
+              </div>
+              <div className="flex items-center justify-between gap-3 text-[13px] text-muted">
+                <span>{ROLE_LABEL[a.role] ?? a.role} · MFA {a.mfaEnabled ? 'on' : 'pending'}</span>
+                {a.isActive ? <Button size="sm" variant="danger" onClick={() => toggle(a)}>Disable</Button> : <Button size="sm" variant="secondary" onClick={() => toggle(a)}>Enable</Button>}
+              </div>
+            </div>
+          )}
           footer={<span>{admins.length} {admins.length === 1 ? 'operator' : 'operators'}</span>}
           empty={loaded ? <EmptyState icon="users" title="No platform admins" description="Add the first operator with the form on the right." /> : 'Loading…'}
         />

@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Badge, Button, Card, CardHeader, DataTable, EmptyState, Field, Input, PageHeader, SearchInput, Select, Stat, type Column } from '@/components/ui';
-import { usePlatformApi, type Tenant, type AuditEntry, statusLabel, statusTone, dateInputValue, fmtDateTime } from '../_lib/api';
+import { Badge, Button, Card, CardHeader, DataTable, EmptyState, Field, Input, Modal, PageHeader, SearchInput, Select, Stat, type Column } from '@/components/ui';
+import { usePlatformApi, type Tenant, type AuditEntry, statusLabel, statusTone, dateInputValue, fmtDate, fmtDateTime } from '../_lib/api';
 
 const COUNTRIES = ['SG', 'MY', 'HK', 'ID', 'TH', 'PH', 'VN'];
 const SIZES = ['1-10', '11-50', '51-200', '201-500', '500+'];
@@ -102,7 +102,7 @@ export default function CompaniesPage() {
         actions={<Button icon="plus" onClick={() => { setCreated(null); setShowCreate(true); }}>Create company</Button>}
       />
 
-      {err && <div className="rounded-control border border-rule bg-danger-soft px-4 py-2.5 text-sm text-danger" role="alert">{err}</div>}
+      {err && <div className="rounded-control border border-rule bg-danger-bg px-4 py-2.5 text-sm text-danger" role="alert">{err}</div>}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Companies" value={<span className="font-mono">{counts.total}</span>} note="All tenants" />
@@ -121,12 +121,26 @@ export default function CompaniesPage() {
 
       <div className="grid items-start gap-4 2xl:grid-cols-[minmax(0,1fr)_340px]">
         <DataTable
+          aria-label="Companies"
           columns={columns}
           rows={rows}
           rowKey={(t) => t.id}
           rowHeight={56}
           onRowClick={(t) => router.push(`/platform/companies/${t.id}`)}
-          footer={<><span>{rows.length} of {tenants.length}</span><span className="text-faint">Click a row for modules, trial and AI settings</span></>}
+          mobileCard={(t) => (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0"><div className="truncate font-semibold text-ink">{t.name}</div><div className="truncate font-mono text-xs text-muted">{t.slug} · {t.country}</div></div>
+                <Badge tone={statusTone(t.status)}>{statusLabel(t.status)}</Badge>
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted">
+                <span>{t.plan ?? 'No plan'}</span>
+                <span className="font-mono">{t.users} {t.users === 1 ? 'user' : 'users'}</span>
+                {t.trialEndsAt && <span className="font-mono">trial ends {fmtDate(t.trialEndsAt)}</span>}
+              </div>
+            </div>
+          )}
+          footer={<><span>{rows.length} of {tenants.length}</span><span className="hidden text-faint md:inline">Click a row for modules, trial and AI settings</span></>}
           empty={loaded
             ? (tenants.length
               ? <EmptyState icon="search" title="No companies match" description="Try a different search or clear the status filter." action={<Button variant="secondary" onClick={() => { setQ(''); setStatus('ALL'); }}>Clear filters</Button>} />
@@ -149,43 +163,33 @@ export default function CompaniesPage() {
         </Card>
       </div>
 
-      {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-page/80 p-4" onClick={() => { setShowCreate(false); setCreated(null); }}>
-          <Card className="w-full max-w-md" role="dialog" aria-modal="true" aria-labelledby="create-title" onClick={(e) => e.stopPropagation()}>
-            {created ? (
-              <div className="flex flex-col gap-4">
-                <div>
-                  <h2 id="create-title" className="text-lg font-bold text-ink">Company created</h2>
-                  <p className="mt-1 text-sm text-muted">Share these one-time owner credentials with <span className="font-semibold text-ink">{created.company}</span>. They sign in at the normal login.</p>
-                </div>
-                <div className="flex flex-col gap-2 text-sm">
-                  <div className="rounded-control bg-pill px-3 py-2"><span className="text-muted">Email </span><span className="font-mono text-ink">{created.email}</span></div>
-                  <div className="rounded-control bg-pill px-3 py-2"><span className="text-muted">Temporary password </span><span className="font-mono text-ink">{created.tempPassword}</span></div>
-                </div>
-                <Button onClick={() => { setShowCreate(false); setCreated(null); }} className="w-full">Done</Button>
-              </div>
-            ) : (
-              <form onSubmit={createCompany} className="flex flex-col gap-4">
-                <div>
-                  <h2 id="create-title" className="text-lg font-bold text-ink">Create a company</h2>
-                  <p className="mt-1 text-[13px] text-muted">Provisions an isolated workspace and an owner account on a 14-day trial.</p>
-                </div>
-                <Field label="Company name" required><Input value={cf.companyName} onChange={(e) => setCf({ ...cf, companyName: e.target.value })} required autoFocus /></Field>
-                <Field label="Owner full name" required><Input value={cf.fullName} onChange={(e) => setCf({ ...cf, fullName: e.target.value })} required /></Field>
-                <Field label="Owner work email" required><Input type="email" value={cf.workEmail} onChange={(e) => setCf({ ...cf, workEmail: e.target.value })} required /></Field>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Country"><Select value={cf.country} onChange={(e) => setCf({ ...cf, country: e.target.value })}>{COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}</Select></Field>
-                  <Field label="Company size"><Select value={cf.companySize} onChange={(e) => setCf({ ...cf, companySize: e.target.value })}>{SIZES.map((s) => <option key={s} value={s}>{s}</option>)}</Select></Field>
-                </div>
-                <div className="mt-1 flex gap-2">
-                  <Button type="button" variant="secondary" onClick={() => setShowCreate(false)} className="flex-1">Cancel</Button>
-                  <Button type="submit" disabled={creating} className="flex-1">{creating ? 'Creating…' : 'Create company'}</Button>
-                </div>
-              </form>
-            )}
-          </Card>
-        </div>
-      )}
+      <Modal
+        open={showCreate}
+        onClose={() => { setShowCreate(false); setCreated(null); }}
+        title={created ? 'Company created' : 'Create a company'}
+        caption={created ? undefined : 'Provisions an isolated workspace and an owner account on a 14-day trial.'}
+        footer={created
+          ? <Button onClick={() => { setShowCreate(false); setCreated(null); }}>Done</Button>
+          : <><Button type="button" variant="secondary" onClick={() => setShowCreate(false)}>Cancel</Button><Button type="submit" form="create-company" disabled={creating}>{creating ? 'Creating…' : 'Create company'}</Button></>}
+      >
+        {created ? (
+          <div className="flex flex-col gap-3">
+            <p className="text-muted">Share these one-time owner credentials with <span className="font-semibold text-ink">{created.company}</span>. They sign in at the normal login.</p>
+            <div className="rounded-control bg-pill px-3 py-2"><span className="text-muted">Email </span><span className="font-mono text-ink">{created.email}</span></div>
+            <div className="rounded-control bg-pill px-3 py-2"><span className="text-muted">Temporary password </span><span className="font-mono text-ink">{created.tempPassword}</span></div>
+          </div>
+        ) : (
+          <form id="create-company" onSubmit={createCompany} className="flex flex-col gap-4">
+            <Field label="Company name" required><Input value={cf.companyName} onChange={(e) => setCf({ ...cf, companyName: e.target.value })} required autoFocus /></Field>
+            <Field label="Owner full name" required><Input value={cf.fullName} onChange={(e) => setCf({ ...cf, fullName: e.target.value })} required /></Field>
+            <Field label="Owner work email" required><Input type="email" value={cf.workEmail} onChange={(e) => setCf({ ...cf, workEmail: e.target.value })} required /></Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Country"><Select value={cf.country} onChange={(e) => setCf({ ...cf, country: e.target.value })}>{COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}</Select></Field>
+              <Field label="Company size"><Select value={cf.companySize} onChange={(e) => setCf({ ...cf, companySize: e.target.value })}>{SIZES.map((sz) => <option key={sz} value={sz}>{sz}</option>)}</Select></Field>
+            </div>
+          </form>
+        )}
+      </Modal>
     </>
   );
 }
