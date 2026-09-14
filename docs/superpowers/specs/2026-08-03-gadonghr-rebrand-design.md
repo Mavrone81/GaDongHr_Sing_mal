@@ -210,7 +210,7 @@ commit.
 - Cross-tenant isolation still 16/16
 - Frontend suite green; `tsc --noEmit` clean
 - Seal-reservation test passes
-- No `gadonghr` / `GaDongHR` in tracked files, mirroring the EzyHRM sweep
+- No `gadonghr` / `GaDongHR` in tracked files, mirroring the earlier brand sweep
 - Auth works end to end after the issuer/cookie rename — login, refresh,
   platform login, all three JWT verify sites agreeing
 
@@ -224,4 +224,4 @@ commit.
 | 74 hand-converted files drift in style | Primitives land first, so conversion is *use the component*, not *invent the markup* |
 | Seal reservation erodes | Enforced by test, per the document's own warning |
 | Rebrand collides with in-flight Malaysia work | Rebrand touches naming/UI; Malaysia touches statutory services. Little overlap, but the rebrand lands first so P2 starts from GaDongHR |
-| Old-brand strings survive in DB seeds/fixtures | Sweep mirrors the EzyHRM removal, which found 3 tracked lines and 2 untracked |
+| Old-brand strings survive in DB seeds/fixtures | Sweep mirrors the earlier brand removal, which found 3 tracked lines and 2 untracked |

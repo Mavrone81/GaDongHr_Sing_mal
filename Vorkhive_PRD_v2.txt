@@ -3,7 +3,7 @@ Human Resource Management System (GaDongHR)
 Singapore – Full Statutory Compliance Edition
 Document Reference: PRD-HRMS-001  │  Version 2.0  │  May 2026
 Classification: Confidential
-Prepared by: RMA DEV TEAM
+Prepared by: GaDongHR Product Team
 
 1. Document Control
 1.1 Document Information
@@ -36,11 +36,11 @@ Author
 Summary of Changes
 1.0
 March 2025
-RMA Dev Team
+GaDongHR Product Team
 Initial PRD derived from URD-HRMS-001 with full statutory detail embedded
 2.0
 May 2026
-RMA Dev Team
+GaDongHR Product Team
 Updated to reflect implemented features: CPF OW Ceiling updated to SGD 7,400 (Jan 2026); supervisor approval chain (ANY_ONE/SEQUENTIAL); face recognition clock-in; Performance and Training modules moved to Phase 1 (implemented); Support & Ticketing module added (Module 11); payroll period consolidation; NPL auto-deduction from leave; EA s.20 pro-rating
 
 2. Executive Summary
