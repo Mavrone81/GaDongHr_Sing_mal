@@ -6,6 +6,7 @@ import { apiFetch } from '@/lib/api';
 import { Badge, Button, Card, EmptyState, Field, Icon, Input, type IconName } from '@/components/ui';
 import { SectionHeader } from '../_components/SectionHeader';
 import { Dialog } from '../_components/Dialog';
+import { Toast } from '../_components/Toast';
 import { sentenceCase } from '../_components/format';
 
 interface Permission {
@@ -144,16 +145,7 @@ export default function RoleManagementPage() {
 
   return (
     <>
-      {/* Toast */}
-      {toast && (
-        <div
-          role={toast.type === 'error' ? 'alert' : 'status'}
-          className="fixed bottom-24 right-4 z-50 flex max-w-sm items-start gap-2.5 rounded-control border border-rule bg-paper px-4 py-3 text-sm text-ink shadow-card animate-in slide-in-from-bottom-4 duration-300 lg:bottom-6 lg:right-6"
-        >
-          <Icon name={toast.type === 'success' ? 'check' : 'alert'} size={16} strokeWidth={2} className={`mt-0.5 ${toast.type === 'success' ? 'text-ok' : 'text-danger'}`} />
-          <span>{toast.msg}</span>
-        </div>
-      )}
+      <Toast toast={toast} />
 
       {/* Create role */}
       {showCreate && (
