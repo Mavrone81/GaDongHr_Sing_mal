@@ -552,7 +552,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         ))}
       </nav>
       <div className="flex items-center gap-2.5 pt-3 mt-2 px-2 border-t border-rule">
-        <div className="w-8 h-8 rounded-full bg-accent text-white flex items-center justify-center text-xs font-bold shrink-0">{initials}</div>
+        <div className="w-8 h-8 rounded-full bg-accent text-on-accent flex items-center justify-center text-xs font-bold shrink-0">{initials}</div>
         <div className="flex flex-col min-w-0">
           <div className="text-[13px] font-bold text-ink truncate">{user?.name || (isSuperAdmin ? 'Administrator' : 'User')}</div>
           <div className="text-xs text-muted truncate">{roleLabel}</div>
@@ -636,7 +636,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <button
                 type="button"
                 onClick={() => setMenuOpen((v) => !v)}
-                className="w-9 h-9 rounded-full bg-accent text-white flex items-center justify-center text-xs font-bold"
+                className="w-9 h-9 rounded-full bg-accent text-on-accent flex items-center justify-center text-xs font-bold"
                 aria-label="Account menu"
                 aria-expanded={menuOpen}
               >

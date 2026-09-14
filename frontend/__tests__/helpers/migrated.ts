@@ -10,7 +10,14 @@
 export const MIGRATED: string[] = [
   'components/ui/',
   'app/layout.tsx',
-  // redesign/shell adds: components/auth/, components/CommandPalette.tsx,
-  // components/NotificationBell.tsx, components/TrialBanner.tsx,
-  // app/(dashboard)/layout.tsx, app/login/, app/register/, app/auth/*
+  // redesign/shell
+  'components/auth/',
+  'components/CommandPalette.tsx',
+  'components/NotificationBell.tsx',
+  'components/TrialBanner.tsx',
+  'app/(dashboard)/layout.tsx',
+  'app/login/',
+  'app/register/',
+  'app/auth/forgot-password/',
+  'app/auth/reset-password/',
 ];
