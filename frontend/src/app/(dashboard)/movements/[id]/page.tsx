@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { apiFetch } from '@/lib/api';
+import { apiFetchRaw } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
 const HR_ROLES = ['HR_ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'];
@@ -50,7 +50,7 @@ export default function MovementDetailPage() {
   async function load() {
     setLoading(true);
     try {
-      const res = await apiFetch(`/movements/${id}`);
+      const res = await apiFetchRaw(`/movements/${id}`);
       if (!res.ok) { const e = await res.json(); setError(e.error || 'Failed'); return; }
       setMovement(await res.json());
     } catch { setError('Network error'); }
@@ -60,14 +60,14 @@ export default function MovementDetailPage() {
 
   async function loadLetter() {
     setLoadingLetter(true);
-    const res = await apiFetch(`/movements/${id}/letter`).then(r => r.json());
+    const res = await apiFetchRaw(`/movements/${id}/letter`).then(r => r.json());
     setLetter(res.html || '');
     setLoadingLetter(false);
   }
 
   async function approve() {
     if (!confirm('Approve this movement?')) return;
-    const res = await apiFetch(`/movements/${id}/approve`, { method: 'PUT' });
+    const res = await apiFetchRaw(`/movements/${id}/approve`, { method: 'PUT' });
     if (res.ok) load();
     else alert((await res.json()).error || 'Failed');
   }
@@ -75,7 +75,7 @@ export default function MovementDetailPage() {
   async function reject() {
     const reason = window.prompt('Reason for rejection?');
     if (!reason || !reason.trim()) return;
-    const res = await apiFetch(`/movements/${id}/reject`, {
+    const res = await apiFetchRaw(`/movements/${id}/reject`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rejectionReason: reason.trim() }),
     });
@@ -85,14 +85,14 @@ export default function MovementDetailPage() {
 
   async function cancelMov() {
     if (!confirm('Cancel this movement?')) return;
-    const res = await apiFetch(`/movements/${id}/cancel`, { method: 'PUT' });
+    const res = await apiFetchRaw(`/movements/${id}/cancel`, { method: 'PUT' });
     if (res.ok) load();
     else alert((await res.json()).error || 'Failed');
   }
 
   async function apply() {
     if (!confirm('Apply this movement to the employee record now?')) return;
-    const res = await apiFetch(`/movements/${id}/apply`, { method: 'POST' });
+    const res = await apiFetchRaw(`/movements/${id}/apply`, { method: 'POST' });
     if (res.ok) load();
     else alert((await res.json()).error || 'Failed');
   }

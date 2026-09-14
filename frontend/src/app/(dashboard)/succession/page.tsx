@@ -108,7 +108,7 @@ function AddPositionModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
     e.preventDefault();
     setSaving(true); setErr('');
     try {
-      await apiFetch('/api/performance/key-positions', {
+      await apiFetch('/performance/key-positions', {
         method: 'POST',
         body: JSON.stringify({ ...form, currentHolderId: form.currentHolderId || null }),
       });
@@ -166,7 +166,7 @@ function NominateModal({ positionId, onClose, onSaved }: { positionId: string; o
     e.preventDefault();
     setSaving(true); setErr('');
     try {
-      await apiFetch(`/api/performance/key-positions/${positionId}/nominees`, {
+      await apiFetch(`/performance/key-positions/${positionId}/nominees`, {
         method: 'POST',
         body: JSON.stringify({ ...form, potentialBand: parseInt(form.potentialBand) }),
       });
@@ -231,7 +231,7 @@ function DevPlanModal({ nomineeId, onClose, onSaved }: { nomineeId: string; onCl
     e.preventDefault();
     setSaving(true); setErr('');
     try {
-      await apiFetch(`/api/performance/nominees/${nomineeId}/dev-plans`, {
+      await apiFetch(`/performance/nominees/${nomineeId}/dev-plans`, {
         method: 'POST',
         body: JSON.stringify({ ...form, trainingProgramId: form.trainingProgramId || null, targetDate: form.targetDate || null }),
       });
@@ -298,7 +298,7 @@ function PositionDetail({ position, onClose, onRefresh }: { position: KeyPositio
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await apiFetch(`/api/performance/key-positions/${position.id}`);
+      const data = await apiFetch(`/performance/key-positions/${position.id}`);
       setDetail(data);
     } finally { setLoading(false); }
   }, [position.id]);
@@ -307,12 +307,12 @@ function PositionDetail({ position, onClose, onRefresh }: { position: KeyPositio
 
   async function removeNominee(id: string) {
     if (!confirm('Remove this nominee?')) return;
-    await apiFetch(`/api/performance/nominees/${id}`, { method: 'DELETE' });
+    await apiFetch(`/performance/nominees/${id}`, { method: 'DELETE' });
     load(); onRefresh();
   }
 
   async function updateDevStatus(planId: string, status: string) {
-    await apiFetch(`/api/performance/dev-plans/${planId}`, {
+    await apiFetch(`/performance/dev-plans/${planId}`, {
       method: 'PUT',
       body: JSON.stringify({ status }),
     });
@@ -452,7 +452,7 @@ function NineBoxView() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch('/api/performance/nine-box').then(setData).finally(() => setLoading(false));
+    apiFetch('/performance/nine-box').then(setData).finally(() => setLoading(false));
   }, []);
 
   if (loading) return <p className="text-muted text-sm p-4">Loading 9-box…</p>;
@@ -541,7 +541,7 @@ function RiskReportView() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch('/api/performance/succession/risk-report').then(setReport).finally(() => setLoading(false));
+    apiFetch('/performance/succession/risk-report').then(setReport).finally(() => setLoading(false));
   }, []);
 
   if (loading) return <p className="text-muted text-sm p-4">Loading risk report…</p>;
@@ -617,8 +617,8 @@ export default function SuccessionPage() {
     setLoading(true);
     try {
       const [posData, dashData] = await Promise.all([
-        apiFetch('/api/performance/key-positions'),
-        apiFetch('/api/performance/succession/dashboard'),
+        apiFetch('/performance/key-positions'),
+        apiFetch('/performance/succession/dashboard'),
       ]);
       setPositions(posData);
       setDashboard(dashData);

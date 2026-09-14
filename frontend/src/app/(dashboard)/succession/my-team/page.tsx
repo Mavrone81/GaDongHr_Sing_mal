@@ -23,7 +23,7 @@ export default function MyTeamSuccessionPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch('/api/performance/succession/my-team').then(setData).finally(() => setLoading(false));
+    apiFetch('/performance/succession/my-team').then(setData).finally(() => setLoading(false));
   }, []);
 
   return (
