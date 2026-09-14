@@ -1,8 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { TONES } from '@/lib/statusTone';
 import { apiFetch } from '@/lib/api';
+import {
+  PageHeader, Stat, DataTable, Button, Badge, EmptyState, Field, Input, Select, Textarea, Modal, Tabs, Icon, useToast,
+  type Column, type BadgeTone,
+} from '@/components/ui';
 
 interface Asset {
   id: string;
@@ -19,32 +22,21 @@ interface Asset {
   assignments?: { employeeId: string; assignedAt: string; isActive: boolean }[];
 }
 
-const STATUS_STYLE: Record<string, string> = {
-  AVAILABLE: TONES.critical,
-  ASSIGNED: TONES.done,
-  UNDER_REPAIR: TONES.warning,
-  RETIRED: TONES.active,
+const STATUS_TONE: Record<string, BadgeTone> = {
+  AVAILABLE: 'ok',
+  ASSIGNED: 'accent',
+  UNDER_REPAIR: 'warn',
+  RETIRED: 'neutral',
 };
 const STATUS_LABEL: Record<string, string> = {
-  AVAILABLE: 'Available', ASSIGNED: 'Assigned', UNDER_REPAIR: 'Under Repair', RETIRED: 'Retired',
+  AVAILABLE: 'Available', ASSIGNED: 'Assigned', UNDER_REPAIR: 'Under repair', RETIRED: 'Retired',
 };
 
 const CATEGORIES = ['All', 'Laptop', 'Mobile', 'Monitor', 'Accessories', 'Telecom', 'Furniture', 'Other'];
 
-function Toast({ msg, type, onClose }: { msg: string; type: 'ok' | 'err'; onClose: () => void }) {
-  useEffect(() => { const t = setTimeout(onClose, 3500); return () => clearTimeout(t); }, [onClose]);
-  return (
-    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-6 duration-300">
-      <div className={`px-8 py-4   flex items-center gap-3 ${type === 'ok' ? 'bg-shadow border border-shadow' : 'bg-ink border border-ink'}`}>
-        <div className={`w-2 h-2  ${type === 'ok' ? 'bg-accent' : 'bg-ink'}`} />
-        <span className="text-[11px] font-black text-paper uppercase tracking-widest">{msg}</span>
-        <button onClick={onClose} className="ml-4 text-paper/50 hover:text-paper text-xs">✕</button>
-      </div>
-    </div>
-  );
-}
+const money = (n: number) => `S$${(n ?? 0).toLocaleString()}`;
 
-// ── Register Asset Modal ──────────────────────────────────────────────────────
+// ── Register asset ────────────────────────────────────────────────────────────
 function RegisterModal({ onClose, onSaved }: { onClose: () => void; onSaved: (a: Asset) => void }) {
   const [form, setForm] = useState({ name: '', category: 'Laptop', serialNumber: '', purchaseDate: '', purchaseValue: '', currentValue: '', location: '', notes: '' });
   const [saving, setSaving] = useState(false);
@@ -62,75 +54,50 @@ function RegisterModal({ onClose, onSaved }: { onClose: () => void; onSaved: (a:
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-      <div className="w-full max-w-lg bg-paper flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-8 py-6 border-b border-rule">
-          <div>
-            <h2 className="text-lg font-black text-ink tracking-tighter">Register New Asset</h2>
-            <p className="eyebrow-tight mt-0.5">Add to the asset registry</p>
-          </div>
-          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page transition-all">✕</button>
-        </div>
-        <div className="p-8 flex flex-col gap-4 overflow-y-auto max-h-[65vh]">
-          {err && <div className="px-4 py-3 bg-page border border-ink text-ink text-xs font-bold ">{err}</div>}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2 flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Asset Name *</label>
-              <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. MacBook Pro 14"
-                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Category *</label>
-              <select value={form.category} onChange={e => set('category', e.target.value)}
-                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent">
-                {CATEGORIES.filter(c => c !== 'All').map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Serial Number</label>
-              <input value={form.serialNumber} onChange={e => set('serialNumber', e.target.value)} placeholder="Optional"
-                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Purchase Date</label>
-              <input type="date" value={form.purchaseDate} onChange={e => set('purchaseDate', e.target.value)}
-                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Purchase Value (SGD)</label>
-              <input type="number" min={0} value={form.purchaseValue} onChange={e => set('purchaseValue', e.target.value)} placeholder="0"
-                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Current Value (SGD)</label>
-              <input type="number" min={0} value={form.currentValue} onChange={e => set('currentValue', e.target.value)} placeholder="Same as purchase"
-                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent" />
-            </div>
-            <div className="col-span-2 flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Location</label>
-              <input value={form.location} onChange={e => set('location', e.target.value)} placeholder="e.g. Office Level 3"
-                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent" />
-            </div>
-            <div className="col-span-2 flex flex-col gap-1.5">
-              <label className="text-[10px] font-black text-muted uppercase tracking-widest">Notes</label>
-              <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} placeholder="Optional notes"
-                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent resize-none" />
-            </div>
-          </div>
-        </div>
-        <div className="flex gap-3 px-8 py-5 border-t border-rule bg-page">
-          <button onClick={onClose} className="flex-1 py-3 text-[10px] font-black text-muted border border-rule hover:bg-page uppercase tracking-widest">Cancel</button>
-          <button onClick={handleSave} disabled={saving}
-            className="flex-1 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent disabled:opacity-50 uppercase tracking-widest transition-all">
-            {saving ? 'Registering…' : 'Register Asset'}
-          </button>
-        </div>
+    <Modal
+      open
+      title="Register asset"
+      caption="Adds it to the asset register as available."
+      onClose={onClose}
+      footer={<>
+        <Button variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button onClick={handleSave} disabled={saving}>{saving ? 'Registering…' : 'Register asset'}</Button>
+      </>}
+    >
+      {err && <p role="alert" className="mb-4 text-sm text-danger">{err}</p>}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Asset name" required className="sm:col-span-2" error={err && !form.name ? 'Enter a name' : undefined}>
+          <Input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. MacBook Pro 14" invalid={!!err && !form.name} />
+        </Field>
+        <Field label="Category" required>
+          <Select value={form.category} onChange={e => set('category', e.target.value)}>
+            {CATEGORIES.filter(c => c !== 'All').map(c => <option key={c} value={c}>{c}</option>)}
+          </Select>
+        </Field>
+        <Field label="Serial number" help="Optional">
+          <Input value={form.serialNumber} onChange={e => set('serialNumber', e.target.value)} />
+        </Field>
+        <Field label="Purchase date">
+          <Input type="date" value={form.purchaseDate} onChange={e => set('purchaseDate', e.target.value)} />
+        </Field>
+        <Field label="Purchase value (SGD)">
+          <Input type="number" min={0} value={form.purchaseValue} onChange={e => set('purchaseValue', e.target.value)} placeholder="0" />
+        </Field>
+        <Field label="Current value (SGD)" help="Leave blank to use the purchase value">
+          <Input type="number" min={0} value={form.currentValue} onChange={e => set('currentValue', e.target.value)} />
+        </Field>
+        <Field label="Location">
+          <Input value={form.location} onChange={e => set('location', e.target.value)} placeholder="e.g. Office level 3" />
+        </Field>
+        <Field label="Notes" className="sm:col-span-2">
+          <Textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} />
+        </Field>
       </div>
-    </div>
+    </Modal>
   );
 }
 
-// ── Manage / Assign / Return Modal ────────────────────────────────────────────
+// ── Manage: assign / return / status / history ────────────────────────────────
 function ManageModal({ asset, onClose, onUpdated }: { asset: Asset; onClose: () => void; onUpdated: (a: Asset) => void }) {
   const [tab, setTab] = useState<'assign' | 'return' | 'status' | 'history'>(asset.status === 'ASSIGNED' ? 'return' : 'assign');
   const [employeeId, setEmployeeId] = useState('');
@@ -178,129 +145,102 @@ function ManageModal({ asset, onClose, onUpdated }: { asset: Asset; onClose: () 
     finally { setSaving(false); }
   };
 
+  const tabs = ([
+    { id: 'assign' as const, label: 'Assign', show: asset.status === 'AVAILABLE' },
+    { id: 'return' as const, label: 'Return', show: asset.status === 'ASSIGNED' },
+    { id: 'status' as const, label: 'Change status', show: true },
+    { id: 'history' as const, label: 'History', show: true },
+  ]).filter(t => t.show !== false);
+
+  const footer =
+    tab === 'assign' ? <Button onClick={handleAssign} disabled={saving}>{saving ? 'Assigning…' : 'Confirm assignment'}</Button>
+    : tab === 'return' ? <Button onClick={handleReturn} disabled={saving}>{saving ? 'Processing…' : 'Confirm return'}</Button>
+    : tab === 'status' ? <Button onClick={handleStatusChange} disabled={saving}>{saving ? 'Updating…' : 'Update status'}</Button>
+    : undefined;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-      <div className="w-full max-w-lg bg-paper flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-8 py-6 border-b border-rule">
-          <div>
-            <h2 className="text-base font-black text-ink tracking-tighter">{asset.name}</h2>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="label-form">{asset.assetCode}</span>
-              <span className={`text-[9px] font-black px-2 py-0.5  border uppercase ${STATUS_STYLE[asset.status]}`}>{STATUS_LABEL[asset.status]}</span>
-            </div>
-          </div>
-          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page transition-all">✕</button>
-        </div>
+    <Modal
+      open
+      title={asset.name}
+      caption={<span className="inline-flex items-center gap-2"><span className="tabular-nums">{asset.assetCode}</span><Badge tone={STATUS_TONE[asset.status]}>{STATUS_LABEL[asset.status]}</Badge></span>}
+      onClose={onClose}
+      footer={footer}
+    >
+      <div className="flex flex-col gap-4 min-h-[200px]">
+      <Tabs items={tabs.map(({ id, label }) => ({ id, label }))} active={tab} onChange={(id) => { setTab(id); setErr(''); }} />
+      {err && <p role="alert" className="text-sm text-danger">{err}</p>}
 
-        {/* Tabs */}
-        <div className="flex border-b border-rule bg-page">
-          {([
-            { key: 'assign' as const, label: 'Assign', show: asset.status === 'AVAILABLE' },
-            { key: 'return' as const, label: 'Return', show: asset.status === 'ASSIGNED' },
-            { key: 'status' as const, label: 'Change Status', show: true },
-            { key: 'history' as const, label: 'History', show: true },
-          ]).filter(t => t.show !== false).map(t => (
-            <button key={t.key} onClick={() => { setTab(t.key); setErr(''); }}
-              className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${tab === t.key ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'}`}>
-              {t.label}
-            </button>
-          ))}
-        </div>
+      {tab === 'assign' && (
+        <>
+          <Field label="Assign to employee" required error={err === 'Select an employee' ? err : undefined}>
+            <Select value={employeeId} onChange={e => setEmployeeId(e.target.value)} invalid={err === 'Select an employee'}>
+              <option value="">Select employee</option>
+              {employees.map(e => <option key={e.id} value={e.id}>{e.fullName} · {e.employeeCode}</option>)}
+            </Select>
+          </Field>
+          <Field label="Handover notes" help="Optional">
+            <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
+          </Field>
+        </>
+      )}
 
-        <div className="p-8 flex flex-col gap-4 min-h-[200px]">
-          {err && <div className="px-4 py-3 bg-page border border-ink text-ink text-xs font-bold ">{err}</div>}
+      {tab === 'return' && (
+        <>
+          <p className="text-sm text-muted">Marks this asset as returned and sets it back to available.</p>
+          <Field label="Return notes" help="Condition, damage, missing accessories">
+            <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
+          </Field>
+        </>
+      )}
 
-          {tab === 'assign' && (
-            <>
-              <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-muted uppercase tracking-widest">Assign To Employee *</label>
-                <select value={employeeId} onChange={e => setEmployeeId(e.target.value)}
-                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent">
-                  <option value="">— Select employee —</option>
-                  {employees.map(e => <option key={e.id} value={e.id}>{e.fullName} · {e.employeeCode}</option>)}
-                </select>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-muted uppercase tracking-widest">Notes</label>
-                <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Optional handover notes"
-                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent resize-none" />
-              </div>
-              <button onClick={handleAssign} disabled={saving} className="w-full py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent disabled:opacity-50 uppercase tracking-widest transition-all">
-                {saving ? 'Assigning…' : 'Confirm Assignment'}
-              </button>
-            </>
-          )}
+      {tab === 'status' && (
+        <>
+          <Field label="New status">
+            <Select value={newStatus} onChange={e => setNewStatus(e.target.value)}>
+              {['AVAILABLE', 'UNDER_REPAIR', 'RETIRED'].map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+            </Select>
+          </Field>
+          <Field label="Reason">
+            <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
+          </Field>
+        </>
+      )}
 
-          {tab === 'return' && (
-            <>
-              <p className="text-xs font-bold text-muted">Mark this asset as returned and set it back to Available.</p>
-              <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-muted uppercase tracking-widest">Return Notes</label>
-                <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Condition notes, damages, etc."
-                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent resize-none" />
-              </div>
-              <button onClick={handleReturn} disabled={saving} className="w-full py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent disabled:opacity-50 uppercase tracking-widest transition-all">
-                {saving ? 'Processing…' : 'Confirm Return'}
-              </button>
-            </>
-          )}
-
-          {tab === 'status' && (
-            <>
-              <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-muted uppercase tracking-widest">New Status</label>
-                <select value={newStatus} onChange={e => setNewStatus(e.target.value)}
-                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent">
-                  {['AVAILABLE', 'UNDER_REPAIR', 'RETIRED'].map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-                </select>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-muted uppercase tracking-widest">Notes</label>
-                <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Reason for status change"
-                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent resize-none" />
-              </div>
-              <button onClick={handleStatusChange} disabled={saving} className="w-full py-3 text-[10px] font-black text-paper bg-shadow hover:bg-shadow disabled:opacity-50 uppercase tracking-widest transition-all">
-                {saving ? 'Updating…' : 'Update Status'}
-              </button>
-            </>
-          )}
-
-          {tab === 'history' && (
-            <div className="flex flex-col gap-2">
-              {history.length === 0 ? (
-                <p className="text-xs font-bold text-muted text-center py-8">No assignment history</p>
-              ) : history.map(h => (
-                <div key={h.id} className="flex items-center justify-between px-4 py-3 bg-page border border-rule ">
-                  <div>
-                    <p className="text-xs font-black text-ink">{h.employeeId}</p>
-                    <p className="text-[9px] font-bold text-muted uppercase mt-0.5">
-                      {new Date(h.assignedAt).toLocaleDateString('en-SG')} → {h.returnedAt ? new Date(h.returnedAt).toLocaleDateString('en-SG') : 'Active'}
-                    </p>
-                  </div>
-                  <span className={`text-[9px] font-black px-2 py-0.5  border uppercase ${h.isActive ? 'bg-page text-accent border-accent' : 'bg-page text-muted border-rule'}`}>
-                    {h.isActive ? 'Active' : 'Returned'}
+      {tab === 'history' && (
+        history.length === 0 ? (
+          <EmptyState icon="clock" title="No assignment history" description="Assignments and returns will be listed here." className="py-8" />
+        ) : (
+          <div className="flex flex-col divide-y divide-rule border border-rule rounded-card">
+            {history.map(h => (
+              <div key={h.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-semibold text-ink truncate">{h.employeeId}</span>
+                  <span className="text-xs text-muted tabular-nums">
+                    {new Date(h.assignedAt).toLocaleDateString('en-SG')} to {h.returnedAt ? new Date(h.returnedAt).toLocaleDateString('en-SG') : 'now'}
                   </span>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+                <Badge tone={h.isActive ? 'accent' : 'neutral'}>{h.isActive ? 'Active' : 'Returned'}</Badge>
+              </div>
+            ))}
+          </div>
+        )
+      )}
       </div>
-    </div>
+    </Modal>
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
+// ── Page ──────────────────────────────────────────────────────────────────────
 export default function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('All');
-  const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  const { toast } = useToast();
   const [registerOpen, setRegisterOpen] = useState(false);
   const [managing, setManaging] = useState<Asset | null>(null);
   const [assetSort, setAssetSort] = useState<{ col: 'name' | 'category' | 'location' | 'value' | 'status'; dir: 'asc' | 'desc' }>({ col: 'name', dir: 'asc' });
 
-  const showToast = (msg: string, type: 'ok' | 'err') => setToast({ msg, type });
+  const showToast = useCallback((msg: string, type: 'ok' | 'err') => toast(msg, type === 'err' ? 'danger' : 'ok'), [toast]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -309,7 +249,7 @@ export default function AssetsPage() {
       setAssets(data.assets ?? []);
     } catch (e: any) { showToast(e.message, 'err'); }
     finally { setLoading(false); }
-  }, []);
+  }, [showToast]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -329,9 +269,14 @@ export default function AssetsPage() {
   function toggleAssetSort(col: typeof assetSort.col) {
     setAssetSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
   }
-  function AssetSortIcon({ col }: { col: typeof assetSort.col }) {
-    return <span className="text-[8px] ml-1">{assetSort.col === col ? (assetSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
-  }
+  const sortHead = (col: typeof assetSort.col, label: string, alignEnd = false) => (
+    <button type="button" onClick={() => toggleAssetSort(col)}
+      aria-sort={assetSort.col === col ? (assetSort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+      className={`inline-flex items-center gap-1 hover:text-ink ${alignEnd ? 'justify-end w-full' : ''}`}>
+      {label}
+      {assetSort.col === col && <Icon name="chevronDown" size={13} strokeWidth={2.25} className={assetSort.dir === 'asc' ? 'rotate-180' : ''} />}
+    </button>
+  );
 
   const handleSaved = (a: Asset) => {
     setAssets(prev => [a, ...prev]);
@@ -355,141 +300,108 @@ export default function AssetsPage() {
     URL.revokeObjectURL(url);
   };
 
+  const assignedCount = assets.filter(a => a.status === 'ASSIGNED').length;
+  const availableCount = assets.filter(a => a.status === 'AVAILABLE').length;
+
+  const columns: Column<Asset>[] = [
+    {
+      key: 'name', label: sortHead('name', 'Asset'), width: 'minmax(0, 1.6fr)',
+      render: a => (
+        <div className="flex flex-col min-w-0">
+          <span className="font-semibold text-ink truncate">{a.name}</span>
+          <span className="text-xs text-muted truncate tabular-nums">{a.assetCode}{a.serialNumber ? ` · ${a.serialNumber}` : ''}</span>
+        </div>
+      ),
+    },
+    { key: 'category', label: sortHead('category', 'Category'), render: a => a.category },
+    { key: 'location', label: sortHead('location', 'Location'), render: a => a.location || <span className="text-faint">Not set</span> },
+    { key: 'value', label: sortHead('value', 'Value', true), width: '120px', align: 'right', numeric: true, render: a => money(a.currentValue) },
+    { key: 'status', label: sortHead('status', 'Status'), width: '130px', render: a => <Badge tone={STATUS_TONE[a.status]}>{STATUS_LABEL[a.status]}</Badge> },
+    {
+      key: 'act', label: '', width: '96px', align: 'right',
+      render: a => <Button size="sm" variant="secondary" onClick={() => setManaging(a)}>{a.status === 'AVAILABLE' ? 'Assign' : 'Manage'}</Button>,
+    },
+  ];
+
+  const empty = (
+    <EmptyState
+      icon="briefcase"
+      title={filter === 'All' ? 'No assets registered' : `No ${filter.toLowerCase()} assets`}
+      description={filter === 'All' ? 'Register laptops, phones and other equipment to track who holds them.' : 'Try another category, or register one.'}
+      action={<Button icon="plus" onClick={() => setRegisterOpen(true)}>Register asset</Button>}
+      className="py-6"
+    />
+  );
+
   return (
-    <div className="flex flex-col gap-8 max-w-[1400px] mx-auto pb-20 animate-in fade-in duration-700">
+    <div className="flex flex-col gap-6 max-w-[1400px] mx-auto pb-24 lg:pb-10">
+      <PageHeader
+        title="Assets"
+        subtitle={loading ? 'Loading the register…' : `${assets.length} registered · ${assignedCount} assigned · ${availableCount} available`}
+        actions={<>
+          <Button variant="secondary" icon="download" onClick={handleExport} disabled={filtered.length === 0} className="hidden sm:inline-flex">Export</Button>
+          <Button icon="plus" onClick={() => setRegisterOpen(true)}>Register asset</Button>
+        </>}
+      />
 
-      {/* Header */}
-      <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6 bg-paper p-10 border border-rule relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-accent " />
-        <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-2 h-2 bg-accent " />
-            <span className="text-[10px] font-black text-accent uppercase tracking-[0.4em]">Asset &amp; Logistics Layer</span>
-          </div>
-          <h1 className="text-4xl font-black text-ink tracking-tighter">Asset <span className="text-accent">Registry</span></h1>
-          <p className="text-sm font-bold text-muted mt-2 uppercase tracking-widest max-w-xl">
-            Corporate asset register, employee assignments, logistics requests, and inventory management.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-4 relative z-10">
-          <button onClick={() => setRegisterOpen(true)}
-            className="px-8 py-4 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95">
-            + Register Asset
-          </button>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Stat label="Total assets" value={loading ? '—' : assets.length} />
+        <Stat label="Assigned" value={loading ? '—' : assignedCount} />
+        <Stat label="Available" value={loading ? '—' : availableCount} />
+        <Stat label="Current value" value={loading ? '—' : money(totalValue)} note="SGD, all categories" />
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
-          { label: 'Total Assets',      value: loading ? '—' : String(assets.length),                                          color: 'text-ink' },
-          { label: 'Assigned',          value: loading ? '—' : String(assets.filter(a => a.status === 'ASSIGNED').length),     color: 'text-accent' },
-          { label: 'Available',         value: loading ? '—' : String(assets.filter(a => a.status === 'AVAILABLE').length),    color: 'text-accent' },
-          { label: 'Total Value (SGD)', value: loading ? '—' : `$${totalValue.toLocaleString()}`,                              color: 'text-accent' },
-        ].map(k => (
-          <div key={k.label} className="bg-paper p-8 border border-rule ">
-            <p className="label-form mb-4">{k.label}</p>
-            <h3 className={`text-3xl font-black tracking-tighter ${k.color}`}>{k.value}</h3>
-          </div>
-        ))}
-      </div>
-
-      {/* Filter Tabs */}
-      <div className="flex gap-2 flex-wrap">
-        {CATEGORIES.map(c => (
-          <button key={c} onClick={() => setFilter(c)}
-            className={`px-5 py-2.5  text-[9px] font-black uppercase tracking-widest transition-all ${
-              filter === c ? 'bg-shadow text-paper ' : 'bg-paper border border-rule text-muted hover:border-accent hover:text-accent'
-            }`}>
-            {c}
-          </button>
-        ))}
-      </div>
-
-      {/* Asset Table */}
-      <section className="bg-paper border border-rule overflow-hidden">
-        <div className="p-8 border-b border-rule flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-2 h-8 bg-accent " />
-            <h3 className="text-lg font-black text-ink uppercase tracking-widest">Asset Register</h3>
-            <span className="text-[9px] font-black px-3 py-1 bg-page text-muted uppercase">{filtered.length} items</span>
-          </div>
-          <button onClick={handleExport} className="px-6 py-3 bg-paper border border-rule text-[10px] font-black text-muted uppercase tracking-widest hover:bg-page hover:border-accent hover:text-accent transition-all">
-            Export CSV
-          </button>
-        </div>
-        <div className="overflow-x-auto">
-          {loading ? (
-            <div className="p-8 flex flex-col gap-3">
-              {[1,2,3,4,5].map(i => <div key={i} className="h-14 bg-page animate-pulse" />)}
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="py-20 text-center">
-              <p className="text-sm font-black text-muted uppercase tracking-widest">No assets found</p>
-              <button onClick={() => setRegisterOpen(true)} className="mt-4 px-6 py-2.5 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all">
-                Register First Asset
+      {/* Category filter — chips on desktop, a select on the phone */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="hidden sm:flex flex-wrap gap-2" role="group" aria-label="Category">
+          {CATEGORIES.map(c => {
+            const on = filter === c;
+            return (
+              <button key={c} type="button" onClick={() => setFilter(c)} aria-pressed={on}
+                className={`h-[34px] px-3 rounded-control border text-[13px] font-semibold transition-colors ${on ? 'border-accent bg-tint text-accent' : 'border-rule bg-paper text-ink hover:bg-pill'}`}>
+                {c}
               </button>
-            </div>
-          ) : (
-            <table className="w-full text-left">
-              <thead className="text-[10px] font-black text-muted uppercase tracking-[0.2em] border-b border-rule">
-                <tr>
-                  {([
-                    { col: 'name',     label: 'Asset',       cls: 'px-8 py-6',            align: 'start' },
-                    { col: 'category', label: 'Category',    cls: 'px-8 py-6',            align: 'start' },
-                    { col: 'location', label: 'Location',    cls: 'px-8 py-6',            align: 'start' },
-                    { col: 'value',    label: 'Value (SGD)', cls: 'px-8 py-6 text-right', align: 'end' },
-                    { col: 'status',   label: 'Status',      cls: 'px-8 py-6',            align: 'start' },
-                  ] as const).map(h => (
-                    <th key={h.col} className={h.cls}>
-                      <button onClick={() => toggleAssetSort(h.col)} className={`flex items-center hover:text-ink transition-colors ${h.align === 'end' ? 'ml-auto justify-end' : ''}`}>
-                        {h.label}<AssetSortIcon col={h.col} />
-                      </button>
-                    </th>
-                  ))}
-                  <th className="px-8 py-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-rule">
-                {filtered.map(a => (
-                  <tr key={a.id} className="group hover:bg-page transition-all">
-                    <td className="px-8 py-5">
-                      <div className="flex flex-col">
-                        <span className="text-xs font-black text-ink uppercase tracking-tight group-hover:text-accent transition-colors">{a.name}</span>
-                        <span className="text-[9px] font-bold text-muted uppercase mt-0.5">{a.assetCode}{a.serialNumber ? ` · ${a.serialNumber}` : ''}</span>
-                      </div>
-                    </td>
-                    <td className="px-8 py-5">
-                      <span className="text-[10px] font-black text-muted uppercase tracking-widest">{a.category}</span>
-                    </td>
-                    <td className="px-8 py-5">
-                      <span className="text-[10px] font-black text-muted">{a.location || '—'}</span>
-                    </td>
-                    <td className="px-8 py-5 text-right">
-                      <span className="text-sm font-black text-ink tracking-tight">${(a.currentValue ?? 0).toLocaleString()}</span>
-                    </td>
-                    <td className="px-8 py-5">
-                      <span className={`text-[9px] font-black px-3 py-1.5  border uppercase tracking-widest ${STATUS_STYLE[a.status]}`}>
-                        {STATUS_LABEL[a.status]}
-                      </span>
-                    </td>
-                    <td className="px-8 py-5 text-right">
-                      <button onClick={() => setManaging(a)}
-                        className="px-4 py-2 bg-paper border border-rule text-[9px] font-black text-muted uppercase hover:border-accent hover:text-accent hover:bg-page transition-all">
-                        {a.status === 'AVAILABLE' ? 'Assign' : 'Manage'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+            );
+          })}
         </div>
-      </section>
+        <Field label="Category" className="sm:hidden flex-1">
+          <Select value={filter} onChange={e => setFilter(e.target.value)}>
+            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </Select>
+        </Field>
+        <span className="hidden sm:block text-[13px] text-muted whitespace-nowrap tabular-nums">{loading ? '' : `Showing ${filtered.length} of ${assets.length}`}</span>
+      </div>
+
+      {loading ? (
+        <div className="flex flex-col gap-2" aria-busy="true">
+          {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-[52px] bg-pill rounded-card animate-pulse" />)}
+        </div>
+      ) : (
+        <DataTable
+          aria-label="Asset register"
+          columns={columns}
+          rows={filtered}
+          rowKey={a => a.id}
+          empty={empty}
+          mobileCard={a => (
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col gap-1 min-w-0">
+                <span className="font-semibold text-ink truncate">{a.name}</span>
+                <span className="text-xs text-muted truncate tabular-nums">{a.assetCode} · {a.category}{a.location ? ` · ${a.location}` : ''}</span>
+                <span className="text-sm text-ink tabular-nums">{money(a.currentValue)}</span>
+              </div>
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <Badge tone={STATUS_TONE[a.status]}>{STATUS_LABEL[a.status]}</Badge>
+                <Button size="sm" variant="secondary" onClick={() => setManaging(a)}>{a.status === 'AVAILABLE' ? 'Assign' : 'Manage'}</Button>
+              </div>
+            </div>
+          )}
+          footer={filtered.length > 0 ? <><span className="tabular-nums">{filtered.length} item{filtered.length === 1 ? '' : 's'}</span><span className="tabular-nums">{money(filtered.reduce((s, a) => s + (a.currentValue ?? 0), 0))} shown</span></> : undefined}
+        />
+      )}
 
       {registerOpen && <RegisterModal onClose={() => setRegisterOpen(false)} onSaved={handleSaved} />}
       {managing && <ManageModal asset={managing} onClose={() => setManaging(null)} onUpdated={handleUpdated} />}
-      {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }
