@@ -5,10 +5,10 @@ type Tone = 'neutral' | 'ok' | 'warn' | 'danger' | 'accent' | 'brass';
 const TONE: Record<Tone, string> = {
   neutral: 'bg-pill text-muted',
   ok: 'bg-tint text-ok',
-  warn: 'bg-[#FFF4E5] text-warn',
-  danger: 'bg-[#FEEDEA] text-danger',
+  warn: 'bg-warn-soft text-warn',
+  danger: 'bg-danger-soft text-danger',
   accent: 'bg-tint text-accent',
-  brass: 'bg-[#F7EEDD] text-[#8A6425]', // trials / plans — dark brass text so it reads on paper
+  brass: 'bg-brass-soft text-brass-ink', // trials / plans — tokens, so it reads on paper and in the dark console
 };
 
 /** Status pill: 24px tall, 12px semibold, never all-caps. */
