@@ -2,11 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-
-function apiUrl() {
-  return process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:4000/api`;
-}
-const INPUT = 'w-full border border-rule bg-shadow px-3 py-2.5 text-sm text-paper focus:border-accent focus:outline-none';
+import { Button, Field, Icon, Input } from '@/components/ui';
+import { apiUrl, TOKEN_KEY } from '../_lib/api';
+import { Lockup } from '../_components/Shell';
+import { CodeInput } from '../_components/CodeInput';
 
 export default function PlatformLogin() {
   const router = useRouter();
@@ -30,7 +29,7 @@ export default function PlatformLogin() {
       });
       const d = await res.json();
       if (!res.ok) { setError(d.error || 'Login failed'); setLoading(false); return; }
-      if (d.token) { localStorage.setItem('gadonghr_platform_token', d.token); router.push('/platform'); return; }
+      if (d.token) { localStorage.setItem(TOKEN_KEY, d.token); router.push('/platform'); return; }
       if (d.mfaSetupRequired) {
         setSetupToken(d.setupToken);
         const sres = await fetch(`${apiUrl()}/platform/mfa/setup`, { method: 'POST', headers: { Authorization: `Bearer ${d.setupToken}` } });
@@ -54,7 +53,7 @@ export default function PlatformLogin() {
       });
       const d = await res.json();
       if (!res.ok || !d.token) { setError(d.error || 'Invalid code'); setLoading(false); return; }
-      localStorage.setItem('gadonghr_platform_token', d.token); router.push('/platform');
+      localStorage.setItem(TOKEN_KEY, d.token); router.push('/platform');
     } catch { setError('Could not reach the server.'); }
     setLoading(false);
   }
@@ -69,41 +68,59 @@ export default function PlatformLogin() {
       });
       const d = await res.json();
       if (!res.ok || !d.token) { setError(d.error || 'Invalid code'); setLoading(false); return; }
-      localStorage.setItem('gadonghr_platform_token', d.token); router.push('/platform');
+      localStorage.setItem(TOKEN_KEY, d.token); router.push('/platform');
     } catch { setError('Could not reach the server.'); }
     setLoading(false);
   }
 
+  const codeReady = mfaCode.length === 6;
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-shadow p-6">
-      <div className="w-full max-w-sm">
-        <div className="mb-6 text-center">
-          <div className="text-xl font-black tracking-tight text-paper">GADONGHR</div>
-          <div className="text-xs font-bold uppercase tracking-[0.3em] text-accent">Platform Operator</div>
-        </div>
-        {error && <div className="mb-4 bg-ink border border-ink px-4 py-2.5 text-sm text-ink">{error}</div>}
+    <div className="flex min-h-screen items-center justify-center p-4 sm:p-6">
+      <div className="flex w-full max-w-[420px] flex-col gap-[22px] rounded-card border border-rule bg-paper p-6 sm:p-9">
+        <Lockup />
 
         {step === 'creds' && (
-          <form onSubmit={submitCreds} className="space-y-3">
-            <input className={INPUT} type="email" placeholder="Operator email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-            <input className={INPUT} type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-            <button disabled={loading} className="w-full bg-accent py-2.5 font-bold text-paper hover:bg-accent disabled:opacity-60">{loading ? '…' : 'Sign in'}</button>
+          <form onSubmit={submitCreds} className="flex flex-col gap-[22px]">
+            <div className="flex flex-col gap-1">
+              <h1 className="text-[22px] font-semibold text-ink">Operator sign-in</h1>
+              <p className="text-[13.5px] leading-relaxed text-muted">For Bevora staff only. Every sign-in is recorded in the platform audit log.</p>
+            </div>
+            <div className="flex flex-col gap-3">
+              <Field label="Email"><Input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} invalid={!!error} required autoFocus /></Field>
+              <Field label="Password" error={error || undefined}><Input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} invalid={!!error} required /></Field>
+            </div>
+            <Button type="submit" disabled={loading} className="h-11 w-full">{loading ? 'Signing in…' : 'Continue'}</Button>
+            <div className="flex items-center gap-2 text-[12.5px] text-muted"><Icon name="lock" size={14} />Authenticator code required after the password.</div>
           </form>
         )}
+
         {step === 'mfa' && (
-          <form onSubmit={submitMfa} className="space-y-3">
-            <p className="text-sm text-muted">Enter the 6-digit code from your authenticator.</p>
-            <input className={INPUT} inputMode="numeric" placeholder="123456" value={mfaCode} onChange={(e) => setMfaCode(e.target.value)} required />
-            <button disabled={loading} className="w-full bg-accent py-2.5 font-bold text-paper hover:bg-accent disabled:opacity-60">Verify</button>
+          <form onSubmit={submitMfa} className="flex flex-col gap-[22px]">
+            <div className="flex flex-col gap-1">
+              <h1 className="text-[22px] font-semibold text-ink">Enter your code</h1>
+              <p className="text-[13.5px] leading-relaxed text-muted">The 6-digit code from your authenticator app for <span className="font-mono text-ink">{email}</span>.</p>
+            </div>
+            <CodeInput value={mfaCode} onChange={setMfaCode} autoFocus />
+            {error && <p className="text-xs text-danger" role="alert">{error}</p>}
+            <Button type="submit" disabled={loading || !codeReady} className="h-11 w-full">{loading ? 'Verifying…' : 'Verify and sign in'}</Button>
+            <button type="button" onClick={() => { setStep('creds'); setMfaCode(''); setError(''); }} className="text-[13px] font-semibold text-accent hover:text-ink">Use a different account</button>
           </form>
         )}
+
         {step === 'setup' && (
-          <form onSubmit={enableMfa} className="space-y-3">
-            <p className="text-sm text-muted">Set up MFA (mandatory). Scan the QR with your authenticator app (or paste the secret), then enter a code:</p>
-            {qr && <img src={qr} alt="MFA QR code" className="mx-auto h-44 w-44 bg-paper p-2" />}
-            <div className=" bg-shadow border border-shadow px-3 py-2 font-mono text-xs text-accent break-all">{secret}</div>
-            <input className={INPUT} inputMode="numeric" placeholder="123456" value={mfaCode} onChange={(e) => setMfaCode(e.target.value)} required />
-            <button disabled={loading} className="w-full bg-accent py-2.5 font-bold text-paper hover:bg-accent disabled:opacity-60">Enable MFA &amp; continue</button>
+          <form onSubmit={enableMfa} className="flex flex-col gap-[22px]">
+            <div className="flex flex-col gap-1">
+              <h1 className="text-[22px] font-semibold text-ink">Set up your authenticator</h1>
+              <p className="text-[13.5px] leading-relaxed text-muted">MFA is required for every operator. Scan the QR code with your authenticator app, or enter the key by hand, then type the code it shows.</p>
+            </div>
+            {qr && <img src={qr} alt="QR code for the authenticator app" className="mx-auto h-44 w-44 rounded-control bg-paper p-2" />}
+            <Field label="Setup key" help="For entering by hand.">
+              <div className="break-all rounded-control border border-rule bg-pill px-3 py-2.5 font-mono text-xs text-ink">{secret}</div>
+            </Field>
+            <CodeInput value={mfaCode} onChange={setMfaCode} />
+            {error && <p className="text-xs text-danger" role="alert">{error}</p>}
+            <Button type="submit" disabled={loading || !codeReady} className="h-11 w-full">{loading ? 'Enabling…' : 'Enable MFA and continue'}</Button>
           </form>
         )}
       </div>

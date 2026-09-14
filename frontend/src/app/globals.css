@@ -37,13 +37,19 @@
   --danger:    #B42318;   /* errors, destructive actions, overdue           */
   --warn:      #B54708;   /* attention, expiring, late                      */
   --ok:        #067647;   /* success, verified, active                      */
+  --on-accent: #FFFFFF;   /* text on an accent fill (dark console flips it) */
+  --warn-soft:   #FFF4E5; /* soft grounds for status pills                  */
+  --danger-soft: #FEEDEA;
+  --brass-soft:  #F7EEDD;
+  --brass-ink:   #8A6425; /* brass text that still reads on paper           */
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root { --page:#0F1512; --paper:#171F1B; --ink:#E8ECE9; --rule:#27322C; --muted:#8E9A93; --tint:#1A2620; --pill:#1F2924; --faint:#5F6B65; --accent:#3FA07C; --danger:#E5735F; --warn:#E2A94A; --ok:#3FA07C; }
+  :root { --page:#0F1512; --paper:#171F1B; --ink:#E8ECE9; --rule:#27322C; --muted:#8E9A93; --tint:#1A2620; --pill:#1F2924; --faint:#5F6B65; --accent:#3FA07C; --danger:#E5735F; --warn:#E2A94A; --ok:#3FA07C; --on-accent:#0F1512; --warn-soft:#2C2416; --danger-soft:#2E1B18; --brass-soft:#2C2416; --brass-ink:#D4A254; }
 }
-:root[data-theme="dark"]  { --page:#0F1512; --paper:#171F1B; --ink:#E8ECE9; --rule:#27322C; --muted:#8E9A93; --tint:#1A2620; --pill:#1F2924; --faint:#5F6B65; --accent:#3FA07C; --danger:#E5735F; --warn:#E2A94A; --ok:#3FA07C; }
-:root[data-theme="light"] { --page:#F6F6F3; --paper:#FFFFFF; --ink:#1A1A18; --rule:#E5E3DD; --muted:#6B6960; --tint:#E7EFEA; --pill:#F3F2EE; --faint:#9C9A91; --accent:#1B4A3C; --danger:#B42318; --warn:#B54708; --ok:#067647; }
+:root[data-theme="dark"], [data-theme="dark"] { --page:#0F1512; --paper:#171F1B; --ink:#E8ECE9; --rule:#27322C; --muted:#8E9A93; --tint:#1A2620; --pill:#1F2924; --faint:#5F6B65; --accent:#3FA07C; --danger:#E5735F; --warn:#E2A94A; --ok:#3FA07C; --on-accent:#0F1512; --warn-soft:#2C2416; --danger-soft:#2E1B18; --brass-soft:#2C2416; --brass-ink:#D4A254; }
+:root[data-theme="light"], [data-theme="light"] { --page:#F6F6F3; --paper:#FFFFFF; --ink:#1A1A18; --rule:#E5E3DD; --muted:#6B6960; --tint:#E7EFEA; --pill:#F3F2EE; --faint:#9C9A91; --accent:#1B4A3C; --danger:#B42318; --warn:#B54708; --ok:#067647; --on-accent:#FFFFFF; --warn-soft:#FFF4E5; --danger-soft:#FEEDEA; --brass-soft:#F7EEDD; --brass-ink:#8A6425; }
 
 /* Thai marks sit above and below the baseline. At Latin leading they clip —
    illegible to a native reader, invisible to anyone testing in English. The
@@ -76,6 +82,8 @@
 
   /* ── TYPOGRAPHY ─────────────────────────────────────────────────── */
   --font-manrope: 'Manrope';   /* fallback; next/font overrides it on <body> */
+  --font-plex-sans: 'IBM Plex Sans';   /* fallbacks; next/font overrides them on the /platform wrapper */
+  --font-plex-mono: 'IBM Plex Mono';
   --font-sans: var(--font-manrope), 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-feature-settings: "tnum";
   /* Redesign type scale — nothing user-facing below 12px; labels are sentence case. */
@@ -324,3 +332,11 @@
   }
 }
 
+
+/* Operator console (/platform): IBM Plex Sans for text, Plex Mono for ids and numbers.
+   The variables come from next/font in src/app/platform/layout.tsx. */
+.platform-console {
+  font-family: var(--font-plex-sans), 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}

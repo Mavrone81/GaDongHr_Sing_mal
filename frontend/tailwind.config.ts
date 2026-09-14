@@ -76,6 +76,11 @@ const config: Config = {
         danger:    'var(--danger)',
         warn:      'var(--warn)',
         ok:        'var(--ok)',
+        'on-accent':   'var(--on-accent)',
+        'warn-soft':   'var(--warn-soft)',
+        'danger-soft': 'var(--danger-soft)',
+        'brass-soft':  'var(--brass-soft)',
+        'brass-ink':   'var(--brass-ink)',
 
         // The 2026 `indigo: navy` remap is RETIRED, not repointed. It made
         // brand colour arrive through a class named "indigo" — a lie in the
@@ -106,6 +111,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: ['var(--font-manrope)', 'Manrope', 'Segoe UI', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'ui-monospace', 'Menlo', 'monospace'],
       },
       borderRadius: {
         card: '12px',
