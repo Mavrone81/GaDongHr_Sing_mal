@@ -180,7 +180,7 @@ export default function CompaniesPage() {
           </div>
         ) : (
           <form id="create-company" onSubmit={createCompany} className="flex flex-col gap-4">
-            <Field label="Company name" required><Input value={cf.companyName} onChange={(e) => setCf({ ...cf, companyName: e.target.value })} required autoFocus /></Field>
+            <Field label="Company name" required><Input value={cf.companyName} onChange={(e) => setCf({ ...cf, companyName: e.target.value })} required /></Field>
             <Field label="Owner full name" required><Input value={cf.fullName} onChange={(e) => setCf({ ...cf, fullName: e.target.value })} required /></Field>
             <Field label="Owner work email" required><Input type="email" value={cf.workEmail} onChange={(e) => setCf({ ...cf, workEmail: e.target.value })} required /></Field>
             <div className="grid grid-cols-2 gap-3">
