@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { getMondayOf } from '@/lib/attendanceUtils';
 import { addDays, toISODate as toISO, todayISO } from '@/lib/timezone';
+import { PageHeader, Stat, Card, CardHeader, Button, Badge, EmptyState, Icon } from '@/components/ui';
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -84,143 +85,107 @@ export default function MySchedulePage() {
 
   const today = todayISO();
 
+  const weekLabel =
+    `${weekStart.getDate()} ${MONTH_NAMES[weekStart.getMonth()]}` +
+    (weekStart.getFullYear() !== weekEnd.getFullYear() ? ` ${weekStart.getFullYear()}` : '') +
+    ` – ${weekEnd.getDate()} ${MONTH_NAMES[weekEnd.getMonth()]} ${weekEnd.getFullYear()}`;
+
   return (
-    <div className="flex flex-col gap-6 max-w-[1100px] mx-auto pb-12 animate-in fade-in duration-700">
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="My schedule"
+        subtitle={weekOffset === 0 ? 'This week' : weekOffset === 1 ? 'Next week' : weekOffset === -1 ? 'Last week' : weekLabel}
+        actions={
+          <>
+            <Button variant="secondary" size="md" aria-label="Previous week" onClick={() => setWeekOffset(w => w - 1)}>
+              <Icon name="chevronRight" size={16} className="rotate-180" />
+            </Button>
+            <Button variant="secondary" onClick={() => setWeekOffset(0)} disabled={weekOffset === 0}>This week</Button>
+            <Button variant="secondary" size="md" aria-label="Next week" onClick={() => setWeekOffset(w => w + 1)}>
+              <Icon name="chevronRight" size={16} />
+            </Button>
+          </>
+        }
+      />
 
-      {/* Header */}
-      <div className="bg-paper p-8 border border-rule flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-black text-ink tracking-tighter">My <span className="text-accent">Schedule</span></h1>
-          <p className="text-[10px] font-black text-muted mt-1 uppercase tracking-widest">Weekly roster · Shift assignments</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setWeekOffset(w => w - 1)}
-            className="w-9 h-9 bg-page hover:bg-rule flex items-center justify-center text-ink transition-all font-black text-sm"
-          >‹</button>
-          <button
-            onClick={() => setWeekOffset(0)}
-            className="px-5 py-2 text-[10px] font-black uppercase tracking-widest bg-page text-accent border border-accent hover:bg-page transition-all"
-          >
-            This Week
-          </button>
-          <button
-            onClick={() => setWeekOffset(w => w + 1)}
-            className="w-9 h-9 bg-page hover:bg-rule flex items-center justify-center text-ink transition-all font-black text-sm"
-          >›</button>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Stat label="Week of" value={<span className="text-[22px]">{weekLabel}</span>} />
+        <Stat label="Scheduled hours" value={loading ? '—' : `${totalHours}h`} note="Across the week" />
+        <Stat label="Working days" value={loading ? '—' : `${workDays} / 7`} note={loading ? undefined : workDays === 0 ? 'No shifts published yet' : `${7 - workDays} off`} />
       </div>
 
-      {/* Week label + stats */}
-      <div className="grid grid-cols-3 gap-5">
-        <div className="col-span-1 bg-shadow p-7 border border-shadow">
-          <p className="text-[10px] font-black text-accent uppercase tracking-widest mb-2">Week of</p>
-          <p className="text-2xl font-black text-paper tracking-tighter">
-            {weekStart.getDate()} {MONTH_NAMES[weekStart.getMonth()]}
-            {weekStart.getFullYear() !== weekEnd.getFullYear() ? ` ${weekStart.getFullYear()}` : ''}
-            {' – '}
-            {weekEnd.getDate()} {MONTH_NAMES[weekEnd.getMonth()]} {weekEnd.getFullYear()}
-          </p>
-        </div>
-        <div className="bg-paper p-7 border border-rule">
-          <p className="eyebrow-tight mb-3">Scheduled Hours</p>
-          {loading ? <div className="h-10 w-20 bg-page animate-pulse" /> : <p className="text-4xl font-black text-ink tracking-tighter">{totalHours}h</p>}
-        </div>
-        <div className="bg-page p-7 border border-accent">
-          <p className="text-[10px] font-black text-accent uppercase tracking-widest mb-3">Work Days</p>
-          {loading ? <div className="h-10 w-16 bg-page animate-pulse" /> : <p className="text-4xl font-black text-accent tracking-tighter">{workDays} / 7</p>}
-        </div>
-      </div>
-
-      {/* Week grid */}
-      <div className="bg-paper border border-rule overflow-hidden">
-        <div className="px-8 py-5 border-b border-rule bg-page">
-          <h3 className="text-sm font-black text-ink uppercase tracking-widest">Weekly View</h3>
-        </div>
-        <div className="grid grid-cols-7 divide-x divide-rule min-h-[280px]">
-          {loading
-            ? Array.from({ length: 7 }).map((_, i) => (
-                <div key={i} className="p-4 flex flex-col gap-2">
-                  <div className="h-4 w-10 bg-page animate-pulse" />
-                  <div className="h-20 bg-page animate-pulse" />
-                </div>
-              ))
-            : roster.map((day) => {
-                const d = new Date(day.date + 'T00:00:00');
-                const isToday = day.date === today;
-                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                return (
-                  <div key={day.date} className={`p-4 flex flex-col gap-2 ${isWeekend ? 'bg-page' : ''}`}>
-                    {/* Day header */}
-                    <div className="flex flex-col items-center mb-1">
-                      <span className="label-form">{DAY_NAMES[d.getDay()]}</span>
-                      <div className={`w-8 h-8  flex items-center justify-center mt-1 ${isToday ? 'bg-accent' : ''}`}>
-                        <span className={`text-sm font-black ${isToday ? 'text-paper' : 'text-ink'}`}>{d.getDate()}</span>
-                      </div>
-                    </div>
-
-                    {/* Shift card */}
-                    {day.shift ? (
-                      <div
-                        className="flex-1 p-3 flex flex-col gap-1 border"
-                        style={{ backgroundColor: `${day.shift.color}18`, borderColor: `${day.shift.color}40` }}
-                      >
-                        <div className="w-2 h-2 shrink-0" style={{ backgroundColor: day.shift.color }} />
-                        <p className="text-[10px] font-black text-ink leading-tight mt-0.5">{day.shift.name}</p>
-                        <p className="text-[9px] font-bold text-muted mt-1">{day.shift.startTime} – {day.shift.endTime}</p>
-                        <p className="label-form mt-auto">{day.shift.hoursPerDay}h</p>
-                        {day.note && <p className="text-[8px] font-bold text-muted italic truncate">{day.note}</p>}
-                      </div>
-                    ) : (
-                      <div className="flex-1 border border-dashed border-rule flex items-center justify-center">
-                        <span className="text-[9px] font-black text-muted uppercase tracking-widest">Off</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-        </div>
-      </div>
-
-      {/* List view */}
-      {!loading && workDays > 0 && (
-        <div className="bg-paper border border-rule overflow-hidden">
-          <div className="px-8 py-5 border-b border-rule bg-page">
-            <h3 className="text-sm font-black text-ink uppercase tracking-widest">Shift Details</h3>
-          </div>
-          <div className="divide-y divide-rule">
-            {roster.filter(d => d.shift).map(day => {
+      {/* Week grid at ≥768px; a stacked list of day cards below that (375 rule). */}
+      <Card padding="p-0" className="overflow-hidden">
+        <div className="px-5 pt-5 pb-3"><CardHeader title="Week view" caption={weekLabel} className="mb-0" /></div>
+        {loading ? (
+          <div className="flex items-center justify-center py-16"><div className="w-8 h-8 border-4 border-accent border-t-accent animate-spin rounded-full" /></div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-7 md:divide-x divide-y md:divide-y-0 divide-rule border-t border-rule">
+            {roster.map((day) => {
               const d = new Date(day.date + 'T00:00:00');
               const isToday = day.date === today;
+              const isWeekend = d.getDay() === 0 || d.getDay() === 6;
               return (
-                <div key={day.date} className="flex items-center gap-5 px-8 py-4 hover:bg-page transition-all">
-                  <div className={`w-12 h-12  flex flex-col items-center justify-center shrink-0 ${isToday ? 'bg-accent' : 'bg-page'}`}>
-                    <span className={`text-[8px] font-black uppercase tracking-wider ${isToday ? 'text-paper' : 'text-muted'}`}>{DAY_NAMES[d.getDay()]}</span>
-                    <span className={`text-lg font-black leading-none ${isToday ? 'text-paper' : 'text-ink'}`}>{d.getDate()}</span>
+                <div key={day.date} className={`flex md:flex-col gap-3 md:gap-2 p-4 md:min-h-[200px] ${isWeekend ? 'bg-page' : ''}`}>
+                  <div className="flex md:flex-col items-center gap-2 md:gap-1 md:mb-1 shrink-0 w-14 md:w-auto">
+                    <span className="text-xs font-semibold text-muted">{DAY_NAMES[d.getDay()]}</span>
+                    <span className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold tabular-nums ${isToday ? 'bg-accent text-on-accent' : 'text-ink'}`}>{d.getDate()}</span>
                   </div>
-                  <div className="w-3 h-3 shrink-0" style={{ backgroundColor: day.shift!.color }} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-black text-ink uppercase tracking-tight">{day.shift!.name}</p>
-                    <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-0.5">
-                      {day.shift!.startTime} – {day.shift!.endTime} · {day.shift!.hoursPerDay}h
-                    </p>
-                    {day.note && <p className="text-[9px] font-bold text-muted italic mt-0.5">&quot;{day.note}&quot;</p>}
-                  </div>
-                  {isToday && (
-                    <span className="text-[9px] font-black text-accent bg-page border border-accent px-3 py-1 uppercase tracking-widest shrink-0">Today</span>
+                  {day.shift ? (
+                    <div className="flex-1 flex flex-col gap-1 p-3 rounded-control border border-rule bg-paper min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: day.shift.color }} aria-hidden="true" />
+                        <span className="text-sm font-semibold text-ink truncate">{day.shift.name}</span>
+                      </div>
+                      <span className="text-xs text-muted tabular-nums">{day.shift.startTime} – {day.shift.endTime}</span>
+                      <span className="text-xs font-semibold text-ink mt-auto tabular-nums">{day.shift.hoursPerDay}h</span>
+                      {day.note && <span className="text-xs text-muted truncate">{day.note}</span>}
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex items-center justify-center min-h-[44px] rounded-control border border-dashed border-rule text-xs font-semibold text-faint">Off</div>
                   )}
                 </div>
               );
             })}
           </div>
-        </div>
+        )}
+      </Card>
+
+      {!loading && workDays > 0 && (
+        <Card padding="p-0" className="overflow-hidden">
+          <div className="px-5 pt-5 pb-3"><CardHeader title="Shift details" className="mb-0" /></div>
+          <div className="flex flex-col divide-y divide-rule border-t border-rule">
+            {roster.filter(d => d.shift).map(day => {
+              const d = new Date(day.date + 'T00:00:00');
+              const isToday = day.date === today;
+              return (
+                <div key={day.date} className="flex items-center gap-4 px-5 py-3.5 hover:bg-page">
+                  <div className={`flex flex-col items-center justify-center w-12 h-12 rounded-control shrink-0 ${isToday ? 'bg-accent text-on-accent' : 'bg-pill text-ink'}`}>
+                    <span className={`text-xs font-semibold ${isToday ? 'text-on-accent' : 'text-muted'}`}>{DAY_NAMES[d.getDay()]}</span>
+                    <span className="text-lg font-bold leading-none tabular-nums">{d.getDate()}</span>
+                  </div>
+                  <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: day.shift!.color }} aria-hidden="true" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-ink truncate">{day.shift!.name}</p>
+                    <p className="text-xs text-muted tabular-nums">{day.shift!.startTime} – {day.shift!.endTime} · {day.shift!.hoursPerDay}h</p>
+                    {day.note && <p className="text-xs text-muted truncate mt-0.5">{day.note}</p>}
+                  </div>
+                  {isToday && <Badge tone="accent">Today</Badge>}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
       )}
 
       {!loading && workDays === 0 && (
-        <div className="bg-paper border border-rule py-16 text-center">
-          <p className="text-sm font-black text-muted uppercase tracking-widest">No shifts scheduled this week</p>
-          <p className="text-[10px] font-bold text-muted mt-2">Your manager will publish shifts here</p>
-        </div>
+        <Card padding="p-0">
+          <EmptyState
+            icon="calendar"
+            title="No shifts this week"
+            description="Your manager publishes shifts here. Check back once the roster is out, or look at another week."
+          />
+        </Card>
       )}
     </div>
   );

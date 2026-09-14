@@ -39,6 +39,8 @@ const PATHS = {
   more: 'M5 12h.01M12 12h.01M19 12h.01',
   menu: 'M4 6h16M4 12h16M4 18h16',
   eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  refresh: 'M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5',
+  paperclip: 'M20 11.5l-8.5 8.5a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8',
 } as const;
 
 export type IconName = keyof typeof PATHS;
