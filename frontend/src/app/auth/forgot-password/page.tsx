@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { canSubmitEmail } from '@/lib/passwordReset';
+import GaDongLogo from '@/components/GaDongLogo';
+import { AuthAlert, AuthTitle, AUTH_PRIMARY } from '@/components/auth/AuthSplit';
+import { Field, Input, Icon } from '@/components/ui';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -28,50 +31,29 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-page px-4">
-      <div className="w-full max-w-md border border-rule bg-paper p-8">
-        <h1 className="text-lg font-black text-ink tracking-tight">Reset your password</h1>
-        <p className="mt-1 text-xs font-bold text-muted leading-relaxed">
-          Enter the email on your account and we&apos;ll send you a link to set a new password.
-        </p>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-page px-5 py-10 font-sans">
+      <div className="w-full max-w-[440px] flex flex-col gap-6">
+        <GaDongLogo variant="light" markSize={30} />
+        <div className="bg-paper border border-rule rounded-card shadow-card p-6 sm:p-8 flex flex-col gap-5">
+          <AuthTitle title="Reset your password" sub="Enter the email on your account and we'll send you a link to set a new password." />
 
-        {done ? (
-          <div className="mt-6 bg-page border border-accent px-4 py-4">
-            <p className="text-[11px] font-black text-accent leading-relaxed">
-              If that email is registered, a password-reset link is on its way. Check your inbox (and spam) — the link expires in 1 hour.
-            </p>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-muted uppercase tracking-[0.2em] ml-1">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                placeholder="e.g. you@company.com"
-                className="w-full border border-rule bg-paper px-5 py-4 text-xs font-bold text-ink focus:border-accent focus:ring-4 focus:ring-accent transition-all outline-none "
-              />
-            </div>
-
-            {error && (
-              <p className="text-[10px] font-black text-ink bg-page px-4 py-2.5 border border-ink">{error}</p>
-            )}
-
-            <button
-              type="submit"
-              disabled={!canSubmitEmail(email, submitting)}
-              className="w-full py-4 px-4 text-[11px] font-black text-paper bg-accent hover:bg-accent transition-all uppercase tracking-[0.3em] active:scale-95 disabled:opacity-40"
-            >
-              {submitting ? 'Sending…' : 'Send reset link'}
-            </button>
-          </form>
-        )}
-
-        <div className="mt-6 text-center">
-          <a href="/login" className="text-[10px] font-black text-accent hover:text-accent tracking-widest uppercase">← Back to sign in</a>
+          {done ? (
+            <AuthAlert tone="ok">If that email is registered, a password-reset link is on its way. Check your inbox and spam folder — the link expires in 1 hour.</AuthAlert>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <Field label="Work email">
+                <Input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email" placeholder="you@company.com" autoFocus />
+              </Field>
+              {error && <AuthAlert>{error}</AuthAlert>}
+              <button type="submit" disabled={!canSubmitEmail(email, submitting)} className={AUTH_PRIMARY}>
+                {submitting ? 'Sending…' : 'Send reset link'}
+              </button>
+            </form>
+          )}
         </div>
+        <a href="/login" className="self-center inline-flex items-center gap-1 text-[13.5px] font-semibold text-accent hover:underline">
+          <Icon name="chevronRight" size={14} className="rotate-180" />Back to sign in
+        </a>
       </div>
     </div>
   );

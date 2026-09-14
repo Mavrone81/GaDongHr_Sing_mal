@@ -3,7 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import GaDongLogo, { GaDongMark } from '@/components/GaDongLogo';
+import { GaDongMark } from '@/components/GaDongLogo';
+import AuthSplit, { AuthAlert, AuthTitle, AUTH_PRIMARY } from '@/components/auth/AuthSplit';
+import CodeInput from '@/components/auth/CodeInput';
+import { Field, Input, Icon } from '@/components/ui';
 
 type Step = 'credentials' | 'mfa-challenge' | 'mfa-setup';
 type MfaMethod = 'TOTP' | 'EMAIL_OTP' | 'EITHER';
@@ -271,261 +274,115 @@ export default function LoginPage() {
     }
   };
 
+  const remaining = (code: string) => `${6 - code.length} digit${6 - code.length === 1 ? '' : 's'} remaining`;
+
   return (
-    <div className="flex min-h-screen w-full bg-paper font-sans">
-
-      {/* Full-screen navigation overlay */}
+    <AuthSplit
+      headline="HR and payroll, built for Singapore's and Malaysia's rules."
+      sub="CPF, IRAS, MOM and SDL handled in one place; EPF, SOCSO, EIS and PCB for your Malaysian entities."
+    >
       {navigating && (
-        <div className="fixed inset-0 z-50 bg-shadow backdrop- flex flex-col items-center justify-center gap-6">
-          <GaDongMark size={52} />
-
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-6 h-6 border-2 border-accent border-t-accent animate-spin rounded-full" />
-            <span className="text-[10px] font-black text-muted uppercase tracking-[0.3em]">Loading workspace…</span>
-          </div>
+        <div className="fixed inset-0 z-50 bg-page flex flex-col items-center justify-center gap-4" role="status">
+          <GaDongMark size={44} tone="ink" className="text-accent" />
+          <div className="w-7 h-7 border-[3px] border-rule border-t-accent animate-spin rounded-full" />
+          <span className="text-sm text-muted">Opening your workspace…</span>
         </div>
       )}
 
-      {/* Left brand panel */}
-      <div className="hidden lg:flex w-[45%] bg-shadow border-r border-shadow p-16 flex-col justify-between relative overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-accent blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-accent blur-[100px]" />
-        <div className="relative z-10 space-y-10">
-          <GaDongLogo variant="dark" markSize={48} />
-          <div className="space-y-6">
-            <h1 className="text-5xl font-black text-paper tracking-tighter leading-[0.9]">
-              Enterprise <br/><span className="text-highlight underline decoration-gold-500/40 underline-offset-8">Intelligence</span> Suite
-            </h1>
-            <p className="text-muted max-w-sm leading-relaxed text-[13px] font-bold uppercase tracking-widest opacity-80">
-              Operational Command Center for modern personnel management, payroll terminal, and departmental auditing.
-            </p>
-          </div>
-          <div className="flex flex-col gap-4 pt-10">
-            {[{ icon: '🔒', text: 'Military-Grade Encryption' }, { icon: '📋', text: 'Section 2 RBAC Compliant' }, { icon: '⏱️', text: 'Real-time Analytics Feed' }].map((f, i) => (
-              <div key={i} className="flex items-center gap-3 text-muted font-black text-[10px] tracking-widest uppercase">
-                <span className="opacity-50">{f.icon}</span>{f.text}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="relative z-10 text-[10px] text-paper/60 font-black tracking-[0.3em] uppercase">
-          © 2026 Bevora Technologies • BT-HRMS-001 • v1.1.0-STABLE
-        </div>
-      </div>
+      {step === 'credentials' && (
+        <>
+          <AuthTitle title="Sign in" sub="Use your work email and password." />
 
-      {/* Right auth panel */}
-      <div className="flex-1 flex flex-col justify-center items-center px-6 sm:px-12 lg:px-24 bg-page">
-        <div className="w-full max-w-sm space-y-8">
+          <form onSubmit={handleLogin} className="flex flex-col gap-[14px]">
+            {error && <AuthAlert>{error}</AuthAlert>}
+            <Field label="Work email">
+              <Input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email" placeholder="you@company.com" />
+            </Field>
+            <Field label="Password">
+              <Input type="password" value={password} onChange={e => setPassword(e.target.value)} required autoComplete="current-password" placeholder="Your password" />
+            </Field>
+            <div className="flex justify-end text-[13px]">
+              <a href="/auth/forgot-password" className="text-accent font-semibold hover:underline">Forgot password?</a>
+            </div>
+            <button type="submit" disabled={loading} className={AUTH_PRIMARY}>
+              {loading ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white animate-spin rounded-full" />Signing in…</> : 'Sign in'}
+            </button>
+          </form>
 
-          {/* ── Credentials step ── */}
-          {step === 'credentials' && (
+          {activeSso.length > 0 && (
             <>
-              <div>
-                <h2 className="text-sm font-black text-ink tracking-[0.2em] uppercase mb-2">System Access Required</h2>
-                <p className="text-xs font-bold text-muted uppercase tracking-widest">Identity verification for HRMS personnel.</p>
+              <div className="flex items-center gap-3 text-[12.5px] text-faint">
+                <div className="flex-1 h-px bg-rule" />or<div className="flex-1 h-px bg-rule" />
               </div>
-
-              {/* SSO buttons */}
-              {activeSso.length > 0 && (
-                <div className="flex flex-col gap-3">
-                  {activeSso.map(p => (
-                    <button key={p.id} onClick={() => handleSso(p)}
-                      className="w-full flex items-center gap-3 px-5 py-3.5 bg-paper border border-rule text-xs font-black text-ink hover:border-accent hover:bg-page transition-all uppercase tracking-widest ">
-                      <span className="w-6 h-6 bg-page flex items-center justify-center text-[11px] font-black">{p.icon}</span>
-                      Continue with {p.name}
-                    </button>
-                  ))}
-                  {ssoError && <p className="text-[10px] font-bold text-ink bg-page border border-highlight px-4 py-3 ">{ssoError}</p>}
-                  <div className="flex items-center gap-3 py-1">
-                    <div className="flex-1 h-px bg-rule" />
-                    <span className="eyebrow-tight">or</span>
-                    <div className="flex-1 h-px bg-rule" />
-                  </div>
-                </div>
-              )}
-
-              <form onSubmit={handleLogin} className="space-y-5">
-                {error && (
-                  <div className="bg-ink border border-ink text-ink px-4 py-3 text-[11px] font-black uppercase tracking-widest">
-                    ERR: {error}
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-muted uppercase tracking-[0.2em] ml-1">Email</label>
-                  <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
-                    placeholder="e.g. admin@hrms.com"
-                    className="w-full border border-rule bg-paper px-5 py-4 text-xs font-bold text-ink focus:border-accent focus:ring-4 focus:ring-accent transition-all outline-none " />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between ml-1">
-                    <label className="text-[10px] font-black text-muted uppercase tracking-[0.2em]">Password</label>
-                    <a href="/auth/forgot-password" className="text-[10px] font-black text-accent hover:text-accent tracking-widest">Reset</a>
-                  </div>
-                  <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
-                    placeholder="••••••••"
-                    className="w-full border border-rule bg-paper px-5 py-4 text-xs font-bold text-ink focus:border-accent focus:ring-4 focus:ring-accent transition-all outline-none " />
-                </div>
-                <button type="submit" disabled={loading}
-                  className={`w-full flex justify-center py-5 px-4    text-[11px] font-black text-paper bg-accent hover:bg-accent transition-all uppercase tracking-[0.3em] active:scale-95 ${loading ? 'opacity-70 pointer-events-none' : ''}`}>
-                  {loading ? <><div className="w-3 h-3 border-2 border-paper/30 border-t-paper animate-spin mr-3 rounded-full" />Verifying…</> : 'Initialize Session'}
-                </button>
-              </form>
-              <p className="mt-6 text-center text-xs text-muted">
-                New company?{' '}
-                <a href="/register" className="font-semibold text-accent hover:underline">Register &amp; start a free trial</a>
-              </p>
+              <div className="flex flex-col sm:flex-row gap-2.5">
+                {activeSso.map(p => (
+                  <button key={p.id} type="button" onClick={() => handleSso(p)}
+                    className="flex-1 h-11 rounded-control border border-rule bg-paper text-sm font-semibold text-ink hover:bg-page flex items-center justify-center gap-2.5">
+                    <span className="w-[18px] h-[18px] rounded bg-pill border border-rule text-xs font-bold flex items-center justify-center">{p.icon}</span>
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+              {ssoError && <AuthAlert tone="warn">{ssoError}</AuthAlert>}
             </>
           )}
 
-          {/* ── MFA challenge (existing MFA users) ── */}
-          {step === 'mfa-challenge' && (
-            <>
-              <div>
-                <button onClick={() => { setStep('credentials'); setMfaCode(''); setError(''); }} className="eyebrow-tight hover:text-ink mb-4 flex items-center gap-1">← Back</button>
-                <div className="w-14 h-14 flex items-center justify-center text-2xl mb-4 bg-page border-2 border-accent">
-                  {mfaMethod === 'EMAIL_OTP' ? '📧' : '🔐'}
-                </div>
-                <h2 className="text-sm font-black text-ink tracking-[0.2em] uppercase mb-2">
-                  {mfaMethod === 'EMAIL_OTP' ? 'Check Your Email' : 'Two-Factor Required'}
-                </h2>
-                {mfaMethod === 'EMAIL_OTP' ? (
-                  <p className="text-xs font-bold text-muted uppercase tracking-widest">
-                    A 6-digit code was sent to <strong className="text-ink">{email}</strong>. Enter it below.
-                  </p>
-                ) : mfaMethod === 'EITHER' ? (
-                  <p className="text-xs font-bold text-muted uppercase tracking-widest">
-                    Enter the code from your authenticator app, or from your email at <strong className="text-ink">{email}</strong>.
-                  </p>
-                ) : (
-                  <p className="text-xs font-bold text-muted uppercase tracking-widest">
-                    Open your authenticator app and enter the 6-digit code for <strong className="text-ink">{email}</strong>.
-                  </p>
-                )}
-              </div>
+          <p className="text-[13.5px] text-muted text-center">
+            New company? <a href="/register" className="text-accent font-bold hover:underline">Start your free trial</a> — 14 days, no credit card.
+          </p>
+        </>
+      )}
 
-              <div className="space-y-5">
-                {error && <div className="bg-ink border border-ink text-ink px-4 py-3 text-[11px] font-black uppercase tracking-widest">ERR: {error}</div>}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between ml-1">
-                    <label className="text-[10px] font-black text-muted uppercase tracking-[0.2em]">
-                      {mfaMethod === 'EMAIL_OTP' ? 'Email Code' : 'Authenticator Code'}
-                    </label>
-                    {(mfaMethod === 'EMAIL_OTP' || mfaMethod === 'EITHER') && (
-                      <button
-                        onClick={handleResendOtp}
-                        disabled={resendCooldown > 0 || loading}
-                        className="text-[9px] font-black uppercase tracking-widest text-accent hover:text-accent disabled:text-muted disabled:pointer-events-none transition-colors"
-                      >
-                        {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
-                      </button>
-                    )}
-                  </div>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]{6}"
-                    maxLength={6}
-                    value={mfaCode}
-                    onChange={e => handleMfaCodeChange(e.target.value)}
-                    placeholder="000000"
-                    autoFocus
-                    disabled={loading}
-                    className={`w-full  border bg-paper px-5 py-4 text-2xl font-black text-ink tracking-[0.4em] text-center transition-all outline-none  disabled:opacity-60 ${
-                      mfaCode.length === 6 ? 'border-accent ring-4 ring-accent' : 'border-rule focus:border-accent focus:ring-4 focus:ring-accent'
-                    }`}
-                  />
-                  <p className="text-[9px] font-bold text-muted uppercase tracking-widest text-center">
-                    {loading ? 'Verifying…' : mfaCode.length === 6 ? 'Submitting…' : `${6 - mfaCode.length} digit${6 - mfaCode.length !== 1 ? 's' : ''} remaining`}
-                  </p>
-                </div>
-                {loading && (
-                  <div className="flex items-center justify-center gap-3 py-2">
-                    <div className="w-4 h-4 border-2 border-accent border-t-accent animate-spin rounded-full" />
-                    <span className="eyebrow-tight">Verifying…</span>
-                  </div>
-                )}
-              </div>
-            </>
+      {step === 'mfa-challenge' && (
+        <>
+          <button type="button" onClick={() => { setStep('credentials'); setMfaCode(''); setError(''); }} className="self-start inline-flex items-center gap-1 text-[13px] font-semibold text-muted hover:text-ink">
+            <Icon name="chevronRight" size={14} className="rotate-180" />Back to sign in
+          </button>
+          <AuthTitle
+            title={mfaMethod === 'EMAIL_OTP' ? 'Check your email' : 'Enter your code'}
+            sub={
+              mfaMethod === 'EMAIL_OTP' ? <>We sent a 6-digit code to <strong className="text-ink">{email}</strong>. Enter it below — it submits automatically.</>
+              : mfaMethod === 'EITHER' ? <>Enter the code from your authenticator app, or from the email we sent to <strong className="text-ink">{email}</strong>.</>
+              : <>Open your authenticator app and enter the 6-digit code for GaDongHR. It submits automatically.</>
+            }
+          />
+          {error && <AuthAlert>{error}</AuthAlert>}
+          <CodeInput value={mfaCode} onChange={handleMfaCodeChange} disabled={loading} label={mfaMethod === 'EMAIL_OTP' ? 'Email code' : 'Authenticator code'} />
+          {(email || ssoMfaPending) && (
+            <AuthAlert tone="info">{ssoMfaPending ? 'Signing in with single sign-on from a new browser.' : <>Signing in as <strong>{email}</strong> from a new browser.</>}</AuthAlert>
           )}
-
-          {/* ── MFA setup: scan + verify on one screen ── */}
-          {step === 'mfa-setup' && (
-            <>
-              <div>
-                <div className="w-14 h-14 bg-page border-2 border-highlight flex items-center justify-center text-2xl mb-4">🛡️</div>
-                <h2 className="text-sm font-black text-ink tracking-[0.2em] uppercase mb-2">Set Up Two-Factor Auth</h2>
-                <p className="text-xs font-bold text-muted uppercase tracking-widest">
-                  Scan with <strong className="text-ink">Microsoft Authenticator</strong>, Google Authenticator, Authy or any TOTP app — then enter the 6-digit code below.
-                </p>
-              </div>
-
-              {/* QR code card */}
-              <div className="flex flex-col items-center gap-3 p-6 bg-paper border border-rule ">
-                {qrCode
-                  ? <img src={qrCode} alt="MFA QR Code" className="w-44 h-44 " />
-                  : <div className="w-44 h-44 bg-page animate-pulse" />
-                }
-                <div className="text-center">
-                  <p className="label-form mb-1">Can&apos;t scan? Enter manually</p>
-                  <p className="text-[10px] font-mono font-black text-ink tracking-widest break-all select-all">{mfaSecret}</p>
-                </div>
-              </div>
-
-              {/* Instruction + auto-submit OTP input */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className={`w-5 h-5  flex items-center justify-center text-[9px] font-black transition-all ${qrScanned ? 'bg-accent text-paper' : 'bg-rule text-muted'}`}>
-                    {qrScanned ? '✓' : '1'}
-                  </div>
-                  <p className="text-[10px] font-black text-muted uppercase tracking-widest">Scan the QR code with your authenticator</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 bg-page text-accent flex items-center justify-center text-[9px] font-black">2</div>
-                  <p className="text-[10px] font-black text-muted uppercase tracking-widest">Enter the 6-digit code — auto-submits</p>
-                </div>
-              </div>
-
-              {error && (
-                <div className="bg-ink border border-ink text-ink px-4 py-3 text-[11px] font-black uppercase tracking-widest">
-                  ERR: {error}
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-muted uppercase tracking-[0.2em] ml-1">Authenticator Code</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  value={setupCode}
-                  onChange={e => { setQrScanned(true); handleSetupCodeChange(e.target.value); }}
-                  placeholder="000000"
-                  autoFocus
-                  disabled={loading}
-                  className={`w-full  border bg-paper px-5 py-4 text-2xl font-black text-ink tracking-[0.4em] text-center transition-all outline-none  disabled:opacity-60 ${
-                    setupCode.length === 6 ? 'border-accent ring-4 ring-accent' : 'border-rule focus:border-accent focus:ring-4 focus:ring-accent'
-                  }`}
-                />
-                <p className="text-[9px] font-bold text-muted uppercase tracking-widest text-center">
-                  {loading ? 'Verifying…' : setupCode.length === 6 ? 'Submitting…' : `${6 - setupCode.length} digit${6 - setupCode.length !== 1 ? 's' : ''} remaining`}
-                </p>
-              </div>
-
-              {loading && (
-                <div className="flex items-center justify-center gap-3 py-3">
-                  <div className="w-4 h-4 border-2 border-accent border-t-accent animate-spin rounded-full" />
-                  <span className="eyebrow-tight">Activating MFA…</span>
-                </div>
-              )}
-            </>
-          )}
-
-          <div className="text-center text-[9px] font-black text-muted uppercase tracking-[0.4em] opacity-40">
-            SECURE PORTAL ENTRY
+          <div className="flex items-center justify-between text-[13.5px]">
+            {(mfaMethod === 'EMAIL_OTP' || mfaMethod === 'EITHER') ? (
+              <button type="button" onClick={handleResendOtp} disabled={resendCooldown > 0 || loading} className="text-accent font-semibold hover:underline disabled:text-faint disabled:no-underline">
+                {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend code'}
+              </button>
+            ) : <span />}
+            <span className="text-muted">{loading ? 'Verifying…' : mfaCode.length === 6 ? 'Submitting…' : remaining(mfaCode)}</span>
           </div>
-        </div>
-      </div>
-    </div>
+        </>
+      )}
+
+      {step === 'mfa-setup' && (
+        <>
+          <AuthTitle
+            title="Set up two-factor authentication"
+            sub={<>Your company requires it. Scan the code with <strong className="text-ink">Microsoft Authenticator</strong>, Google Authenticator, Authy or any TOTP app, then enter the 6-digit code — it submits automatically.</>}
+          />
+          <div className="flex flex-col items-center gap-3 p-5 bg-paper border border-rule rounded-card">
+            {qrCode
+              ? <img src={qrCode} alt="QR code for your authenticator app" className="w-44 h-44 rounded-control" />
+              : <div className="w-44 h-44 bg-pill rounded-control animate-pulse" />
+            }
+            <div className="text-center">
+              <p className="text-xs text-muted inline-flex items-center gap-1.5">{qrScanned && <Icon name="check" size={13} className="text-ok" strokeWidth={2.5} />}Can&apos;t scan? Enter this key manually</p>
+              <p className="mt-1 text-[13px] font-mono font-semibold text-ink break-all select-all">{mfaSecret}</p>
+            </div>
+          </div>
+          {error && <AuthAlert>{error}</AuthAlert>}
+          <CodeInput value={setupCode} onChange={(v) => { setQrScanned(true); handleSetupCodeChange(v); }} disabled={loading} label="Authenticator code" />
+          <p className="text-[13px] text-muted text-center">{loading ? 'Activating two-factor…' : setupCode.length === 6 ? 'Submitting…' : remaining(setupCode)}</p>
+        </>
+      )}
+    </AuthSplit>
   );
 }
