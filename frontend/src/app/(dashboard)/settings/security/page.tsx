@@ -1,16 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { Badge, Button, Card, CardHeader, Field, Input, Select, Stat } from '@/components/ui';
+import { Avatar, Badge, Button, Card, CardHeader, Field, Input, Modal, Select, Stat, Textarea, useToast } from '@/components/ui';
 import { SectionHeader } from '../_components/SectionHeader';
 import { SettingRow } from '../_components/SettingRow';
 import { Toggle } from '../_components/Toggle';
-import { Toast } from '../_components/Toast';
 import { Notice } from '../_components/Notice';
-import { Dialog } from '../_components/Dialog';
-import { initialsOf } from '../_components/format';
 
 interface OrgUser { id: string; name: string; email: string; role: string; mfaEnabled: boolean; mfaExempt: boolean; isActive: boolean; }
 interface ResetMfaState { userId: string; step: 'confirm' | 'loading'; }
@@ -52,7 +49,6 @@ const SESSION_OPTS = [
   { label: 'Send login alerts', desc: 'Email notification on new device login', defaultOn: false },
 ] as const;
 
-const TEXTAREA = 'w-full rounded-control border border-rule bg-paper px-3 py-2.5 font-mono text-sm text-ink placeholder:text-faint outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:bg-pill disabled:text-muted resize-none';
 
 const spinner = (cls = 'h-4 w-4') => <svg className={`animate-spin rounded-full ${cls}`} fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>;
 
@@ -90,12 +86,12 @@ export default function SecurityPage() {
   });
 
   // UI
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const { toast } = useToast();
   const [saving, setSaving] = useState(false);
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3500);
+    // Same call shape as before; the shared toast (root layout) does the display and timing.
+    toast(msg, type === 'success' ? 'ok' : 'danger');
   };
 
   // Load persisted settings from localStorage + MFA method from API
@@ -159,6 +155,9 @@ export default function SecurityPage() {
       setDisablingMfa(null);
     }
   };
+
+  // Stable identity: Modal re-runs its focus effect whenever onClose changes.
+  const closeResetMfa = useCallback(() => setResetMfa(null), []);
 
   const handleResetMfa = (userId: string, mode: 'disable' | 'reset') => {
     setResetMfaMode(mode);
@@ -377,9 +376,7 @@ export default function SecurityPage() {
               const isBusy = disablingMfa === u.id || resetMfa?.userId === u.id;
               return (
                 <div key={u.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-rule py-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-tint text-xs font-bold text-accent">
-                    {initialsOf(u.name)}
-                  </div>
+                  <Avatar name={u.name} size={32} tone="soft" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-ink">{u.name}</p>
                     <p className="truncate text-[12.5px] text-muted">{u.email}</p>
@@ -547,13 +544,13 @@ export default function SecurityPage() {
         </div>
 
         <Field label="IP allow-list" help="One per line; CIDR supported. Leave blank to allow all. Applies to admin roles only." className="mt-4">
-          <textarea
+          <Textarea
             value={ipWhitelist}
             onChange={e => setIpWhitelist(e.target.value)}
             rows={4}
             disabled={!canEdit}
             placeholder={'e.g.\n203.0.113.0/24\n192.168.1.0/24'}
-            className={TEXTAREA}
+            className="resize-none font-mono"
           />
         </Field>
 
@@ -584,36 +581,37 @@ export default function SecurityPage() {
       </Card>
 
       {/* Disable / reset MFA confirmation */}
-      {resetMfa?.step === 'confirm' && (() => {
-        const u = users.find(x => x.id === resetMfa.userId);
+      {(() => {
+        const u = users.find(x => x.id === resetMfa?.userId);
         const isReset = resetMfaMode === 'reset';
         return (
-          <Dialog
+          <Modal
+            open={resetMfa?.step === 'confirm'}
             title={isReset ? 'Reset MFA' : 'Disable MFA'}
             caption={isReset ? 'Wipes the authenticator; they must enrol again.' : 'Turns MFA off; the secret is kept.'}
-            onClose={() => setResetMfa(null)}
+            onClose={closeResetMfa}
             footer={
               <>
-                <Button variant="secondary" onClick={() => setResetMfa(null)}>Cancel</Button>
+                <Button variant="secondary" onClick={closeResetMfa}>Cancel</Button>
                 <Button variant={isReset ? 'danger' : 'primary'} onClick={confirmResetMfa}>
                   Confirm {isReset ? 'reset' : 'disable'}
                 </Button>
               </>
             }
           >
-            <p className="text-sm text-ink">
-              {isReset ? 'Reset' : 'Disable'} MFA for <strong className="font-semibold">{u?.name}</strong>?
-            </p>
-            <p className="text-[13px] text-muted">
-              {isReset
-                ? 'Their authenticator app entry will be unlinked. They must scan a new QR code to re-enroll.'
-                : 'MFA will be turned off but their authenticator app stays linked. An admin can re-enable it without a new QR scan.'}
-            </p>
-          </Dialog>
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-ink">
+                {isReset ? 'Reset' : 'Disable'} MFA for <strong className="font-semibold">{u?.name}</strong>?
+              </p>
+              <p className="text-[13px] text-muted">
+                {isReset
+                  ? 'Their authenticator app entry will be unlinked. They must scan a new QR code to re-enroll.'
+                  : 'MFA will be turned off but their authenticator app stays linked. An admin can re-enable it without a new QR scan.'}
+              </p>
+            </div>
+          </Modal>
         );
       })()}
-
-      <Toast toast={toast} />
     </>
   );
 }

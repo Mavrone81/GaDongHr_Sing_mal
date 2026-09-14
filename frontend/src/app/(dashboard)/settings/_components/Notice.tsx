@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react';
 import { Icon, type IconName } from '@/components/ui';
 
-type Tone = 'ok' | 'danger' | 'warn' | 'info';
+export type NoticeTone = 'ok' | 'danger' | 'warn' | 'info';
+/** A form's result line: tone carried explicitly, never inferred from a glyph. */
+export type NoticeMsg = { tone: NoticeTone; text: string } | null;
 
-const LOOK: Record<Tone, { icon: IconName; colour: string }> = {
+const LOOK: Record<NoticeTone, { icon: IconName; colour: string }> = {
   ok: { icon: 'check', colour: 'text-ok' },
   danger: { icon: 'alert', colour: 'text-danger' },
   warn: { icon: 'alert', colour: 'text-warn' },
@@ -11,25 +13,19 @@ const LOOK: Record<Tone, { icon: IconName; colour: string }> = {
 };
 
 /**
- * Inline result / warning line for settings forms.
- *
- * The page handlers build their messages with a leading "✓" or "✗" and style
- * off `startsWith('✓')`. That logic stays untouched; this strips the glyph for
- * display and shows the matching icon instead (no dingbats on screen), so the
- * tone is carried by icon + wording, never colour alone.
+ * Inline result / warning line inside a settings card or drawer (the kit's
+ * toast is for transient feedback; this stays next to the form it explains).
+ * Icon + wording carry the tone, never colour alone.
  */
-export function Notice({ tone, children, className = '' }: { tone?: Tone; children: ReactNode; className?: string }) {
-  const text = typeof children === 'string' ? children.replace(/^[✓✗]\s*/, '') : children;
-  const inferred: Tone = tone ?? (typeof children === 'string' && children.startsWith('✓') ? 'ok'
-    : typeof children === 'string' && children.startsWith('✗') ? 'danger' : 'info');
-  const look = LOOK[inferred];
+export function Notice({ tone = 'info', children, className = '' }: { tone?: NoticeTone; children: ReactNode; className?: string }) {
+  const look = LOOK[tone];
   return (
     <div
-      role={inferred === 'danger' ? 'alert' : 'status'}
+      role={tone === 'danger' ? 'alert' : 'status'}
       className={`flex items-start gap-2.5 rounded-control border border-rule bg-page px-3.5 py-2.5 text-[13px] text-ink ${className}`}
     >
       <Icon name={look.icon} size={16} strokeWidth={2} className={`mt-px ${look.colour}`} />
-      <div className="min-w-0">{text}</div>
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }

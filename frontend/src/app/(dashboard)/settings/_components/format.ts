@@ -17,8 +17,3 @@ export function sentenceCase(id: string): string {
     })
     .join(' ');
 }
-
-/** Two-letter avatar initials from a display name. */
-export function initialsOf(name: string): string {
-  return String(name ?? '').split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
-}

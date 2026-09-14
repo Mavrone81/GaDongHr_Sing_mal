@@ -34,7 +34,7 @@ const FALLBACK_PLANS = [
   },
 ];
 
-/** Subscription status → badge tone. Trials are brass (the plan colour), not green. */
+/** Subscription status → pill colour. Trials are brass (the plan colour), not green. */
 const SUB_STATUS_TONE: Record<string, 'ok' | 'brass' | 'warn' | 'danger' | 'neutral'> = {
   ACTIVE: 'ok',
   TRIALING: 'brass',

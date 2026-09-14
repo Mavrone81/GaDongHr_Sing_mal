@@ -40,7 +40,7 @@ interface PayrollAuditLog {
 type Source = 'employee' | 'payroll';
 type Tone = 'ok' | 'accent' | 'danger' | 'warn' | 'neutral';
 
-// ── Event label + badge tone ──────────────────────────────────────────────────
+// ── Event label + pill colour ─────────────────────────────────────────────────
 const EMP_ACTION_META: Record<string, { label: string; tone: Tone }> = {
   CREATE:         { label: 'Created',        tone: 'ok' },
   UPDATE:         { label: 'Updated',        tone: 'accent' },
@@ -557,7 +557,7 @@ export default function AuditPage() {
                     if (pg < 1 || pg > pages) return null;
                     return (
                       <button key={pg} type="button" onClick={() => setPage(pg)} aria-current={pg === page ? 'page' : undefined}
-                        className={`h-8 min-w-[2rem] rounded-control px-2 text-[13px] font-semibold tabular-nums transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${pg === page ? 'bg-accent text-white' : 'text-muted hover:bg-pill hover:text-ink'}`}>
+                        className={`h-8 min-w-[2rem] rounded-control px-2 text-[13px] font-semibold tabular-nums transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${pg === page ? 'bg-accent text-on-accent' :'text-muted hover:bg-pill hover:text-ink'}`}>
                         {pg}
                       </button>
                     );
