@@ -3,9 +3,11 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
+import { PageHeader, Card, CardHeader, Stat, Badge, Icon, EmptyState, type BadgeTone, type IconName } from '@/components/ui';
 
 /* ─────────────────────────────────────────────────────────────────────
-   GaDongHR Command Centre — HR / Payroll management dashboard.
+   GaDongHR home for HR / payroll roles.
    Every figure on this dashboard is sourced from a live service endpoint:
      • headcount / new hires / departments  → /employees
      • payroll total + run status           → /payroll/runs
@@ -29,7 +31,7 @@ function Donut({
   const c = 2 * Math.PI * r;
   let offset = 0;
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
+    <div className="relative shrink-0" style={{ width: size, height: size }} role="img" aria-label={segments.map((s) => `${s.label} ${Math.round((s.value / total) * 100)}%`).join(', ')}>
       <svg width={size} height={size} className="-rotate-90">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--rule)" strokeWidth={thickness} />
         {segments.map((seg, i) => {
@@ -51,8 +53,8 @@ function Donut({
       </svg>
       {(centerLabel || centerSub) && (
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          {centerLabel && <span className="text-xl font-black text-ink tracking-tighter leading-none">{centerLabel}</span>}
-          {centerSub && <span className="text-[8px] font-black text-muted uppercase tracking-widest mt-1">{centerSub}</span>}
+          {centerLabel && <span className="text-[22px] font-extrabold text-ink tracking-[-0.02em] leading-none tabular-nums">{centerLabel}</span>}
+          {centerSub && <span className="text-xs text-muted mt-1">{centerSub}</span>}
         </div>
       )}
     </div>
@@ -62,77 +64,20 @@ function Donut({
 function Legend({ segments }: { segments: { label: string; value: number; color: string }[] }) {
   const total = segments.reduce((s, x) => s + x.value, 0) || 1;
   return (
-    <div className="flex flex-col gap-2.5 flex-1 min-w-0">
+    <ul className="flex flex-col gap-2 flex-1 min-w-0">
       {segments.map((seg) => (
-        <div key={seg.label} className="flex items-center gap-2.5">
-          <span className="w-2.5 h-2.5 shrink-0" style={{ background: seg.color }} />
-          <span className="text-[10px] font-bold text-ink truncate flex-1">{seg.label}</span>
-          <span className="text-[10px] font-black text-ink">{Math.round((seg.value / total) * 100)}%</span>
-        </div>
+        <li key={seg.label} className="flex items-center gap-2.5 text-[13px]">
+          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: seg.color }} aria-hidden="true" />
+          <span className="text-ink truncate flex-1">{seg.label}</span>
+          <span className="text-muted tabular-nums">{Math.round((seg.value / total) * 100)}%</span>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 
-function EmptyState({ label }: { label: string }) {
-  return (
-    <div className="flex items-center justify-center py-10">
-      <p className="text-[9px] font-black text-muted uppercase tracking-widest text-center">{label}</p>
-    </div>
-  );
-}
-
-// ─── Glance tile ───────────────────────────────────────────────────────────────
-function GlanceTile({
-  icon, label, value, sub, accent, href, loading,
-}: {
-  icon: string; label: string; value: string; sub?: string;
-  accent: 'navy' | 'gold' | 'emerald' | 'amber'; href?: string; loading?: boolean;
-}) {
-  const ring: Record<string, string> = {
-    navy: 'bg-page text-accent', gold: 'bg-page text-highlight',
-    emerald: 'bg-page text-accent', amber: 'bg-page text-ink',
-  };
-  const subColor: Record<string, string> = {
-    navy: 'text-accent', gold: 'text-highlight', emerald: 'text-accent', amber: 'text-ink',
-  };
-  const Wrapper = href ? Link : 'div';
-  return (
-    <Wrapper href={href as string} className="bg-paper border border-rule p-5 flex flex-col gap-3 group hover:border-highlight transition-all">
-      <div className="flex items-center justify-between">
-        <div className={`w-9 h-9  flex items-center justify-center text-base ${ring[accent]}`}>{icon}</div>
-        <span className="text-[8px] font-black text-muted uppercase tracking-[0.2em]">{label}</span>
-      </div>
-      {loading ? (
-        <div className="h-8 w-16 bg-page animate-pulse" />
-      ) : (
-        <h3 className="text-3xl font-black text-ink tracking-tighter leading-none">{value}</h3>
-      )}
-      {sub && <p className={`text-[8px] font-black uppercase tracking-widest ${subColor[accent]}`}>{sub}</p>}
-    </Wrapper>
-  );
-}
-
-// ─── Section Header ───────────────────────────────────────────────────────────
-function SectionHeader({ title, badge, href, color = 'navy' }: { title: string; badge?: string; href?: string; color?: string }) {
-  const colorMap: Record<string, string> = {
-    navy: 'bg-accent', gold: 'bg-highlight', emerald: 'bg-accent',
-    amber: 'bg-highlight', red: 'bg-ink', slate: 'bg-muted',
-  };
-  return (
-    <div className="flex items-center justify-between mb-6">
-      <div className="flex items-center gap-4">
-        <div className={`w-1.5 h-8 ${colorMap[color] ?? colorMap.navy} `}></div>
-        <h3 className="text-[11px] font-black text-ink uppercase tracking-[0.25em]">{title}</h3>
-        {badge && <span className="text-[8px] font-black px-2.5 py-1 bg-page border border-highlight text-highlight uppercase tracking-widest">{badge}</span>}
-      </div>
-      {href && (
-        <Link href={href} className="label-form hover:text-highlight transition-colors flex items-center gap-2">
-          View All <span>→</span>
-        </Link>
-      )}
-    </div>
-  );
+function Skeleton({ className = '' }: { className?: string }) {
+  return <div className={`bg-pill rounded-control animate-pulse ${className}`} aria-hidden="true" />;
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -154,15 +99,12 @@ interface DashboardStats {
 let _statsCache: { data: DashboardStats; ts: number } | null = null;
 const CACHE_TTL = 5 * 60 * 1000;
 
-const SGD = (n: number) => 'SGD ' + n.toLocaleString('en-SG', { maximumFractionDigits: 0 });
+const SGD = (n: number) => 'S$' + n.toLocaleString('en-SG', { maximumFractionDigits: 0 });
 const titleCase = (s: string) =>
-  s.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
+  s.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (m) => m.toUpperCase());
 
-// Donut palette (navy → gold → neutrals)
-// Donut series from the tokens. These were frozen hexes from the retired 2026
-// navy/gold palette, so the chart kept rendering the old brand on a converted
-// page — and being SVG fills, no class-based check could see them. Colour-mix
-// gives the intermediate steps a six-series chart needs from three tokens.
+// Donut series from the tokens; colour-mix gives the intermediate steps a
+// six-series chart needs from three tokens.
 const DONUT = [
   'var(--accent)',
   'var(--highlight)',
@@ -172,17 +114,25 @@ const DONUT = [
   'var(--rule)',
 ];
 
-// Map a real IRAS submission status to a badge tone
-function irasTone(status: string, urgency: string) {
-  if (status === 'ACKNOWLEDGED') return { dot: 'bg-accent', txt: 'text-accent', label: 'Acknowledged' };
-  if (status === 'REJECTED')     return { dot: 'bg-ink',     txt: 'text-ink',     label: 'Rejected' };
-  if (urgency === 'OVERDUE')     return { dot: 'bg-ink',     txt: 'text-ink',     label: 'Overdue' };
-  if (status === 'SUBMITTED')    return { dot: 'bg-accent',  txt: 'text-accent',  label: 'Submitted' };
-  if (urgency === 'DUE_SOON')    return { dot: 'bg-highlight',   txt: 'text-ink',   label: 'Due soon' };
-  return { dot: 'bg-muted', txt: 'text-muted', label: titleCase(status || 'Draft') };
+// Map a real IRAS submission status to a Badge tone
+function irasTone(status: string, urgency: string): { tone: BadgeTone; label: string } {
+  if (status === 'ACKNOWLEDGED') return { tone: 'ok', label: 'Acknowledged' };
+  if (status === 'REJECTED')     return { tone: 'danger', label: 'Rejected' };
+  if (urgency === 'OVERDUE')     return { tone: 'danger', label: 'Overdue' };
+  if (status === 'SUBMITTED')    return { tone: 'accent', label: 'Submitted' };
+  if (urgency === 'DUE_SOON')    return { tone: 'warn', label: 'Due soon' };
+  return { tone: 'neutral', label: titleCase(status || 'Draft') };
+}
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
 }
 
 export default function ManagementDashboard() {
+  const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -293,268 +243,169 @@ export default function ManagementDashboard() {
     load();
   }, []);
 
+  const monthLabel = new Date().toLocaleString('en-SG', { month: 'long' });
   const payrollBadge = stats?.latestPayrollRun?.period
     ? stats.latestPayrollRun.period
     : new Date().toLocaleString('default', { month: 'short', year: 'numeric' });
 
   const payrollStatus = stats?.latestPayrollRun?.status ?? 'N/A';
   const payrollStatusLabel =
-    payrollStatus === 'PENDING' ? 'Pending Approval' :
+    payrollStatus === 'PENDING' ? 'Pending approval' :
     payrollStatus === 'APPROVED' ? 'Approved' :
     payrollStatus === 'FINALISED' ? 'Finalised' :
-    payrollStatus === 'DRAFT' ? 'Draft' : payrollStatus;
+    payrollStatus === 'DRAFT' ? 'Draft' : titleCase(payrollStatus);
   const payrollProcessed = payrollStatus === 'FINALISED' || payrollStatus === 'APPROVED';
+  const payrollOpen = payrollStatus === 'PENDING' || payrollStatus === 'DRAFT';
 
   const deptSegments = (stats?.departments ?? []).map((d, i) => ({ label: d.label, value: d.count, color: DONUT[i % DONUT.length] }));
   const leaveSegments = (stats?.leaveByType ?? []).map((d, i) => ({ label: d.label, value: d.count, color: DONUT[i % DONUT.length] }));
   const leaveTotal = leaveSegments.reduce((s, x) => s + x.value, 0);
 
-  const pendingApprovals = (stats?.pendingLeave ?? 0) + (stats?.pendingClaims ?? 0);
-
-  // Action items — only real signals (omit a row when its source is unavailable)
-  const actionItems = [
-    { label: 'Pending Approvals', count: pendingApprovals, path: '/leave', accent: true, show: true },
-    { label: 'Statutory Filings Due', count: stats?.irasDueCount ?? 0, path: '/payroll/iras-submissions', accent: false, show: stats?.irasDueCount != null },
-    { label: 'Documents Overdue', count: stats?.docsOverdue ?? 0, path: '/documents', accent: false, show: stats?.docsOverdue != null },
-  ].filter((i) => i.show);
-
-  // Command queue — derived purely from live signals
+  // Needs your attention — derived purely from live signals
   const queue = [
-    payrollStatus === 'PENDING' || payrollStatus === 'DRAFT'
-      ? { title: `Payroll Auth — ${payrollBadge}`, sub: 'Checker approval required', path: '/payroll', urgent: true, icon: '◆' } : null,
+    payrollOpen
+      ? { title: `${payrollBadge} payroll needs approval`, sub: 'Checker approval before the GIRO file', path: '/payroll', urgent: true, icon: 'wallet' as IconName } : null,
     (stats?.pendingLeave ?? 0) > 0
-      ? { title: `Leave Approvals (${stats?.pendingLeave})`, sub: 'L1 / L2 pending', path: '/leave/registry', urgent: false, icon: '◌' } : null,
+      ? { title: `${stats?.pendingLeave} leave request${stats?.pendingLeave === 1 ? '' : 's'}`, sub: 'Awaiting approval', path: '/leave/registry', urgent: false, icon: 'calendar' as IconName } : null,
     (stats?.pendingClaims ?? 0) > 0
-      ? { title: `Claims Review (${stats?.pendingClaims})`, sub: 'Finance: L2 pending', path: '/claims/registry', urgent: false, icon: '◫' } : null,
+      ? { title: `${stats?.pendingClaims} claim${stats?.pendingClaims === 1 ? '' : 's'} to review`, sub: 'Submitted, not yet approved', path: '/claims/registry', urgent: false, icon: 'receipt' as IconName } : null,
     (stats?.irasDueCount ?? 0) > 0
-      ? { title: `Statutory Filings (${stats?.irasDueCount})`, sub: 'CPF / IRAS deadlines', path: '/payroll/iras-submissions', urgent: true, icon: '◉' } : null,
+      ? { title: `${stats?.irasDueCount} statutory filing${stats?.irasDueCount === 1 ? '' : 's'} due`, sub: 'CPF / IRAS within 60 days', path: '/payroll/iras-submissions', urgent: true, icon: 'alert' as IconName } : null,
     (stats?.docsOverdue ?? 0) > 0
-      ? { title: `Documents Overdue (${stats?.docsOverdue})`, sub: 'e-Sign past due', path: '/documents', urgent: false, icon: '◭' } : null,
-  ].filter(Boolean) as { title: string; sub: string; path: string; urgent: boolean; icon: string }[];
+      ? { title: `${stats?.docsOverdue} document${stats?.docsOverdue === 1 ? '' : 's'} overdue`, sub: 'e-sign requests past due', path: '/documents', urgent: false, icon: 'file' as IconName } : null,
+  ].filter(Boolean) as { title: string; sub: string; path: string; urgent: boolean; icon: IconName }[];
+
+  const firstName = user?.name?.split(' ')[0];
 
   return (
-    <div className="flex flex-col gap-8 pb-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="flex flex-col gap-5 pb-8">
+      <PageHeader
+        title={firstName ? `${greeting()}, ${firstName}` : greeting()}
+        subtitle={`Here is where ${monthLabel} payroll and your approvals stand.`}
+        actions={
+          <>
+            <Link href="/employees" className="inline-flex items-center gap-2 h-10 px-4 rounded-control border border-rule bg-paper text-sm font-semibold text-ink hover:bg-pill"><Icon name="plus" size={16} strokeWidth={2} />Add employee</Link>
+            <Link href="/payroll" className="inline-flex items-center gap-2 h-10 px-4 rounded-control border border-accent bg-accent text-sm font-semibold text-on-accent hover:opacity-95">{payrollOpen ? `Continue ${payrollBadge} payroll` : 'Open payroll'}<Icon name="arrowRight" size={16} strokeWidth={2} /></Link>
+          </>
+        }
+      />
 
-      {/* ── ROW 1: Workforce at a glance ──────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <GlanceTile
-          icon="◈" label="Headcount" accent="navy" href="/employees" loading={loading}
-          value={loading ? '—' : String(stats?.activeEmployees ?? 0)}
-          sub={!loading && stats ? `↑ ${stats.newThisMonth} new this month` : 'Active employees'}
+      {/* KPIs */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <Stat label="Headcount" value={loading ? <Skeleton className="h-8 w-16" /> : String(stats?.activeEmployees ?? 0)} note={loading ? '' : `${stats?.newThisMonth ?? 0} joined this month`} />
+        <Stat
+          label={`${payrollBadge} payroll`}
+          value={loading ? <Skeleton className="h-8 w-28" /> : stats?.latestPayrollRun?.amount != null ? SGD(stats.latestPayrollRun.amount) : (stats?.latestPayrollRun ? payrollStatusLabel : '—')}
+          note={loading ? '' : stats?.latestPayrollRun ? <Badge tone={payrollProcessed ? 'ok' : payrollOpen ? 'warn' : 'neutral'}>{payrollStatusLabel}</Badge> : 'No payroll run yet'}
         />
-        <GlanceTile
-          icon="◇" label="New Hires" accent="gold" href="/employees" loading={loading}
-          value={loading ? '—' : String(stats?.newThisMonth ?? 0)}
-          sub="Joined this month"
-        />
-        <GlanceTile
-          icon="◉" label="Departments" accent="emerald" href="/employees" loading={loading}
-          value={loading ? '—' : String(stats?.departments?.length ?? 0)}
-          sub="Active units"
-        />
-        <GlanceTile
-          icon="✓" label="Statutory" accent="amber" href="/payroll/iras-submissions" loading={loading}
-          value={loading ? '—' : String(stats?.irasDueCount ?? '—')}
-          sub={stats?.irasDueCount != null ? 'Filings due (60 days)' : 'No access'}
-        />
+        <Stat label="Leave requests" value={loading ? <Skeleton className="h-8 w-10" /> : String(stats?.pendingLeave ?? 0)} note={loading ? '' : 'awaiting your approval'} />
+        <Stat label="Claims" value={loading ? <Skeleton className="h-8 w-10" /> : String(stats?.pendingClaims ?? 0)} note={loading ? '' : 'submitted, awaiting review'} />
       </div>
 
-      {/* ── ROW 2: Payroll Summary · Leave Overview · Action Items ─────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
-
-        {/* Payroll Summary */}
-        <div className="bg-paper border border-rule p-6 lg:p-8 flex flex-col">
-          <SectionHeader title="Payroll Summary" badge={payrollBadge} href="/payroll" color="navy" />
-          <div className="flex-1 flex flex-col justify-center">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        {/* Left 2/3 */}
+        <div className="xl:col-span-2 flex flex-col gap-4 min-w-0">
+          <Card padding="px-[22px] pt-5 pb-1.5">
+            <CardHeader title="Statutory deadlines" caption="Latest submission per filing, from IRAS and CPF records." action={<Link href="/payroll/iras-submissions" className="hover:underline">View all</Link>} />
             {loading ? (
-              <div className="h-9 w-40 bg-page animate-pulse" />
-            ) : (
-              <h3 className="text-3xl font-black text-ink tracking-tighter leading-none">
-                {stats?.latestPayrollRun?.amount != null ? SGD(stats.latestPayrollRun.amount) : payrollBadge}
-              </h3>
-            )}
-            <p className="text-[9px] font-black text-muted uppercase tracking-widest mt-3">
-              {stats?.latestPayrollRun ? 'Latest run' : 'No payroll run yet'}
-            </p>
-            {!loading && stats?.latestPayrollRun && (
-              <div className="mt-5 flex items-center gap-2">
-                <span className={`badge ${payrollProcessed ? 'badge-success' : 'badge-warning'}`}>
-                  {payrollProcessed ? `✓ ${payrollStatusLabel}` : payrollStatusLabel}
-                </span>
-              </div>
-            )}
-          </div>
-          <Link href="/payroll" className="mt-6 block w-full py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95 text-center">
-            ⚡ Review &amp; Authorise
-          </Link>
-        </div>
-
-        {/* Leave Overview donut */}
-        <div className="bg-paper border border-rule p-6 lg:p-8">
-          <SectionHeader title="Leave Overview" href="/leave/registry" color="gold" />
-          {loading ? (
-            <div className="h-[132px] flex items-center justify-center">
-              <div className="w-[132px] h-[132px] border-[16px] border-rule animate-pulse" />
-            </div>
-          ) : leaveSegments.length ? (
-            <div className="flex items-center gap-6">
-              <Donut segments={leaveSegments} centerLabel={String(leaveTotal)} centerSub="Requests" />
-              <Legend segments={leaveSegments} />
-            </div>
-          ) : (
-            <EmptyState label="No leave records" />
-          )}
-        </div>
-
-        {/* Action Items */}
-        <div className="bg-paper border border-rule p-6 lg:p-8">
-          <SectionHeader title="Action Items" color="amber" />
-          <div className="space-y-3">
-            {actionItems.map((it) => (
-              <Link key={it.label} href={it.path} className="flex items-center justify-between p-4 border bg-page border-rule hover:border-highlight hover:bg-page/40 transition-all group">
-                <span className="text-[10px] font-bold text-ink group-hover:text-ink truncate">{it.label}</span>
-                <span className={`text-[10px] font-black px-2.5 py-1  border ${it.accent ? 'bg-page text-highlight border-highlight' : 'bg-paper text-muted border-rule'}`}>
-                  {loading ? '…' : String(it.count).padStart(2, '0')}
-                </span>
-              </Link>
-            ))}
-            {!loading && actionItems.length === 0 && <EmptyState label="Nothing requires attention" />}
-          </div>
-        </div>
-      </div>
-
-      {/* ── ROW 3: Statutory Compliance + Department Load ──────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
-
-        {/* Statutory Compliance — real IRAS/CPF submission status by kind */}
-        <div className="xl:col-span-2 bg-paper border border-rule overflow-hidden">
-          <div className="p-4 sm:p-6 lg:p-8 border-b border-rule">
-            <SectionHeader title="Statutory Compliance" badge={payrollBadge} href="/payroll/iras-submissions" color="navy" />
-          </div>
-          <div className="p-4 sm:p-6 lg:p-8">
-            {loading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {[1, 2, 3, 4].map((i) => <div key={i} className="h-14 bg-page animate-pulse" />)}
-              </div>
+              <div className="flex flex-col gap-3 pb-4">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-10" />)}</div>
             ) : (stats?.iras?.length ?? 0) > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <ul>
                 {stats!.iras.map((it) => {
-                  const tone = irasTone(it.status, it.urgency);
+                  const t = irasTone(it.status, it.urgency);
+                  const days = it.daysUntilDeadline;
                   return (
-                    <div key={it.kind} className="flex items-center justify-between p-4 bg-page border border-rule">
+                    <li key={it.kind} className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-4 items-center py-3 border-t border-rule">
                       <div className="min-w-0">
-                        <span className="text-[10px] font-bold text-ink block truncate">{titleCase(it.kind)}</span>
-                        {it.daysUntilDeadline != null && (
-                          <span className="text-[8px] font-black text-muted uppercase tracking-widest">
-                            {it.daysUntilDeadline < 0 ? `${Math.abs(it.daysUntilDeadline)}d overdue` : `T-${it.daysUntilDeadline} days`}
-                          </span>
-                        )}
+                        <div className="text-sm font-semibold text-ink truncate">{titleCase(it.kind)}</div>
+                        <div className="text-[13px] text-muted">{days == null ? 'No deadline on record' : days < 0 ? `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue` : days === 0 ? 'Due today' : `Due in ${days} day${days === 1 ? '' : 's'}`}</div>
                       </div>
-                      <span className="flex items-center gap-2 shrink-0">
-                        <span className={`w-1.5 h-1.5  ${tone.dot}`} />
-                        <span className={`text-[9px] font-black uppercase tracking-widest ${tone.txt}`}>{tone.label}</span>
-                      </span>
-                    </div>
+                      <Badge tone={t.tone}>{t.label}</Badge>
+                      <Link href="/payroll/iras-submissions" className="text-muted hover:text-ink" aria-label={`Open ${titleCase(it.kind)}`}><Icon name="chevronRight" size={16} /></Link>
+                    </li>
                   );
                 })}
+              </ul>
+            ) : (
+              <EmptyState icon="shield" title="No statutory submissions on record" description="Filings appear here once a payroll run has been finalised." className="py-8" />
+            )}
+          </Card>
+
+          <Card>
+            <CardHeader title={`${payrollBadge} payroll`} action={<Link href="/payroll" className="hover:underline">Open</Link>} />
+            {loading ? (
+              <Skeleton className="h-10 w-48" />
+            ) : stats?.latestPayrollRun ? (
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                <div>
+                  <div className="text-[26px] font-extrabold tracking-[-0.02em] leading-none text-ink tabular-nums">{stats.latestPayrollRun.amount != null ? SGD(stats.latestPayrollRun.amount) : payrollBadge}</div>
+                  <div className="text-[13px] text-muted mt-1.5">{stats.latestPayrollRun.amount != null ? 'Latest run total' : 'Latest run'}</div>
+                </div>
+                <Badge tone={payrollProcessed ? 'ok' : payrollOpen ? 'warn' : 'neutral'}>{payrollStatusLabel}</Badge>
+                <p className="w-full text-[13px] text-muted">{payrollOpen ? 'Needs a second approver before the GIRO file is generated.' : payrollProcessed ? 'Approved. Payslips and statutory files can be issued from the payroll page.' : ''}</p>
               </div>
             ) : (
-              <EmptyState label="No statutory submissions on record" />
+              <EmptyState icon="wallet" title="No payroll run yet" description="Start the first run from the payroll page." className="py-6" />
             )}
-          </div>
-          <div className="px-8 pb-8 flex gap-4">
-            <Link href="/payroll" className="flex-1 py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95 text-center">
-              ⚡ Review &amp; Authorise Payroll
-            </Link>
-            <Link href="/payroll/iras-submissions" className="px-6 py-3 bg-paper border border-rule text-[10px] font-black text-muted uppercase tracking-widest hover:border-highlight hover:text-highlight transition-all">
-              Submissions
-            </Link>
+          </Card>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader title="Leave overview" caption="Applications by type" action={<Link href="/leave/registry" className="hover:underline">Registry</Link>} />
+              {loading ? <Skeleton className="h-[132px]" /> : leaveSegments.length ? (
+                <div className="flex items-center gap-5"><Donut segments={leaveSegments} centerLabel={String(leaveTotal)} centerSub="requests" /><Legend segments={leaveSegments} /></div>
+              ) : <EmptyState icon="calendar" title="No leave records" className="py-6" />}
+            </Card>
+            <Card>
+              <CardHeader title="Department load" caption="Active employees by department" action={<Link href="/employees" className="hover:underline">Employees</Link>} />
+              {loading ? <Skeleton className="h-[132px]" /> : deptSegments.length ? (
+                <div className="flex items-center gap-5"><Donut segments={deptSegments} centerLabel={String(stats?.activeEmployees ?? 0)} centerSub="staff" /><Legend segments={deptSegments} /></div>
+              ) : <EmptyState icon="users" title="No department data" className="py-6" />}
+            </Card>
           </div>
         </div>
 
-        {/* Department Load donut (real) */}
-        <div className="bg-paper border border-rule p-6 lg:p-8">
-          <SectionHeader title="Department Load" href="/employees" color="slate" />
-          {loading ? (
-            <div className="h-[132px] flex items-center justify-center">
-              <div className="w-[132px] h-[132px] border-[16px] border-rule animate-pulse" />
-            </div>
-          ) : deptSegments.length ? (
-            <div className="flex items-center gap-6">
-              <Donut segments={deptSegments} centerLabel={String(stats?.activeEmployees ?? 0)} centerSub="Staff" />
-              <Legend segments={deptSegments} />
-            </div>
-          ) : (
-            <EmptyState label="No department data" />
-          )}
-        </div>
-      </div>
+        {/* Right 1/3 */}
+        <div className="flex flex-col gap-4 min-w-0">
+          <Card padding="px-[22px] pt-5 pb-2">
+            <CardHeader title="Needs your attention" />
+            {loading ? (
+              <div className="flex flex-col gap-3 pb-4">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12" />)}</div>
+            ) : queue.length === 0 ? (
+              <EmptyState icon="check" title="Nothing needs you right now" className="py-6" />
+            ) : (
+              <ul>
+                {queue.map((task) => (
+                  <li key={task.path + task.title} className="border-t border-rule">
+                    <Link href={task.path} className="flex items-center gap-3 py-[11px] -mx-2 px-2 rounded-control hover:bg-page">
+                      <span className={`flex items-center justify-center w-[34px] h-[34px] rounded-control shrink-0 ${task.urgent ? 'bg-warn-bg text-warn' : 'bg-pill text-accent'}`}><Icon name={task.icon} size={17} /></span>
+                      <span className="flex flex-col gap-0.5 flex-1 min-w-0">
+                        <span className="text-sm font-semibold text-ink truncate">{task.title}</span>
+                        <span className="text-[12.5px] text-muted truncate">{task.sub}</span>
+                      </span>
+                      <Icon name="chevronRight" size={16} className="text-faint" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
 
-      {/* ── ROW 4: Command Queue (live signals only) ──────────────────────── */}
-      {(loading || queue.length > 0) && (
-        <div className="bg-paper border border-rule p-6 lg:p-8">
-          <SectionHeader title="Command Queue" badge="Actions Due" color="amber" />
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 bg-page animate-pulse" />)}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {queue.map((task, i) => (
-                <Link
-                  key={i}
-                  href={task.path}
-                  className={`flex items-center gap-4 p-4  border transition-all group ${
-                    task.urgent ? 'bg-page/50 border-highlight hover:bg-page' : 'bg-page border-rule hover:bg-page'
-                  }`}
-                >
-                  <span className={`text-lg ${task.urgent ? 'text-highlight' : 'text-muted'}`}>{task.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-black text-ink uppercase tracking-tight truncate">{task.title}</p>
-                    <p className={`text-[9px] font-black mt-1 uppercase tracking-widest truncate ${task.urgent ? 'text-highlight' : 'text-muted'}`}>{task.sub}</p>
-                  </div>
-                  <span className="text-muted group-hover:text-highlight transition-colors font-black">→</span>
+          <Card>
+            <CardHeader title="Quick links" />
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                ['Employees', '/employees', 'users'], ['Payroll', '/payroll', 'wallet'], ['Leave', '/leave/registry', 'calendar'], ['Claims', '/claims/registry', 'receipt'],
+                ['Attendance', '/attendance/registry', 'clock'], ['Reports', '/reports', 'chart'],
+              ] as [string, string, IconName][]).map(([name, path, icon]) => (
+                <Link key={path} href={path} className="flex items-center gap-2.5 h-11 px-3 rounded-control border border-rule text-sm font-semibold text-ink hover:bg-page">
+                  <Icon name={icon} size={17} className="text-accent" />{name}
                 </Link>
               ))}
             </div>
-          )}
-        </div>
-      )}
-
-      {/* ── ROW 5: Quick Access Module Grid ───────────────────────────────── */}
-      <div className="bg-paper border border-rule p-6 lg:p-8">
-        <SectionHeader title="All Modules" badge="RBAC Enabled" color="navy" />
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          {[
-            { name: 'Employees',    path: '/employees',     icon: '◈', color: 'hover:border-accent hover:bg-page' },
-            { name: 'Payroll',      path: '/payroll',       icon: '◆', color: 'hover:border-accent hover:bg-page', highlight: true },
-            { name: 'Leave',        path: '/leave',         icon: '◌', color: 'hover:border-highlight hover:bg-page' },
-            { name: 'Claims',       path: '/claims',        icon: '◫', color: 'hover:border-accent hover:bg-page' },
-            { name: 'Attendance',   path: '/attendance',    icon: '◉', color: 'hover:border-accent hover:bg-page' },
-            { name: 'Recruitment',  path: '/recruitment',   icon: '◇', color: 'hover:border-accent hover:bg-page' },
-            { name: 'Performance',  path: '/performance',   icon: '▣', color: 'hover:border-accent hover:bg-page' },
-            { name: 'Training',     path: '/training',      icon: '◑', color: 'hover:border-highlight hover:bg-page' },
-            { name: 'Reports',      path: '/reports',       icon: '▤', color: 'hover:border-accent hover:bg-page' },
-            { name: 'Settings',     path: '/settings',      icon: '◎', color: 'hover:border-rule hover:bg-page' },
-          ].map((mod) => (
-            <Link
-              key={mod.name}
-              href={mod.path}
-              className={`flex flex-col items-center gap-4 p-6  border transition-all group cursor-pointer active:scale-95 ${
-                mod.highlight ? 'bg-accent border-accent text-paper' : `bg-paper border-rule ${mod.color}`
-              }`}
-            >
-              <span className={`text-2xl transition-transform group-hover:scale-125 duration-300 ${mod.highlight ? 'text-paper' : 'text-muted group-hover:text-current'}`}>
-                {mod.icon}
-              </span>
-              <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${mod.highlight ? 'text-paper' : 'text-muted group-hover:text-ink'} transition-colors`}>
-                {mod.name}
-              </span>
-            </Link>
-          ))}
+          </Card>
         </div>
       </div>
-
     </div>
   );
 }
