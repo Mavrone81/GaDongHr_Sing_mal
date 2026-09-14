@@ -14,7 +14,8 @@
  *   - Focus is the global :focus-visible outline; never remove it without a visible ring.
  *   - A page = <PageHeader> then content. Lists = <DataTable> (give mobileCard).
  *     Forms = <Field>. Processes = <Stepper>. Inboxes = <SplitPane>.
- *     Confirmations = <Modal>. Feedback = useToast().
+ *     Confirmations = <Modal>. Feedback = useToast(). The list half of an
+ *     inbox = <InboxList> (a DataTable is too wide for the SplitPane column).
  *
  * The older `components/official/*` set stays for screens not yet migrated;
  * new work imports from here.
@@ -40,3 +41,4 @@ export { Stepper } from './Stepper';
 export type { StepState } from './Stepper';
 export { Avatar } from './Avatar';
 export { SplitPane } from './SplitPane';
+export { InboxList } from './InboxList';
