@@ -1,8 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { TONES } from '@/lib/statusTone';
 import { apiFetch } from '@/lib/api';
+import {
+  PageHeader, Stat, DataTable, Card, CardHeader, Button, Badge, EmptyState, Field, Input, Select, Textarea, Modal, Tabs,
+  SearchInput, Icon, Avatar,
+  type Column, type BadgeTone,
+} from '@/components/ui';
 
 function resolveApiBase() {
   if (typeof window === 'undefined') return 'http://localhost:4000/api';
@@ -45,50 +49,66 @@ const STAGE_LABELS: Record<string, string> = {
   APPLIED: 'Applied', SCREENING: 'Screening', INTERVIEW_1: 'Interview 1', INTERVIEW_2: 'Interview 2',
   ASSESSMENT: 'Assessment', OFFER: 'Offer', HIRED: 'Hired', REJECTED: 'Rejected', WITHDRAWN: 'Withdrawn',
 };
-const STAGE_COLORS: Record<string, string> = {
-  APPLIED:     TONES.neutral,
-  SCREENING:   TONES.pending,
-  INTERVIEW_1: TONES.active,
-  INTERVIEW_2: TONES.active,
-  ASSESSMENT:  TONES.warning,
-  OFFER:       TONES.approved,
-  HIRED:       TONES.done,
-  REJECTED:    TONES.critical,
-  WITHDRAWN:   TONES.inert,
-};
+
 /**
- * A pure FILL per hiring stage — not a TONES chip.
- *
- * STAGE_DOT is used three ways: as a funnel bar, as a step marker that sets its
- * own `border-transparent`, and as a 6px dot. All three need a background and
- * nothing else, so the chip tones (which carry border, text and weight) do not
- * apply here. The ramp runs pale to saturated along the pipeline, with
- * rejection as ink and withdrawal receding into the page.
+ * Stage chips. The two interview rounds share a tone on purpose (same kind of
+ * state, the label tells them apart), as do applied/withdrawn (both inert);
+ * everything with a different consequence — an offer out, a hire, a rejection
+ * — looks different.
+ */
+const STAGE_TONE: Record<string, BadgeTone> = {
+  APPLIED:     'neutral',
+  SCREENING:   'accent',
+  INTERVIEW_1: 'brass',
+  INTERVIEW_2: 'brass',
+  ASSESSMENT:  'warn',
+  OFFER:       'accent',
+  HIRED:       'ok',
+  REJECTED:    'danger',
+  WITHDRAWN:   'neutral',
+};
+
+/**
+ * A pure fill per stage for the funnel bars, column dots and tracker. It runs
+ * pale to saturated along the pipeline; rejection is the danger fill and
+ * withdrawal recedes into the page.
  */
 const STAGE_DOT: Record<string, string> = {
   APPLIED:     'bg-rule',
-  SCREENING:   'bg-muted',
+  SCREENING:   'bg-faint',
   INTERVIEW_1: 'bg-accent/40',
   INTERVIEW_2: 'bg-accent/70',
-  ASSESSMENT:  'bg-highlight/70',
-  OFFER:       'bg-highlight',
-  HIRED:       'bg-accent',
-  REJECTED:    'bg-ink',
-  WITHDRAWN:   'bg-page',
+  ASSESSMENT:  'bg-warn',
+  OFFER:       'bg-accent',
+  HIRED:       'bg-ok',
+  REJECTED:    'bg-danger',
+  WITHDRAWN:   'bg-pill',
 };
 
-const JOB_STATUS_FLOW = ['DRAFT', 'OPEN', 'FILLED', 'CANCELLED'];
-const JOB_STATUS_COLORS: Record<string, string> = {
-  DRAFT: TONES.neutral,
-  OPEN: TONES.active,
-  FILLED: TONES.critical,
-  CANCELLED: TONES.inert,
+const JOB_STATUS_LABEL: Record<string, string> = { DRAFT: 'Draft', OPEN: 'Open', FILLED: 'Filled', CANCELLED: 'Archived' };
+const JOB_STATUS_TONE: Record<string, BadgeTone> = {
+  DRAFT: 'brass',
+  OPEN: 'ok',
+  FILLED: 'accent',
+  CANCELLED: 'neutral',
 };
+
+const JOB_TYPE_LABEL: Record<string, string> = { FULL_TIME: 'Full-time', PART_TIME: 'Part-time', CONTRACT: 'Contract' };
 
 const EMPTY_JOB = { title: '', department: '', headcount: 1, jobDescription: '', requirements: '', salaryMin: '', salaryMax: '', jobType: 'FULL_TIME', location: '' };
 const EMPTY_CANDIDATE = { firstName: '', lastName: '', email: '', phone: '', currentEmployer: '', currentTitle: '', noticePeriod: '', expectedSalary: '' };
 const EMPTY_INTERVIEW = { roundName: '', scheduledAt: '', notes: '' };
 const EMPTY_MCF = { mcfJobId: '', mcfPostedAt: '' };
+
+const PIPELINE_SORTS = [
+  { id: 'applied:desc', label: 'Newest first' },
+  { id: 'applied:asc', label: 'Oldest first' },
+  { id: 'name:asc', label: 'Name' },
+  { id: 'salary:desc', label: 'Expected salary, high to low' },
+  { id: 'notice:asc', label: 'Notice, shortest first' },
+] as const;
+
+const TAB_LABELS = { jobs: 'job openings', candidates: 'candidates', pipeline: 'pipeline', interviews: 'interviews' } as const;
 
 export default function RecruitmentPage() {
   const [activeTab, setActiveTab] = useState<'jobs' | 'candidates' | 'pipeline' | 'interviews'>('jobs');
@@ -324,8 +344,22 @@ export default function RecruitmentPage() {
     set(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
   }
 
-  function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
-    return <span className="text-[8px]">{active ? (dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  /** Sortable column header: the label is the button; the arrow appears on the active column only. */
+  function sortHead<C extends string>(
+    current: { col: C; dir: 'asc' | 'desc' },
+    set: React.Dispatch<React.SetStateAction<{ col: C; dir: 'asc' | 'desc' }>>,
+    col: C,
+    label: string,
+    alignEnd = false,
+  ) {
+    const on = current.col === col;
+    return (
+      <button type="button" onClick={() => toggleSort(current, set, col)} aria-sort={on ? (current.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+        className={`inline-flex items-center gap-1 hover:text-ink ${alignEnd ? 'justify-end w-full' : ''}`}>
+        {label}
+        {on && <Icon name="chevronDown" size={13} strokeWidth={2.25} className={current.dir === 'asc' ? 'rotate-180' : ''} />}
+      </button>
+    );
   }
 
   const sortedInterviews = [...interviews].sort((a, b) => {
@@ -364,939 +398,735 @@ export default function RecruitmentPage() {
     return counts;
   }
 
-  return (
-    <div className="flex flex-col gap-6 max-w-[1600px] mx-auto pb-12">
+  // ── Small shared renderers ────────────────────────────────────────────────
+  const money = (n?: number) => (n ? `S$${Number(n).toLocaleString()}` : '—');
+  const fullName = (c: Candidate) => `${c.firstName} ${c.lastName}`;
+  const jobTitleOf = (c: Candidate) => c.job?.title || jobs.find(j => j.id === c.jobId)?.title;
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 bg-paper p-6 sm:p-8 border border-rule relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-1.5 h-full bg-accent rounded-l-[2.5rem]" />
-        <div className="pl-4">
-          <h2 className="text-2xl font-black text-ink tracking-tighter uppercase">Talent Acquisition & ATS</h2>
-          <p className="text-[10px] font-black text-muted mt-1 uppercase tracking-[0.2em]">Job Postings · Candidate Pool · Pipeline · MCF Compliance</p>
-        </div>
-        <div className="flex flex-wrap gap-3 pl-4 sm:pl-0">
-          <button onClick={() => { setCandidateForm(EMPTY_CANDIDATE); setCandidateJobId(''); setCandidateModal(true); }}
-            className="px-5 py-2.5 text-[10px] font-black text-ink bg-page border border-rule hover:bg-page uppercase tracking-widest transition-all">
-            + Add Candidate
+  const openNewJob = () => { setEditingJob(null); setJobForm(EMPTY_JOB); setJobModal(true); };
+  const openNewCandidate = (jobId = '') => { setCandidateForm(EMPTY_CANDIDATE); setCandidateJobId(jobId); setCandidateModal(true); };
+  const openInterview = (candidateId: string) => { setInterviewCandidateId(candidateId); setInterviewForm(EMPTY_INTERVIEW); setInterviewModal(true); };
+  const openTagJob = (c: Candidate) => { setTagJobSelected(c.jobId || ''); setTagJobModal(c.id); };
+  const openEditJob = (job: Job) => { setEditingJob(job); setJobForm({ title: job.title, department: job.department, headcount: job.headcount, jobDescription: job.jobDescription, requirements: job.requirements || '', salaryMin: job.salaryMin ?? '', salaryMax: job.salaryMax ?? '', jobType: job.jobType, location: job.location || '' }); setJobModal(true); };
+
+  function stageSelect(c: Candidate, label = false) {
+    const control = (
+      <Select value={c.stage} onChange={e => updateStage(c.id, e.target.value)} aria-label={`Stage for ${fullName(c)}`}>
+        {PIPELINE_STAGES.map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
+      </Select>
+    );
+    return label ? <Field label="Stage">{control}</Field> : control;
+  }
+
+  function resumeControl(c: Candidate) {
+    if (c.resumeName) {
+      return (
+        <span className="inline-flex items-center gap-1 min-w-0">
+          <button type="button" onClick={() => downloadResume(c.id)} title={c.resumeName}
+            className="inline-flex items-center gap-1.5 min-w-0 text-[13px] font-semibold text-accent hover:underline">
+            <Icon name="file" size={15} /><span className="truncate max-w-[110px]">{c.resumeName}</span>
           </button>
-          <button onClick={() => { setEditingJob(null); setJobForm(EMPTY_JOB); setJobModal(true); }}
-            className="px-5 py-2.5 text-[10px] font-black text-paper bg-accent hover:bg-accent uppercase tracking-widest transition-all">
-            + New Job Opening
+          <button type="button" onClick={() => deleteResume(c.id)} aria-label={`Remove resume ${c.resumeName}`}
+            className="flex items-center justify-center w-7 h-7 rounded-control text-muted hover:text-danger hover:bg-pill">
+            <Icon name="x" size={14} />
           </button>
+        </span>
+      );
+    }
+    const busy = resumeUploading === c.id;
+    // The input is sr-only rather than hidden so it stays keyboard-reachable; the label draws the ring.
+    return (
+      <label className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-control border border-rule text-[13px] font-semibold focus-within:ring-2 focus-within:ring-accent ${busy ? 'text-muted bg-pill cursor-wait' : 'text-ink bg-paper hover:bg-pill cursor-pointer'}`}>
+        <Icon name="upload" size={14} />{busy ? 'Uploading…' : 'Resume'}
+        <input type="file" accept=".pdf,.doc,.docx" className="sr-only" disabled={busy}
+          onChange={e => { const f = e.target.files?.[0]; if (f) uploadResume(c.id, f); e.target.value = ''; }} />
+      </label>
+    );
+  }
+
+  function funnel(job: Job) {
+    const counts = jobStageCounts(job);
+    const total = job._count?.candidates ?? 0;
+    if (total === 0) return <span className="text-[13px] text-muted">No candidates yet</span>;
+    const furthest = [...ACTIVE_STAGES].reverse().find(s => counts[s]);
+    return (
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-end gap-0.5 h-6 w-[70px] shrink-0" aria-hidden="true">
+          {ACTIVE_STAGES.map(s => {
+            const n = counts[s] || 0;
+            const pct = total > 0 ? (n / total) * 100 : 0;
+            return <div key={s} title={`${STAGE_LABELS[s]}: ${n}`} className={`flex-1 ${STAGE_DOT[s]}`} style={{ height: `${Math.max(pct, n > 0 ? 18 : 6)}%` }} />;
+          })}
         </div>
+        <span className="text-[13px] text-ink truncate tabular-nums">
+          {total} · {furthest ? `${counts[furthest]} at ${STAGE_LABELS[furthest].toLowerCase()}` : `${counts['REJECTED'] || 0} rejected`}
+        </span>
       </div>
+    );
+  }
 
-      {error && <div className="bg-page border border-ink p-4 text-sm font-bold text-ink">{error}</div>}
+  function mcfCell(job: Job) {
+    const daysLeft = mcfDaysLeft(job);
+    if (job.mcfPostedAt) {
+      return (
+        <span className="inline-flex items-center gap-2">
+          <Badge tone="ok">Listed</Badge>
+          {daysLeft !== null && <span className="text-xs text-muted tabular-nums">{daysLeft > 0 ? `${daysLeft} days left` : 'Window closed'}</span>}
+        </span>
+      );
+    }
+    return <Button size="sm" variant="secondary" onClick={() => { setMcfJobId(job.id); setMcfForm(EMPTY_MCF); setMcfModal(true); }}>Record listing</Button>;
+  }
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: 'Open Positions', value: openJobs, sub: `${jobs.filter(j => j.status === 'DRAFT').length} drafts`, color: 'text-accent' },
-          { label: 'Total Candidates', value: totalApplicants, sub: `${candidates.filter(c => c.stage === 'HIRED').length} hired · ${candidates.filter(c => !c.jobId).length} in pool`, color: 'text-accent' },
-          { label: 'Upcoming Interviews', value: upcomingInterviews, sub: 'scheduled ahead', color: 'text-ink' },
-          { label: 'MCF Compliance', value: `${mcfPct}%`, sub: `${mcfCompliant}/${openJobs} open ads listed`, color: mcfPct === 100 ? 'text-accent' : 'text-ink' },
-        ].map(kpi => (
-          <div key={kpi.label} className="bg-paper p-6 border border-rule ">
-            <p className="label-form">{kpi.label}</p>
-            <p className={`text-3xl font-black mt-2 ${kpi.color}`}>{loading ? '—' : kpi.value}</p>
-            <p className="text-[9px] font-bold text-muted uppercase tracking-widest mt-2">{kpi.sub}</p>
+  function jobActions(job: Job) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <Button size="sm" variant="ghost" onClick={() => openNewCandidate(job.id)}>Add candidate</Button>
+        <Button size="sm" variant="ghost" onClick={() => { setPipelineJob(job.id); setPipelineStage(''); setActiveTab('pipeline'); }}>Pipeline</Button>
+        <Button size="sm" variant="ghost" onClick={() => openEditJob(job)}>Edit</Button>
+        {job.status !== 'CANCELLED' && <Button size="sm" variant="danger" onClick={() => archiveJob(job.id)}>Archive</Button>}
+      </span>
+    );
+  }
+
+  // ── Columns ───────────────────────────────────────────────────────────────
+  const jobColumns: Column<Job>[] = [
+    {
+      key: 'title', label: sortHead(jobSort, setJobSort, 'title', 'Job'), width: 'minmax(0, 1.5fr)',
+      render: j => (
+        <div className="flex flex-col min-w-0">
+          <span className="font-semibold text-ink truncate">{j.title}</span>
+          <span className="text-xs text-muted truncate">{j.location || 'Location not set'} · {JOB_TYPE_LABEL[j.jobType] || j.jobType} · {j.headcount} {j.headcount === 1 ? 'hire' : 'hires'}</span>
+        </div>
+      ),
+    },
+    { key: 'department', label: sortHead(jobSort, setJobSort, 'department', 'Department'), width: 'minmax(0, 0.8fr)', render: j => j.department },
+    { key: 'status', label: sortHead(jobSort, setJobSort, 'status', 'Status'), width: '96px', render: j => <Badge tone={JOB_STATUS_TONE[j.status] || 'neutral'}>{JOB_STATUS_LABEL[j.status] || j.status}</Badge> },
+    { key: 'mcf', label: sortHead(jobSort, setJobSort, 'mcf', 'MCF'), width: '170px', render: j => mcfCell(j) },
+    { key: 'count', label: sortHead(jobSort, setJobSort, 'count', 'Candidates'), width: 'minmax(0, 1fr)', render: j => funnel(j) },
+    { key: 'act', label: '', width: '330px', align: 'right', render: j => jobActions(j) },
+  ];
+
+  const nameCell = (c: Candidate) => (
+    <div className="flex items-center gap-2.5 min-w-0">
+      <Avatar name={fullName(c)} size={30} tone="soft" />
+      <div className="flex flex-col min-w-0">
+        <button type="button" onClick={() => loadCandidateDetail(c.id)} className="text-left font-semibold text-ink truncate hover:text-accent hover:underline">{fullName(c)}</button>
+        <span className="text-xs text-muted truncate">{c.currentTitle ? `${c.currentTitle}${c.currentEmployer ? ` at ${c.currentEmployer}` : ''}` : c.email}</span>
+      </div>
+    </div>
+  );
+
+  const candidateColumns: Column<Candidate>[] = [
+    { key: 'name', label: sortHead(candidateSort, setCandidateSort, 'name', 'Candidate'), width: 'minmax(0, 1.5fr)', render: nameCell },
+    { key: 'stage', label: sortHead(candidateSort, setCandidateSort, 'stage', 'Stage'), width: '150px', render: c => stageSelect(c) },
+    { key: 'job', label: sortHead(candidateSort, setCandidateSort, 'job', 'Job'), width: 'minmax(0, 1fr)', render: c => c.job ? c.job.title : <span className="text-muted">Unassigned</span> },
+    { key: 'salary', label: sortHead(candidateSort, setCandidateSort, 'salary', 'Expected', true), width: '100px', align: 'right', numeric: true, render: c => money(c.expectedSalary) },
+    { key: 'notice', label: sortHead(candidateSort, setCandidateSort, 'notice', 'Notice', true), width: '72px', align: 'right', numeric: true, render: c => c.noticePeriod ? `${c.noticePeriod}d` : '—' },
+    { key: 'added', label: sortHead(candidateSort, setCandidateSort, 'added', 'Added'), width: '104px', numeric: true, render: c => fmtDate(c.createdAt) },
+    { key: 'resume', label: 'Resume', width: '160px', render: c => resumeControl(c) },
+    {
+      key: 'act', label: '', width: '170px', align: 'right',
+      render: c => (
+        <span className="inline-flex items-center gap-1">
+          <Button size="sm" variant="ghost" onClick={() => openTagJob(c)}>{c.jobId ? 'Re-tag' : 'Tag job'}</Button>
+          <Button size="sm" variant="ghost" onClick={() => openInterview(c.id)}>Interview</Button>
+        </span>
+      ),
+    },
+  ];
+
+  const resultBadge = (r?: string) => r
+    ? <Badge tone={r === 'PASS' ? 'ok' : r === 'FAIL' ? 'danger' : 'neutral'}>{r === 'PASS' ? 'Pass' : r === 'FAIL' ? 'Fail' : r.charAt(0) + r.slice(1).toLowerCase()}</Badge>
+    : <span className="text-[13px] text-muted">Pending</span>;
+
+  const interviewColumns: Column<InterviewRound>[] = [
+    { key: 'round', label: sortHead(interviewSort, setInterviewSort, 'round', 'Round'), width: 'minmax(0, 1fr)', render: ir => <span className="font-semibold">{ir.roundName}</span> },
+    {
+      key: 'candidate', label: sortHead(interviewSort, setInterviewSort, 'candidate', 'Candidate'), width: 'minmax(0, 1.3fr)',
+      render: ir => {
+        const cand = candidates.find(c => c.id === ir.candidateId);
+        return cand ? (
+          <div className="flex flex-col min-w-0">
+            <button type="button" onClick={() => loadCandidateDetail(cand.id)} className="text-left font-semibold text-ink truncate hover:text-accent hover:underline">{fullName(cand)}</button>
+            <span className="text-xs text-muted truncate">{jobTitleOf(cand) || 'Unassigned'}</span>
           </div>
-        ))}
-      </div>
+        ) : <span className="text-muted">Unknown</span>;
+      },
+    },
+    {
+      key: 'scheduled', label: sortHead(interviewSort, setInterviewSort, 'scheduled', 'Scheduled'), width: '210px',
+      render: ir => {
+        const isPast = new Date(ir.scheduledAt) < new Date();
+        return <span className="inline-flex items-center gap-2"><span className={`tabular-nums ${isPast ? 'text-muted' : 'text-ink'}`}>{fmtDateTime(ir.scheduledAt)}</span>{!isPast && <Badge tone="accent">Upcoming</Badge>}</span>;
+      },
+    },
+    { key: 'notes', label: 'Notes', width: 'minmax(0, 1.2fr)', render: ir => <span className="text-muted">{ir.notes || '—'}</span> },
+    { key: 'result', label: sortHead(interviewSort, setInterviewSort, 'result', 'Result'), width: '100px', render: ir => resultBadge(ir.result) },
+  ];
 
-      {/* Tabs */}
-      <div className="bg-paper border border-rule overflow-hidden flex flex-col min-h-[600px]">
-        <div className="px-4 sm:px-8 border-b border-rule flex items-center gap-5 sm:gap-8 bg-page overflow-x-auto custom-scrollbar">
-          {([
-            { key: 'jobs', label: 'Job Openings', count: jobs.length },
-            { key: 'candidates', label: 'Candidate Pool', count: candidates.length },
-            { key: 'pipeline', label: 'Pipeline' },
-            { key: 'interviews', label: 'Interviews', count: upcomingInterviews || undefined },
-          ] as const).map(tab => (
-            <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-              className={`py-5 text-[10px] font-black uppercase tracking-[0.18em] border-b-2 transition-all flex items-center gap-2 shrink-0 whitespace-nowrap ${activeTab === tab.key ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'}`}>
-              {tab.label}
-              {'count' in tab && tab.count !== undefined && (
-                <span className={`text-[8px] font-black px-1.5 py-0.5  ${activeTab === tab.key ? 'bg-page text-accent' : 'bg-page text-muted'}`}>{tab.count}</span>
-              )}
-            </button>
-          ))}
-        </div>
+  const noRows = (icon: 'briefcase' | 'users' | 'calendar', title: string, description: string, action?: React.ReactNode) =>
+    <EmptyState icon={icon} title={title} description={description} action={action} className="py-6" />;
 
-        {/* ── Jobs Tab ───────────────────────────────────────────────────────── */}
-        {activeTab === 'jobs' && (
-          <div className="overflow-x-auto">
-            {loading ? (
-              <div className="p-16 text-center text-muted text-sm font-bold">Loading…</div>
-            ) : jobs.length === 0 ? (
-              <div className="p-20 flex flex-col items-center gap-4">
-                <div className="w-16 h-16 bg-page border border-rule flex items-center justify-center text-2xl">📋</div>
-                <p className="text-sm font-black text-muted uppercase tracking-widest">No job openings yet</p>
-                <button onClick={() => { setEditingJob(null); setJobForm(EMPTY_JOB); setJobModal(true); }} className="px-5 py-2.5 bg-accent text-paper text-[10px] font-black uppercase tracking-widest">Create First Opening</button>
+  // ── Candidate record ──────────────────────────────────────────────────────
+  if (detailCandidate || detailLoading) {
+    const back = (
+      <button type="button" onClick={() => setDetailCandidate(null)} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-accent hover:underline self-start">
+        <Icon name="chevronRight" size={15} strokeWidth={2} className="rotate-180" />Back to {TAB_LABELS[activeTab]}
+      </button>
+    );
+    const d = detailCandidate;
+    return (
+      <div className="flex flex-col gap-6 max-w-[1400px] mx-auto pb-24 lg:pb-10">
+        {back}
+        {detailLoading || !d ? (
+          <div className="flex flex-col gap-4" aria-busy="true">
+            <div className="h-16 rounded-card bg-pill animate-pulse" />
+            <div className="h-72 rounded-card bg-pill animate-pulse" />
+          </div>
+        ) : (
+          <>
+            {/* Identity band */}
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-4 min-w-0">
+                <Avatar name={fullName(d)} size={56} tone="soft" />
+                <div className="flex flex-col gap-1.5 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <h1 className="text-2xl font-extrabold tracking-[-0.02em] text-ink truncate">{fullName(d)}</h1>
+                    <Badge tone={STAGE_TONE[d.stage] || 'neutral'}>{STAGE_LABELS[d.stage] || d.stage}</Badge>
+                    {d.isHired && <Badge tone="ok">Hired</Badge>}
+                    {d.isOfferMade && !d.isHired && <Badge tone="accent">Offer made</Badge>}
+                  </div>
+                  <p className="text-sm text-muted truncate">
+                    {[d.job?.title, d.email, d.phone].filter(Boolean).join(' · ')}
+                  </p>
+                </div>
               </div>
-            ) : (
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-page text-muted text-[9px] font-black uppercase tracking-[0.18em] border-b border-rule">
-                    {([
-                      { key: 'title',      label: 'Title',            cls: 'px-8 py-4' },
-                      { key: 'department', label: 'Department',       cls: 'px-4 py-4' },
-                      { key: 'status',     label: 'Status',           cls: 'px-4 py-4' },
-                      { key: 'mcf',        label: 'MCF',              cls: 'px-4 py-4' },
-                      { key: 'count',      label: 'Candidate Funnel', cls: 'px-4 py-4' },
-                      { key: null,         label: 'Actions',          cls: 'px-8 py-4 text-right' },
-                    ] as const).map(col => (
-                      <th key={col.label} className={col.cls}>
-                        {col.key ? (
-                          <button onClick={() => toggleSort(jobSort, setJobSort, col.key!)} className="flex items-center gap-1 hover:text-ink transition-colors">
-                            {col.label}<SortIcon active={jobSort.col === col.key} dir={jobSort.dir} />
+              <div className="flex flex-wrap gap-2.5">
+                <Button variant="secondary" onClick={() => openTagJob(d)}>{d.jobId ? 'Change job' : 'Tag job'}</Button>
+                <Button icon="calendar" onClick={() => openInterview(d.id)}>Schedule interview</Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+              {/* Main */}
+              <div className="lg:col-span-2 flex flex-col gap-4">
+                <Card>
+                  <CardHeader title="Stage" caption="Where this candidate is, and when they got there." />
+                  <ol className="flex flex-col">
+                    {PIPELINE_STAGES.filter(s => s !== 'WITHDRAWN').map((s, i, arr) => {
+                      const stageOrder = ['APPLIED', 'SCREENING', 'INTERVIEW_1', 'INTERVIEW_2', 'ASSESSMENT', 'OFFER', 'HIRED', 'REJECTED'];
+                      const currentIdx = stageOrder.indexOf(d.stage);
+                      const thisIdx = stageOrder.indexOf(s);
+                      const isCurrent = d.stage === s;
+                      const isPast = thisIdx < currentIdx && !['REJECTED'].includes(d.stage);
+                      const event = d.stageEvents?.find(e => e.toStage === s);
+                      return (
+                        <li key={s} className="flex items-stretch gap-3" aria-current={isCurrent ? 'step' : undefined}>
+                          <div className="flex flex-col items-center w-[18px] shrink-0">
+                            <span className={`mt-[3px] w-[14px] h-[14px] rounded-full border-2 shrink-0 ${isCurrent ? `${STAGE_DOT[s]} border-transparent ring-2 ring-accent/30` : isPast ? 'bg-accent border-accent' : 'bg-paper border-rule'}`} />
+                            {i < arr.length - 1 && <span className={`flex-1 w-0.5 my-0.5 ${isPast ? 'bg-accent' : 'bg-rule'}`} />}
+                          </div>
+                          <div className="flex-1 min-w-0 pb-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className={`text-sm ${isCurrent ? 'font-bold text-ink' : isPast ? 'text-ink' : 'text-muted'}`}>{STAGE_LABELS[s]}</span>
+                              {event ? <span className="text-xs text-muted tabular-nums">{fmtDate(event.createdAt)}</span>
+                                : isCurrent ? <span className="text-xs font-semibold text-accent">Current</span> : null}
+                            </div>
+                            {event?.note && <p className="text-[13px] text-muted mt-0.5">{event.note}</p>}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                  <div className="flex flex-col gap-2 pt-3 mt-1 border-t border-rule">
+                    <span className="text-[12.5px] font-semibold text-muted">Move to</span>
+                    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Move to stage">
+                      {PIPELINE_STAGES.map(s => {
+                        const on = d.stage === s;
+                        return (
+                          <button key={s} type="button" onClick={() => updateStage(d.id, s)} aria-pressed={on}
+                            className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-control border text-[13px] font-semibold transition-colors ${on ? 'border-accent bg-tint text-accent' : 'border-rule bg-paper text-ink hover:bg-pill'}`}>
+                            <span className={`w-2 h-2 rounded-full ${STAGE_DOT[s]}`} aria-hidden="true" />{STAGE_LABELS[s]}
                           </button>
-                        ) : col.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-rule">
-                  {sortedJobs.map(job => {
-                    const daysLeft = mcfDaysLeft(job);
-                    const counts = jobStageCounts(job);
-                    const total = job._count?.candidates ?? 0;
-                    const statusIdx = JOB_STATUS_FLOW.indexOf(job.status);
-                    return (
-                      <tr key={job.id} className="hover:bg-page transition-all">
-                        <td className="px-8 py-5">
-                          <p className="text-sm font-black text-ink tracking-tight">{job.title}</p>
-                          <p className="text-[9px] text-muted font-bold uppercase tracking-widest mt-1">{job.location || 'Location TBD'} · {job.jobType.replace('_', ' ')} · {job.headcount} HC</p>
-                          {/* Job lifecycle bar */}
-                          <div className="flex items-center gap-1 mt-2">
-                            {JOB_STATUS_FLOW.map((s, i) => (
-                              <div key={s} className={`flex items-center gap-1 ${i < JOB_STATUS_FLOW.length - 1 ? 'flex-1' : ''}`}>
-                                <div className={`w-2 h-2  flex-shrink-0 ${i <= statusIdx ? (s === 'CANCELLED' ? 'bg-ink' : 'bg-accent') : 'bg-rule'}`} />
-                                {i < JOB_STATUS_FLOW.length - 1 && <div className={`flex-1 h-px ${i < statusIdx ? 'bg-accent' : 'bg-rule'}`} />}
-                              </div>
-                            ))}
-                          </div>
-                          <div className="flex gap-3 mt-1">
-                            {JOB_STATUS_FLOW.map((s, i) => (
-                              <span key={s} className={`text-[8px] font-black uppercase tracking-widest ${i === statusIdx ? 'text-accent' : 'text-muted'}`}>{s}</span>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="px-4 py-5">
-                          <span className="text-[9px] font-black text-muted uppercase tracking-widest border border-rule px-2.5 py-1 ">{job.department}</span>
-                        </td>
-                        <td className="px-4 py-5">
-                          <span className={`text-[9px] px-2.5 py-1  font-black uppercase border tracking-widest ${JOB_STATUS_COLORS[job.status] || 'bg-page text-muted border-rule'}`}>{job.status}</span>
-                        </td>
-                        <td className="px-4 py-5">
-                          {job.mcfPostedAt ? (
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <div className="w-1.5 h-1.5 bg-accent" />
-                                <span className="text-[9px] font-black text-accent uppercase tracking-widest">Listed</span>
-                              </div>
-                              {daysLeft !== null && <p className="text-[9px] text-muted font-bold mt-0.5">{daysLeft > 0 ? `${daysLeft}d window` : 'Window closed'}</p>}
-                            </div>
-                          ) : (
-                            <button onClick={() => { setMcfJobId(job.id); setMcfForm(EMPTY_MCF); setMcfModal(true); }}
-                              className="text-[9px] font-black text-ink border border-highlight bg-page px-2 py-1 uppercase tracking-widest hover:bg-page transition-all">
-                              Record MCF
-                            </button>
-                          )}
-                        </td>
-                        <td className="px-4 py-5 min-w-[220px]">
-                          {total === 0 ? (
-                            <span className="text-[9px] text-muted font-bold">No candidates yet</span>
-                          ) : (
-                            <div>
-                              <div className="flex items-end gap-1 h-7">
-                                {ACTIVE_STAGES.map(s => {
-                                  const n = counts[s] || 0;
-                                  const pct = total > 0 ? (n / total) * 100 : 0;
-                                  return (
-                                    <div key={s} title={`${STAGE_LABELS[s]}: ${n}`} className="flex-1 flex flex-col justify-end">
-                                      <div className={`w-full  ${STAGE_DOT[s]} opacity-80`} style={{ height: `${Math.max(pct, n > 0 ? 15 : 0)}%` }} />
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                              <div className="flex gap-1 mt-1.5 flex-wrap">
-                                {ACTIVE_STAGES.filter(s => counts[s]).map(s => (
-                                  <span key={s} className={`text-[8px] font-black border px-1.5 py-0.5  ${STAGE_COLORS[s]}`}>
-                                    {counts[s]} {STAGE_LABELS[s]}
-                                  </span>
-                                ))}
-                                {(counts['REJECTED'] || 0) > 0 && <span className="text-[8px] font-black border px-1.5 py-0.5 bg-page text-ink border-ink">{counts['REJECTED']} Rejected</span>}
-                              </div>
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-8 py-5 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <button onClick={() => { setCandidateForm(EMPTY_CANDIDATE); setCandidateJobId(job.id); setCandidateModal(true); }}
-                              className="text-[9px] font-black text-accent border border-accent bg-page px-2.5 py-1.5 uppercase tracking-widest hover:bg-page transition-all">
-                              + Candidate
-                            </button>
-                            <button onClick={() => { setPipelineJob(job.id); setPipelineStage(''); setActiveTab('pipeline'); }}
-                              className="text-[9px] font-black text-muted border border-rule bg-page px-2.5 py-1.5 uppercase tracking-widest hover:bg-page transition-all">
-                              Pipeline
-                            </button>
-                            <button onClick={() => { setEditingJob(job); setJobForm({ title: job.title, department: job.department, headcount: job.headcount, jobDescription: job.jobDescription, requirements: job.requirements || '', salaryMin: job.salaryMin ?? '', salaryMax: job.salaryMax ?? '', jobType: job.jobType, location: job.location || '' }); setJobModal(true); }}
-                              className="text-[9px] font-black text-muted border border-rule bg-page px-2.5 py-1.5 uppercase tracking-widest hover:bg-page transition-all">
-                              Edit
-                            </button>
-                            {job.status !== 'CANCELLED' && (
-                              <button onClick={() => archiveJob(job.id)}
-                                className="text-[9px] font-black text-ink border border-ink bg-page px-2.5 py-1.5 uppercase tracking-widest hover:bg-page transition-all">
-                                Archive
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
+                        );
+                      })}
+                    </div>
+                  </div>
+                </Card>
 
-        {/* ── Candidates Tab ─────────────────────────────────────────────────── */}
-        {activeTab === 'candidates' && (
-          <div className="flex flex-col">
-            <div className="px-8 py-4 border-b border-rule flex items-center gap-4">
-              <input value={candidateSearch} onChange={e => setCandidateSearch(e.target.value)}
-                placeholder="Search candidates by name, email, title…"
-                className="text-[10px] font-bold text-ink bg-page border border-rule px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-accent w-72" />
-              <span className="label-form ml-auto">{filteredCandidates.length} candidates</span>
-              <span className="text-[9px] font-black text-muted uppercase tracking-widest">{candidates.filter(c => !c.jobId).length} unassigned</span>
-            </div>
-            {loading ? (
-              <div className="p-16 text-center text-muted text-sm font-bold">Loading…</div>
-            ) : filteredCandidates.length === 0 ? (
-              <div className="p-20 flex flex-col items-center gap-4">
-                <div className="w-16 h-16 bg-page border border-rule flex items-center justify-center text-2xl">👤</div>
-                <p className="text-sm font-black text-muted uppercase tracking-widest">{candidateSearch ? 'No matching candidates' : 'No candidates yet'}</p>
-                {!candidateSearch && <button onClick={() => { setCandidateForm(EMPTY_CANDIDATE); setCandidateJobId(''); setCandidateModal(true); }} className="px-5 py-2.5 bg-accent text-paper text-[10px] font-black uppercase tracking-widest">Add First Candidate</button>}
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="bg-page text-muted text-[9px] font-black uppercase tracking-[0.18em] border-b border-rule">
-                      {([
-                        { key: 'name',   label: 'Candidate',       cls: 'px-8 py-4' },
-                        { key: 'stage',  label: 'Stage',           cls: 'px-4 py-4' },
-                        { key: 'job',    label: 'Tagged Job',      cls: 'px-4 py-4' },
-                        { key: 'salary', label: 'Expected Salary', cls: 'px-4 py-4' },
-                        { key: 'notice', label: 'Notice',          cls: 'px-4 py-4' },
-                        { key: 'added',  label: 'Added',           cls: 'px-4 py-4' },
-                        { key: null,     label: 'Resume',          cls: 'px-4 py-4' },
-                        { key: null,     label: 'Actions',         cls: 'px-8 py-4 text-right' },
-                      ] as const).map(col => (
-                        <th key={col.label} className={col.cls}>
-                          {col.key ? (
-                            <button onClick={() => toggleSort(candidateSort, setCandidateSort, col.key!)} className="flex items-center gap-1 hover:text-ink transition-colors">
-                              {col.label}<SortIcon active={candidateSort.col === col.key} dir={candidateSort.dir} />
-                            </button>
-                          ) : col.label}
-                        </th>
+                <Card>
+                  <CardHeader title="Interviews" action={<button type="button" onClick={() => openInterview(d.id)} className="hover:underline">Schedule</button>} />
+                  {!d.interviewRounds?.length ? (
+                    <p className="text-sm text-muted">No interviews scheduled yet.</p>
+                  ) : (
+                    <ul className="flex flex-col divide-y divide-rule">
+                      {d.interviewRounds.map(ir => (
+                        <li key={ir.id} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                          <div className="flex flex-col gap-0.5 min-w-0">
+                            <span className="text-sm font-semibold text-ink">{ir.roundName}</span>
+                            <span className="text-xs text-muted tabular-nums">{fmtDateTime(ir.scheduledAt)}</span>
+                            {ir.notes && <span className="text-[13px] text-muted">{ir.notes}</span>}
+                          </div>
+                          {resultBadge(ir.result)}
+                        </li>
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-rule">
-                    {sortedCandidates.map(c => (
-                      <tr key={c.id} className="hover:bg-page transition-all cursor-pointer" onClick={() => loadCandidateDetail(c.id)}>
-                        <td className="px-8 py-5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-page border border-accent flex items-center justify-center text-xs font-black text-accent flex-shrink-0">
-                              {c.firstName[0]}{c.lastName[0]}
-                            </div>
-                            <div>
-                              <p className="text-sm font-black text-ink">{c.firstName} {c.lastName}</p>
-                              <p className="text-[9px] text-muted font-bold mt-0.5">{c.email}</p>
-                              {c.currentTitle && <p className="text-[9px] text-muted font-bold">{c.currentTitle}{c.currentEmployer ? ` @ ${c.currentEmployer}` : ''}</p>}
-                            </div>
+                    </ul>
+                  )}
+                </Card>
+
+                {d.stageEvents && d.stageEvents.length > 1 && (
+                  <Card>
+                    <CardHeader title="Activity" />
+                    <ul className="flex flex-col gap-3">
+                      {[...d.stageEvents].reverse().map(ev => (
+                        <li key={ev.id} className="flex items-start gap-3">
+                          <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${STAGE_DOT[ev.toStage] || 'bg-rule'}`} aria-hidden="true" />
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-sm text-ink">
+                              {ev.fromStage ? `${STAGE_LABELS[ev.fromStage] || ev.fromStage} → ${STAGE_LABELS[ev.toStage] || ev.toStage}` : `Added as ${STAGE_LABELS[ev.toStage] || ev.toStage}`}
+                            </span>
+                            {ev.note && <span className="text-[13px] text-muted">{ev.note}</span>}
+                            <span className="text-xs text-muted tabular-nums">{fmtDateTime(ev.createdAt)}</span>
                           </div>
-                        </td>
-                        <td className="px-4 py-5" onClick={e => e.stopPropagation()}>
-                          <select value={c.stage} onChange={e => updateStage(c.id, e.target.value)}
-                            className={`text-[9px] font-black border  px-2.5 py-1.5 uppercase tracking-widest cursor-pointer ${STAGE_COLORS[c.stage] || 'bg-page text-ink border-rule'}`}>
-                            {PIPELINE_STAGES.map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
-                          </select>
-                        </td>
-                        <td className="px-4 py-5">
-                          {c.job ? (
-                            <span className="text-[9px] font-black text-ink border border-rule bg-page px-2 py-1 uppercase tracking-widest">{c.job.title}</span>
-                          ) : (
-                            <span className="text-[9px] font-bold text-muted italic">Unassigned</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-5"><span className="text-sm font-black text-ink">{c.expectedSalary ? `$${Number(c.expectedSalary).toLocaleString()}` : '—'}</span></td>
-                        <td className="px-4 py-5"><span className="text-[9px] font-bold text-muted">{c.noticePeriod ? `${c.noticePeriod}d` : '—'}</span></td>
-                        <td className="px-4 py-5"><span className="text-[9px] font-bold text-muted">{fmtDate(c.createdAt)}</span></td>
-                        <td className="px-4 py-5" onClick={e => e.stopPropagation()}>
-                          {c.resumeName ? (
-                            <div className="flex items-center gap-1.5">
-                              <button onClick={() => downloadResume(c.id)} title={c.resumeName}
-                                className="text-[9px] font-black text-accent border border-accent bg-page px-2 py-1 uppercase tracking-widest hover:bg-page transition-all max-w-[90px] truncate">
-                                {c.resumeName.length > 12 ? c.resumeName.slice(0, 10) + '…' : c.resumeName}
-                              </button>
-                              <button onClick={() => deleteResume(c.id)} title="Remove resume"
-                                className="text-[9px] font-black text-ink hover:text-ink transition-colors">✕</button>
-                            </div>
-                          ) : (
-                            <label className={`text-[9px] font-black border  px-2 py-1 uppercase tracking-widest transition-all cursor-pointer ${resumeUploading === c.id ? 'text-muted border-rule bg-page' : 'text-accent border-accent bg-page hover:bg-page'}`}>
-                              {resumeUploading === c.id ? 'Uploading…' : '+ Resume'}
-                              <input type="file" accept=".pdf,.doc,.docx" className="hidden" disabled={resumeUploading === c.id}
-                                onChange={e => { const f = e.target.files?.[0]; if (f) uploadResume(c.id, f); e.target.value = ''; }} />
-                            </label>
-                          )}
-                        </td>
-                        <td className="px-8 py-5 text-right" onClick={e => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-2">
-                            <button onClick={() => { setTagJobSelected(c.jobId || ''); setTagJobModal(c.id); }}
-                              className="text-[9px] font-black text-muted border border-rule bg-page px-2.5 py-1.5 uppercase tracking-widest hover:bg-page transition-all">
-                              {c.jobId ? 'Re-tag' : 'Tag Job'}
-                            </button>
-                            <button onClick={() => { setInterviewCandidateId(c.id); setInterviewForm(EMPTY_INTERVIEW); setInterviewModal(true); }}
-                              className="text-[9px] font-black text-accent border border-accent bg-page px-2.5 py-1.5 uppercase tracking-widest hover:bg-page transition-all">
-                              + Interview
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </li>
+                      ))}
+                    </ul>
+                  </Card>
+                )}
               </div>
-            )}
-          </div>
-        )}
 
-        {/* ── Pipeline Tab ───────────────────────────────────────────────────── */}
-        {activeTab === 'pipeline' && (
-          <div className="flex flex-col">
-            <div className="px-8 py-4 border-b border-rule flex items-center gap-4">
-              <select value={pipelineJob} onChange={e => setPipelineJob(e.target.value)}
-                className="text-[10px] font-black text-ink bg-page border border-rule px-3 py-2 uppercase tracking-widest">
-                <option value="">All Job Openings</option>
-                {jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
-              </select>
-              <select value={pipelineStage} onChange={e => setPipelineStage(e.target.value)}
-                className="text-[10px] font-black text-ink bg-page border border-rule px-3 py-2 uppercase tracking-widest">
-                <option value="">All Stages</option>
-                {PIPELINE_STAGES.map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
-              </select>
-              <span className="label-form ml-auto">{filteredPipeline.length} candidates</span>
-            </div>
+              {/* Side */}
+              <div className="flex flex-col gap-4">
+                <Card>
+                  <CardHeader title="Details" />
+                  <dl className="flex flex-col text-sm">
+                    {[
+                      ['Current title', d.currentTitle || '—'],
+                      ['Current employer', d.currentEmployer || '—'],
+                      ['Expected salary', money(d.expectedSalary)],
+                      ['Notice period', d.noticePeriod ? `${d.noticePeriod} days` : '—'],
+                      ['Added', fmtDate(d.createdAt)],
+                    ].map(([k, v]) => (
+                      <div key={k} className="flex justify-between gap-4 py-2.5 border-t border-rule first:border-t-0">
+                        <dt className="text-muted">{k}</dt>
+                        <dd className="font-semibold text-ink text-right tabular-nums">{v}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </Card>
 
-            {/* Stage funnel summary */}
-            {!pipelineStage && (
-              <div className="px-8 py-4 border-b border-rule grid grid-cols-9 gap-2">
-                {PIPELINE_STAGES.map(s => {
-                  const n = filteredPipeline.filter(c => c.stage === s).length;
-                  return (
-                    <button key={s} onClick={() => setPipelineStage(s === pipelineStage ? '' : s)}
-                      className={`flex flex-col items-center gap-1.5 p-3  border transition-all hover: ${n > 0 ? STAGE_COLORS[s] : 'bg-page text-muted border-rule'}`}>
-                      <span className="text-base font-black">{n}</span>
-                      <span className="text-[8px] font-black uppercase tracking-widest text-center leading-tight">{STAGE_LABELS[s]}</span>
+                <Card>
+                  <CardHeader title="Job" action={<button type="button" onClick={() => openTagJob(d)} className="hover:underline">{d.jobId ? 'Change' : 'Tag job'}</button>} />
+                  {d.job ? (
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-sm font-semibold text-ink">{d.job.title}</span>
+                      {d.job.department && <span className="text-[13px] text-muted">{d.job.department}</span>}
+                    </div>
+                  ) : <p className="text-sm text-muted">In the candidate pool, not tagged to an opening.</p>}
+                </Card>
+
+                <Card>
+                  <CardHeader title="Resume" action={d.resumeName ? <button type="button" onClick={() => deleteResume(d.id)} className="text-danger hover:underline">Remove</button> : undefined} />
+                  {d.resumeName ? (
+                    <button type="button" onClick={() => downloadResume(d.id)}
+                      className="flex items-center gap-3 p-3 rounded-control border border-rule bg-page hover:border-accent text-left">
+                      <span className="flex items-center justify-center w-9 h-9 rounded-control bg-paper border border-rule text-muted shrink-0"><Icon name="file" size={18} /></span>
+                      <span className="flex flex-col min-w-0">
+                        <span className="text-sm font-semibold text-ink truncate">{d.resumeName}</span>
+                        <span className="text-xs text-muted">Download</span>
+                      </span>
                     </button>
-                  );
-                })}
-              </div>
-            )}
+                  ) : (
+                    <label className={`flex flex-col items-center justify-center gap-1 p-5 rounded-control border-2 border-dashed text-center focus-within:ring-2 focus-within:ring-accent ${resumeUploading === d.id ? 'border-rule bg-page cursor-wait' : 'border-rule hover:border-accent cursor-pointer'}`}>
+                      <Icon name="upload" size={20} className="text-muted" />
+                      <span className={`text-sm font-semibold ${resumeUploading === d.id ? 'text-muted' : 'text-accent'}`}>{resumeUploading === d.id ? 'Uploading…' : 'Upload resume'}</span>
+                      <span className="text-xs text-muted">PDF, DOC or DOCX, up to 10 MB</span>
+                      <input type="file" accept=".pdf,.doc,.docx" className="sr-only" disabled={resumeUploading === d.id}
+                        onChange={e => { const f = e.target.files?.[0]; if (f) uploadResume(d.id, f); e.target.value = ''; }} />
+                    </label>
+                  )}
+                </Card>
 
-            {loading ? (
-              <div className="p-16 text-center text-muted text-sm font-bold">Loading…</div>
-            ) : filteredPipeline.length === 0 ? (
-              <div className="p-20 flex flex-col items-center gap-4">
-                <div className="w-16 h-16 bg-page border border-rule flex items-center justify-center text-2xl">👤</div>
-                <p className="text-sm font-black text-muted uppercase tracking-widest">No candidates in pipeline</p>
+                {d.notes && (
+                  <Card>
+                    <CardHeader title="Notes" />
+                    <p className="text-sm text-ink leading-relaxed whitespace-pre-line">{d.notes}</p>
+                  </Card>
+                )}
               </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="bg-page text-muted text-[9px] font-black uppercase tracking-[0.18em] border-b border-rule">
-                      {([
-                        { key: 'name',    label: 'Candidate',  cls: 'px-8 py-4' },
-                        { key: 'job',     label: 'Applied For', cls: 'px-4 py-4' },
-                        { key: 'stage',   label: 'Stage',      cls: 'px-4 py-4' },
-                        { key: 'salary',  label: 'Salary',     cls: 'px-4 py-4' },
-                        { key: 'notice',  label: 'Notice',     cls: 'px-4 py-4' },
-                        { key: 'applied', label: 'Applied',    cls: 'px-4 py-4' },
-                        { key: null,      label: 'Actions',    cls: 'px-8 py-4 text-right' },
-                      ] as const).map(col => (
-                        <th key={col.label} className={col.cls}>
-                          {col.key ? (
-                            <button onClick={() => toggleSort(pipelineSort, setPipelineSort, col.key!)} className="flex items-center gap-1 hover:text-ink transition-colors">
-                              {col.label}<SortIcon active={pipelineSort.col === col.key} dir={pipelineSort.dir} />
-                            </button>
-                          ) : col.label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-rule">
-                    {sortedPipeline.map(c => (
-                      <tr key={c.id} className="hover:bg-page transition-all cursor-pointer" onClick={() => loadCandidateDetail(c.id)}>
-                        <td className="px-8 py-5">
-                          <p className="text-sm font-black text-ink">{c.firstName} {c.lastName}</p>
-                          <p className="text-[9px] text-muted font-bold mt-0.5">{c.email}</p>
-                          {c.currentTitle && <p className="text-[9px] text-muted font-bold">{c.currentTitle}{c.currentEmployer ? ` @ ${c.currentEmployer}` : ''}</p>}
-                        </td>
-                        <td className="px-4 py-5">
-                          <span className="text-[9px] font-black text-ink uppercase tracking-widest border border-rule px-2 py-1 ">
-                            {c.job?.title || jobs.find(j => j.id === c.jobId)?.title || <span className="text-muted normal-case font-bold not-italic">Unassigned</span>}
-                          </span>
-                        </td>
-                        <td className="px-4 py-5" onClick={e => e.stopPropagation()}>
-                          <select value={c.stage} onChange={e => updateStage(c.id, e.target.value)}
-                            className={`text-[9px] font-black border  px-2.5 py-1.5 uppercase tracking-widest ${STAGE_COLORS[c.stage] || 'bg-page text-ink border-rule'}`}>
-                            {PIPELINE_STAGES.map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
-                          </select>
-                        </td>
-                        <td className="px-4 py-5"><span className="text-sm font-black text-ink">{c.expectedSalary ? `$${Number(c.expectedSalary).toLocaleString()}` : '—'}</span></td>
-                        <td className="px-4 py-5"><span className="text-[9px] font-bold text-muted">{c.noticePeriod ? `${c.noticePeriod}d` : '—'}</span></td>
-                        <td className="px-4 py-5"><span className="text-[9px] font-bold text-muted">{fmtDate(c.createdAt)}</span></td>
-                        <td className="px-8 py-5 text-right" onClick={e => e.stopPropagation()}>
-                          <button onClick={() => { setInterviewCandidateId(c.id); setInterviewForm(EMPTY_INTERVIEW); setInterviewModal(true); }}
-                            className="text-[9px] font-black text-accent border border-accent bg-page px-2.5 py-1.5 uppercase tracking-widest hover:bg-page transition-all">
-                            + Interview
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+            </div>
+          </>
         )}
+        {modals()}
+      </div>
+    );
+  }
 
-        {/* ── Interviews Tab ─────────────────────────────────────────────────── */}
-        {activeTab === 'interviews' && (
-          <div className="overflow-x-auto">
-            {loading ? (
-              <div className="p-16 text-center text-muted text-sm font-bold">Loading…</div>
-            ) : interviews.length === 0 ? (
-              <div className="p-20 flex flex-col items-center gap-4">
-                <div className="w-16 h-16 bg-page border border-rule flex items-center justify-center text-2xl">📅</div>
-                <p className="text-sm font-black text-muted uppercase tracking-widest">No interviews scheduled</p>
-              </div>
-            ) : (
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-page text-muted text-[9px] font-black uppercase tracking-[0.18em] border-b border-rule">
-                    {([
-                      { key: 'round', label: 'Round', cls: 'px-8 py-4' },
-                      { key: 'candidate', label: 'Candidate', cls: 'px-4 py-4' },
-                      { key: 'scheduled', label: 'Scheduled', cls: 'px-4 py-4' },
-                      { key: null, label: 'Notes', cls: 'px-4 py-4' },
-                      { key: 'result', label: 'Result', cls: 'px-4 py-4' },
-                    ] as const).map(col => (
-                      <th key={col.label} className={col.cls}>
-                        {col.key ? (
-                          <button onClick={() => toggleSort(interviewSort, setInterviewSort, col.key!)} className="flex items-center gap-1 hover:text-ink transition-colors">
-                            {col.label}
-                            <SortIcon active={interviewSort.col === col.key} dir={interviewSort.dir} />
-                          </button>
-                        ) : col.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-rule">
-                  {sortedInterviews.map(ir => {
-                    const cand = candidates.find(c => c.id === ir.candidateId);
-                    const isPast = new Date(ir.scheduledAt) < new Date();
-                    return (
-                      <tr key={ir.id} className="hover:bg-page transition-all">
-                        <td className="px-8 py-5"><p className="text-sm font-black text-ink">{ir.roundName}</p></td>
-                        <td className="px-4 py-5">
-                          {cand ? (
-                            <button onClick={() => loadCandidateDetail(cand.id)} className="text-left hover:opacity-80">
-                              <p className="text-sm font-black text-ink">{cand.firstName} {cand.lastName}</p>
-                              <p className="text-[9px] text-muted font-bold">{cand.job?.title || jobs.find(j => j.id === cand.jobId)?.title || '—'}</p>
-                            </button>
-                          ) : <span className="text-muted text-xs">—</span>}
-                        </td>
-                        <td className="px-4 py-5">
-                          <p className={`text-sm font-black ${isPast ? 'text-muted' : 'text-ink'}`}>{fmtDateTime(ir.scheduledAt)}</p>
-                          {!isPast && <span className="text-[9px] font-black text-accent uppercase tracking-widest">Upcoming</span>}
-                        </td>
-                        <td className="px-4 py-5"><p className="text-xs text-muted max-w-[240px] truncate">{ir.notes || '—'}</p></td>
-                        <td className="px-4 py-5">
-                          {ir.result ? (
-                            <span className={`text-[9px] font-black uppercase border px-2.5 py-1  tracking-widest ${ir.result === 'PASS' ? 'bg-page text-accent border-accent' : ir.result === 'FAIL' ? 'bg-page text-ink border-ink' : 'bg-page text-muted border-rule'}`}>{ir.result}</span>
-                          ) : <span className="text-[9px] font-bold text-muted">Pending</span>}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
+  // ── Modals (rendered on both the list and the record) ─────────────────────
+  function modals() {
+    const interviewCand = candidates.find(x => x.id === interviewCandidateId);
+    const jobMissing = !jobForm.title || !jobForm.department || !jobForm.jobDescription;
+    const candMissing = !candidateForm.firstName || !candidateForm.lastName || !candidateForm.email;
+    const intMissing = !interviewForm.roundName || !interviewForm.scheduledAt;
+    return (
+      <>
+        <Modal
+          open={!!tagJobModal}
+          onClose={() => setTagJobModal(null)}
+          title="Tag to a job opening"
+          caption="Choosing no job moves the candidate back to the pool."
+          footer={<>
+            <Button variant="secondary" onClick={() => setTagJobModal(null)}>Cancel</Button>
+            <Button onClick={tagJob} disabled={tagJobSaving}>{tagJobSaving ? 'Saving…' : 'Save'}</Button>
+          </>}
+        >
+          <Field label="Job opening">
+            <Select value={tagJobSelected} onChange={e => setTagJobSelected(e.target.value)}>
+              <option value="">No job (candidate pool)</option>
+              {jobs.filter(j => j.status !== 'CANCELLED').map(j => <option key={j.id} value={j.id}>{j.title} · {j.department}</option>)}
+            </Select>
+          </Field>
+        </Modal>
+
+        <Modal
+          open={jobModal}
+          size="lg"
+          onClose={() => { setJobModal(false); setEditingJob(null); }}
+          title={editingJob ? 'Edit job opening' : 'New job opening'}
+          footer={<>
+            <Button variant="secondary" onClick={() => { setJobModal(false); setEditingJob(null); }}>Cancel</Button>
+            <Button onClick={saveJob} disabled={jobSaving || jobMissing} reason={jobMissing && !jobSaving ? 'Title, department and description are required' : undefined}>
+              {jobSaving ? 'Saving…' : editingJob ? 'Save changes' : 'Create opening'}
+            </Button>
+          </>}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Job title" required className="sm:col-span-2">
+              <Input value={String(jobForm.title || '')} onChange={e => setJobForm(p => ({ ...p, title: e.target.value }))} placeholder="e.g. Senior software engineer" />
+            </Field>
+            <Field label="Department" required>
+              <Input value={String(jobForm.department || '')} onChange={e => setJobForm(p => ({ ...p, department: e.target.value }))} placeholder="e.g. Engineering" />
+            </Field>
+            <Field label="Headcount">
+              <Input type="number" min={1} value={String(jobForm.headcount || 1)} onChange={e => setJobForm(p => ({ ...p, headcount: e.target.value }))} />
+            </Field>
+            <Field label="Job type">
+              <Select value={String(jobForm.jobType || 'FULL_TIME')} onChange={e => setJobForm(p => ({ ...p, jobType: e.target.value }))}>
+                <option value="FULL_TIME">Full-time</option>
+                <option value="PART_TIME">Part-time</option>
+                <option value="CONTRACT">Contract</option>
+              </Select>
+            </Field>
+            <Field label="Location">
+              <Input value={String(jobForm.location || '')} onChange={e => setJobForm(p => ({ ...p, location: e.target.value }))} placeholder="e.g. Singapore CBD" />
+            </Field>
+            <Field label="Salary from (SGD)">
+              <Input type="number" value={String(jobForm.salaryMin || '')} onChange={e => setJobForm(p => ({ ...p, salaryMin: e.target.value }))} placeholder="e.g. 4000" />
+            </Field>
+            <Field label="Salary to (SGD)">
+              <Input type="number" value={String(jobForm.salaryMax || '')} onChange={e => setJobForm(p => ({ ...p, salaryMax: e.target.value }))} placeholder="e.g. 8000" />
+            </Field>
+            <Field label="Job description" required className="sm:col-span-2" help="The role, the responsibilities, what they will work on.">
+              <Textarea rows={5} value={String(jobForm.jobDescription || '')} onChange={e => setJobForm(p => ({ ...p, jobDescription: e.target.value }))} />
+            </Field>
+            <Field label="Requirements" className="sm:col-span-2" help="Skills, qualifications and experience.">
+              <Textarea rows={3} value={String(jobForm.requirements || '')} onChange={e => setJobForm(p => ({ ...p, requirements: e.target.value }))} />
+            </Field>
           </div>
-        )}
+        </Modal>
+
+        <Modal
+          open={mcfModal}
+          onClose={() => setMcfModal(false)}
+          title="Record MCF listing"
+          caption="Fair Consideration Framework: list on MyCareersFuture for at least 14 days before shortlisting."
+          footer={<>
+            <Button variant="secondary" onClick={() => setMcfModal(false)}>Cancel</Button>
+            <Button onClick={saveMcf} disabled={mcfSaving || !mcfForm.mcfPostedAt} reason={!mcfForm.mcfPostedAt && !mcfSaving ? 'Enter the date posted' : undefined}>{mcfSaving ? 'Saving…' : 'Record listing'}</Button>
+          </>}
+        >
+          <div className="flex flex-col gap-4">
+            <Field label="MCF job ID" help="The reference shown on MyCareersFuture">
+              <Input value={mcfForm.mcfJobId} onChange={e => setMcfForm(p => ({ ...p, mcfJobId: e.target.value }))} placeholder="MCF-2026-XXXXXX" />
+            </Field>
+            <Field label="Date posted on MCF" required>
+              <Input type="date" value={mcfForm.mcfPostedAt} onChange={e => setMcfForm(p => ({ ...p, mcfPostedAt: e.target.value }))} />
+            </Field>
+          </div>
+        </Modal>
+
+        <Modal
+          open={candidateModal}
+          onClose={() => setCandidateModal(false)}
+          title="Add candidate"
+          footer={<>
+            <Button variant="secondary" onClick={() => setCandidateModal(false)}>Cancel</Button>
+            <Button onClick={saveCandidate} disabled={candidateSaving || candMissing} reason={candMissing && !candidateSaving ? 'Name and email are required' : undefined}>{candidateSaving ? 'Adding…' : 'Add candidate'}</Button>
+          </>}
+        >
+          <div className="flex flex-col gap-4">
+            <Field label="Job opening" help="Optional. You can tag a job later.">
+              <Select value={candidateJobId} onChange={e => setCandidateJobId(e.target.value)}>
+                <option value="">Add to candidate pool</option>
+                {jobs.filter(j => j.status !== 'CANCELLED').map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
+              </Select>
+            </Field>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[
+                { key: 'firstName', label: 'First name', type: 'text', required: true },
+                { key: 'lastName', label: 'Last name', type: 'text', required: true },
+                { key: 'email', label: 'Email', type: 'email', required: true },
+                { key: 'phone', label: 'Phone', type: 'tel', placeholder: '+65 9123 4567' },
+                { key: 'currentTitle', label: 'Current title', type: 'text' },
+                { key: 'currentEmployer', label: 'Current employer', type: 'text' },
+                { key: 'expectedSalary', label: 'Expected salary (SGD)', type: 'number' },
+                { key: 'noticePeriod', label: 'Notice period (days)', type: 'number' },
+              ].map(f => (
+                <Field key={f.key} label={f.label} required={f.required}>
+                  <Input type={f.type} value={candidateForm[f.key] || ''} onChange={e => setCandidateForm(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.placeholder} />
+                </Field>
+              ))}
+            </div>
+          </div>
+        </Modal>
+
+        <Modal
+          open={interviewModal}
+          onClose={() => setInterviewModal(false)}
+          title="Schedule interview"
+          caption={interviewCand ? `For ${fullName(interviewCand)}` : undefined}
+          footer={<>
+            <Button variant="secondary" onClick={() => setInterviewModal(false)}>Cancel</Button>
+            <Button onClick={saveInterview} disabled={interviewSaving || intMissing} reason={intMissing && !interviewSaving ? 'Round name and time are required' : undefined}>{interviewSaving ? 'Scheduling…' : 'Schedule interview'}</Button>
+          </>}
+        >
+          <div className="flex flex-col gap-4">
+            <Field label="Round" required>
+              <Input value={interviewForm.roundName} onChange={e => setInterviewForm(p => ({ ...p, roundName: e.target.value }))} placeholder="e.g. Technical screen, final round" />
+            </Field>
+            <Field label="Date and time" required>
+              <Input type="datetime-local" value={interviewForm.scheduledAt} onChange={e => setInterviewForm(p => ({ ...p, scheduledAt: e.target.value }))} />
+            </Field>
+            <Field label="Notes" help="Location, topics, instructions for the panel.">
+              <Textarea rows={3} value={interviewForm.notes} onChange={e => setInterviewForm(p => ({ ...p, notes: e.target.value }))} />
+            </Field>
+          </div>
+        </Modal>
+      </>
+    );
+  }
+
+  // ── Pipeline columns ──────────────────────────────────────────────────────
+  const pipelineCols = pipelineStage ? [pipelineStage] : PIPELINE_STAGES;
+  const pipelineSortId = `${pipelineSort.col}:${pipelineSort.dir}`;
+
+  return (
+    <div className="flex flex-col gap-6 max-w-[1600px] mx-auto pb-24 lg:pb-10">
+      <PageHeader
+        title="Recruitment"
+        subtitle={loading ? 'Loading…' : `${openJobs} open ${openJobs === 1 ? 'position' : 'positions'} · ${totalApplicants} candidates · ${upcomingInterviews} interviews ahead`}
+        actions={<>
+          <Button variant="secondary" icon="plus" onClick={() => openNewCandidate()}>Add candidate</Button>
+          <Button icon="plus" onClick={openNewJob}>New job opening</Button>
+        </>}
+      />
+
+      {error && (
+        <div role="alert" className="flex items-start gap-2.5 p-3.5 rounded-control border border-rule bg-danger-bg text-danger">
+          <Icon name="alert" size={18} className="mt-0.5" />
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-semibold">Recruitment data did not load</span>
+            <span className="text-[13px] text-ink">{error}</span>
+          </div>
+          <Button size="sm" variant="secondary" className="ml-auto" onClick={load}>Retry</Button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Stat label="Open positions" value={loading ? '—' : openJobs} note={`${jobs.filter(j => j.status === 'DRAFT').length} drafts`} />
+        <Stat label="Candidates" value={loading ? '—' : totalApplicants} note={`${candidates.filter(c => c.stage === 'HIRED').length} hired · ${candidates.filter(c => !c.jobId).length} in pool`} />
+        <Stat label="Upcoming interviews" value={loading ? '—' : upcomingInterviews} note="Scheduled, no result yet" />
+        <Stat label="MCF compliance" value={loading ? '—' : `${mcfPct}%`} note={`${mcfCompliant} of ${openJobs} open ads listed`} />
       </div>
 
-      {/* ── Candidate Detail Side Panel ─────────────────────────────────────── */}
-      {detailCandidate && (
-        <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setDetailCandidate(null)}>
-          <div className="absolute inset-0 bg-shadow backdrop-" />
-          <div className="relative z-10 w-full max-w-lg bg-paper h-full overflow-y-auto " onClick={e => e.stopPropagation()}>
-            {detailLoading ? (
-              <div className="p-16 text-center text-muted text-sm font-bold">Loading…</div>
-            ) : (
-              <>
-                <div className="p-8 border-b border-rule">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="flex items-center gap-3 mb-1">
-                        <div className="w-10 h-10 bg-page border border-accent flex items-center justify-center text-sm font-black text-accent">
-                          {detailCandidate.firstName[0]}{detailCandidate.lastName[0]}
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-black text-ink tracking-tighter">{detailCandidate.firstName} {detailCandidate.lastName}</h3>
-                          <p className="text-xs font-bold text-muted">{detailCandidate.email}</p>
-                        </div>
-                      </div>
-                      {detailCandidate.phone && <p className="text-xs font-bold text-muted mt-1">{detailCandidate.phone}</p>}
-                    </div>
-                    <button onClick={() => setDetailCandidate(null)} className="text-muted hover:text-ink text-xl font-black">✕</button>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <span className={`text-[9px] font-black border  px-2.5 py-1 uppercase tracking-widest ${STAGE_COLORS[detailCandidate.stage] || ''}`}>
-                      {STAGE_LABELS[detailCandidate.stage] || detailCandidate.stage}
-                    </span>
-                    {detailCandidate.job && (
-                      <span className="text-[9px] font-black bg-page text-ink border border-rule px-2.5 py-1 uppercase tracking-widest">{detailCandidate.job.title}</span>
-                    )}
-                    {detailCandidate.isHired && <span className="text-[9px] font-black bg-page text-accent border border-accent px-2.5 py-1 uppercase tracking-widest">Hired</span>}
-                    {detailCandidate.isOfferMade && !detailCandidate.isHired && <span className="text-[9px] font-black bg-page text-ink border border-highlight px-2.5 py-1 uppercase tracking-widest">Offer Made</span>}
-                  </div>
-                </div>
+      <Tabs
+        items={[
+          { id: 'jobs' as const, label: 'Job openings', count: jobs.length },
+          { id: 'candidates' as const, label: 'Candidates', count: candidates.length },
+          { id: 'pipeline' as const, label: 'Pipeline' },
+          { id: 'interviews' as const, label: 'Interviews', count: upcomingInterviews || undefined },
+        ]}
+        active={activeTab}
+        onChange={setActiveTab}
+      />
 
-                <div className="p-8 flex flex-col gap-7">
-                  {/* Stage Lifecycle Tracker */}
-                  <div>
-                    <p className="label-form mb-4">Stage Tracker</p>
-                    <div className="relative">
-                      {/* Connector line */}
-                      <div className="absolute left-[9px] top-2 bottom-2 w-px bg-page" />
-                      <div className="flex flex-col gap-0">
-                        {PIPELINE_STAGES.filter(s => s !== 'WITHDRAWN').map((s) => {
-                          const stageOrder = ['APPLIED', 'SCREENING', 'INTERVIEW_1', 'INTERVIEW_2', 'ASSESSMENT', 'OFFER', 'HIRED', 'REJECTED'];
-                          const currentIdx = stageOrder.indexOf(detailCandidate.stage);
-                          const thisIdx = stageOrder.indexOf(s);
-                          const isCurrent = detailCandidate.stage === s;
-                          const isPast = thisIdx < currentIdx && !['REJECTED'].includes(detailCandidate.stage);
-                          const isRejected = detailCandidate.stage === 'REJECTED' && s === 'REJECTED';
-                          const event = detailCandidate.stageEvents?.find(e => e.toStage === s);
-                          return (
-                            <div key={s} className="flex items-start gap-4 py-2 relative z-10">
-                              <div className={`w-[18px] h-[18px]  flex-shrink-0 flex items-center justify-center mt-0.5 border-2 ${
-                                isCurrent || isRejected
-                                  ? `${STAGE_DOT[s]} border-transparent`
-                                  : isPast
-                                  ? 'bg-rule border-transparent'
-                                  : 'bg-paper border-rule'
-                              }`}>
-                                {(isPast) && <div className="w-2 h-2 bg-paper " />}
-                                {isCurrent && <div className="w-2 h-2 bg-paper " />}
+      {loading ? (
+        <div className="flex flex-col gap-2" aria-busy="true">
+          {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-[52px] bg-pill rounded-card animate-pulse" />)}
+        </div>
+      ) : (
+        <>
+          {/* ── Job openings ─────────────────────────────────────────────────── */}
+          {activeTab === 'jobs' && (
+            <DataTable
+              aria-label="Job openings"
+              columns={jobColumns}
+              rows={sortedJobs}
+              rowKey={j => j.id}
+              rowHeight={60}
+              empty={noRows('briefcase', 'No job openings yet', 'Create an opening to start collecting candidates.', <Button icon="plus" onClick={openNewJob}>New job opening</Button>)}
+              mobileCard={j => (
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-semibold text-ink">{j.title}</span>
+                      <span className="text-xs text-muted">{j.department} · {j.location || 'Location not set'} · {j.headcount} {j.headcount === 1 ? 'hire' : 'hires'}</span>
+                    </div>
+                    <Badge tone={JOB_STATUS_TONE[j.status] || 'neutral'}>{JOB_STATUS_LABEL[j.status] || j.status}</Badge>
+                  </div>
+                  {funnel(j)}
+                  {mcfCell(j)}
+                  <div className="-ml-3 flex flex-wrap">{jobActions(j)}</div>
+                </div>
+              )}
+              footer={<span className="tabular-nums">{jobs.length} opening{jobs.length === 1 ? '' : 's'}</span>}
+            />
+          )}
+
+          {/* ── Candidates ───────────────────────────────────────────────────── */}
+          {activeTab === 'candidates' && (
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <SearchInput value={candidateSearch} onChange={e => setCandidateSearch(e.target.value)} placeholder="Search name, email, title, employer…" aria-label="Search candidates" className="sm:w-80" />
+                <span className="sm:ml-auto text-[13px] text-muted tabular-nums">{filteredCandidates.length} shown · {candidates.filter(c => !c.jobId).length} unassigned</span>
+              </div>
+              <DataTable
+                aria-label="Candidates"
+                columns={candidateColumns}
+                rows={sortedCandidates}
+                rowKey={c => c.id}
+                empty={candidateSearch
+                  ? noRows('users', 'No matching candidates', `Nothing matches “${candidateSearch}”.`, <Button variant="secondary" onClick={() => setCandidateSearch('')}>Clear search</Button>)
+                  : noRows('users', 'No candidates yet', 'Add candidates to a job opening or to the general pool.', <Button icon="plus" onClick={() => openNewCandidate()}>Add candidate</Button>)}
+                mobileCard={c => (
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex items-start justify-between gap-3">
+                      {nameCell(c)}
+                      <Badge tone={STAGE_TONE[c.stage] || 'neutral'}>{STAGE_LABELS[c.stage] || c.stage}</Badge>
+                    </div>
+                    <span className="text-xs text-muted tabular-nums">{c.job?.title || 'Unassigned'} · {money(c.expectedSalary)} · {c.noticePeriod ? `${c.noticePeriod}d notice` : 'notice not given'}</span>
+                    {stageSelect(c)}
+                    <div className="flex flex-wrap items-center gap-1">
+                      {resumeControl(c)}
+                      <Button size="sm" variant="ghost" onClick={() => openTagJob(c)}>{c.jobId ? 'Re-tag' : 'Tag job'}</Button>
+                      <Button size="sm" variant="ghost" onClick={() => openInterview(c.id)}>Interview</Button>
+                    </div>
+                  </div>
+                )}
+              />
+            </div>
+          )}
+
+          {/* ── Pipeline: one column per stage ───────────────────────────────── */}
+          {activeTab === 'pipeline' && (
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:max-w-[760px]">
+                <Field label="Job opening">
+                  <Select value={pipelineJob} onChange={e => setPipelineJob(e.target.value)}>
+                    <option value="">All job openings</option>
+                    {jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Stage">
+                  <Select value={pipelineStage} onChange={e => setPipelineStage(e.target.value)}>
+                    <option value="">All stages</option>
+                    {PIPELINE_STAGES.map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Sort">
+                  <Select value={pipelineSortId} onChange={e => { const [col, dir] = e.target.value.split(':'); setPipelineSort({ col: col as typeof pipelineSort.col, dir: dir as 'asc' | 'desc' }); }}>
+                    {!PIPELINE_SORTS.some(s => s.id === pipelineSortId) && <option value={pipelineSortId}>Custom</option>}
+                    {PIPELINE_SORTS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </Select>
+                </Field>
+              </div>
+
+              {filteredPipeline.length === 0 ? (
+                <Card>{noRows('users', 'No candidates in the pipeline', pipelineJob || pipelineStage ? 'Nothing matches these filters.' : 'Candidates appear here once they are added.',
+                  pipelineJob || pipelineStage ? <Button variant="secondary" onClick={() => { setPipelineJob(''); setPipelineStage(''); }}>Clear filters</Button> : undefined)}</Card>
+              ) : (
+                <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 snap-x" aria-label="Pipeline by stage">
+                  {pipelineCols.map(s => {
+                    const inStage = sortedPipeline.filter(c => c.stage === s);
+                    return (
+                      <section key={s} aria-label={`${STAGE_LABELS[s]}, ${inStage.length}`} className="flex flex-col gap-2 w-[82vw] sm:w-[264px] shrink-0 snap-start p-2.5 rounded-card bg-pill">
+                        <header className="flex items-center justify-between gap-2 px-1.5 py-1">
+                          <span className="inline-flex items-center gap-2 text-[13.5px] font-bold text-ink">
+                            <span className={`w-2.5 h-2.5 rounded-full ${STAGE_DOT[s]} ring-1 ring-rule`} aria-hidden="true" />{STAGE_LABELS[s]}
+                          </span>
+                          <span className="text-xs font-semibold text-muted tabular-nums">{inStage.length}</span>
+                        </header>
+                        {inStage.length === 0 ? (
+                          <p className="px-1.5 py-3 text-[13px] text-muted">No one at this stage</p>
+                        ) : inStage.map(c => (
+                          <Card key={c.id} padding="p-3" className="gap-2.5">
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <Avatar name={fullName(c)} size={28} tone="soft" />
+                              <div className="flex flex-col min-w-0">
+                                <button type="button" onClick={() => loadCandidateDetail(c.id)} className="text-left text-sm font-semibold text-ink truncate hover:text-accent hover:underline">{fullName(c)}</button>
+                                <span className="text-xs text-muted truncate">{jobTitleOf(c) || 'Unassigned'}</span>
                               </div>
-                              <div className="flex-1 min-w-0 pb-1">
-                                <div className="flex items-center justify-between">
-                                  <span className={`text-[10px] font-black uppercase tracking-widest ${isCurrent || isRejected ? 'text-ink' : isPast ? 'text-muted' : 'text-muted'}`}>
-                                    {STAGE_LABELS[s]}
-                                  </span>
-                                  {event && <span className="text-[8px] font-bold text-muted">{fmtDate(event.createdAt)}</span>}
-                                  {isCurrent && !event && <span className="text-[8px] font-black text-accent uppercase tracking-widest">Current</span>}
-                                </div>
-                                {event?.note && <p className="text-[9px] text-muted mt-0.5">{event.note}</p>}
-                              </div>
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Move Stage */}
-                  <div>
-                    <p className="label-form mb-3">Move Stage</p>
-                    <div className="flex flex-wrap gap-2">
-                      {PIPELINE_STAGES.map(s => (
-                        <button key={s} onClick={() => updateStage(detailCandidate.id, s)}
-                          className={`text-[9px] font-black border  px-2.5 py-1.5 uppercase tracking-widest transition-all ${detailCandidate.stage === s ? 'ring-2 ring-accent ' + STAGE_COLORS[s] : STAGE_COLORS[s] + ' opacity-60 hover:opacity-100'}`}>
-                          {STAGE_LABELS[s]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Employment Details */}
-                  <div>
-                    <p className="label-form mb-3">Employment Details</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        ['Current Title', detailCandidate.currentTitle || '—'],
-                        ['Current Employer', detailCandidate.currentEmployer || '—'],
-                        ['Expected Salary', detailCandidate.expectedSalary ? `$${Number(detailCandidate.expectedSalary).toLocaleString()}` : '—'],
-                        ['Notice Period', detailCandidate.noticePeriod ? `${detailCandidate.noticePeriod} days` : '—'],
-                      ].map(([label, value]) => (
-                        <div key={label}>
-                          <p className="label-form">{label}</p>
-                          <p className="text-xs font-bold text-ink mt-0.5">{value}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Tagged job */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="label-form">Tagged Job</p>
-                      <button onClick={() => { setTagJobSelected(detailCandidate.jobId || ''); setTagJobModal(detailCandidate.id); }}
-                        className="text-[9px] font-black text-accent border border-accent bg-page px-2 py-1 uppercase tracking-widest hover:bg-page">
-                        {detailCandidate.jobId ? 'Change' : 'Tag Job'}
-                      </button>
-                    </div>
-                    {detailCandidate.job ? (
-                      <div className="bg-page border border-rule p-3">
-                        <p className="text-xs font-black text-ink">{detailCandidate.job.title}</p>
-                        {detailCandidate.job.department && <p className="text-[9px] font-bold text-muted uppercase tracking-widest mt-0.5">{detailCandidate.job.department}</p>}
-                      </div>
-                    ) : <p className="text-xs text-muted font-bold">Not tagged to any job opening</p>}
-                  </div>
-
-                  {/* Resume */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="label-form">Resume</p>
-                      {detailCandidate.resumeName && (
-                        <button onClick={() => deleteResume(detailCandidate.id)}
-                          className="text-[9px] font-black text-ink hover:text-ink uppercase tracking-widest transition-colors">
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                    {detailCandidate.resumeName ? (
-                      <button onClick={() => downloadResume(detailCandidate.id)}
-                        className="w-full flex items-center gap-3 bg-page hover:bg-page border border-rule hover:border-accent p-3 transition-all group">
-                        <div className="w-8 h-8 bg-page border border-ink flex items-center justify-center text-xs font-black text-ink flex-shrink-0">PDF</div>
-                        <div className="flex-1 min-w-0 text-left">
-                          <p className="text-xs font-black text-ink truncate group-hover:text-accent">{detailCandidate.resumeName}</p>
-                          <p className="text-[9px] font-bold text-muted uppercase tracking-widest mt-0.5">Click to download</p>
-                        </div>
-                      </button>
-                    ) : (
-                      <label className={`w-full flex items-center justify-center gap-2 border-2 border-dashed  p-4 cursor-pointer transition-all ${resumeUploading === detailCandidate.id ? 'border-rule bg-page' : 'border-accent hover:border-accent hover:bg-page'}`}>
-                        <div className="text-center">
-                          <p className={`text-[10px] font-black uppercase tracking-widest ${resumeUploading === detailCandidate.id ? 'text-muted' : 'text-accent'}`}>
-                            {resumeUploading === detailCandidate.id ? 'Uploading…' : 'Upload Resume'}
-                          </p>
-                          <p className="text-[8px] font-bold text-muted mt-1">PDF, DOC, DOCX · Max 10 MB</p>
-                        </div>
-                        <input type="file" accept=".pdf,.doc,.docx" className="hidden" disabled={resumeUploading === detailCandidate.id}
-                          onChange={e => { const f = e.target.files?.[0]; if (f) uploadResume(detailCandidate.id, f); e.target.value = ''; }} />
-                      </label>
-                    )}
-                  </div>
-
-                  {detailCandidate.notes && (
-                    <div>
-                      <p className="label-form mb-2">Notes</p>
-                      <p className="text-xs text-ink leading-relaxed">{detailCandidate.notes}</p>
-                    </div>
-                  )}
-
-                  {/* Interview Rounds */}
-                  <div>
-                    <div className="flex justify-between items-center mb-3">
-                      <p className="label-form">Interview Rounds</p>
-                      <button onClick={() => { setInterviewCandidateId(detailCandidate.id); setInterviewForm(EMPTY_INTERVIEW); setInterviewModal(true); }}
-                        className="text-[9px] font-black text-accent border border-accent bg-page px-2.5 py-1 uppercase tracking-widest hover:bg-page">
-                        + Schedule
-                      </button>
-                    </div>
-                    {!detailCandidate.interviewRounds?.length ? (
-                      <p className="text-xs text-muted font-bold">No interviews scheduled yet.</p>
-                    ) : (
-                      <div className="flex flex-col gap-3">
-                        {detailCandidate.interviewRounds.map(ir => (
-                          <div key={ir.id} className="bg-page border border-rule p-4">
-                            <div className="flex justify-between">
-                              <p className="text-xs font-black text-ink">{ir.roundName}</p>
-                              {ir.result && (
-                                <span className={`text-[9px] font-black uppercase px-2 py-0.5  ${ir.result === 'PASS' ? 'bg-page text-accent' : ir.result === 'FAIL' ? 'bg-page text-ink' : 'bg-page text-muted'}`}>{ir.result}</span>
-                              )}
+                            <div className="flex items-center justify-between gap-2 text-xs text-muted tabular-nums">
+                              <span>{money(c.expectedSalary)}</span>
+                              <span>{c.noticePeriod ? `${c.noticePeriod}d notice` : 'No notice given'}</span>
+                              <span>{fmtDate(c.createdAt)}</span>
                             </div>
-                            <p className="text-[9px] font-bold text-muted mt-1">{fmtDateTime(ir.scheduledAt)}</p>
-                            {ir.notes && <p className="text-[10px] text-muted mt-1">{ir.notes}</p>}
-                          </div>
+                            <div className="flex items-center gap-1.5">
+                              <div className="flex-1 min-w-0">{stageSelect(c)}</div>
+                              <Button size="sm" variant="ghost" onClick={() => openInterview(c.id)} aria-label={`Schedule interview for ${fullName(c)}`} icon="calendar">
+                                <span className="sr-only">Interview</span>
+                              </Button>
+                            </div>
+                          </Card>
                         ))}
-                      </div>
-                    )}
-                  </div>
+                      </section>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
-                  {/* Stage History */}
-                  {detailCandidate.stageEvents && detailCandidate.stageEvents.length > 1 && (
-                    <div>
-                      <p className="label-form mb-3">Activity Log</p>
-                      <div className="flex flex-col gap-2">
-                        {[...detailCandidate.stageEvents].reverse().map(ev => (
-                          <div key={ev.id} className="flex items-start gap-3">
-                            <div className={`w-1.5 h-1.5  mt-1.5 flex-shrink-0 ${STAGE_DOT[ev.toStage] || 'bg-rule'}`} />
-                            <div>
-                              <p className="text-[10px] font-black text-ink">
-                                {ev.fromStage ? `${STAGE_LABELS[ev.fromStage] || ev.fromStage} → ${STAGE_LABELS[ev.toStage] || ev.toStage}` : `Added as ${STAGE_LABELS[ev.toStage] || ev.toStage}`}
-                              </p>
-                              {ev.note && <p className="text-[9px] text-muted">{ev.note}</p>}
-                              <p className="text-[8px] font-bold text-muted mt-0.5">{fmtDateTime(ev.createdAt)}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+          {/* ── Interviews ───────────────────────────────────────────────────── */}
+          {activeTab === 'interviews' && (
+            <DataTable
+              aria-label="Interviews"
+              columns={interviewColumns}
+              rows={sortedInterviews}
+              rowKey={ir => ir.id}
+              empty={noRows('calendar', 'No interviews scheduled', 'Schedule a round from a candidate’s record or the candidates list.')}
+              mobileCard={ir => {
+                const cand = candidates.find(c => c.id === ir.candidateId);
+                const isPast = new Date(ir.scheduledAt) < new Date();
+                return (
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <span className="font-semibold text-ink">{ir.roundName}</span>
+                      {cand && <button type="button" onClick={() => loadCandidateDetail(cand.id)} className="text-left text-sm text-accent hover:underline truncate">{fullName(cand)}</button>}
+                      <span className={`text-xs tabular-nums ${isPast ? 'text-muted' : 'text-ink'}`}>{fmtDateTime(ir.scheduledAt)}{!isPast ? ' · upcoming' : ''}</span>
                     </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── Tag Job Modal ──────────────────────────────────────────────────────── */}
-      {tagJobModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagJobModal(null)}>
-          <div className="absolute inset-0 bg-shadow backdrop-" />
-          <div className="relative z-10 bg-paper w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <div className="p-8 border-b border-rule flex justify-between items-center">
-              <div>
-                <h3 className="text-base font-black text-ink tracking-tighter">Tag to Job Opening</h3>
-                <p className="text-[9px] font-bold text-muted uppercase tracking-widest mt-1">Select a job to link this candidate</p>
-              </div>
-              <button onClick={() => setTagJobModal(null)} className="text-muted hover:text-ink text-xl font-black">✕</button>
-            </div>
-            <div className="p-8 flex flex-col gap-4">
-              <select value={tagJobSelected} onChange={e => setTagJobSelected(e.target.value)}
-                className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent">
-                <option value="">— No job (candidate pool) —</option>
-                {jobs.filter(j => j.status !== 'CANCELLED').map(j => <option key={j.id} value={j.id}>{j.title} · {j.department}</option>)}
-              </select>
-              <p className="text-[9px] text-muted font-bold">Selecting no job moves the candidate back to the unassigned pool.</p>
-            </div>
-            <div className="p-8 pt-0 flex gap-3 justify-end">
-              <button onClick={() => setTagJobModal(null)} className="px-6 py-3 text-[10px] font-black text-ink bg-page border border-rule uppercase tracking-widest">Cancel</button>
-              <button onClick={tagJob} disabled={tagJobSaving}
-                className="px-6 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent uppercase tracking-widest disabled:opacity-50">
-                {tagJobSaving ? 'Saving…' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Job Modal ──────────────────────────────────────────────────────────── */}
-      {jobModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setJobModal(false); setEditingJob(null); }}>
-          <div className="absolute inset-0 bg-shadow backdrop-" />
-          <div className="relative z-10 bg-paper w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="p-8 border-b border-rule flex justify-between items-center">
-              <h3 className="text-lg font-black text-ink tracking-tighter">{editingJob ? 'Edit Job Opening' : 'New Job Opening'}</h3>
-              <button onClick={() => { setJobModal(false); setEditingJob(null); }} className="text-muted hover:text-ink text-xl font-black">✕</button>
-            </div>
-            <div className="p-8 flex flex-col gap-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2 flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">Job Title *</label>
-                  <input value={String(jobForm.title || '')} onChange={e => setJobForm(p => ({ ...p, title: e.target.value }))} placeholder="e.g. Senior Software Engineer"
-                    className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">Department *</label>
-                  <input value={String(jobForm.department || '')} onChange={e => setJobForm(p => ({ ...p, department: e.target.value }))} placeholder="e.g. Engineering"
-                    className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">Headcount</label>
-                  <input type="number" min={1} value={String(jobForm.headcount || 1)} onChange={e => setJobForm(p => ({ ...p, headcount: e.target.value }))}
-                    className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">Job Type</label>
-                  <select value={String(jobForm.jobType || 'FULL_TIME')} onChange={e => setJobForm(p => ({ ...p, jobType: e.target.value }))}
-                    className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent">
-                    <option value="FULL_TIME">Full Time</option>
-                    <option value="PART_TIME">Part Time</option>
-                    <option value="CONTRACT">Contract</option>
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">Location</label>
-                  <input value={String(jobForm.location || '')} onChange={e => setJobForm(p => ({ ...p, location: e.target.value }))} placeholder="e.g. Singapore CBD"
-                    className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">Salary Min (SGD)</label>
-                  <input type="number" value={String(jobForm.salaryMin || '')} onChange={e => setJobForm(p => ({ ...p, salaryMin: e.target.value }))} placeholder="e.g. 4000"
-                    className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">Salary Max (SGD)</label>
-                  <input type="number" value={String(jobForm.salaryMax || '')} onChange={e => setJobForm(p => ({ ...p, salaryMax: e.target.value }))} placeholder="e.g. 8000"
-                    className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent" />
-                </div>
-                <div className="col-span-2 flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">Job Description *</label>
-                  <textarea rows={5} value={String(jobForm.jobDescription || '')} onChange={e => setJobForm(p => ({ ...p, jobDescription: e.target.value }))}
-                    placeholder="Describe the role, responsibilities, and what the candidate will work on..."
-                    className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent resize-none" />
-                </div>
-                <div className="col-span-2 flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">Requirements</label>
-                  <textarea rows={3} value={String(jobForm.requirements || '')} onChange={e => setJobForm(p => ({ ...p, requirements: e.target.value }))}
-                    placeholder="List required skills, qualifications, and experience..."
-                    className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent resize-none" />
-                </div>
-              </div>
-            </div>
-            <div className="p-8 pt-0 flex gap-3 justify-end">
-              <button onClick={() => { setJobModal(false); setEditingJob(null); }} className="px-6 py-3 text-[10px] font-black text-ink bg-page border border-rule uppercase tracking-widest hover:bg-page">Cancel</button>
-              <button onClick={saveJob} disabled={jobSaving || !jobForm.title || !jobForm.department || !jobForm.jobDescription}
-                className="px-6 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent uppercase tracking-widest disabled:opacity-50 transition-all">
-                {jobSaving ? 'Saving…' : editingJob ? 'Save Changes' : 'Create Opening'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── MCF Compliance Modal ───────────────────────────────────────────────── */}
-      {mcfModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setMcfModal(false)}>
-          <div className="absolute inset-0 bg-shadow backdrop-" />
-          <div className="relative z-10 bg-paper w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <div className="p-8 border-b border-rule flex justify-between items-center">
-              <div>
-                <h3 className="text-base font-black text-ink tracking-tighter">Record MCF Listing</h3>
-                <p className="text-[9px] font-bold text-muted uppercase tracking-widest mt-1">MyCareersFuture 14-Day Compliance</p>
-              </div>
-              <button onClick={() => setMcfModal(false)} className="text-muted hover:text-ink text-xl font-black">✕</button>
-            </div>
-            <div className="p-8 flex flex-col gap-4">
-              <p className="text-xs text-muted leading-relaxed">Under the Fair Consideration Framework, job postings must be listed on MyCareersFuture for at least 14 days before shortlisting.</p>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">MCF Job ID (Reference)</label>
-                <input value={mcfForm.mcfJobId} onChange={e => setMcfForm(p => ({ ...p, mcfJobId: e.target.value }))} placeholder="MCF-2026-XXXXXX"
-                  className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Date Posted on MCF *</label>
-                <input type="date" value={mcfForm.mcfPostedAt} onChange={e => setMcfForm(p => ({ ...p, mcfPostedAt: e.target.value }))}
-                  className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent" />
-              </div>
-            </div>
-            <div className="p-8 pt-0 flex gap-3 justify-end">
-              <button onClick={() => setMcfModal(false)} className="px-6 py-3 text-[10px] font-black text-ink bg-page border border-rule uppercase tracking-widest">Cancel</button>
-              <button onClick={saveMcf} disabled={mcfSaving || !mcfForm.mcfPostedAt}
-                className="px-6 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent uppercase tracking-widest disabled:opacity-50">
-                {mcfSaving ? 'Saving…' : 'Record Listing'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Add Candidate Modal ────────────────────────────────────────────────── */}
-      {candidateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setCandidateModal(false)}>
-          <div className="absolute inset-0 bg-shadow backdrop-" />
-          <div className="relative z-10 bg-paper w-full max-w-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="p-8 border-b border-rule flex justify-between items-center">
-              <h3 className="text-lg font-black text-ink tracking-tighter">Add Candidate</h3>
-              <button onClick={() => setCandidateModal(false)} className="text-muted hover:text-ink text-xl font-black">✕</button>
-            </div>
-            <div className="p-8 flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Job Opening <span className="text-muted normal-case font-bold">(optional — can be tagged later)</span></label>
-                <select value={candidateJobId} onChange={e => setCandidateJobId(e.target.value)}
-                  className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent">
-                  <option value="">— Add to candidate pool —</option>
-                  {jobs.filter(j => j.status !== 'CANCELLED').map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                {[
-                  { key: 'firstName', label: 'First Name *', type: 'text', placeholder: 'John' },
-                  { key: 'lastName', label: 'Last Name *', type: 'text', placeholder: 'Doe' },
-                  { key: 'email', label: 'Email *', type: 'email', placeholder: 'john@example.com' },
-                  { key: 'phone', label: 'Phone', type: 'tel', placeholder: '+65 9123 4567' },
-                  { key: 'currentTitle', label: 'Current Title', type: 'text', placeholder: 'e.g. Software Engineer' },
-                  { key: 'currentEmployer', label: 'Current Employer', type: 'text', placeholder: 'e.g. Acme Corp' },
-                  { key: 'expectedSalary', label: 'Expected Salary (SGD)', type: 'number', placeholder: '5000' },
-                  { key: 'noticePeriod', label: 'Notice Period (days)', type: 'number', placeholder: '30' },
-                ].map(f => (
-                  <div key={f.key} className="flex flex-col gap-1.5">
-                    <label className="text-[9px] font-black text-muted uppercase tracking-widest">{f.label}</label>
-                    <input type={f.type} value={candidateForm[f.key] || ''} onChange={e => setCandidateForm(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.placeholder}
-                      className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent" />
+                    {resultBadge(ir.result)}
                   </div>
-                ))}
-              </div>
-            </div>
-            <div className="p-8 pt-0 flex gap-3 justify-end">
-              <button onClick={() => setCandidateModal(false)} className="px-6 py-3 text-[10px] font-black text-ink bg-page border border-rule uppercase tracking-widest">Cancel</button>
-              <button onClick={saveCandidate} disabled={candidateSaving || !candidateForm.firstName || !candidateForm.lastName || !candidateForm.email}
-                className="px-6 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent uppercase tracking-widest disabled:opacity-50">
-                {candidateSaving ? 'Adding…' : 'Add Candidate'}
-              </button>
-            </div>
-          </div>
-        </div>
+                );
+              }}
+            />
+          )}
+        </>
       )}
 
-      {/* ── Schedule Interview Modal ───────────────────────────────────────────── */}
-      {interviewModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setInterviewModal(false)}>
-          <div className="absolute inset-0 bg-shadow backdrop-" />
-          <div className="relative z-10 bg-paper w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <div className="p-8 border-b border-rule flex justify-between items-center">
-              <h3 className="text-lg font-black text-ink tracking-tighter">Schedule Interview</h3>
-              <button onClick={() => setInterviewModal(false)} className="text-muted hover:text-ink text-xl font-black">✕</button>
-            </div>
-            <div className="p-8 flex flex-col gap-4">
-              {(() => { const c = candidates.find(x => x.id === interviewCandidateId); return c ? <p className="text-xs font-bold text-muted">Candidate: <span className="text-ink">{c.firstName} {c.lastName}</span></p> : null; })()}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Round Name *</label>
-                <input value={interviewForm.roundName} onChange={e => setInterviewForm(p => ({ ...p, roundName: e.target.value }))} placeholder="e.g. Technical Screen, Culture Fit, Final Round"
-                  className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Scheduled Date & Time *</label>
-                <input type="datetime-local" value={interviewForm.scheduledAt} onChange={e => setInterviewForm(p => ({ ...p, scheduledAt: e.target.value }))}
-                  className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Notes</label>
-                <textarea rows={3} value={interviewForm.notes} onChange={e => setInterviewForm(p => ({ ...p, notes: e.target.value }))} placeholder="Interview location, topics to cover, or any instructions…"
-                  className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent resize-none" />
-              </div>
-            </div>
-            <div className="p-8 pt-0 flex gap-3 justify-end">
-              <button onClick={() => setInterviewModal(false)} className="px-6 py-3 text-[10px] font-black text-ink bg-page border border-rule uppercase tracking-widest">Cancel</button>
-              <button onClick={saveInterview} disabled={interviewSaving || !interviewForm.roundName || !interviewForm.scheduledAt}
-                className="px-6 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent uppercase tracking-widest disabled:opacity-50">
-                {interviewSaving ? 'Scheduling…' : 'Schedule Interview'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {modals()}
     </div>
   );
 }
