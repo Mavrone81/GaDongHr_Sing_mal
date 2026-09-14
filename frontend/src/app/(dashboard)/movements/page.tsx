@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { apiFetch } from '@/lib/api';
+import { apiFetchRaw } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
 interface Movement {
@@ -75,7 +75,7 @@ export default function MovementsPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const res = await apiFetch('/movements').then(r => r.json());
+      const res = await apiFetchRaw('/movements').then(r => r.json());
       setMovements(res.movements || []);
       setSummary(res.summary);
     } catch (err) {
@@ -251,7 +251,7 @@ function InitiateModal({ isHr, defaultEmployeeId, onClose, onSuccess }: { isHr: 
       delete body.toSalary;
       delete body.salaryReasonCode;
     }
-    const res = await apiFetch('/movements', {
+    const res = await apiFetchRaw('/movements', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
     if (res.ok) onSuccess();
