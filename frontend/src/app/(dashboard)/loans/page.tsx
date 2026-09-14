@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { TONES } from '@/lib/statusTone';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { apiFetchRaw } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { TONES } from '@/lib/statusTone';
+import { PageHeader, Card, Stat, Tabs, Button, EmptyState, Field, Input, Textarea, Modal, Icon } from '@/components/ui';
 
 interface Advance {
   id: string;
@@ -48,7 +49,7 @@ const HR_ROLES      = ['HR_ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'];
 const FINANCE_ROLES = ['FINANCE_ADMIN', 'SUPER_ADMIN'];
 const APPROVER_ROLES = [...HR_ROLES, ...FINANCE_ROLES];
 
-const STATUS_COLORS: Record<string, string> = {
+const STATUS_TONE: Record<string, string> = {
   PENDING:     TONES.pending,
   APPROVED:    TONES.approved,
   ACTIVE:      TONES.active,     // being repaid
@@ -59,8 +60,23 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELLED:   TONES.inert,
 };
 
+/** Status word in sentence case — the tone makes the list scannable, the word carries the meaning. */
+function statusLabel(s: string) {
+  return s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ');
+}
+function StatusChip({ status }: { status: string }) {
+  return (
+    <span className={`inline-flex items-center h-6 px-2.5 rounded-full text-xs whitespace-nowrap ${STATUS_TONE[status] || 'bg-pill text-muted'}`}>
+      {statusLabel(status)}
+    </span>
+  );
+}
+
+const sgd = (n: number) => `SGD ${n.toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 export default function LoansPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const role = (user?.role || '').toUpperCase();
   const isApprover = APPROVER_ROLES.includes(role);
 
@@ -117,193 +133,165 @@ export default function LoansPage() {
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-[400px]"><div className="w-10 h-10 border-4 border-accent border-t-accent animate-spin rounded-full" /></div>;
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="w-8 h-8 rounded-full border-2 border-rule border-t-accent animate-spin" />
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-black text-ink">{isApprover ? 'Salary Advances & Staff Loans' : 'My Loans'}</h1>
-          <p className="text-xs text-muted mt-0.5 uppercase tracking-widest font-bold">Advances · Loans · Repayments</p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => setShowAdvanceModal(true)}
-            className="px-4 py-2 bg-muted text-paper text-xs font-black uppercase tracking-widest hover:bg-shadow transition-all"
-          >
-            + Request Advance
-          </button>
-          <button
-            onClick={() => setShowLoanModal(true)}
-            className="px-4 py-2 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent transition-all"
-          >
-            + Apply for Loan
-          </button>
-        </div>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title={isApprover ? 'Salary advances & staff loans' : 'My loans'}
+        subtitle="Advances, loans and repayments"
+        actions={
+          <>
+            <Button variant="secondary" icon="plus" onClick={() => setShowAdvanceModal(true)}>Request advance</Button>
+            <Button variant="primary" icon="plus" onClick={() => setShowLoanModal(true)}>Apply for loan</Button>
+          </>
+        }
+      />
 
       {/* Approver dashboard */}
       {isApprover && dashboard && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard label="Active Loans"        value={dashboard.loans.activeCount}     accent="emerald" />
-          <StatCard label="Pending Approvals"   value={dashboard.loans.pendingCount + dashboard.advances.pending} accent="amber" />
-          <StatCard label="Outstanding Balance" value={`SGD ${dashboard.loans.totalOutstanding.toLocaleString()}`} accent="indigo" />
-          <StatCard label="Advances Approved"   value={`SGD ${dashboard.advances.totalApprovedAmount.toLocaleString()}`} accent="teal" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <Stat label="Active loans" value={dashboard.loans.activeCount} />
+          <Stat label="Pending approvals" value={dashboard.loans.pendingCount + dashboard.advances.pending} />
+          <Stat label="Outstanding balance" value={sgd(dashboard.loans.totalOutstanding)} />
+          <Stat label="Advances approved" value={sgd(dashboard.advances.totalApprovedAmount)} />
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-rule">
-        {(['loans', 'advances'] as const).map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-all border-b-2 -mb-px ${
-              tab === t ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'
-            }`}
-          >
-            {t === 'loans' ? `Staff Loans (${loans.length})` : `Salary Advances (${advances.length})`}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        items={[
+          { id: 'loans', label: 'Staff loans', count: loans.length },
+          { id: 'advances', label: 'Salary advances', count: advances.length },
+        ]}
+        active={tab}
+        onChange={setTab}
+      />
 
-      {/* Loans list */}
+      {/* Loans */}
       {tab === 'loans' && (
         loans.length === 0 ? (
-          <div className="bg-paper border border-rule p-12 text-center">
-            <p className="text-sm text-muted">No loans yet.</p>
-          </div>
+          <EmptyState icon="wallet" title="No loans yet" description="Staff loan applications appear here once submitted." />
         ) : (
-          <div className="space-y-3">
-            {loans.map(l => (
-              <Link key={l.id} href={`/loans/${l.id}`} className="block bg-paper border border-rule p-4 sm:p-5 hover: hover:border-accent transition-all">
-                <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-mono font-black text-muted">{l.loanNumber}</span>
-                    <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[l.status] || 'bg-page text-ink'}`}>
-                      {l.status}
-                    </span>
-                    <span className="text-xs text-muted">·</span>
-                    <span className="text-xs font-bold text-ink">{l.employeeName}</span>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-black text-muted uppercase tracking-widest">Principal</p>
-                    <p className="text-sm font-black text-ink">SGD {l.principal.toLocaleString()}</p>
-                  </div>
-                </div>
-                <p className="text-sm text-ink mb-3 line-clamp-1">{l.reason}</p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                  <div>
-                    <p className="text-[10px] font-black text-muted uppercase tracking-wider">Monthly</p>
-                    <p className="text-ink font-bold mt-0.5">SGD {l.monthlyInstalment.toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black text-muted uppercase tracking-wider">Tenure</p>
-                    <p className="text-ink font-bold mt-0.5">{l.tenureMonths} months</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black text-muted uppercase tracking-wider">Outstanding</p>
-                    <p className="text-ink font-bold mt-0.5">SGD {l.outstandingBalance.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black text-muted uppercase tracking-wider">Interest</p>
-                    <p className="text-ink font-bold mt-0.5">{l.interestRate}% p.a.</p>
-                  </div>
-                </div>
-                {l.status === 'ACTIVE' && (
-                  <div className="mt-3 h-1.5 bg-page overflow-hidden">
-                    <div
-                      className="h-full bg-accent transition-all"
-                      style={{ width: `${Math.round((l.totalRepaid / Math.max(l.totalRepayable, 1)) * 100)}%` }}
-                    />
-                  </div>
-                )}
-              </Link>
-            ))}
+          <div className="flex flex-col gap-3">
+            {loans.map(l => {
+              const pct = Math.round((l.totalRepaid / Math.max(l.totalRepayable, 1)) * 100);
+              return (
+                <Card key={l.id} padding="p-0" className="overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/loans/${l.id}`)}
+                    className="text-left p-4 sm:p-5 hover:bg-page transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  >
+                    <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <span className="text-[13px] font-semibold text-muted tabular-nums">{l.loanNumber}</span>
+                        <StatusChip status={l.status} />
+                        <span className="text-muted" aria-hidden>·</span>
+                        <span className="text-sm font-semibold text-ink truncate">{l.employeeName}</span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[12.5px] font-semibold text-muted">Principal</p>
+                        <p className="text-sm font-bold text-ink tabular-nums">{sgd(l.principal)}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-ink mb-3 line-clamp-1">{l.reason}</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                      <div>
+                        <p className="text-[12.5px] font-semibold text-muted">Monthly</p>
+                        <p className="text-ink font-semibold mt-0.5 tabular-nums">{sgd(l.monthlyInstalment)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[12.5px] font-semibold text-muted">Tenure</p>
+                        <p className="text-ink font-semibold mt-0.5 tabular-nums">{l.tenureMonths} months</p>
+                      </div>
+                      <div>
+                        <p className="text-[12.5px] font-semibold text-muted">Outstanding</p>
+                        <p className="text-ink font-semibold mt-0.5 tabular-nums">{sgd(l.outstandingBalance)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[12.5px] font-semibold text-muted">Interest</p>
+                        <p className="text-ink font-semibold mt-0.5 tabular-nums">{l.interestRate}% p.a.</p>
+                      </div>
+                    </div>
+                    {l.status === 'ACTIVE' && (
+                      <div className="mt-3">
+                        <div className="h-1.5 bg-pill rounded-full overflow-hidden">
+                          <div className="h-full bg-accent rounded-full transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                        <p className="mt-1 text-[12.5px] text-muted tabular-nums">{pct}% repaid</p>
+                      </div>
+                    )}
+                  </button>
+                </Card>
+              );
+            })}
           </div>
         )
       )}
 
-      {/* Advances list */}
+      {/* Advances */}
       {tab === 'advances' && (
         advances.length === 0 ? (
-          <div className="bg-paper border border-rule p-12 text-center">
-            <p className="text-sm text-muted">No advance requests yet.</p>
-          </div>
+          <EmptyState icon="wallet" title="No advance requests yet" description="Salary advance requests appear here once submitted." />
         ) : (
-          <div className="space-y-3">
+          <div className="flex flex-col gap-3">
             {advances.map(a => (
-              <div key={a.id} className="bg-paper border border-rule p-4 sm:p-5">
+              <Card key={a.id}>
                 <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-mono font-black text-muted">{a.advanceNumber}</span>
-                    <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[a.status] || 'bg-page text-ink'}`}>
-                      {a.status}
-                    </span>
-                    <span className="text-xs text-muted">·</span>
-                    <span className="text-xs font-bold text-ink">{a.employeeName}</span>
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <span className="text-[13px] font-semibold text-muted tabular-nums">{a.advanceNumber}</span>
+                    <StatusChip status={a.status} />
+                    <span className="text-muted" aria-hidden>·</span>
+                    <span className="text-sm font-semibold text-ink truncate">{a.employeeName}</span>
                   </div>
                   <div className="text-right">
-                    <p className="text-[10px] font-black text-muted uppercase tracking-widest">Amount</p>
-                    <p className="text-sm font-black text-ink">SGD {a.amount.toLocaleString()}</p>
+                    <p className="text-[12.5px] font-semibold text-muted">Amount</p>
+                    <p className="text-sm font-bold text-ink tabular-nums">{sgd(a.amount)}</p>
                   </div>
                 </div>
-                <p className="text-sm text-ink mb-3 italic">"{a.reason}"</p>
-                <div className="flex items-center justify-between text-xs text-muted flex-wrap gap-2">
+                <p className="text-sm text-ink mb-3">{a.reason}</p>
+                <div className="flex items-center justify-between text-[13px] text-muted flex-wrap gap-2">
                   <div className="flex gap-3 flex-wrap">
-                    <span>Requested: <span className="font-bold text-ink">{new Date(a.requestedAt).toLocaleDateString('en-SG')}</span></span>
-                    {a.deductionMonth && <span>Deduct: <span className="font-bold text-ink">{a.deductionMonth}</span></span>}
-                    {a.approvedByName && <span>By: <span className="font-bold text-ink">{a.approvedByName}</span></span>}
+                    <span>Requested <span className="font-semibold text-ink tabular-nums">{new Date(a.requestedAt).toLocaleDateString('en-SG')}</span></span>
+                    {a.deductionMonth && <span>Deduct <span className="font-semibold text-ink tabular-nums">{a.deductionMonth}</span></span>}
+                    {a.approvedByName && <span>By <span className="font-semibold text-ink">{a.approvedByName}</span></span>}
                   </div>
-                  <div className="flex gap-2 flex-wrap">
+                  <div className="flex gap-1 flex-wrap">
                     {a.status === 'PENDING' && isApprover && (
                       <>
-                        <button onClick={() => approveAdvance(a.id)} className="text-xs font-bold text-accent hover:text-accent px-2 py-1">Approve</button>
-                        <button onClick={() => rejectAdvance(a.id)}  className="text-xs font-bold text-ink hover:text-ink px-2 py-1">Reject</button>
+                        <Button variant="ghost" size="sm" onClick={() => approveAdvance(a.id)}>Approve</Button>
+                        <Button variant="ghost" size="sm" onClick={() => rejectAdvance(a.id)}>Reject</Button>
                       </>
                     )}
                     {a.status === 'PENDING' && (
-                      <button onClick={() => cancelAdvance(a.id)} className="text-xs font-bold text-muted hover:text-ink px-2 py-1">Cancel</button>
+                      <Button variant="ghost" size="sm" onClick={() => cancelAdvance(a.id)}>Cancel</Button>
                     )}
                   </div>
                 </div>
                 {a.rejectionReason && (
-                  <p className="mt-2 text-xs text-ink bg-page border border-ink px-3 py-2">
-                    <strong>Rejected:</strong> {a.rejectionReason}
+                  <p className="mt-3 text-[13px] text-ink bg-page border border-rule rounded-control px-3 py-2">
+                    <span className="font-semibold">Rejected:</span> {a.rejectionReason}
                   </p>
                 )}
-              </div>
+              </Card>
             ))}
           </div>
         )
       )}
 
-      {showAdvanceModal && (
-        <AdvanceModal onClose={() => setShowAdvanceModal(false)} onSuccess={() => { setShowAdvanceModal(false); loadData(); }} />
-      )}
-      {showLoanModal && (
-        <LoanModal onClose={() => setShowLoanModal(false)} onSuccess={() => { setShowLoanModal(false); loadData(); }} />
-      )}
+      <AdvanceModal open={showAdvanceModal} onClose={() => setShowAdvanceModal(false)} onSuccess={() => { setShowAdvanceModal(false); loadData(); }} />
+      <LoanModal open={showLoanModal} onClose={() => setShowLoanModal(false)} onSuccess={() => { setShowLoanModal(false); loadData(); }} />
     </div>
   );
 }
 
-function StatCard({ label, value, accent }: { label: string; value: number | string; accent: string }) {
-  const colorMap: Record<string, string> = {
-    amber: 'text-ink', emerald: 'text-accent', indigo: 'text-accent', teal: 'text-accent',
-  };
-  return (
-    <div className="bg-paper border border-rule p-4">
-      <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-2">{label}</p>
-      <p className={`text-xl sm:text-2xl font-black ${colorMap[accent] || 'text-ink'}`}>{value}</p>
-    </div>
-  );
-}
-
-// ─── Advance Modal ────────────────────────────────────────────────────────────
-function AdvanceModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+// ─── Advance modal ───────────────────────────────────────────────────────────
+function AdvanceModal({ open, onClose, onSuccess }: { open: boolean; onClose: () => void; onSuccess: () => void }) {
   const [form, setForm] = useState({ amount: '', monthlySalary: '', reason: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -321,28 +309,42 @@ function AdvanceModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
     setSaving(false);
   }
 
+  const disabled = !form.amount || !form.monthlySalary || !form.reason;
+
   return (
-    <Modal title="Request Salary Advance" onClose={onClose}>
-      <Field label="Amount (SGD)" required>
-        <input type="number" step="0.01" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} className="input" />
-      </Field>
-      <Field label="Your Monthly Salary (SGD)" required>
-        <input type="number" step="0.01" value={form.monthlySalary} onChange={e => setForm({...form, monthlySalary: e.target.value})} className="input" placeholder="Used to enforce 1× cap" />
-      </Field>
-      <Field label="Reason" required>
-        <textarea rows={3} value={form.reason} onChange={e => setForm({...form, reason: e.target.value})} className="input resize-none" />
-      </Field>
-      <p className="text-xs text-muted">
-        Salary advances are deducted in full from your next payroll. Maximum 1× monthly salary.
-      </p>
-      {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
-      <ModalFooter onSave={save} onClose={onClose} saving={saving} saveLabel="Submit Request" disabled={!form.amount || !form.monthlySalary || !form.reason} />
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Request salary advance"
+      caption="Deducted in full from your next payroll. Maximum 1× monthly salary."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={save} disabled={saving || disabled}
+            reason={disabled && !saving ? 'Fill in amount, salary and reason' : undefined}>
+            {saving ? 'Saving…' : 'Submit request'}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <Field label="Amount (SGD)" required>
+          <Input type="number" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} />
+        </Field>
+        <Field label="Your monthly salary (SGD)" required help="Used to enforce the 1× cap">
+          <Input type="number" step="0.01" value={form.monthlySalary} onChange={e => setForm({ ...form, monthlySalary: e.target.value })} />
+        </Field>
+        <Field label="Reason" required>
+          <Textarea rows={3} value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} />
+        </Field>
+        {error && <p className="text-sm text-danger font-semibold">{error}</p>}
+      </div>
     </Modal>
   );
 }
 
-// ─── Loan Modal ──────────────────────────────────────────────────────────────
-function LoanModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+// ─── Loan modal ──────────────────────────────────────────────────────────────
+function LoanModal({ open, onClose, onSuccess }: { open: boolean; onClose: () => void; onSuccess: () => void }) {
   const [form, setForm] = useState({
     principal: '', interestRate: '0', tenureMonths: '12', monthlySalary: '', reason: '',
   });
@@ -371,81 +373,54 @@ function LoanModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () 
     setSaving(false);
   }
 
-  return (
-    <Modal title="Apply for Staff Loan" onClose={onClose}>
-      <Field label="Principal Amount (SGD)" required>
-        <input type="number" step="0.01" value={form.principal} onChange={e => setForm({...form, principal: e.target.value})} className="input" />
-      </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Tenure (months)" required>
-          <input type="number" min={1} max={60} value={form.tenureMonths} onChange={e => setForm({...form, tenureMonths: e.target.value})} className="input" />
-        </Field>
-        <Field label="Interest %/year">
-          <input type="number" min={0} max={10} step="0.1" value={form.interestRate} onChange={e => setForm({...form, interestRate: e.target.value})} className="input" />
-        </Field>
-      </div>
-      <Field label="Your Monthly Salary (SGD)" required>
-        <input type="number" step="0.01" value={form.monthlySalary} onChange={e => setForm({...form, monthlySalary: e.target.value})} className="input" placeholder="For affordability check (max 30% deduction)" />
-      </Field>
-      <Field label="Reason" required>
-        <textarea rows={3} value={form.reason} onChange={e => setForm({...form, reason: e.target.value})} className="input resize-none" />
-      </Field>
+  const disabled = !form.principal || !form.tenureMonths || !form.monthlySalary || !form.reason;
 
-      {p > 0 && n > 0 && (
-        <div className="p-4 bg-page border border-accent text-xs space-y-1">
-          <p><strong>Live Estimate:</strong></p>
-          <p>Monthly instalment: <strong>SGD {monthly.toFixed(2)}</strong></p>
-          <p>Total repayable: <strong>SGD {totalRepayable.toFixed(2)}</strong></p>
-          <p>Total interest: <strong>SGD {totalInterest.toFixed(2)}</strong></p>
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Apply for staff loan"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={save} disabled={saving || disabled}
+            reason={disabled && !saving ? 'Fill in the required fields' : undefined}>
+            {saving ? 'Saving…' : 'Submit application'}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <Field label="Principal amount (SGD)" required>
+          <Input type="number" step="0.01" value={form.principal} onChange={e => setForm({ ...form, principal: e.target.value })} />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Tenure (months)" required>
+            <Input type="number" min={1} max={60} value={form.tenureMonths} onChange={e => setForm({ ...form, tenureMonths: e.target.value })} />
+          </Field>
+          <Field label="Interest %/year">
+            <Input type="number" min={0} max={10} step="0.1" value={form.interestRate} onChange={e => setForm({ ...form, interestRate: e.target.value })} />
+          </Field>
         </div>
-      )}
-      {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
-      <ModalFooter onSave={save} onClose={onClose} saving={saving} saveLabel="Submit Application" disabled={!form.principal || !form.tenureMonths || !form.monthlySalary || !form.reason} />
+        <Field label="Your monthly salary (SGD)" required help="For the affordability check (max 30% deduction)">
+          <Input type="number" step="0.01" value={form.monthlySalary} onChange={e => setForm({ ...form, monthlySalary: e.target.value })} />
+        </Field>
+        <Field label="Reason" required>
+          <Textarea rows={3} value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} />
+        </Field>
+
+        {p > 0 && n > 0 && (
+          <div className="rounded-control bg-tint border border-rule px-4 py-3 text-sm">
+            <p className="font-semibold text-ink mb-1">Live estimate</p>
+            <div className="grid grid-cols-3 gap-3">
+              <div><p className="text-[12.5px] text-muted">Monthly</p><p className="font-semibold text-ink tabular-nums">{sgd(monthly)}</p></div>
+              <div><p className="text-[12.5px] text-muted">Total repayable</p><p className="font-semibold text-ink tabular-nums">{sgd(totalRepayable)}</p></div>
+              <div><p className="text-[12.5px] text-muted">Total interest</p><p className="font-semibold text-ink tabular-nums">{sgd(totalInterest)}</p></div>
+            </div>
+          </div>
+        )}
+        {error && <p className="text-sm text-danger font-semibold">{error}</p>}
+      </div>
     </Modal>
-  );
-}
-
-// ─── Modal scaffolding ───────────────────────────────────────────────────────
-function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow/40 backdrop- p-4">
-      <div className="bg-paper w-full max-w-lg border border-rule max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-rule sticky top-0 bg-paper flex items-center justify-between">
-          <h3 className="text-sm font-black text-ink">{title}</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center hover:bg-page text-muted text-lg">×</button>
-        </div>
-        <div className="p-6 space-y-4">{children}</div>
-      </div>
-      <style jsx>{`
-        :global(.input) {
-          width: 100%; border: 1px solid var(--rule);
-          padding: 0.6rem 0.9rem; font-size: 0.875rem; outline: none;
-          transition: all 0.15s;
-        }
-        :global(.input:focus) { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent); }
-      `}</style>
-    </div>
-  );
-}
-
-function ModalFooter({ onSave, onClose, saving, saveLabel, disabled }: { onSave: () => void; onClose: () => void; saving: boolean; saveLabel: string; disabled?: boolean }) {
-  return (
-    <div className="flex gap-3 pt-1">
-      <button onClick={onSave} disabled={saving || disabled} className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
-        {saving ? 'Saving…' : saveLabel}
-      </button>
-      <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
-    </div>
-  );
-}
-
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-xs font-black text-ink uppercase tracking-wider mb-1.5">
-        {label}{required && <span className="text-ink"> *</span>}
-      </label>
-      {children}
-    </div>
   );
 }
