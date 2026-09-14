@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import NotificationBell from '@/components/NotificationBell';
 import FloatingAssistant from '@/components/FloatingAssistant';
 import TrialBanner from '@/components/TrialBanner';
-import { GaDongMark } from '@/components/GaDongLogo';
+import GaDongLogo from '@/components/GaDongLogo';
 
 // ─── RBAC Navigation Matrix — Section 2, GaDongHR_RBAC_Workflow_Reference.pdf ──
 // SA = Superadmin (full, unrestricted access to ALL modules)
@@ -504,11 +504,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       >
         {/* Brand */}
         <div className="relative px-5 pt-5 pb-4 border-b border-paper/5 flex items-center gap-3">
-          <GaDongMark size={34} className="shrink-0" />
-          <div className="flex flex-col min-w-0">
-            <span className="font-black text-paper tracking-[0.18em] uppercase text-sm leading-none">GaDongHR</span>
-            <span className="text-[8px] font-black text-highlight/80 mt-1 tracking-[0.25em] uppercase truncate">CRM · HR · Payroll</span>
-          </div>
+          <GaDongLogo variant="dark" markSize={34} className="min-w-0" />
         </div>
 
         {/* Role badge */}
@@ -641,12 +637,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="hidden lg:block h-4 w-px bg-muted" />
             <NotificationBell />
             <div className="hidden lg:block h-4 w-px bg-muted" />
-            {/* Brand lockup on the light top bar — cream-background JPEG */}
-            <img
-              src="/gadonghr-logo.jpg"
-              alt="GaDongHR — CRM · HR · Payroll"
-              className="hidden lg:block h-7 w-auto"
-            />
+            {/* Brand lockup on the light top bar. Was an <img> of /gadonghr-logo.jpg,
+                a file that never existed in public/ — every dashboard page showed a
+                broken image here. Now the shared carapace lockup, drawn inline. */}
+            <GaDongLogo variant="light" markSize={26} className="hidden lg:flex" />
             <div className="hidden lg:flex flex-col items-end">
               <p className="text-[8px] font-black text-muted uppercase tracking-[0.15em] leading-none">v1.1.0</p>
               <p className="text-[7px] font-bold text-highlight mt-0.5 uppercase tracking-widest leading-none">SG Compliance</p>
