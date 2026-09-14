@@ -41,7 +41,7 @@ export default function CodeInput({ value, onChange, disabled, label = 'Verifica
               key={i}
               className={`flex-1 h-[58px] rounded-control border bg-paper flex items-center justify-center text-2xl font-bold text-ink tabular-nums transition-colors ${
                 d || active ? 'border-accent' : 'border-rule'
-              } ${active ? 'ring-2 ring-accent/20' : ''} ${disabled ? 'opacity-60' : ''}`}
+              } ${active ? 'ring-2 ring-accent ring-offset-2 ring-offset-page' : ''} ${disabled ? 'opacity-60' : ''}`}
             >
               {d}
             </div>
