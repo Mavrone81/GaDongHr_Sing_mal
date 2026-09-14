@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { TONES } from '@/lib/statusTone';
 import Link from 'next/link';
-import { apiFetch } from '@/lib/api';
+import { apiFetchRaw } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
 interface Advance {
@@ -76,9 +76,9 @@ export default function LoansPage() {
     setLoading(true);
     try {
       const [advRes, loanRes, dashRes] = await Promise.all([
-        apiFetch('/loans/advances').then(r => r.json()),
-        apiFetch('/loans/staff-loans').then(r => r.json()),
-        isApprover ? apiFetch('/loans/dashboard').then(r => r.json()) : Promise.resolve(null),
+        apiFetchRaw('/loans/advances').then(r => r.json()),
+        apiFetchRaw('/loans/staff-loans').then(r => r.json()),
+        isApprover ? apiFetchRaw('/loans/dashboard').then(r => r.json()) : Promise.resolve(null),
       ]);
       setAdvances(advRes.advances || []);
       setLoans(loanRes.loans || []);
@@ -95,7 +95,7 @@ export default function LoansPage() {
   async function approveAdvance(id: string) {
     if (!confirm('Approve this advance request?')) return;
     const month = window.prompt('Deduction month (YYYY-MM, blank = next payroll):', '') || undefined;
-    const res = await apiFetch(`/loans/advances/${id}/approve`, {
+    const res = await apiFetchRaw(`/loans/advances/${id}/approve`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(month ? { deductionMonth: month } : {}),
     });
@@ -104,7 +104,7 @@ export default function LoansPage() {
   async function rejectAdvance(id: string) {
     const reason = window.prompt('Reason for rejection?');
     if (!reason || !reason.trim()) return;
-    const res = await apiFetch(`/loans/advances/${id}/reject`, {
+    const res = await apiFetchRaw(`/loans/advances/${id}/reject`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rejectionReason: reason.trim() }),
     });
@@ -112,7 +112,7 @@ export default function LoansPage() {
   }
   async function cancelAdvance(id: string) {
     if (!confirm('Cancel this advance?')) return;
-    const res = await apiFetch(`/loans/advances/${id}/cancel`, { method: 'PUT' });
+    const res = await apiFetchRaw(`/loans/advances/${id}/cancel`, { method: 'PUT' });
     if (res.ok) loadData(); else alert((await res.json()).error || 'Failed');
   }
 
@@ -310,7 +310,7 @@ function AdvanceModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
 
   async function save() {
     setSaving(true); setError('');
-    const res = await apiFetch('/loans/advances', {
+    const res = await apiFetchRaw('/loans/advances', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         amount: parseFloat(form.amount), monthlySalary: parseFloat(form.monthlySalary), reason: form.reason,
@@ -359,7 +359,7 @@ function LoanModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () 
 
   async function save() {
     setSaving(true); setError('');
-    const res = await apiFetch('/loans/staff-loans', {
+    const res = await apiFetchRaw('/loans/staff-loans', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         principal: p, interestRate: r, tenureMonths: n,
