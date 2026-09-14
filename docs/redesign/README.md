@@ -19,18 +19,43 @@ it, split across the fleet. This file is the spec every worker builds against.
 | Radius | cards 12px (`rounded-card`), controls 8px (`rounded-control`) | same |
 
 Token names in `frontend/src/app/globals.css` are unchanged, so untouched
-screens keep rendering (slightly cleaner) until their batch lands. The dark
-console uses the same variable names under a `data-theme="dark"` wrapper on the
-`/platform` layout — do not hard-code hex in pages.
+screens keep rendering (slightly cleaner) until their batch lands. The tenant
+app is light only. The dark console is opt-in: put `data-theme="dark"` on a
+wrapper element in the `/platform` layout (the selector is a descendant match,
+so a div works) — do not hard-code hex in pages. Tailwind colours are
+`rgb(var(--x-rgb) / <alpha-value>)`, so `bg-ink/40` and `ring-accent/30` work;
+`text-on-accent` is the text colour on any accent fill; chip grounds are
+`bg-ok-bg` / `bg-warn-bg` / `bg-danger-bg` / `bg-brass-bg`.
 
 ## Shared components
 
 Import from `@/components/ui` (see `index.ts` for the rules): `PageHeader`,
-`Card`/`CardHeader`, `Stat`, `DataTable`, `Tabs`, `Field`/`Input`/`Select`,
-`Button`, `Badge`, `SearchInput`, `EmptyState`, `Icon`. Add a component there
-when two batches need it; do not fork a private copy. The older
-`components/official/*` set stays for unmigrated screens and is deleted at the
-end.
+`Card`/`CardHeader`, `Stat`, `DataTable` (with `mobileCard` for phones),
+`Tabs`, `Field`/`Input`/`Select`/`Textarea`, `Button`, `Badge`, `SearchInput`,
+`EmptyState`, `Icon`, `Modal`, `useToast()` (provider is in the root layout),
+`Stepper`, `Avatar`, `SplitPane`. Add a component there when two batches need
+it; do not fork a private copy. The older `components/official/*` set stays for
+unmigrated screens and is deleted at the end.
+
+Focus is the global `:focus-visible` outline in globals.css; never
+`outline-none` without a visible replacement.
+
+## Declaring a batch done
+
+Append your route prefixes to `frontend/__tests__/helpers/migrated.ts` in the
+same commit that rebuilds them. `redesign-guard.test.ts` then enforces the
+stricter rules on those files: no `text-[<12px]`, no `text-2xs`, no
+`eyebrow`/`label-form`/`panel-header`/`badge` classes, no dingbat or emoji
+icons, no old marketing copy, no focus removal.
+
+## Pre-existing bug you will meet: `apiFetch` returns JSON
+
+`lib/api.ts` `apiFetch` has returned parsed JSON since May, but a dozen pages
+still do `.then(r => r.json())` or check `res.ok` on it, so they throw and never
+load. Some also prefix paths with `/api/` on a base that already ends in `/api`
+(404 at the gateway). Fix at those call sites only (`apiFetchRaw` for the
+Response-style ones; drop the `/api/` prefix) in a **separate commit** titled
+`fix(api-callers): …` so it can be reviewed apart from presentation.
 
 ## Screen types (build to the matching artboard)
 

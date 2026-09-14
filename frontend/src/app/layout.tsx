@@ -1,6 +1,7 @@
 import { Manrope } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/context/AuthContext'
+import { ToastProvider } from '@/components/ui/Toast'
 
 // 2026-09 redesign: Manrope replaces Inter. The CSS variable feeds --font-sans
 // in globals.css and the Tailwind `font-sans` family.
@@ -54,9 +55,11 @@ export default function RootLayout({
         `}} />
       </head>
       <body className={`${manrope.variable} font-sans`}>
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        <ToastProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </ToastProvider>
       </body>
     </html>
   )
