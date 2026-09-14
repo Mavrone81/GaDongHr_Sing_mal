@@ -61,26 +61,29 @@ const config: Config = {
         // enforced by frontend/__tests__/seal-reservation.test.ts.
         // 2026-09 redesign: values follow the CSS variables so dark mode and
         // the theme switch work; names unchanged so existing screens keep rendering.
-        paper:     'var(--paper)',
-        ink:       'var(--ink)',
-        rule:      'var(--rule)',
+        // rgb(var(--x-rgb) / <alpha-value>) so opacity modifiers (bg-ink/40,
+        // ring-accent/30) emit CSS; a bare var() colour silently cannot.
+        paper:     'rgb(var(--paper-rgb) / <alpha-value>)',
+        ink:       'rgb(var(--ink-rgb) / <alpha-value>)',
+        rule:      'rgb(var(--rule-rgb) / <alpha-value>)',
         seal:      '#A8322A',
-        accent:    'var(--accent)',
-        highlight: '#C08A3E',
-        muted:     'var(--muted)',
-        shadow:    '#102A22',
-        page:      'var(--page)',
-        tint:      'var(--tint)',
-        pill:      'var(--pill)',
-        faint:     'var(--faint)',
-        danger:    'var(--danger)',
-        warn:      'var(--warn)',
-        ok:        'var(--ok)',
-        'on-accent':   'var(--on-accent)',
-        'warn-soft':   'var(--warn-soft)',
-        'danger-soft': 'var(--danger-soft)',
-        'brass-soft':  'var(--brass-soft)',
-        'brass-ink':   'var(--brass-ink)',
+        accent:    'rgb(var(--accent-rgb) / <alpha-value>)',
+        highlight: 'rgb(var(--highlight-rgb) / <alpha-value>)',
+        muted:     'rgb(var(--muted-rgb) / <alpha-value>)',
+        shadow:    'rgb(var(--shadow-rgb) / <alpha-value>)',
+        page:      'rgb(var(--page-rgb) / <alpha-value>)',
+        tint:      'rgb(var(--tint-rgb) / <alpha-value>)',
+        pill:      'rgb(var(--pill-rgb) / <alpha-value>)',
+        faint:     'rgb(var(--faint-rgb) / <alpha-value>)',
+        danger:    'rgb(var(--danger-rgb) / <alpha-value>)',
+        warn:      'rgb(var(--warn-rgb) / <alpha-value>)',
+        ok:        'rgb(var(--ok-rgb) / <alpha-value>)',
+        'on-accent': 'rgb(var(--on-accent-rgb) / <alpha-value>)',
+        'danger-bg': 'var(--danger-bg)',
+        'warn-bg':   'var(--warn-bg)',
+        'ok-bg':     'var(--ok-bg)',
+        'brass-bg':  'var(--brass-bg)',
+        'brass-fg':  'var(--brass-fg)',
 
         // The 2026 `indigo: navy` remap is RETIRED, not repointed. It made
         // brand colour arrive through a class named "indigo" — a lie in the
@@ -107,11 +110,12 @@ const config: Config = {
         },
       },
       fontSize: {
-        '2xs': '0.65rem',
+        // Redesign floor: the legacy 2xs (10.4px) now resolves to 12px.
+        '2xs': '0.75rem',
       },
       fontFamily: {
         sans: ['var(--font-manrope)', 'Manrope', 'Segoe UI', 'system-ui', 'sans-serif'],
-        mono: ['var(--font-mono)', 'ui-monospace', 'Menlo', 'monospace'],
+        mono: ['var(--font-mono)', 'IBM Plex Mono', 'ui-monospace', 'monospace'],
       },
       borderRadius: {
         card: '12px',

@@ -42,9 +42,16 @@ export default function AuditPage() {
       <PageHeader title="Audit log" subtitle="Every operator action on this console, newest first." />
       <SearchInput placeholder="Filter by action or company…" value={q} onChange={(e) => setQ(e.target.value)} className="sm:w-[360px]" aria-label="Filter audit log" />
       <DataTable
+        aria-label="Audit log"
         columns={columns}
         rows={rows}
         rowKey={(l) => l.i}
+        mobileCard={(l) => (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-start justify-between gap-3"><span className="font-mono text-[13px] text-accent">{l.action}</span><span className="shrink-0 font-mono text-xs text-muted">{fmtDateTime(l.createdAt)}</span></div>
+            {l.tenantId && <Link href={`/platform/companies/${l.tenantId}`} className="text-[13px] text-ink hover:text-accent">{name(l.tenantId) ?? <span className="font-mono text-xs">{l.tenantId.slice(0, 8)}</span>}</Link>}
+          </div>
+        )}
         rowHeight={46}
         footer={<span>{rows.length} of {logs.length} {logs.length === 1 ? 'entry' : 'entries'}</span>}
         empty={loaded

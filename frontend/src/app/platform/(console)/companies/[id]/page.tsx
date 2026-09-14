@@ -77,7 +77,7 @@ export default function CompanyPage() {
         </>}
       />
 
-      {err && <div className="rounded-control border border-rule bg-danger-soft px-4 py-2.5 text-sm text-danger" role="alert">{err}</div>}
+      {err && <div className="rounded-control border border-rule bg-danger-bg px-4 py-2.5 text-sm text-danger" role="alert">{err}</div>}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Users" value={<span className="font-mono">{tenant.users}</span>} note="Accounts in this tenant" />

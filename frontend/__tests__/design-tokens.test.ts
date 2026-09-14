@@ -26,10 +26,11 @@ const TOKENS: Record<string, string> = {
   '--shadow': '#102A22',
   '--tint': '#E7EFEA',
   '--pill': '#F3F2EE',
-  '--faint': '#9C9A91',
+  '--faint': '#85837A',
   '--danger': '#B42318',
   '--warn': '#B54708',
   '--ok': '#067647',
+  '--on-accent': '#FFFFFF',
 };
 
 describe('Official Record tokens', () => {

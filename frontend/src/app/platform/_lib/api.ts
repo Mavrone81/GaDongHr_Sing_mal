@@ -2,6 +2,7 @@
 
 import { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import type { BadgeTone } from '@/components/ui';
 
 // The operator API client, lifted unchanged from the old single-page console so every
 // route talks to the same endpoints with the same token and the same 401/403 redirect.
@@ -39,8 +40,7 @@ export interface ModuleDef { code: string; name: string; isCore: boolean; }
 export interface AuditEntry { action: string; tenantId: string | null; createdAt: string; }
 export interface Admin { id: string; email: string; name: string; role: string; mfaEnabled: boolean; isActive: boolean; }
 
-type Tone = 'neutral' | 'ok' | 'warn' | 'danger' | 'accent' | 'brass';
-export const STATUS_TONE: Record<string, Tone> = {
+export const STATUS_TONE: Record<string, BadgeTone> = {
   ACTIVE: 'ok',
   TRIALING: 'brass',
   SUSPENDED: 'danger',
@@ -49,7 +49,7 @@ export const STATUS_TONE: Record<string, Tone> = {
 };
 const STATUS_LABEL: Record<string, string> = { ACTIVE: 'Active', TRIALING: 'Trialing', SUSPENDED: 'Suspended', PAST_DUE: 'Past due', CANCELED: 'Canceled' };
 export const statusLabel = (s: string) => STATUS_LABEL[s] ?? s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ');
-export const statusTone = (s: string): Tone => STATUS_TONE[s] ?? 'neutral';
+export const statusTone = (s: string): BadgeTone => STATUS_TONE[s] ?? 'neutral';
 
 export const ROLE_LABEL: Record<string, string> = { SUPER_ADMIN: 'Super admin', BILLING: 'Billing', SUPPORT: 'Support' };
 
