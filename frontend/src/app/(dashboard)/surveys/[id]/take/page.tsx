@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { apiFetch } from '@/lib/api';
+import { apiFetchRaw } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
 interface Question {
@@ -47,8 +47,8 @@ export default function TakeSurveyPage() {
     setLoading(true);
     try {
       const [sRes, meRes] = await Promise.all([
-        apiFetch(`/surveys/${id}`).then(r => r.json()),
-        apiFetch(`/surveys/${id}/responses/me`).then(r => r.json()).catch(() => ({ submitted: false })),
+        apiFetchRaw(`/surveys/${id}`).then(r => r.json()),
+        apiFetchRaw(`/surveys/${id}/responses/me`).then(r => r.json()).catch(() => ({ submitted: false })),
       ]);
       if (sRes.error) { setError(sRes.error); return; }
       setSurvey(sRes);
@@ -74,7 +74,7 @@ export default function TakeSurveyPage() {
         textValue: answers[q.id]?.textValue,
       })).filter(a => a.numericValue !== undefined || a.textValue),
     };
-    const res = await apiFetch(`/surveys/${id}/responses`, {
+    const res = await apiFetchRaw(`/surveys/${id}/responses`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     });
     const data = await res.json();

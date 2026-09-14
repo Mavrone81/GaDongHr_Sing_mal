@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { TONES } from '@/lib/statusTone';
 import Link from 'next/link';
-import { apiFetch } from '@/lib/api';
+import { apiFetchRaw } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
 interface HrCase {
@@ -83,8 +83,8 @@ export default function HrCasesPage() {
       if (filterType)     params.set('type', filterType);
       if (filterSeverity) params.set('severity', filterSeverity);
       const [listRes, dashRes] = await Promise.all([
-        apiFetch(`/hr-cases${params.toString() ? `?${params}` : ''}`).then(r => r.json()),
-        isHr ? apiFetch('/hr-cases/dashboard').then(r => r.json()) : Promise.resolve(null),
+        apiFetchRaw(`/hr-cases${params.toString() ? `?${params}` : ''}`).then(r => r.json()),
+        isHr ? apiFetchRaw('/hr-cases/dashboard').then(r => r.json()) : Promise.resolve(null),
       ]);
       setCases(listRes.cases || []);
       setDashboard(dashRes);
@@ -298,7 +298,7 @@ function FileCaseModal({ isHr, onClose, onSuccess }: { isHr: boolean; onClose: (
 
   async function save() {
     setSaving(true); setError('');
-    const res = await apiFetch('/hr-cases', {
+    const res = await apiFetchRaw('/hr-cases', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
     });
     if (res.ok) onSuccess();

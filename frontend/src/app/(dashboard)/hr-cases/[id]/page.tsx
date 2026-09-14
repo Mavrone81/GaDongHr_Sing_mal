@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { TONES } from '@/lib/statusTone';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { apiFetch } from '@/lib/api';
+import { apiFetchRaw } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
 interface CaseDetail {
@@ -80,7 +80,7 @@ export default function CaseDetailPage() {
   async function loadCase() {
     setLoading(true);
     try {
-      const res = await apiFetch(`/hr-cases/${id}`);
+      const res = await apiFetchRaw(`/hr-cases/${id}`);
       if (!res.ok) { const e = await res.json(); setError(e.error || 'Failed'); return; }
       setCase(await res.json());
     } catch { setError('Failed to load'); }
@@ -92,7 +92,7 @@ export default function CaseDetailPage() {
   async function escalate() {
     const reason = window.prompt('Reason for escalation?');
     if (!reason || !reason.trim()) return;
-    const res = await apiFetch(`/hr-cases/${id}/escalate`, {
+    const res = await apiFetchRaw(`/hr-cases/${id}/escalate`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: reason.trim() }),
     });
@@ -103,7 +103,7 @@ export default function CaseDetailPage() {
   async function resolve() {
     const resolution = window.prompt('Resolution / final decision?');
     if (!resolution || !resolution.trim()) return;
-    const res = await apiFetch(`/hr-cases/${id}/resolve`, {
+    const res = await apiFetchRaw(`/hr-cases/${id}/resolve`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ resolution: resolution.trim() }),
     });
@@ -113,21 +113,21 @@ export default function CaseDetailPage() {
 
   async function close() {
     if (!confirm('Close this case permanently?')) return;
-    const res = await apiFetch(`/hr-cases/${id}/close`, { method: 'PUT' });
+    const res = await apiFetchRaw(`/hr-cases/${id}/close`, { method: 'PUT' });
     if (res.ok) loadCase();
     else alert((await res.json()).error || 'Failed');
   }
 
   async function withdraw() {
     if (!confirm('Withdraw this case?')) return;
-    const res = await apiFetch(`/hr-cases/${id}/withdraw`, { method: 'PUT' });
+    const res = await apiFetchRaw(`/hr-cases/${id}/withdraw`, { method: 'PUT' });
     if (res.ok) loadCase();
     else alert((await res.json()).error || 'Failed');
   }
 
   async function acknowledgeAction(actionId: string) {
     if (!confirm('Acknowledge receipt of this action?')) return;
-    const res = await apiFetch(`/hr-cases/${id}/actions/${actionId}/acknowledge`, { method: 'PUT' });
+    const res = await apiFetchRaw(`/hr-cases/${id}/actions/${actionId}/acknowledge`, { method: 'PUT' });
     if (res.ok) loadCase();
     else alert((await res.json()).error || 'Failed');
   }
@@ -138,7 +138,7 @@ export default function CaseDetailPage() {
     const valid = ['UPHELD', 'PARTIALLY_UPHELD', 'REJECTED', 'WITHDRAWN'];
     if (!valid.includes(status.toUpperCase())) { alert('Invalid status'); return; }
     const notes = window.prompt('Outcome notes (optional):') || '';
-    const res = await apiFetch(`/hr-cases/${id}/appeals/${appealId}/decide`, {
+    const res = await apiFetchRaw(`/hr-cases/${id}/appeals/${appealId}/decide`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: status.toUpperCase(), outcomeNotes: notes.trim() }),
     });
@@ -422,7 +422,7 @@ function ActionModal({ caseId, severity, stage, onClose, onSuccess }: { caseId: 
   const [error, setError] = useState('');
 
   useEffect(() => {
-    apiFetch(`/hr-cases/${caseId}/recommend-next-action`)
+    apiFetchRaw(`/hr-cases/${caseId}/recommend-next-action`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.recommended) { setRecommended(d.recommended); setForm(f => ({ ...f, actionType: d.recommended })); } })
       .catch(() => {});
@@ -438,7 +438,7 @@ function ActionModal({ caseId, severity, stage, onClose, onSuccess }: { caseId: 
     if (form.effectiveTo)   body.effectiveTo   = form.effectiveTo;
     if (form.actionType === 'SUSPENSION')   body.suspensionPaid    = form.suspensionPaid;
     if (form.actionType === 'SHOW_CAUSE' && form.showCauseDeadline) body.showCauseDeadline = form.showCauseDeadline;
-    const res = await apiFetch(`/hr-cases/${caseId}/actions`, {
+    const res = await apiFetchRaw(`/hr-cases/${caseId}/actions`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
     if (res.ok) onSuccess();
@@ -490,7 +490,7 @@ function IncidentModal({ caseId, onClose, onSuccess }: { caseId: string; onClose
 
   async function save() {
     setSaving(true); setError('');
-    const res = await apiFetch(`/hr-cases/${caseId}/incidents`, {
+    const res = await apiFetchRaw(`/hr-cases/${caseId}/incidents`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         occurredAt: form.occurredAt,
@@ -532,7 +532,7 @@ function InquiryModal({ caseId, onClose, onSuccess }: { caseId: string; onClose:
 
   async function save() {
     setSaving(true); setError('');
-    const res = await apiFetch(`/hr-cases/${caseId}/inquiry`, {
+    const res = await apiFetchRaw(`/hr-cases/${caseId}/inquiry`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chairId: form.chairId, chairName: form.chairName,
@@ -572,7 +572,7 @@ function AppealModal({ caseId, onClose, onSuccess }: { caseId: string; onClose: 
 
   async function save() {
     setSaving(true); setError('');
-    const res = await apiFetch(`/hr-cases/${caseId}/appeal`, {
+    const res = await apiFetchRaw(`/hr-cases/${caseId}/appeal`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ groundsForAppeal: grounds }),
     });

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { apiFetch } from '@/lib/api';
+import { apiFetchRaw } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
 const HR_ROLES = ['HR_ADMIN', 'HR_MANAGER', 'SUPER_ADMIN', 'FINANCE_ADMIN'];
@@ -27,14 +27,14 @@ export default function AnalyticsPage() {
     setLoading(true);
     try {
       const [headcount, attrition, costPerHire, leaveHeat, otTrend, trainingRoi, payrollRatio, pdpa] = await Promise.all([
-        apiFetch(`/reports/analytics/headcount?period=${period}`).then(r => r.json()).catch(() => null),
-        apiFetch(`/reports/analytics/attrition?months=12`).then(r => r.json()).catch(() => null),
-        apiFetch(`/reports/analytics/cost-per-hire?period=${year}`).then(r => r.json()).catch(() => null),
-        apiFetch(`/reports/analytics/leave-heatmap?year=${year}`).then(r => r.json()).catch(() => null),
-        apiFetch(`/reports/analytics/ot-cost-trend?months=6`).then(r => r.json()).catch(() => null),
-        apiFetch(`/reports/analytics/training-roi?year=${year}`).then(r => r.json()).catch(() => null),
-        apiFetch(`/reports/analytics/payroll-revenue-ratio?period=${year}`).then(r => r.json()).catch(() => null),
-        apiFetch(`/reports/analytics/pdpa-retention`).then(r => r.json()).catch(() => null),
+        apiFetchRaw(`/reports/analytics/headcount?period=${period}`).then(r => r.json()).catch(() => null),
+        apiFetchRaw(`/reports/analytics/attrition?months=12`).then(r => r.json()).catch(() => null),
+        apiFetchRaw(`/reports/analytics/cost-per-hire?period=${year}`).then(r => r.json()).catch(() => null),
+        apiFetchRaw(`/reports/analytics/leave-heatmap?year=${year}`).then(r => r.json()).catch(() => null),
+        apiFetchRaw(`/reports/analytics/ot-cost-trend?months=6`).then(r => r.json()).catch(() => null),
+        apiFetchRaw(`/reports/analytics/training-roi?year=${year}`).then(r => r.json()).catch(() => null),
+        apiFetchRaw(`/reports/analytics/payroll-revenue-ratio?period=${year}`).then(r => r.json()).catch(() => null),
+        apiFetchRaw(`/reports/analytics/pdpa-retention`).then(r => r.json()).catch(() => null),
       ]);
       setData({ headcount, attrition, costPerHire, leaveHeat, otTrend, trainingRoi, payrollRatio, pdpa });
     } catch (err) {
@@ -282,7 +282,7 @@ function BudgetModal({ onClose, onSuccess, year, period }: { onClose: () => void
 
   async function save() {
     setSaving(true); setError('');
-    const res = await apiFetch('/reports/analytics/budget', {
+    const res = await apiFetchRaw('/reports/analytics/budget', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ category: form.category, period: form.periodKey, value: parseFloat(form.value) }),
     });

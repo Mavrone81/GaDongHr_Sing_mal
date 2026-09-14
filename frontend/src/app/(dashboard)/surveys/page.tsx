@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { TONES } from '@/lib/statusTone';
 import Link from 'next/link';
-import { apiFetch } from '@/lib/api';
+import { apiFetchRaw } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
 interface Survey {
@@ -48,7 +48,7 @@ export default function SurveysPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const res = await apiFetch('/surveys').then(r => r.json());
+      const res = await apiFetchRaw('/surveys').then(r => r.json());
       setSurveys(res.surveys || []);
     } catch (err) { console.error('[surveys]', err); }
     finally { setLoading(false); }
@@ -130,7 +130,7 @@ function CreateSurveyModal({ onClose, onSuccess }: { onClose: () => void; onSucc
     setSaving(true); setError('');
     const body: any = { ...form, minResponsesToShow: parseInt(String(form.minResponsesToShow)) };
     if (!body.dueDate) delete body.dueDate;
-    const res = await apiFetch('/surveys', {
+    const res = await apiFetchRaw('/surveys', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
     if (res.ok) onSuccess();
