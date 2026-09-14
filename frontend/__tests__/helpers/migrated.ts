@@ -16,4 +16,5 @@ export const MIGRATED: string[] = [
   // redesign/reports (Form2 (L))
   'app/(dashboard)/notifications/',
   'app/(dashboard)/support/',
+  'app/(dashboard)/surveys/',
 ];
