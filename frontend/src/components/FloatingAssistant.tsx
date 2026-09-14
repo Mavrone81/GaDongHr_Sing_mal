@@ -139,7 +139,7 @@ export default function FloatingAssistant() {
                 onKeyDown={onKeyDown}
                 placeholder="Ask about your leave, claims, payslip…"
                 aria-label="Message"
-                className="flex-1 h-10 rounded-control border border-rule bg-paper px-3 text-sm text-ink placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30"
+                className="flex-1 h-10 rounded-control border border-rule bg-paper px-3 text-sm text-ink placeholder:text-muted focus:border-accent"
               />
               <button
                 type="button"
