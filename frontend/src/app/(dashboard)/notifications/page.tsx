@@ -16,9 +16,9 @@ interface Notification {
 }
 
 /**
- * Category is a topic, not a state: it is printed as a plain neutral badge and
+ * Category is a topic, not a state: it is printed as a plain neutral Badge and
  * the word does the work. Unread-ness is what the eye needs to find, so that is
- * carried by the tinted row, the accent dot, the "New" badge and the bolder
+ * carried by the tinted row, the accent dot, the "New" Badge and the bolder
  * title — never by colour alone.
  */
 const CATEGORY_LABEL: Record<string, string> = {
@@ -143,7 +143,7 @@ export default function NotificationsPage() {
                     key={notif.id}
                     type="button"
                     onClick={() => handleMarkRead(notif)}
-                    className={`group w-full text-left flex items-start gap-3 px-4 py-3.5 sm:px-5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40 ${i > 0 ? 'border-t border-rule' : ''} ${!notif.isRead ? 'bg-tint/50 hover:bg-tint' : 'hover:bg-page'}`}
+                    className={`group w-full text-left flex items-start gap-3 px-4 py-3.5 sm:px-5 transition-colors ${i > 0 ? 'border-t border-rule' : ''} ${!notif.isRead ? 'bg-tint/50 hover:bg-tint' : 'hover:bg-page'}`}
                   >
                     <span
                       className={`mt-2 w-2 h-2 rounded-full shrink-0 ${!notif.isRead ? 'bg-accent' : 'bg-transparent'}`}

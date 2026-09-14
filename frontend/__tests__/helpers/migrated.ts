@@ -13,4 +13,7 @@ export const MIGRATED: string[] = [
   // redesign/shell adds: components/auth/, components/CommandPalette.tsx,
   // components/NotificationBell.tsx, components/TrialBanner.tsx,
   // app/(dashboard)/layout.tsx, app/login/, app/register/, app/auth/*
+  // redesign/reports (Form2 (L))
+  'app/(dashboard)/notifications/',
+  'app/(dashboard)/support/',
 ];

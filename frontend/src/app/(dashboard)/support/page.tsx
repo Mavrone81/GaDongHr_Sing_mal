@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
-import { PageHeader, Card, CardHeader, Badge, Button, Field, Input, Select, EmptyState, Icon } from '@/components/ui';
+import { PageHeader, Card, CardHeader, Badge, Button, Field, Input, Select, Textarea, EmptyState, Icon } from '@/components/ui';
 
 type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
 type TicketCategory = 'GENERAL' | 'PAYROLL' | 'LEAVE' | 'CLAIMS' | 'IT_ACCESS' | 'OTHER';
@@ -54,8 +54,6 @@ const FAQS = [
 
 const REQUIRED_MSG = 'Subject and details are required';
 
-const TEXTAREA = 'w-full px-3 py-2.5 rounded-control border border-rule bg-paper text-sm text-ink placeholder:text-faint outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20 resize-none';
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Thread view — show a ticket's message thread + reply input
 // ─────────────────────────────────────────────────────────────────────────────
@@ -82,7 +80,7 @@ function TicketThread({ ticket, onBack, onUpdated }: { ticket: Ticket; onBack: (
         <button
           type="button"
           onClick={onBack}
-          className="self-start inline-flex items-center gap-1.5 h-8 -ml-1 px-1 rounded-control text-[13px] font-semibold text-muted hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          className="self-start inline-flex items-center gap-1.5 h-8 -ml-1 px-1 rounded-control text-[13px] font-semibold text-muted hover:text-accent"
         >
           <Icon name="chevronRight" size={16} className="rotate-180" /> All tickets
         </button>
@@ -119,12 +117,11 @@ function TicketThread({ ticket, onBack, onUpdated }: { ticket: Ticket; onBack: (
       {ticket.status !== 'CLOSED' && (
         <Card>
           <Field label="Add a reply" error={error || undefined}>
-            <textarea
+            <Textarea
               value={reply}
               onChange={e => setReply(e.target.value)}
               rows={3}
               placeholder="Type your message…"
-              className={TEXTAREA}
             />
           </Field>
           <div className="flex justify-end mt-3">
@@ -227,7 +224,7 @@ export default function SupportPage() {
               <Input value={subject} onChange={e => setSubject(e.target.value)} placeholder="A short summary of the issue" invalid={formError === REQUIRED_MSG && !subject.trim()} />
             </Field>
             <Field label="Details" required error={formError === REQUIRED_MSG && !body.trim() ? 'Describe the issue' : undefined}>
-              <textarea value={body} onChange={e => setBody(e.target.value)} rows={5} placeholder="What happened, and what did you expect?" className={`${TEXTAREA} ${formError === REQUIRED_MSG && !body.trim() ? 'border-danger' : ''}`} />
+              <Textarea value={body} onChange={e => setBody(e.target.value)} rows={5} placeholder="What happened, and what did you expect?" invalid={formError === REQUIRED_MSG && !body.trim()} />
             </Field>
             {formError && formError !== REQUIRED_MSG && (
               <p role="alert" className="text-[13px] text-danger">{formError}</p>
@@ -265,7 +262,7 @@ export default function SupportPage() {
                   <button
                     type="button"
                     onClick={() => setActiveTicket(t)}
-                    className="w-full text-left px-5 py-4 hover:bg-page transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40"
+                    className="w-full text-left px-5 py-4 hover:bg-page transition-colors"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
@@ -292,7 +289,7 @@ export default function SupportPage() {
           <div>
             {FAQS.map(f => (
               <details key={f.q} className="group border-t border-rule">
-                <summary className="flex items-center justify-between gap-3 px-5 py-3.5 cursor-pointer list-none hover:bg-page transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40">
+                <summary className="flex items-center justify-between gap-3 px-5 py-3.5 cursor-pointer list-none hover:bg-page transition-colors">
                   <span className="text-sm font-semibold text-ink group-open:text-accent">{f.q}</span>
                   <Icon name="chevronDown" size={16} className="text-muted transition-transform group-open:rotate-180" />
                 </summary>
