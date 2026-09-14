@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { TONES } from '@/lib/statusTone';
-import { apiFetch } from '@/lib/api';
+import { apiFetchRaw } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
 interface Plan {
@@ -226,9 +226,9 @@ export default function BenefitsPage() {
     setLoading(true);
     try {
       const [plansRes, periodRes, catRes] = await Promise.all([
-        apiFetch('/benefits/plans').then(r => r.json()),
-        apiFetch('/benefits/open-enrollment/current').then(r => r.json()),
-        apiFetch('/benefits/flexi-categories').then(r => r.json()),
+        apiFetchRaw('/benefits/plans').then(r => r.json()),
+        apiFetchRaw('/benefits/open-enrollment/current').then(r => r.json()),
+        apiFetchRaw('/benefits/flexi-categories').then(r => r.json()),
       ]);
       setPlans(plansRes.plans || []);
       setOpenPeriod(periodRes.active ? periodRes.period : null);
@@ -236,14 +236,14 @@ export default function BenefitsPage() {
 
       if (isHr) {
         const [enrRes, claimsRes, periodsRes, dashRes, fWalletsRes, fClaimsRes, fDashRes, fCfgRes] = await Promise.all([
-          apiFetch('/benefits/enrollments').then(r => r.json()),
-          apiFetch('/benefits/claims').then(r => r.json()),
-          apiFetch('/benefits/open-enrollment').then(r => r.json()),
-          apiFetch('/benefits/dashboard').then(r => r.json()),
-          apiFetch(`/benefits/flexi-wallets?year=${flexiYear}`).then(r => r.json()),
-          apiFetch(`/benefits/flexi-claims?year=${flexiYear}`).then(r => r.json()),
-          apiFetch(`/benefits/flexi-dashboard?year=${flexiYear}`).then(r => r.json()),
-          apiFetch('/benefits/flexi-config').then(r => r.json()),
+          apiFetchRaw('/benefits/enrollments').then(r => r.json()),
+          apiFetchRaw('/benefits/claims').then(r => r.json()),
+          apiFetchRaw('/benefits/open-enrollment').then(r => r.json()),
+          apiFetchRaw('/benefits/dashboard').then(r => r.json()),
+          apiFetchRaw(`/benefits/flexi-wallets?year=${flexiYear}`).then(r => r.json()),
+          apiFetchRaw(`/benefits/flexi-claims?year=${flexiYear}`).then(r => r.json()),
+          apiFetchRaw(`/benefits/flexi-dashboard?year=${flexiYear}`).then(r => r.json()),
+          apiFetchRaw('/benefits/flexi-config').then(r => r.json()),
         ]);
         setAllEnrollments(enrRes.enrollments || []);
         setAllClaims(claimsRes.claims || []);
@@ -255,11 +255,11 @@ export default function BenefitsPage() {
         setFlexiConfigs(fCfgRes.configs || []);
       } else {
         const [myEnrRes, depRes, myClaimRes, myWalletRes, myFlexiClaimRes] = await Promise.all([
-          apiFetch('/benefits/enrollments/me').then(r => r.json()),
-          apiFetch('/benefits/dependents').then(r => r.json()),
-          apiFetch('/benefits/claims').then(r => r.json()),
-          apiFetch(`/benefits/flexi-wallets/me?year=${new Date().getFullYear()}`).then(r => r.json()),
-          apiFetch('/benefits/flexi-claims').then(r => r.json()),
+          apiFetchRaw('/benefits/enrollments/me').then(r => r.json()),
+          apiFetchRaw('/benefits/dependents').then(r => r.json()),
+          apiFetchRaw('/benefits/claims').then(r => r.json()),
+          apiFetchRaw(`/benefits/flexi-wallets/me?year=${new Date().getFullYear()}`).then(r => r.json()),
+          apiFetchRaw('/benefits/flexi-claims').then(r => r.json()),
         ]);
         setMyEnrollments(myEnrRes.enrollments || []);
         setMyDependents(depRes.dependents || []);
@@ -281,7 +281,7 @@ export default function BenefitsPage() {
   async function cancelEnrollment(id: string) {
     const reason = window.prompt('Reason for cancelling?');
     if (!reason || !reason.trim()) return;
-    const res = await apiFetch(`/benefits/enrollments/${id}/cancel`, {
+    const res = await apiFetchRaw(`/benefits/enrollments/${id}/cancel`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cancelReason: reason.trim() }),
@@ -301,7 +301,7 @@ export default function BenefitsPage() {
       if (isNaN(amt) || amt < 0) { alert('Invalid amount'); return; }
       body.approvedAmount = amt;
     }
-    const res = await apiFetch(`/benefits/claims/${id}/approve`, {
+    const res = await apiFetchRaw(`/benefits/claims/${id}/approve`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -313,7 +313,7 @@ export default function BenefitsPage() {
   async function rejectClaim(id: string) {
     const reason = window.prompt('Reason for rejection?');
     if (!reason || !reason.trim()) return;
-    const res = await apiFetch(`/benefits/claims/${id}/reject`, {
+    const res = await apiFetchRaw(`/benefits/claims/${id}/reject`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rejectedReason: reason.trim() }),
@@ -324,21 +324,21 @@ export default function BenefitsPage() {
 
   async function reimburseClaim(id: string) {
     if (!confirm('Mark this claim as reimbursed?')) return;
-    const res = await apiFetch(`/benefits/claims/${id}/reimburse`, { method: 'PUT' });
+    const res = await apiFetchRaw(`/benefits/claims/${id}/reimburse`, { method: 'PUT' });
     if (res.ok) loadData();
     else alert((await res.json()).error || 'Failed');
   }
 
   async function deleteDependent(id: string) {
     if (!confirm('Remove this dependent?')) return;
-    const res = await apiFetch(`/benefits/dependents/${id}`, { method: 'DELETE' });
+    const res = await apiFetchRaw(`/benefits/dependents/${id}`, { method: 'DELETE' });
     if (res.ok) loadData();
     else alert((await res.json()).error || 'Failed');
   }
 
   async function closePeriod(id: string) {
     if (!confirm('Close this open enrollment window?')) return;
-    const res = await apiFetch(`/benefits/open-enrollment/${id}/close`, { method: 'PUT' });
+    const res = await apiFetchRaw(`/benefits/open-enrollment/${id}/close`, { method: 'PUT' });
     if (res.ok) loadData();
     else alert((await res.json()).error || 'Failed');
   }
@@ -351,7 +351,7 @@ export default function BenefitsPage() {
       if (isNaN(amt) || amt < 0) { alert('Invalid amount'); return; }
       body.approvedAmount = amt;
     }
-    const res = await apiFetch(`/benefits/flexi-claims/${id}/approve`, {
+    const res = await apiFetchRaw(`/benefits/flexi-claims/${id}/approve`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
     if (res.ok) loadData();
@@ -361,7 +361,7 @@ export default function BenefitsPage() {
   async function rejectFlexiClaim(id: string) {
     const reason = window.prompt('Reason for rejection?');
     if (!reason || !reason.trim()) return;
-    const res = await apiFetch(`/benefits/flexi-claims/${id}/reject`, {
+    const res = await apiFetchRaw(`/benefits/flexi-claims/${id}/reject`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rejectedReason: reason.trim() }),
     });
@@ -371,7 +371,7 @@ export default function BenefitsPage() {
 
   async function cancelFlexiClaim(id: string) {
     if (!confirm('Cancel this claim?')) return;
-    const res = await apiFetch(`/benefits/flexi-claims/${id}/cancel`, { method: 'PUT' });
+    const res = await apiFetchRaw(`/benefits/flexi-claims/${id}/cancel`, { method: 'PUT' });
     if (res.ok) loadData();
     else alert((await res.json()).error || 'Failed to cancel');
   }
@@ -379,7 +379,7 @@ export default function BenefitsPage() {
   async function runFlexiYearEnd(encash: boolean) {
     const label = encash ? 'encash (add to payroll)' : 'forfeit (lose unused balance)';
     if (!confirm(`Year-end ${flexiYear}: ${label} all unused flexi wallet balances?`)) return;
-    const res = await apiFetch('/benefits/flexi-wallets/year-end', {
+    const res = await apiFetchRaw('/benefits/flexi-wallets/year-end', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ year: flexiYear, encash }),
     });
@@ -389,13 +389,13 @@ export default function BenefitsPage() {
 
   async function loadYearEndPreview() {
     try {
-      const res = await apiFetch(`/benefits/flexi-wallets/year-end-preview?year=${flexiYear}`);
+      const res = await apiFetchRaw(`/benefits/flexi-wallets/year-end-preview?year=${flexiYear}`);
       if (res.ok) setFlexiYearEndPreview(await res.json());
     } catch (_) { /* ignore */ }
   }
 
   async function seedFlexiCategories() {
-    const res = await apiFetch('/benefits/flexi-categories/seed', { method: 'POST' });
+    const res = await apiFetchRaw('/benefits/flexi-categories/seed', { method: 'POST' });
     if (res.ok) { const d = await res.json(); alert(`Seeded ${d.created} categories (${d.skipped} skipped).`); loadData(); }
     else alert('Failed to seed categories');
   }
@@ -891,7 +891,7 @@ export default function BenefitsPage() {
                       <button
                         onClick={() => {
                           if (confirm(`Deactivate ${p.name}?`)) {
-                            apiFetch(`/benefits/plans/${p.id}`, { method: 'DELETE' })
+                            apiFetchRaw(`/benefits/plans/${p.id}`, { method: 'DELETE' })
                               .then(r => r.ok ? loadData() : r.json().then((e: any) => alert(e.error || 'Failed')));
                           }
                         }}
@@ -1113,7 +1113,7 @@ export default function BenefitsPage() {
                 <button
                   onClick={async () => {
                     if (!confirm('Credit flexi wallets for ALL active employees based on their grade? This uses the batch endpoint.')) return;
-                    const res = await apiFetch('/benefits/flexi-wallets/credit-batch', {
+                    const res = await apiFetchRaw('/benefits/flexi-wallets/credit-batch', {
                       method: 'POST', headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ year: flexiYear }),
                     });
@@ -1251,7 +1251,7 @@ export default function BenefitsPage() {
                               if (!amtStr) return;
                               const thrStr = window.prompt(`Auto-approve threshold for ${cfg.grade} (SGD, 0 = disabled):`, String(cfg.autoApproveThreshold));
                               if (thrStr === null) return;
-                              const res = await apiFetch('/benefits/flexi-config', {
+                              const res = await apiFetchRaw('/benefits/flexi-config', {
                                 method: 'PUT', headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ grade: cfg.grade, annualAmount: parseFloat(amtStr) || 0, autoApproveThreshold: parseFloat(thrStr) || 0 }),
                               });
@@ -1405,7 +1405,7 @@ function PlanModal({ plan, onClose, onSuccess }: { plan: Plan | null; onClose: (
     setSaving(true); setError('');
     const url = plan ? `/benefits/plans/${plan.id}` : '/benefits/plans';
     const method = plan ? 'PUT' : 'POST';
-    const res = await apiFetch(url, {
+    const res = await apiFetchRaw(url, {
       method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
     });
     if (res.ok) onSuccess();
@@ -1509,7 +1509,7 @@ function EnrollModal({ plan, dependents, onClose, onSuccess }: {
 
   async function enroll() {
     setSaving(true); setError('');
-    const res = await apiFetch('/benefits/enrollments', {
+    const res = await apiFetchRaw('/benefits/enrollments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1574,7 +1574,7 @@ function DependentModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
 
   async function save() {
     setSaving(true); setError('');
-    const res = await apiFetch('/benefits/dependents', {
+    const res = await apiFetchRaw('/benefits/dependents', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
     });
     if (res.ok) onSuccess();
@@ -1649,7 +1649,7 @@ function ClaimModal({ enrollment, dependents, onClose, onSuccess }: {
     const patientName = form.patientDependentId
       ? enrolledDeps.find(d => d.id === form.patientDependentId)?.fullName
       : enrollment.employeeName;
-    const res = await apiFetch('/benefits/claims', {
+    const res = await apiFetchRaw('/benefits/claims', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1734,7 +1734,7 @@ function PeriodModal({ plans, onClose, onSuccess }: { plans: Plan[]; onClose: ()
 
   async function save() {
     setSaving(true); setError('');
-    const res = await apiFetch('/benefits/open-enrollment', {
+    const res = await apiFetchRaw('/benefits/open-enrollment', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form),
     });
@@ -1816,7 +1816,7 @@ function FlexiClaimModal({ wallet, categories, onClose, onSuccess }: {
   async function save() {
     if (!form.claimAmount || parseFloat(form.claimAmount) <= 0) { setError('Enter a valid amount'); return; }
     setSaving(true); setError('');
-    const res = await apiFetch('/benefits/flexi-claims', {
+    const res = await apiFetchRaw('/benefits/flexi-claims', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1904,7 +1904,7 @@ function FlexiWalletCreditModal({ year, onClose, onSuccess }: {
   async function save() {
     if (!form.employeeId.trim() || !form.creditedAmount) { setError('Employee ID and amount are required'); return; }
     setSaving(true); setError('');
-    const res = await apiFetch('/benefits/flexi-wallets', {
+    const res = await apiFetchRaw('/benefits/flexi-wallets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

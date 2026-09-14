@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { TONES } from '@/lib/statusTone';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { apiFetch } from '@/lib/api';
+import { apiFetchRaw } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
 const HR_ROLES = ['HR_ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'];
@@ -44,7 +44,7 @@ export default function LoanDetailPage() {
   async function load() {
     setLoading(true);
     try {
-      const res = await apiFetch(`/loans/staff-loans/${id}`);
+      const res = await apiFetchRaw(`/loans/staff-loans/${id}`);
       if (!res.ok) { const e = await res.json(); setError(e.error || 'Failed'); return; }
       setLoan(await res.json());
     } catch { setError('Network error'); }
@@ -55,7 +55,7 @@ export default function LoanDetailPage() {
   async function approve() {
     const start = window.prompt('First deduction date (YYYY-MM-DD), blank = 1st of next month:') || '';
     if (!confirm('Approve this loan? This will generate the repayment schedule.')) return;
-    const res = await apiFetch(`/loans/staff-loans/${id}/approve`, {
+    const res = await apiFetchRaw(`/loans/staff-loans/${id}/approve`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(start ? { startDate: start } : {}),
     });
@@ -65,7 +65,7 @@ export default function LoanDetailPage() {
   async function reject() {
     const reason = window.prompt('Rejection reason?');
     if (!reason || !reason.trim()) return;
-    const res = await apiFetch(`/loans/staff-loans/${id}/reject`, {
+    const res = await apiFetchRaw(`/loans/staff-loans/${id}/reject`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rejectionReason: reason.trim() }),
     });
@@ -74,19 +74,19 @@ export default function LoanDetailPage() {
 
   async function activate() {
     if (!confirm('Activate this loan? Schedule will start.')) return;
-    const res = await apiFetch(`/loans/staff-loans/${id}/activate`, { method: 'PUT' });
+    const res = await apiFetchRaw(`/loans/staff-loans/${id}/activate`, { method: 'PUT' });
     if (res.ok) load(); else alert((await res.json()).error || 'Failed');
   }
 
   async function cancelLoan() {
     if (!confirm('Cancel this loan?')) return;
-    const res = await apiFetch(`/loans/staff-loans/${id}/cancel`, { method: 'PUT' });
+    const res = await apiFetchRaw(`/loans/staff-loans/${id}/cancel`, { method: 'PUT' });
     if (res.ok) load(); else alert((await res.json()).error || 'Failed');
   }
 
   async function recordRepayment(paymentNumber: number) {
     if (!confirm(`Mark payment #${paymentNumber} as paid?`)) return;
-    const res = await apiFetch(`/loans/staff-loans/${id}/repayments`, {
+    const res = await apiFetchRaw(`/loans/staff-loans/${id}/repayments`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ paymentNumber }),
     });
@@ -97,13 +97,13 @@ export default function LoanDetailPage() {
     if (!loan) return;
     const amt = loan.earlySettlement?.settlementAmount || loan.outstandingBalance;
     if (!confirm(`Settle loan early for SGD ${amt}? All remaining scheduled payments will be waived.`)) return;
-    const res = await apiFetch(`/loans/staff-loans/${id}/settle`, { method: 'POST' });
+    const res = await apiFetchRaw(`/loans/staff-loans/${id}/settle`, { method: 'POST' });
     if (res.ok) load(); else alert((await res.json()).error || 'Failed');
   }
 
   async function loadAgreement() {
     setLoadingAg(true);
-    const res = await apiFetch(`/loans/staff-loans/${id}/agreement`).then(r => r.json());
+    const res = await apiFetchRaw(`/loans/staff-loans/${id}/agreement`).then(r => r.json());
     setAgreement(res.html || '');
     setLoadingAg(false);
   }
