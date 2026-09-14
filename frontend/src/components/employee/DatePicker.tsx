@@ -1,5 +1,6 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
+import { Icon } from '@/components/ui';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAYS_SHORT = ['Su','Mo','Tu','We','Th','Fr','Sa'];
@@ -70,43 +71,45 @@ export function DatePicker({ value, onChange, disabled, placeholder = 'Select da
 
   const years = Array.from({ length: yearMax - yearMin + 1 }, (_, i) => yearMax - i);
 
+  const NAV = 'w-8 h-8 flex items-center justify-center rounded-control text-muted hover:bg-page hover:text-ink';
+  const HEAD = 'text-sm font-bold text-ink px-2 py-1 rounded-control hover:bg-page hover:text-accent';
+  const BACK = 'inline-flex items-center gap-1 text-[13px] font-semibold text-muted hover:text-accent';
+
   return (
     <div ref={ref} className="relative">
       <button
         type="button"
         onClick={() => !disabled && setOpen(o => !o)}
-        className="w-full text-left px-4 py-2.5 border border-accent bg-paper text-sm font-bold text-ink flex items-center justify-between hover:border-accent focus:outline-none focus:ring-2 focus:ring-accent transition-all"
+        disabled={disabled}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className="w-full h-[42px] px-3 rounded-control border border-rule bg-paper text-left text-sm text-ink flex items-center justify-between gap-2 transition-colors hover:border-accent focus:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 disabled:bg-pill disabled:text-muted"
       >
-        <span className={displayValue ? 'text-ink' : 'text-muted font-normal'}>{displayValue || placeholder}</span>
-        <svg className="w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-        </svg>
+        <span className={`tabular-nums ${displayValue ? 'text-ink' : 'text-muted'}`}>{displayValue || placeholder}</span>
+        <Icon name="calendar" size={16} className="text-muted" />
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 z-50 mt-1.5 bg-paper border border-rule p-4 w-72">
+        <div className="absolute top-full left-0 z-50 mt-1.5 bg-paper border border-rule rounded-card shadow-card p-4 w-72 max-w-[calc(100vw-2rem)]" role="dialog" aria-label="Choose a date">
 
           {/* Day picker */}
           {mode === 'days' && (
             <>
               <div className="flex items-center justify-between mb-3">
-                <button onClick={prevMonth} className="p-1.5 hover:bg-page transition-all text-muted">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                <button type="button" onClick={prevMonth} className={NAV} aria-label="Previous month">
+                  <Icon name="chevronRight" size={16} className="rotate-180" />
                 </button>
-                <button
-                  onClick={() => setMode('months')}
-                  className="text-sm font-black text-ink hover:text-accent px-2 py-1 hover:bg-page transition-all"
-                >
+                <button type="button" onClick={() => setMode('months')} className={HEAD}>
                   {MONTHS[viewMonth]} {viewYear}
                 </button>
-                <button onClick={nextMonth} className="p-1.5 hover:bg-page transition-all text-muted">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                <button type="button" onClick={nextMonth} className={NAV} aria-label="Next month">
+                  <Icon name="chevronRight" size={16} />
                 </button>
               </div>
 
               <div className="grid grid-cols-7 mb-1">
                 {DAYS_SHORT.map(d => (
-                  <div key={d} className="text-center text-[9px] font-black text-muted uppercase py-1.5">{d}</div>
+                  <div key={d} className="text-center text-xs font-semibold text-muted py-1.5">{d}</div>
                 ))}
               </div>
 
@@ -121,10 +124,12 @@ export function DatePicker({ value, onChange, disabled, placeholder = 'Select da
                       key={day}
                       type="button"
                       onClick={() => selectDay(day)}
-                      className={`h-8 w-full flex items-center justify-center  text-sm font-bold transition-all ${
-                        isSel ? 'bg-accent text-paper font-black' :
-                        isToday ? 'bg-page text-accent font-black ring-1 ring-accent' :
-                        'hover:bg-page text-ink'
+                      aria-pressed={!!isSel}
+                      aria-current={isToday ? 'date' : undefined}
+                      className={`h-8 w-full flex items-center justify-center rounded-control text-sm tabular-nums transition-colors ${
+                        isSel ? 'bg-accent text-on-accent font-bold' :
+                        isToday ? 'text-accent font-bold ring-1 ring-inset ring-accent' :
+                        'text-ink hover:bg-page'
                       }`}
                     >
                       {day}
@@ -135,8 +140,9 @@ export function DatePicker({ value, onChange, disabled, placeholder = 'Select da
 
               {value && (
                 <button
+                  type="button"
                   onClick={() => { onChange(''); setOpen(false); }}
-                  className="w-full mt-3 text-[10px] font-black text-ink hover:text-ink uppercase tracking-widest py-1 border-t border-rule pt-3 transition-all"
+                  className="w-full mt-3 pt-3 border-t border-rule text-[13px] font-semibold text-danger hover:underline"
                 >
                   Clear date
                 </button>
@@ -148,17 +154,18 @@ export function DatePicker({ value, onChange, disabled, placeholder = 'Select da
           {mode === 'months' && (
             <>
               <div className="flex items-center justify-between mb-3">
-                <button onClick={() => setMode('days')} className="text-[10px] font-black text-muted hover:text-accent uppercase tracking-widest transition-all">← Back</button>
-                <button onClick={() => setMode('years')} className="text-sm font-black text-ink hover:text-accent px-2 py-1 hover:bg-page transition-all">{viewYear}</button>
-                <div />
+                <button type="button" onClick={() => setMode('days')} className={BACK}><Icon name="chevronRight" size={14} className="rotate-180" />Back</button>
+                <button type="button" onClick={() => setMode('years')} className={HEAD}>{viewYear}</button>
+                <span className="w-12" />
               </div>
               <div className="grid grid-cols-3 gap-1.5">
                 {MONTHS.map((m, i) => (
                   <button
                     key={m}
+                    type="button"
                     onClick={() => { setViewMonth(i); setMode('days'); }}
-                    className={`py-2  text-xs font-black uppercase transition-all ${
-                      i === viewMonth ? 'bg-accent text-paper' : 'hover:bg-page text-ink'
+                    className={`h-9 rounded-control text-[13px] font-semibold transition-colors ${
+                      i === viewMonth ? 'bg-accent text-on-accent' : 'text-ink hover:bg-page'
                     }`}
                   >
                     {m.slice(0, 3)}
@@ -172,17 +179,18 @@ export function DatePicker({ value, onChange, disabled, placeholder = 'Select da
           {mode === 'years' && (
             <>
               <div className="flex items-center justify-between mb-3">
-                <button onClick={() => setMode('months')} className="text-[10px] font-black text-muted hover:text-accent uppercase tracking-widest transition-all">← Back</button>
-                <span className="text-sm font-black text-muted">Select Year</span>
-                <div />
+                <button type="button" onClick={() => setMode('months')} className={BACK}><Icon name="chevronRight" size={14} className="rotate-180" />Back</button>
+                <span className="text-sm font-bold text-muted">Choose a year</span>
+                <span className="w-12" />
               </div>
               <div className="max-h-48 overflow-y-auto grid grid-cols-3 gap-1.5">
                 {years.map(y => (
                   <button
                     key={y}
+                    type="button"
                     onClick={() => { setViewYear(y); setMode('months'); }}
-                    className={`py-2  text-xs font-black transition-all ${
-                      y === viewYear ? 'bg-accent text-paper' : 'hover:bg-page text-ink'
+                    className={`h-9 rounded-control text-[13px] font-semibold tabular-nums transition-colors ${
+                      y === viewYear ? 'bg-accent text-on-accent' : 'text-ink hover:bg-page'
                     }`}
                   >
                     {y}
