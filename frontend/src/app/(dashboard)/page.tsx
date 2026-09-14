@@ -19,10 +19,10 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-page">
-        <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin h-10 w-10 border-t-2 border-b-2 border-accent rounded-full"></div>
-          <p className="text-[10px] font-black text-muted uppercase tracking-[0.2em] animate-pulse">Syncing Enterprise Intelligence...</p>
+      <div className="min-h-[60vh] flex items-center justify-center bg-page">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-[3px] border-rule border-t-accent animate-spin rounded-full" />
+          <p className="text-sm text-muted">Loading your dashboard…</p>
         </div>
       </div>
     );
