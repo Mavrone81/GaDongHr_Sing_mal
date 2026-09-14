@@ -1,9 +1,13 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { apiFetchRaw } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import {
+  Badge, Button, DataTable, EmptyState, Field, Input, Modal, PageHeader, Select, Stat, Tabs, Textarea, type Column,
+} from '@/components/ui';
+import { Notice, PageLoading } from '@/components/employee/RecordParts';
 
 interface Movement {
   id: string;
@@ -35,34 +39,53 @@ const MOVEMENT_TYPES = [
 ];
 
 const TYPE_LABELS: Record<string, string> = {
-  DEPARTMENT_TRANSFER:     'Department Transfer',
-  LOCATION_TRANSFER:       'Location Transfer',
-  INTER_COMPANY_TRANSFER:  'Inter-Company Transfer',
-  ROLE_CHANGE:             'Role Change',
+  DEPARTMENT_TRANSFER:     'Department transfer',
+  LOCATION_TRANSFER:       'Location transfer',
+  INTER_COMPANY_TRANSFER:  'Inter-company transfer',
+  ROLE_CHANGE:             'Role change',
   PROMOTION:               'Promotion',
-  REPORTING_CHANGE:        'Reporting Change',
-  COST_CENTRE_REALLOC:     'Cost Centre Realloc',
+  REPORTING_CHANGE:        'Reporting change',
+  COST_CENTRE_REALLOC:     'Cost centre reallocation',
 };
 
 /**
- * Weighted by what still needs someone's attention, since the palette has no
- * five-way hue vocabulary: rejection is filled ink and therefore loudest,
- * an applied movement is filled accent because it is now in force, approval is
- * an outline, pending carries the highlight, and a cancellation recedes.
- *
- * Straight token mapping had rendered PENDING, REJECTED and CANCELLED
- * identically — three states with very different consequences.
+ * Five states, five tones. Pending waits on someone (warn); approved is agreed
+ * but not in force (accent); applied is in force (ok); rejected is the loud
+ * one (danger); a cancellation recedes (neutral). The label is always printed.
  */
-const STATUS_COLORS: Record<string, string> = {
-  PENDING:   'bg-paper text-ink border border-highlight',
-  APPROVED:  'bg-paper text-accent border border-accent',
-  APPLIED:   'bg-accent text-paper border border-accent',
-  REJECTED:  'bg-ink text-paper border border-ink',
-  CANCELLED: 'bg-page text-muted border border-rule line-through',
+const STATUS_TONE: Record<string, 'warn' | 'accent' | 'ok' | 'danger' | 'neutral'> = {
+  PENDING:   'warn',
+  APPROVED:  'accent',
+  APPLIED:   'ok',
+  REJECTED:  'danger',
+  CANCELLED: 'neutral',
 };
+const STATUS_LABEL: Record<string, string> = {
+  PENDING: 'Pending', APPROVED: 'Approved', APPLIED: 'Applied', REJECTED: 'Rejected', CANCELLED: 'Cancelled',
+};
+
+type TabId = 'all' | 'pending' | 'upcoming' | 'history';
+const TAB_LABEL: Record<TabId, string> = { all: 'All', pending: 'Pending', upcoming: 'Upcoming', history: 'History' };
+const TAB_EMPTY: Record<TabId, string> = {
+  all: 'Transfers, role changes and promotions will be listed here once one is raised.',
+  pending: 'Nothing is waiting for approval.',
+  upcoming: 'No approved movements take effect in the future.',
+  history: 'Applied, rejected and cancelled movements will be listed here.',
+};
+
+const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
+
+/** The one line that says what actually moves. */
+function changeSummary(m: Movement) {
+  if (m.fromDepartment !== m.toDepartment) return `${m.fromDepartment || '—'} → ${m.toDepartment || '—'}`;
+  if (m.fromDesignation !== m.toDesignation) return `${m.fromDesignation || '—'} → ${m.toDesignation || '—'}`;
+  if ((m.fromCostCentre || '') !== (m.toCostCentre || '')) return `Cost centre ${m.fromCostCentre || '—'} → ${m.toCostCentre || '—'}`;
+  return '—';
+}
 
 export default function MovementsPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const role = (user?.role || '').toUpperCase();
   const isHr = HR_ROLES.includes(role);
 
@@ -87,114 +110,89 @@ export default function MovementsPage() {
 
   useEffect(() => { if (user) loadData(); }, [user]);
 
-  if (loading) {
-    return <div className="flex items-center justify-center min-h-[400px]"><div className="w-10 h-10 border-4 border-t-accent border-accent animate-spin rounded-full" /></div>;
-  }
+  if (loading) return <PageLoading label="Loading movements…" />;
 
   const now = new Date();
-  const filteredMovements = movements.filter(m => {
-    if (tab === 'pending')  return m.status === 'PENDING';
-    if (tab === 'upcoming') return m.status === 'APPROVED' && new Date(m.effectiveDate) > now;
-    if (tab === 'history')  return ['APPLIED', 'REJECTED', 'CANCELLED'].includes(m.status);
+  const inTab = (m: Movement, t: TabId) => {
+    if (t === 'pending')  return m.status === 'PENDING';
+    if (t === 'upcoming') return m.status === 'APPROVED' && new Date(m.effectiveDate) > now;
+    if (t === 'history')  return ['APPLIED', 'REJECTED', 'CANCELLED'].includes(m.status);
     return true;
-  });
+  };
+  const filteredMovements = movements.filter(m => inTab(m, tab));
+
+  const columns: Column<Movement>[] = [
+    {
+      key: 'employee', label: 'Employee', width: 'minmax(0, 1.5fr)',
+      render: m => (
+        <div className="flex flex-col min-w-0">
+          <span className="font-semibold text-ink truncate">{m.employeeName}</span>
+          <span className="text-xs text-muted tabular-nums">{m.movementNumber}</span>
+        </div>
+      ),
+    },
+    { key: 'type', label: 'Type', width: 'minmax(0, 1.1fr)', render: m => <span className="text-ink">{TYPE_LABELS[m.type] || m.type}</span> },
+    {
+      key: 'change', label: 'Change', width: 'minmax(0, 1.6fr)',
+      render: m => (
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="truncate text-ink">{changeSummary(m)}</span>
+          {m.hasSalaryRevision && <Badge tone="neutral">Salary</Badge>}
+        </span>
+      ),
+    },
+    { key: 'effective', label: 'Effective', width: '120px', numeric: true, render: m => fmtDate(m.effectiveDate) },
+    { key: 'by', label: 'Raised by', width: 'minmax(0, 0.9fr)', render: m => <span className="text-muted">{m.initiatedByName || '—'}</span> },
+    { key: 'status', label: 'Status', width: '110px', render: m => <Badge tone={STATUS_TONE[m.status] ?? 'neutral'}>{STATUS_LABEL[m.status] ?? m.status}</Badge> },
+  ];
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-black text-ink">{isHr ? 'Staff Movements' : 'My Transfers'}</h1>
-          <p className="text-xs text-muted mt-0.5 uppercase tracking-widest font-bold">
-            Internal transfers · Role changes · Promotions
-          </p>
-        </div>
-        <button
-          onClick={() => setShowInitiateModal(true)}
-          className="px-4 py-2 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent transition-all"
-        >
-          + {isHr ? 'New Movement' : 'Request Transfer'}
-        </button>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title={isHr ? 'Staff movements' : 'My transfers'}
+        subtitle="Transfers, role changes and promotions"
+        actions={
+          <Button icon="plus" onClick={() => setShowInitiateModal(true)}>
+            {isHr ? 'New movement' : 'Request transfer'}
+          </Button>
+        }
+      />
 
-      {/* HR Stats */}
       {isHr && summary && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <StatCard label="Pending"          value={summary.pending || 0}        accent="amber"   />
-          <StatCard label="Approved"         value={summary.approved || 0}       accent="blue"    />
-          <StatCard label="Effective Today"  value={summary.effectiveToday || 0} accent="violet"  />
-          <StatCard label="Next 30 Days"     value={summary.upcoming30d || 0}    accent="indigo"  />
-          <StatCard label="Applied YTD"      value={summary.applied || 0}        accent="emerald" />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+          <Stat label="Pending approval" value={summary.pending || 0} />
+          <Stat label="Approved" value={summary.approved || 0} />
+          <Stat label="Effective today" value={summary.effectiveToday || 0} />
+          <Stat label="Next 30 days" value={summary.upcoming30d || 0} />
+          <Stat label="Applied this year" value={summary.applied || 0} />
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-rule">
-        {(['all', 'pending', 'upcoming', 'history'] as const).map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-all border-b-2 -mb-px ${
-              tab === t ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      <Tabs<TabId>
+        items={(['all', 'pending', 'upcoming', 'history'] as const).map(t => ({ id: t, label: TAB_LABEL[t], count: movements.filter(m => inTab(m, t)).length }))}
+        active={tab}
+        onChange={setTab}
+      />
 
-      {/* List */}
-      {filteredMovements.length === 0 ? (
-        <div className="bg-paper border border-rule p-12 text-center">
-          <p className="text-sm text-muted">No movements in this view.</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filteredMovements.map(m => (
-            <Link key={m.id} href={`/movements/${m.id}`} className="block bg-paper border border-rule p-5 hover: hover:border-accent transition-all">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                    <span className="text-xs font-mono font-black text-muted">{m.movementNumber}</span>
-                    <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-widest bg-page text-accent">
-                      {TYPE_LABELS[m.type] || m.type}
-                    </span>
-                    <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[m.status] || 'bg-page text-ink'}`}>
-                      {m.status}
-                    </span>
-                    {m.hasSalaryRevision && (
-                      <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-widest bg-page text-accent">
-                        $ Salary Revision
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="text-base font-black text-ink mb-1">{m.employeeName}</h3>
-                  <div className="text-sm text-ink space-y-0.5">
-                    {m.fromDepartment !== m.toDepartment && (
-                      <p><span className="text-muted font-bold">Dept:</span> {m.fromDepartment} → <span className="font-bold text-ink">{m.toDepartment}</span></p>
-                    )}
-                    {m.fromDesignation !== m.toDesignation && (
-                      <p><span className="text-muted font-bold">Role:</span> {m.fromDesignation} → <span className="font-bold text-ink">{m.toDesignation}</span></p>
-                    )}
-                    {(m.fromCostCentre || '') !== (m.toCostCentre || '') && (
-                      <p><span className="text-muted font-bold">CC:</span> {m.fromCostCentre || '—'} → <span className="font-bold text-ink">{m.toCostCentre || '—'}</span></p>
-                    )}
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-[10px] font-black text-muted uppercase tracking-widest">Effective</div>
-                  <div className="text-sm font-black text-ink mt-1">
-                    {new Date(m.effectiveDate).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </div>
-                  {m.initiatedByName && (
-                    <div className="text-[10px] font-bold text-muted mt-1">by {m.initiatedByName}</div>
-                  )}
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
+      <DataTable
+        aria-label="Movements"
+        columns={columns}
+        rows={filteredMovements}
+        rowKey={m => m.id}
+        onRowClick={m => router.push(`/movements/${m.id}`)}
+        mobileCard={m => (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-start justify-between gap-3">
+              <span className="font-semibold text-ink">{m.employeeName}</span>
+              <Badge tone={STATUS_TONE[m.status] ?? 'neutral'}>{STATUS_LABEL[m.status] ?? m.status}</Badge>
+            </div>
+            <span className="text-[13px] text-ink">{TYPE_LABELS[m.type] || m.type} · {changeSummary(m)}</span>
+            <span className="text-xs text-muted tabular-nums">{m.movementNumber} · effective {fmtDate(m.effectiveDate)}{m.hasSalaryRevision ? ' · salary revision' : ''}</span>
+          </div>
+        )}
+        empty={<EmptyState icon="arrowRight" title="No movements in this view" description={TAB_EMPTY[tab]} />}
+        footer={<span className="tabular-nums">{filteredMovements.length} of {movements.length} movements</span>}
+      />
 
       {showInitiateModal && (
         <InitiateModal
@@ -204,19 +202,6 @@ export default function MovementsPage() {
           onSuccess={() => { setShowInitiateModal(false); loadData(); }}
         />
       )}
-    </div>
-  );
-}
-
-function StatCard({ label, value, accent }: { label: string; value: number | string; accent: string }) {
-  const colorMap: Record<string, string> = {
-    amber:   'text-ink', blue: 'text-accent',
-    violet:  'text-accent', indigo: 'text-accent', emerald: 'text-accent',
-  };
-  return (
-    <div className="bg-paper border border-rule p-4">
-      <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-2">{label}</p>
-      <p className={`text-2xl font-black ${colorMap[accent] || 'text-ink'}`}>{value}</p>
     </div>
   );
 }
@@ -266,116 +251,100 @@ function InitiateModal({ isHr, defaultEmployeeId, onClose, onSuccess }: { isHr: 
   const showMgr  = ['REPORTING_CHANGE'].includes(form.type);
   const showCo   = ['INTER_COMPANY_TRANSFER'].includes(form.type);
 
+  const missing = !form.reason.trim() ? 'Add a reason to submit' : !form.effectiveDate ? 'Pick an effective date to submit' : '';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow/40 backdrop- p-4">
-      <div className="bg-paper w-full max-w-xl border border-rule max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-rule sticky top-0 bg-paper flex items-center justify-between">
-          <h3 className="text-sm font-black text-ink">{isHr ? 'New Staff Movement' : 'Request a Transfer'}</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center hover:bg-page text-muted text-lg">×</button>
-        </div>
-        <div className="p-4 sm:p-6 space-y-4">
-          {isHr && (
-            <Field label="Employee ID" required>
-              <input value={form.employeeId} onChange={e => setForm({...form, employeeId: e.target.value})} className="input" />
-            </Field>
-          )}
-          <Field label="Movement Type" required>
-            <select value={form.type} onChange={e => setForm({...form, type: e.target.value})} className="input">
-              {MOVEMENT_TYPES.map(t => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
-            </select>
+    <Modal
+      open
+      onClose={onClose}
+      title={isHr ? 'New staff movement' : 'Request a transfer'}
+      caption={isHr ? 'Raise a transfer, role change or promotion for approval.' : 'Your request goes to HR for approval.'}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={saving || !form.reason.trim() || !form.effectiveDate} reason={saving ? undefined : missing || undefined}>
+            {saving ? 'Submitting…' : 'Submit'}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {isHr && (
+          <Field label="Employee ID" required help="The employee's system ID">
+            <Input value={form.employeeId} onChange={e => setForm({...form, employeeId: e.target.value})} />
           </Field>
+        )}
+        <Field label="Movement type" required>
+          <Select value={form.type} onChange={e => setForm({...form, type: e.target.value})}>
+            {MOVEMENT_TYPES.map(t => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
+          </Select>
+        </Field>
 
-          {showDept && (
-            <Field label="To Department" required>
-              <input value={form.toDepartment} onChange={e => setForm({...form, toDepartment: e.target.value})} className="input" />
-            </Field>
-          )}
-          {showRole && (
-            <Field label="To Designation" required>
-              <input value={form.toDesignation} onChange={e => setForm({...form, toDesignation: e.target.value})} className="input" />
-            </Field>
-          )}
-          {showCC && (
-            <Field label="To Cost Centre" required>
-              <input value={form.toCostCentre} onChange={e => setForm({...form, toCostCentre: e.target.value})} className="input" />
-            </Field>
-          )}
-          {showLoc && (
-            <Field label="To Location" required>
-              <input value={form.toLocation} onChange={e => setForm({...form, toLocation: e.target.value})} className="input" />
-            </Field>
-          )}
-          {showMgr && (
-            <Field label="New Reporting Manager (Employee ID)" required>
-              <input value={form.toReportingManagerId} onChange={e => setForm({...form, toReportingManagerId: e.target.value})} className="input" />
-            </Field>
-          )}
-          {showCo && (
-            <Field label="To Company" required>
-              <input value={form.toCompany} onChange={e => setForm({...form, toCompany: e.target.value})} className="input" />
-            </Field>
-          )}
-
-          <Field label="Effective Date" required>
-            <input type="date" value={form.effectiveDate} onChange={e => setForm({...form, effectiveDate: e.target.value})} className="input" />
+        {showDept && (
+          <Field label="New department" required>
+            <Input value={form.toDepartment} onChange={e => setForm({...form, toDepartment: e.target.value})} />
           </Field>
-
-          <Field label="Reason" required>
-            <textarea rows={3} value={form.reason} onChange={e => setForm({...form, reason: e.target.value})} className="input resize-none" />
+        )}
+        {showRole && (
+          <Field label="New designation" required>
+            <Input value={form.toDesignation} onChange={e => setForm({...form, toDesignation: e.target.value})} />
           </Field>
+        )}
+        {showCC && (
+          <Field label="New cost centre" required>
+            <Input value={form.toCostCentre} onChange={e => setForm({...form, toCostCentre: e.target.value})} />
+          </Field>
+        )}
+        {showLoc && (
+          <Field label="New location" required>
+            <Input value={form.toLocation} onChange={e => setForm({...form, toLocation: e.target.value})} />
+          </Field>
+        )}
+        {showMgr && (
+          <Field label="New reporting manager" required help="Their employee ID">
+            <Input value={form.toReportingManagerId} onChange={e => setForm({...form, toReportingManagerId: e.target.value})} />
+          </Field>
+        )}
+        {showCo && (
+          <Field label="New company" required>
+            <Input value={form.toCompany} onChange={e => setForm({...form, toCompany: e.target.value})} />
+          </Field>
+        )}
 
-          {isHr && showRole && (
-            <>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={form.hasSalaryRevision} onChange={e => setForm({...form, hasSalaryRevision: e.target.checked})} />
-                Include salary revision
-              </label>
-              {form.hasSalaryRevision && (
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="New Monthly Salary (SGD)" required>
-                    <input type="number" value={form.toSalary} onChange={e => setForm({...form, toSalary: e.target.value})} className="input" />
-                  </Field>
-                  <Field label="Reason Code">
-                    <select value={form.salaryReasonCode} onChange={e => setForm({...form, salaryReasonCode: e.target.value})} className="input">
-                      <option value="PROMOTION">Promotion</option>
-                      <option value="ROLE_CHANGE">Role Change</option>
-                      <option value="MARKET_ADJUSTMENT">Market Adjustment</option>
-                      <option value="OTHER">Other</option>
-                    </select>
-                  </Field>
-                </div>
-              )}
-            </>
-          )}
+        <Field label="Effective date" required>
+          <Input type="date" value={form.effectiveDate} onChange={e => setForm({...form, effectiveDate: e.target.value})} />
+        </Field>
 
-          {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
-          <div className="flex gap-3 pt-1">
-            <button onClick={save} disabled={saving || !form.reason.trim() || !form.effectiveDate} className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
-              {saving ? 'Submitting…' : 'Submit'}
-            </button>
-            <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
-          </div>
-        </div>
+        <Field label="Reason" required>
+          <Textarea rows={3} value={form.reason} onChange={e => setForm({...form, reason: e.target.value})} />
+        </Field>
+
+        {isHr && showRole && (
+          <>
+            <label className="flex items-center gap-2.5 text-sm text-ink">
+              <input type="checkbox" className="w-4 h-4 accent-accent" checked={form.hasSalaryRevision} onChange={e => setForm({...form, hasSalaryRevision: e.target.checked})} />
+              Include a salary revision
+            </label>
+            {form.hasSalaryRevision && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="New monthly salary (SGD)" required>
+                  <Input type="number" inputMode="decimal" className="tabular-nums" value={form.toSalary} onChange={e => setForm({...form, toSalary: e.target.value})} />
+                </Field>
+                <Field label="Reason code">
+                  <Select value={form.salaryReasonCode} onChange={e => setForm({...form, salaryReasonCode: e.target.value})}>
+                    <option value="PROMOTION">Promotion</option>
+                    <option value="ROLE_CHANGE">Role change</option>
+                    <option value="MARKET_ADJUSTMENT">Market adjustment</option>
+                    <option value="OTHER">Other</option>
+                  </Select>
+                </Field>
+              </div>
+            )}
+          </>
+        )}
+
+        {error && <Notice tone="danger">{error}</Notice>}
       </div>
-      <style jsx>{`
-        :global(.input) {
-          width: 100%; border: 1px solid var(--rule);
-          padding: 0.6rem 0.9rem; font-size: 0.875rem; outline: none;
-          transition: all 0.15s;
-        }
-        :global(.input:focus) { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent); }
-      `}</style>
-    </div>
-  );
-}
-
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-xs font-black text-ink uppercase tracking-wider mb-1.5">
-        {label}{required && <span className="text-ink"> *</span>}
-      </label>
-      {children}
-    </div>
+    </Modal>
   );
 }
