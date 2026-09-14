@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
 import { validateNewPassword, tokenFromQuery, pwStrength } from '@/lib/passwordReset';
+import GaDongLogo from '@/components/GaDongLogo';
+import { AuthAlert, AuthTitle, AUTH_PRIMARY } from '@/components/auth/AuthSplit';
+import { Field, Input, Icon } from '@/components/ui';
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -44,82 +47,51 @@ export default function ResetPasswordPage() {
 
   const noToken = ready && !token;
   const strength = pwStrength(password);
+  const mismatch = confirm.length > 0 && password !== confirm;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-page px-4">
-      <div className="w-full max-w-md border border-rule bg-paper p-8">
-        <h1 className="text-lg font-black text-ink tracking-tight">Choose a new password</h1>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-page px-5 py-10 font-sans">
+      <div className="w-full max-w-[440px] flex flex-col gap-6">
+        <GaDongLogo variant="light" markSize={30} />
+        <div className="bg-paper border border-rule rounded-card shadow-card p-6 sm:p-8 flex flex-col gap-5">
+          <AuthTitle title="Choose a new password" />
 
-        {done ? (
-          <div className="mt-6 bg-page border border-accent px-4 py-4">
-            <p className="text-[11px] font-black text-accent leading-relaxed">
-              ✓ Your password has been reset. Redirecting you to sign in…
-            </p>
-          </div>
-        ) : noToken ? (
-          <div className="mt-6 bg-page border border-highlight px-4 py-4">
-            <p className="text-[11px] font-black text-ink leading-relaxed">
-              This reset link is missing or invalid. Please request a new one.
-            </p>
-            <a href="/auth/forgot-password" className="mt-3 inline-block text-[10px] font-black text-accent hover:text-accent tracking-widest uppercase">Request new link →</a>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-muted uppercase tracking-[0.2em] ml-1">New Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-                placeholder="Min. 8 characters"
-                className="w-full border border-rule bg-paper px-5 py-4 text-xs font-bold text-ink focus:border-accent focus:ring-4 focus:ring-accent transition-all outline-none "
-              />
-              {/* Strength meter — identical to the admin user panel (@/lib/passwordReset) */}
+          {done ? (
+            <AuthAlert tone="ok">Your password has been reset. Taking you to sign in…</AuthAlert>
+          ) : noToken ? (
+            <div className="flex flex-col gap-3">
+              <AuthAlert tone="warn">This reset link is missing or invalid. Please request a new one.</AuthAlert>
+              <a href="/auth/forgot-password" className="inline-flex items-center gap-1 text-[13.5px] font-semibold text-accent hover:underline">Request a new link<Icon name="arrowRight" size={14} /></a>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <Field label="New password" help={password ? undefined : 'At least 8 characters.'}>
+                <Input type="password" value={password} onChange={e => setPassword(e.target.value)} required autoComplete="new-password" placeholder="8+ characters" autoFocus />
+              </Field>
+              {/* Strength meter — same scoring as the admin user panel (@/lib/passwordReset) */}
               {password && (
-                <div className="mt-2">
-                  <div className="flex gap-1 mb-1">
+                <div className="-mt-1">
+                  <div className="flex gap-1 mb-1.5" aria-hidden="true">
                     {[1, 2, 3, 4, 5].map(i => (
-                      <div key={i} className={`h-1.5 flex-1  transition-all ${i <= strength.score ? strength.color : 'bg-rule'}`} />
+                      <div key={i} className={`h-1.5 flex-1 rounded-full transition-all ${i <= strength.score ? strength.color : 'bg-rule'}`} />
                     ))}
                   </div>
-                  <p className={`text-[9px] font-black uppercase tracking-widest ${strength.score >= 3 ? 'text-accent' : 'text-ink'}`}>
-                    {strength.label}
-                  </p>
+                  <p className={`text-xs font-semibold ${strength.score >= 3 ? 'text-ok' : 'text-muted'}`}>{strength.label}</p>
                 </div>
               )}
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-muted uppercase tracking-[0.2em] ml-1">Confirm Password</label>
-              <input
-                type="password"
-                value={confirm}
-                onChange={e => setConfirm(e.target.value)}
-                required
-                placeholder="Re-enter password"
-                className={`w-full  border bg-paper px-5 py-4 text-xs font-bold text-ink focus:ring-4 focus:ring-accent transition-all outline-none  ${
-                  confirm && password !== confirm ? 'border-ink focus:border-ink' : 'border-rule focus:border-accent'
-                }`}
-              />
-            </div>
-
-            {error && (
-              <p className="text-[10px] font-black text-ink bg-page px-4 py-2.5 border border-ink">{error}</p>
-            )}
-
-            <button
-              type="submit"
-              disabled={submitting || !password || password !== confirm}
-              className="w-full py-4 px-4 text-[11px] font-black text-paper bg-accent hover:bg-accent transition-all uppercase tracking-[0.3em] active:scale-95 disabled:opacity-40"
-            >
-              {submitting ? 'Resetting…' : 'Set new password'}
-            </button>
-          </form>
-        )}
-
-        <div className="mt-6 text-center">
-          <a href="/login" className="text-[10px] font-black text-accent hover:text-accent tracking-widest uppercase">← Back to sign in</a>
+              <Field label="Confirm password" error={mismatch ? 'Passwords do not match.' : undefined}>
+                <Input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} required autoComplete="new-password" placeholder="Re-enter the password" invalid={mismatch} />
+              </Field>
+              {error && <AuthAlert>{error}</AuthAlert>}
+              <button type="submit" disabled={submitting || !password || password !== confirm} className={AUTH_PRIMARY}>
+                {submitting ? 'Saving…' : 'Set new password'}
+              </button>
+            </form>
+          )}
         </div>
+        <a href="/login" className="self-center inline-flex items-center gap-1 text-[13.5px] font-semibold text-accent hover:underline">
+          <Icon name="chevronRight" size={14} className="rotate-180" />Back to sign in
+        </a>
       </div>
     </div>
   );

@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import AuthSplit, { AuthAlert, AuthTitle, AUTH_PRIMARY } from '@/components/auth/AuthSplit';
+import { Field, Input, Select, Icon } from '@/components/ui';
 
 function apiUrl() {
   return process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:4000/api`;
@@ -54,84 +56,64 @@ export default function RegisterPage() {
     }
   }
 
+  const pwShort = form.password.length > 0 && form.password.length < 8;
+
   return (
-    <div className="min-h-screen flex items-stretch bg-page">
-      {/* Left brand panel */}
-      <div className="hidden lg:flex w-1/2 flex-col justify-between bg-gradient-to-br from-accent to-accent p-12 text-paper">
-        <div className="text-2xl font-black tracking-tight">GADONGHR</div>
-        <div>
-          <h1 className="text-4xl font-black leading-tight">Run your whole HR in one place.</h1>
-          <p className="mt-4 text-paper text-lg">Payroll, leave, claims, attendance, appraisals — set up your company in minutes.</p>
-          <ul className="mt-8 space-y-3 text-paper">
-            <li>✓ 14-day free trial</li>
-            <li>✓ No credit card required</li>
-            <li>✓ Your own isolated, secure workspace</li>
-          </ul>
+    <AuthSplit
+      wide
+      headline="Set up your company in ten minutes."
+      sub="14-day free trial, no credit card required. Your first payroll can run this month."
+    >
+      <AuthTitle title="Start your free trial" sub="Your company details first. You'll add employees afterwards." />
+
+      <form onSubmit={submit} className="flex flex-col gap-[22px]">
+        {error && <AuthAlert>{error}</AuthAlert>}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-[14px]">
+          <Field label="Company name" required className="sm:col-span-2">
+            <Input value={form.companyName} onChange={(e) => set('companyName', e.target.value)} placeholder="Acme Pte. Ltd." autoComplete="organization" required />
+          </Field>
+          <Field label="Country of registration" required>
+            <Select value={form.country} onChange={(e) => set('country', e.target.value)}>
+              {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="Company size" required>
+            <Select value={form.companySize} onChange={(e) => set('companySize', e.target.value)}>
+              {SIZES.map((s) => <option key={s} value={s}>{s} employees</option>)}
+            </Select>
+          </Field>
+          <Field label="Your name" required>
+            <Input value={form.fullName} onChange={(e) => set('fullName', e.target.value)} placeholder="Jane Tan" autoComplete="name" required />
+          </Field>
+          <Field label="Work email" required>
+            <Input type="email" value={form.workEmail} onChange={(e) => set('workEmail', e.target.value)} placeholder="you@company.com" autoComplete="email" required />
+          </Field>
+          <Field label="Password" required className="sm:col-span-2" help="At least 8 characters. You can turn on two-factor authentication after signing in." error={pwShort ? 'Password must be at least 8 characters.' : undefined}>
+            <Input type="password" value={form.password} onChange={(e) => set('password', e.target.value)} placeholder="8+ characters" autoComplete="new-password" invalid={pwShort} required />
+          </Field>
+          <Field label="Where did you hear about us?" className="sm:col-span-2">
+            <Select value={form.referralSource} onChange={(e) => set('referralSource', e.target.value)}>
+              <option value="">Select…</option>
+              {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </Select>
+          </Field>
         </div>
-        <div className="text-paper text-sm">© {new Date().getFullYear()} GaDongHR</div>
-      </div>
 
-      {/* Right form */}
-      <div className="flex w-full lg:w-1/2 items-center justify-center p-6">
-        <form onSubmit={submit} className="w-full max-w-md">
-          <h2 className="text-2xl font-black text-ink">Register your company</h2>
-          <p className="mt-1 text-sm text-muted">Start your free trial — no credit card needed.</p>
+        <button type="submit" disabled={loading} className={AUTH_PRIMARY}>
+          {loading ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white animate-spin rounded-full" />Creating your workspace…</> : 'Create company and continue'}
+        </button>
 
-          {error && <div className="mt-4 bg-page border border-ink px-4 py-2.5 text-sm text-ink">{error}</div>}
+        <div className="flex flex-wrap gap-x-[18px] gap-y-2 text-[13px] text-muted">
+          {['14-day free trial', 'No credit card required', 'Your own isolated, secure workspace'].map((t) => (
+            <span key={t} className="inline-flex items-center gap-1.5"><Icon name="check" size={14} className="text-ok" strokeWidth={2.5} />{t}</span>
+          ))}
+        </div>
+      </form>
 
-          <div className="mt-6 space-y-4">
-            <Field label="Company name" required>
-              <input className={INPUT} value={form.companyName} onChange={(e) => set('companyName', e.target.value)} placeholder="Acme Pte Ltd" required />
-            </Field>
-            <Field label="Your full name" required>
-              <input className={INPUT} value={form.fullName} onChange={(e) => set('fullName', e.target.value)} placeholder="Jane Tan" required />
-            </Field>
-            <Field label="Work email" required>
-              <input type="email" className={INPUT} value={form.workEmail} onChange={(e) => set('workEmail', e.target.value)} placeholder="jane@acme.com" required />
-            </Field>
-            <Field label="Password" required>
-              <input type="password" className={INPUT} value={form.password} onChange={(e) => set('password', e.target.value)} placeholder="At least 8 characters" required />
-            </Field>
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Country" required>
-                <select className={INPUT} value={form.country} onChange={(e) => set('country', e.target.value)}>
-                  {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
-                </select>
-              </Field>
-              <Field label="Company size" required>
-                <select className={INPUT} value={form.companySize} onChange={(e) => set('companySize', e.target.value)}>
-                  {SIZES.map((s) => <option key={s} value={s}>{s} employees</option>)}
-                </select>
-              </Field>
-            </div>
-            <Field label="Where did you hear about us?">
-              <select className={INPUT} value={form.referralSource} onChange={(e) => set('referralSource', e.target.value)}>
-                <option value="">Select…</option>
-                {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </Field>
-          </div>
-
-          <button type="submit" disabled={loading} className="mt-6 w-full bg-accent py-3 font-bold text-paper hover:bg-accent disabled:opacity-60">
-            {loading ? 'Creating your workspace…' : 'Start free trial'}
-          </button>
-
-          <p className="mt-4 text-center text-sm text-muted">
-            Already have an account? <a href="/login" className="font-semibold text-accent hover:underline">Sign in</a>
-          </p>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-const INPUT = 'w-full border border-rule px-3 py-2.5 text-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent';
-
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-semibold text-ink">{label}{required && <span className="text-ink"> *</span>}</span>
-      {children}
-    </label>
+      <p className="text-[13px] text-muted">
+        Already have an account? <a href="/login" className="text-accent font-bold hover:underline">Sign in</a>
+      </p>
+    </AuthSplit>
   );
 }
