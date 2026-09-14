@@ -10,6 +10,8 @@
 export const MIGRATED: string[] = [
   'components/ui/',
   'app/layout.tsx',
+  // redesign/talent (IMs (L))
+  'app/(dashboard)/assets/',
   // redesign/shell adds: components/auth/, components/CommandPalette.tsx,
   // components/NotificationBell.tsx, components/TrialBanner.tsx,
   // app/(dashboard)/layout.tsx, app/login/, app/register/, app/auth/*
