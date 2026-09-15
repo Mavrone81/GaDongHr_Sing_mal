@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { TONES } from '@/lib/statusTone';
-import Link from 'next/link';
-import { apiFetch } from '@/lib/api';
+import { useRouter } from 'next/navigation';
+import { apiFetchRaw } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { PageHeader, DataTable, Badge, Button, Modal, Field, Input, Select, Textarea, EmptyState } from '@/components/ui';
+import type { BadgeTone, Column } from '@/components/ui';
 
 interface Survey {
   id: string;
@@ -23,20 +24,28 @@ interface Survey {
 
 const HR_ROLES = ['HR_ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'];
 
-const TYPE_COLORS: Record<string, string> = {
-  ANNUAL: 'bg-page text-accent',
-  PULSE:  'bg-page text-accent',
-  EXIT:   'bg-page text-ink',
-  CUSTOM: 'bg-page text-ink',
+/** Survey type is a kind of survey, not a state: printed as a neutral Badge. */
+const TYPE_LABEL: Record<Survey['type'], string> = {
+  ANNUAL: 'Annual engagement',
+  PULSE:  'Pulse',
+  EXIT:   'Exit',
+  CUSTOM: 'Custom',
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  DRAFT: TONES.neutral,
-  ACTIVE: TONES.approved,
-  CLOSED: TONES.done,
+const STATUS_TONE: Record<Survey['status'], BadgeTone> = {
+  DRAFT:  'neutral',
+  ACTIVE: 'ok',
+  CLOSED: 'accent',
 };
+
+const STATUS_LABEL: Record<Survey['status'], string> = {
+  DRAFT: 'Draft', ACTIVE: 'Active', CLOSED: 'Closed',
+};
+
+const fmt = (iso: string) => new Date(iso).toLocaleDateString('en-SG');
 
 export default function SurveysPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const role = (user?.role || '').toUpperCase();
   const isHr = HR_ROLES.includes(role);
@@ -48,7 +57,7 @@ export default function SurveysPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const res = await apiFetch('/surveys').then(r => r.json());
+      const res = await apiFetchRaw('/surveys').then(r => r.json());
       setSurveys(res.surveys || []);
     } catch (err) { console.error('[surveys]', err); }
     finally { setLoading(false); }
@@ -56,64 +65,74 @@ export default function SurveysPage() {
   useEffect(() => { if (user) loadData(); }, [user]);
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-[400px]"><div className="w-10 h-10 border-4 border-accent border-t-accent animate-spin rounded-full" /></div>;
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="w-9 h-9 border-2 border-rule border-t-accent animate-spin rounded-full" role="status" aria-label="Loading surveys" />
+      </div>
+    );
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-black text-ink">{isHr ? 'Employee Surveys' : 'My Surveys'}</h1>
-          <p className="text-xs text-muted mt-0.5 uppercase tracking-widest font-bold">Engagement · Pulse · Exit feedback</p>
-        </div>
-        {isHr && (
-          <button
-            onClick={() => setShowCreate(true)}
-            className="px-4 py-2 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent transition-all"
-          >
-            + New Survey
-          </button>
-        )}
-      </div>
+  const hrefFor = (s: Survey) => (isHr ? `/surveys/${s.id}` : `/surveys/${s.id}/take`);
 
-      {surveys.length === 0 ? (
-        <div className="bg-paper border border-rule p-12 text-center">
-          <p className="text-sm text-muted">{isHr ? 'No surveys yet. Create one to get started.' : 'No active surveys. Check back later.'}</p>
+  const columns: Column<Survey>[] = [
+    {
+      key: 'survey', label: 'Survey', width: 'minmax(0, 2fr)',
+      render: s => (
+        <div className="flex flex-col min-w-0">
+          <span className="font-semibold text-ink truncate">{s.title}</span>
+          <span className="text-xs text-muted truncate">{s.code}{s.anonymous ? ' · Anonymous' : ''}</span>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-          {surveys.map(s => (
-            <SurveyCard key={s.id} survey={s} isHr={isHr} />
-          ))}
-        </div>
-      )}
+      ),
+    },
+    { key: 'type', label: 'Type', width: '150px', render: s => <Badge tone="neutral">{TYPE_LABEL[s.type]}</Badge> },
+    { key: 'status', label: 'Status', width: '100px', render: s => <Badge tone={STATUS_TONE[s.status]}>{STATUS_LABEL[s.status]}</Badge> },
+    { key: 'questions', label: 'Questions', width: '90px', align: 'right', numeric: true, render: s => s._count?.questions || 0 },
+    ...(isHr ? [{ key: 'responses', label: 'Responses', width: '100px', align: 'right' as const, numeric: true, render: (s: Survey) => s._count?.responses || 0 }] : []),
+    { key: 'due', label: 'Due', width: '110px', numeric: true, render: s => (s.dueDate ? fmt(s.dueDate) : <span className="text-faint">—</span>) },
+  ];
+
+  return (
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title={isHr ? 'Employee surveys' : 'My surveys'}
+        subtitle={isHr ? 'Engagement, pulse and exit surveys. Draft one, publish it, then read the results.' : 'Surveys that are open for you to answer.'}
+        actions={isHr ? <Button icon="plus" onClick={() => setShowCreate(true)}>New survey</Button> : undefined}
+      />
+
+      <DataTable
+        aria-label="Surveys"
+        columns={columns}
+        rows={surveys}
+        rowKey={s => s.id}
+        onRowClick={s => router.push(hrefFor(s))}
+        mobileCard={s => (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-start justify-between gap-3">
+              <span className="font-semibold text-ink">{s.title}</span>
+              <Badge tone={STATUS_TONE[s.status]}>{STATUS_LABEL[s.status]}</Badge>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted">
+              <span>{TYPE_LABEL[s.type]}</span>
+              <span className="tabular-nums">{s._count?.questions || 0} questions</span>
+              {isHr && <span className="tabular-nums">{s._count?.responses || 0} responses</span>}
+              {s.dueDate && <span className="tabular-nums">Due {fmt(s.dueDate)}</span>}
+            </div>
+          </div>
+        )}
+        empty={
+          <EmptyState
+            icon="list"
+            title={isHr ? 'No surveys yet' : 'No surveys open right now'}
+            description={isHr ? 'Create a survey, add questions, then publish it to employees.' : 'When HR opens a survey for you it will appear here.'}
+            action={isHr ? <Button variant="secondary" icon="plus" onClick={() => setShowCreate(true)}>New survey</Button> : undefined}
+          />
+        }
+      />
 
       {showCreate && (
         <CreateSurveyModal onClose={() => setShowCreate(false)} onSuccess={() => { setShowCreate(false); loadData(); }} />
       )}
     </div>
-  );
-}
-
-function SurveyCard({ survey, isHr }: { survey: Survey; isHr: boolean }) {
-  const href = isHr ? `/surveys/${survey.id}` : `/surveys/${survey.id}/take`;
-  return (
-    <Link href={href} className="block bg-paper border border-rule p-4 sm:p-5 hover: hover:border-accent transition-all">
-      <div className="flex items-center gap-2 flex-wrap mb-2">
-        <span className="text-xs font-mono font-black text-muted">{survey.code}</span>
-        <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest  ${TYPE_COLORS[survey.type]}`}>{survey.type}</span>
-        <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[survey.status]}`}>{survey.status}</span>
-        {survey.anonymous && <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-widest bg-page text-accent">Anonymous</span>}
-      </div>
-      <h3 className="text-base font-black text-ink mb-1">{survey.title}</h3>
-      {survey.description && <p className="text-sm text-muted line-clamp-2">{survey.description}</p>}
-      <div className="flex items-center justify-between mt-3 text-xs text-muted">
-        <span>{survey._count?.questions || 0} questions</span>
-        {isHr && <span>{survey._count?.responses || 0} responses</span>}
-        {survey.dueDate && <span className="font-bold">Due {new Date(survey.dueDate).toLocaleDateString('en-SG')}</span>}
-      </div>
-    </Link>
   );
 }
 
@@ -130,7 +149,7 @@ function CreateSurveyModal({ onClose, onSuccess }: { onClose: () => void; onSucc
     setSaving(true); setError('');
     const body: any = { ...form, minResponsesToShow: parseInt(String(form.minResponsesToShow)) };
     if (!body.dueDate) delete body.dueDate;
-    const res = await apiFetch('/surveys', {
+    const res = await apiFetchRaw('/surveys', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
     if (res.ok) onSuccess();
@@ -138,61 +157,59 @@ function CreateSurveyModal({ onClose, onSuccess }: { onClose: () => void; onSucc
     setSaving(false);
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow/40 backdrop- p-4">
-      <div className="bg-paper w-full max-w-lg border border-rule max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-rule sticky top-0 bg-paper flex items-center justify-between">
-          <h3 className="text-sm font-black text-ink">New Survey</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center hover:bg-page text-muted text-lg">×</button>
-        </div>
-        <div className="p-6 space-y-4">
-          <Field label="Code" required><input value={form.code} onChange={e => setForm({...form, code: e.target.value})} className="input" placeholder="e.g. PULSE-Q2-2026" /></Field>
-          <Field label="Title" required><input value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="input" /></Field>
-          <Field label="Description"><textarea rows={3} value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="input resize-none" /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Type" required>
-              <select value={form.type} onChange={e => setForm({...form, type: e.target.value})} className="input">
-                <option value="ANNUAL">Annual Engagement</option>
-                <option value="PULSE">Pulse</option>
-                <option value="EXIT">Exit</option>
-                <option value="CUSTOM">Custom</option>
-              </select>
-            </Field>
-            <Field label="Min Responses to Show">
-              <input type="number" min={1} value={form.minResponsesToShow} onChange={e => setForm({...form, minResponsesToShow: parseInt(e.target.value) || 3})} className="input" />
-            </Field>
-          </div>
-          <Field label="Due Date">
-            <input type="date" value={form.dueDate} onChange={e => setForm({...form, dueDate: e.target.value})} className="input" />
-          </Field>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={form.anonymous} onChange={e => setForm({...form, anonymous: e.target.checked})} />
-            Anonymous responses (recommended)
-          </label>
-          {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
-          <div className="flex gap-3 pt-1">
-            <button onClick={save} disabled={saving || !form.code || !form.title} className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
-              {saving ? 'Creating…' : 'Create as Draft'}
-            </button>
-            <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
-          </div>
-        </div>
-      </div>
-      <style jsx>{`
-        :global(.input) { width: 100%; border: 1px solid var(--rule); padding: 0.6rem 0.9rem; font-size: 0.875rem; outline: none; }
-        :global(.input:focus) { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent); }
-      `}</style>
-    </div>
-  );
-}
+  const missing = !form.code || !form.title;
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-xs font-black text-ink uppercase tracking-wider mb-1.5">
-        {label}{required && <span className="text-ink"> *</span>}
-      </label>
-      {children}
-    </div>
+    <Modal
+      open
+      onClose={onClose}
+      title="New survey"
+      caption="It is saved as a draft. Add questions, then publish it."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button
+            onClick={save}
+            disabled={saving || missing}
+            reason={!saving && missing ? 'Add a code and a title' : undefined}
+          >
+            {saving ? 'Creating…' : 'Create as draft'}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <Field label="Code" required help="A short reference, for example PULSE-Q2-2026.">
+          <Input value={form.code} onChange={e => setForm({...form, code: e.target.value})} placeholder="PULSE-Q2-2026" />
+        </Field>
+        <Field label="Title" required>
+          <Input value={form.title} onChange={e => setForm({...form, title: e.target.value})} />
+        </Field>
+        <Field label="Description">
+          <Textarea rows={3} value={form.description} onChange={e => setForm({...form, description: e.target.value})} />
+        </Field>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Type" required>
+            <Select value={form.type} onChange={e => setForm({...form, type: e.target.value})}>
+              <option value="ANNUAL">Annual engagement</option>
+              <option value="PULSE">Pulse</option>
+              <option value="EXIT">Exit</option>
+              <option value="CUSTOM">Custom</option>
+            </Select>
+          </Field>
+          <Field label="Minimum responses to show" help="Results stay hidden below this many.">
+            <Input type="number" min={1} value={form.minResponsesToShow} onChange={e => setForm({...form, minResponsesToShow: parseInt(e.target.value) || 3})} />
+          </Field>
+        </div>
+        <Field label="Due date">
+          <Input type="date" value={form.dueDate} onChange={e => setForm({...form, dueDate: e.target.value})} />
+        </Field>
+        <label className="flex items-start gap-2.5 text-sm text-ink cursor-pointer">
+          <input type="checkbox" className="mt-0.5 w-4 h-4 accent-accent" checked={form.anonymous} onChange={e => setForm({...form, anonymous: e.target.checked})} />
+          <span>Anonymous responses <span className="text-muted">(recommended)</span></span>
+        </label>
+        {error && <p role="alert" className="text-[13px] text-danger">{error}</p>}
+      </div>
+    </Modal>
   );
 }

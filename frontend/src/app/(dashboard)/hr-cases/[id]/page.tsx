@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { TONES } from '@/lib/statusTone';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { apiFetch } from '@/lib/api';
+import { apiFetchRaw } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { Card, CardHeader, Badge, Button, Modal, Field, Input, Select, Textarea, EmptyState, Icon } from '@/components/ui';
+import type { BadgeTone } from '@/components/ui';
 
 interface CaseDetail {
   id: string;
@@ -51,14 +52,43 @@ const ACTION_TYPES = [
   'COMPENSATION','POLICY_CLARIFICATION','NO_ACTION',
 ];
 
-const STATUS_COLORS: Record<string, string> = {
-  OPEN: TONES.active,
-  UNDER_INVESTIGATION: TONES.critical,
-  PENDING_DECISION: TONES.pending,
-  RESOLVED: TONES.warning,
-  CLOSED: TONES.done,
-  WITHDRAWN: TONES.inert,
+/** Same scheme as the case list: six statuses, five appearances, withdrawn struck through. */
+const STATUS_TONE: Record<string, BadgeTone> = {
+  OPEN:                'accent',
+  UNDER_INVESTIGATION: 'danger',
+  PENDING_DECISION:    'warn',
+  RESOLVED:            'ok',
+  CLOSED:              'neutral',
+  WITHDRAWN:           'neutral',
 };
+
+const SEVERITY_TONE: Record<string, BadgeTone> = {
+  MINOR:            'neutral',
+  MODERATE:         'accent',
+  SERIOUS:          'warn',
+  GROSS_MISCONDUCT: 'danger',
+};
+
+/** Appeal outcomes: five states, five appearances. */
+const APPEAL_STATUS_TONE: Record<string, BadgeTone> = {
+  PENDING:          'warn',
+  UPHELD:           'ok',
+  PARTIALLY_UPHELD: 'accent',
+  REJECTED:         'danger',
+  WITHDRAWN:        'neutral',
+};
+
+/** TERMINATION_FOR_CAUSE → "Termination for cause"; acronyms stay upper case. */
+const sentence = (raw: string) => {
+  const words = String(raw || '').split('_').map(w => (w === 'HR' || w === 'MOM' || w === 'TAFEP' ? w : w.toLowerCase()));
+  const first = words[0] ?? '';
+  words[0] = /^[A-Z]+$/.test(first) ? first : first.charAt(0).toUpperCase() + first.slice(1);
+  return words.join(' ');
+};
+
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-SG');
+
+const LINK_BUTTON = 'inline-flex items-center justify-center gap-2 h-10 px-4 rounded-control border border-rule bg-paper text-sm font-semibold text-ink whitespace-nowrap hover:bg-pill';
 
 export default function CaseDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -80,7 +110,7 @@ export default function CaseDetailPage() {
   async function loadCase() {
     setLoading(true);
     try {
-      const res = await apiFetch(`/hr-cases/${id}`);
+      const res = await apiFetchRaw(`/hr-cases/${id}`);
       if (!res.ok) { const e = await res.json(); setError(e.error || 'Failed'); return; }
       setCase(await res.json());
     } catch { setError('Failed to load'); }
@@ -92,7 +122,7 @@ export default function CaseDetailPage() {
   async function escalate() {
     const reason = window.prompt('Reason for escalation?');
     if (!reason || !reason.trim()) return;
-    const res = await apiFetch(`/hr-cases/${id}/escalate`, {
+    const res = await apiFetchRaw(`/hr-cases/${id}/escalate`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: reason.trim() }),
     });
@@ -103,7 +133,7 @@ export default function CaseDetailPage() {
   async function resolve() {
     const resolution = window.prompt('Resolution / final decision?');
     if (!resolution || !resolution.trim()) return;
-    const res = await apiFetch(`/hr-cases/${id}/resolve`, {
+    const res = await apiFetchRaw(`/hr-cases/${id}/resolve`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ resolution: resolution.trim() }),
     });
@@ -113,21 +143,21 @@ export default function CaseDetailPage() {
 
   async function close() {
     if (!confirm('Close this case permanently?')) return;
-    const res = await apiFetch(`/hr-cases/${id}/close`, { method: 'PUT' });
+    const res = await apiFetchRaw(`/hr-cases/${id}/close`, { method: 'PUT' });
     if (res.ok) loadCase();
     else alert((await res.json()).error || 'Failed');
   }
 
   async function withdraw() {
     if (!confirm('Withdraw this case?')) return;
-    const res = await apiFetch(`/hr-cases/${id}/withdraw`, { method: 'PUT' });
+    const res = await apiFetchRaw(`/hr-cases/${id}/withdraw`, { method: 'PUT' });
     if (res.ok) loadCase();
     else alert((await res.json()).error || 'Failed');
   }
 
   async function acknowledgeAction(actionId: string) {
     if (!confirm('Acknowledge receipt of this action?')) return;
-    const res = await apiFetch(`/hr-cases/${id}/actions/${actionId}/acknowledge`, { method: 'PUT' });
+    const res = await apiFetchRaw(`/hr-cases/${id}/actions/${actionId}/acknowledge`, { method: 'PUT' });
     if (res.ok) loadCase();
     else alert((await res.json()).error || 'Failed');
   }
@@ -138,7 +168,7 @@ export default function CaseDetailPage() {
     const valid = ['UPHELD', 'PARTIALLY_UPHELD', 'REJECTED', 'WITHDRAWN'];
     if (!valid.includes(status.toUpperCase())) { alert('Invalid status'); return; }
     const notes = window.prompt('Outcome notes (optional):') || '';
-    const res = await apiFetch(`/hr-cases/${id}/appeals/${appealId}/decide`, {
+    const res = await apiFetchRaw(`/hr-cases/${id}/appeals/${appealId}/decide`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: status.toUpperCase(), outcomeNotes: notes.trim() }),
     });
@@ -147,15 +177,22 @@ export default function CaseDetailPage() {
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-[400px]"><div className="w-10 h-10 border-4 border-accent border-t-accent animate-spin rounded-full" /></div>;
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="w-9 h-9 border-2 border-rule border-t-accent animate-spin rounded-full" role="status" aria-label="Loading case" />
+      </div>
+    );
   }
   if (error || !c) {
     return (
-      <div className="max-w-2xl mx-auto mt-16 text-center">
-        <h2 className="text-lg font-black text-ink mb-2">Case Not Found</h2>
-        <p className="text-sm text-muted mb-6">{error}</p>
-        <Link href="/hr-cases" className="text-xs font-bold text-accent hover:text-accent">← Back to Cases</Link>
-      </div>
+      <Card padding="p-0" className="max-w-2xl mx-auto mt-10">
+        <EmptyState
+          icon="alert"
+          title="Case not found"
+          description={error || 'It may have been removed, or you may not have access to it.'}
+          action={<Link href="/hr-cases" className={LINK_BUTTON}>Back to cases</Link>}
+        />
+      </Card>
     );
   }
 
@@ -165,205 +202,197 @@ export default function CaseDetailPage() {
   const canFileAppeal = isSubject && c.status === 'RESOLVED' && !c.appeals.some(a => a.status === 'PENDING');
   const canWithdraw = !['CLOSED','RESOLVED','WITHDRAWN'].includes(c.status);
 
-  return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      {/* Header bar */}
-      <div className="flex items-center justify-between">
-        <Link href="/hr-cases" className="text-xs font-bold text-muted hover:text-accent">← Back to Cases</Link>
-        <div className="flex items-center gap-2 flex-wrap">
-          {c.escalation?.shouldEscalate && (
-            <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest bg-page text-ink animate-pulse">
-              ⚠ Past SLA · {c.escalation.daysOpen}d
-            </span>
-          )}
-          {c.isTafepReportable && (
-            <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest bg-page text-ink">
-              TAFEP Reportable
-            </span>
-          )}
-          <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[c.status] || 'bg-page text-ink'}`}>
-            {c.status.replace(/_/g, ' ')}
-          </span>
-        </div>
-      </div>
+  const hasActions = canActOnCase || canResolve || (isHr && c.status === 'RESOLVED') || canFileAppeal || (canWithdraw && !isHr);
 
-      {/* Case Header Card */}
-      <div className="bg-paper border border-rule p-4 sm:p-6">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-mono font-black text-muted mb-1">{c.caseNumber}</p>
-            <h1 className="text-xl font-black text-ink mb-2">{c.title}</h1>
-            <p className="text-sm text-ink whitespace-pre-wrap">{c.summary}</p>
-          </div>
+  return (
+    <div className="flex flex-col gap-5 max-w-6xl mx-auto w-full pb-10">
+      <Link href="/hr-cases" className="self-start inline-flex items-center gap-1.5 h-8 -ml-1 px-1 rounded-control text-[13px] font-semibold text-muted hover:text-accent">
+        <Icon name="chevronRight" size={16} className="rotate-180" /> All cases
+      </Link>
+
+      {/* Identity band */}
+      <Card padding="p-5 sm:p-6">
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <Badge tone={STATUS_TONE[c.status] ?? 'neutral'} className={c.status === 'WITHDRAWN' ? 'line-through' : ''}>{sentence(c.status)}</Badge>
+          <Badge tone={SEVERITY_TONE[c.severity] ?? 'neutral'}>{sentence(c.severity)}</Badge>
+          {c.escalation?.shouldEscalate && (
+            <Badge tone="danger"><Icon name="alert" size={13} className="mr-1" />Past SLA · {c.escalation.daysOpen}d open</Badge>
+          )}
+          {c.isTafepReportable && <Badge tone="neutral">TAFEP reportable</Badge>}
+          <span className="text-[13px] text-muted tabular-nums">{c.caseNumber}</span>
         </div>
+        <h1 className="text-[26px] font-extrabold tracking-[-0.02em] leading-[1.15] text-ink">{c.title}</h1>
+        <p className="text-sm text-ink mt-2 whitespace-pre-wrap max-w-3xl">{c.summary}</p>
 
         {/* Stage progress */}
-        <div className="mt-5">
-          <div className="flex items-center justify-between text-xs font-bold text-muted mb-2">
-            <span className="uppercase tracking-widest">Stage: {c.currentStage}</span>
-            <span>{c.progress.percent}%</span>
+        <div className="mt-5 max-w-xl">
+          <div className="flex items-center justify-between text-[13px] mb-1.5">
+            <span className="text-muted">Stage: <span className="font-semibold text-ink">{sentence(c.currentStage)}</span></span>
+            <span className="font-semibold text-ink tabular-nums">{c.progress.percent}%</span>
           </div>
-          <div className="h-2 bg-page overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-accent to-accent transition-all" style={{ width: `${c.progress.percent}%` }} />
+          <div className="h-2 rounded-full bg-pill overflow-hidden" role="progressbar" aria-valuenow={c.progress.percent} aria-valuemin={0} aria-valuemax={100} aria-label="Case progress">
+            <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${c.progress.percent}%` }} />
           </div>
         </div>
 
-        {/* Meta grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 text-xs">
-          <Meta label="Type" value={c.type} />
-          <Meta label="Severity" value={c.severity.replace(/_/g, ' ')} />
+        <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-4 mt-5 pt-5 border-t border-rule">
+          <Meta label="Type" value={sentence(c.type)} />
           <Meta label="Subject" value={c.subjectEmployeeName} />
           {c.respondentName && <Meta label="Respondent" value={c.respondentName} />}
-          <Meta label="Opened" value={`${new Date(c.openedAt).toLocaleDateString('en-SG')} by ${c.openedByName || '—'}`} />
-          <Meta label="Escalation" value={c.escalationLevel.replace(/_/g, ' ')} />
-          {c.category && <Meta label="Category" value={c.category} />}
-          {c.dueDate && <Meta label="Due" value={new Date(c.dueDate).toLocaleDateString('en-SG')} />}
-          {c.resolvedAt && <Meta label="Resolved" value={new Date(c.resolvedAt).toLocaleDateString('en-SG')} />}
-        </div>
+          <Meta label="Opened" value={`${fmtDate(c.openedAt)} by ${c.openedByName || '—'}`} />
+          <Meta label="Escalation level" value={sentence(c.escalationLevel)} />
+          {c.category && <Meta label="Category" value={sentence(c.category)} />}
+          {c.dueDate && <Meta label="Due" value={fmtDate(c.dueDate)} />}
+          {c.resolvedAt && <Meta label="Resolved" value={fmtDate(c.resolvedAt)} />}
+        </dl>
 
         {c.resolution && (
-          <div className="mt-4 p-4 bg-page border border-accent ">
-            <p className="text-xs font-black text-accent uppercase tracking-widest mb-1">Resolution</p>
-            <p className="text-sm text-accent">{c.resolution}</p>
+          <div className="mt-5 px-4 py-3 rounded-control bg-tint">
+            <p className="text-[12.5px] font-semibold text-accent mb-1">Resolution</p>
+            <p className="text-sm text-ink whitespace-pre-wrap">{c.resolution}</p>
           </div>
         )}
 
-        {/* Action bar */}
-        <div className="mt-6 flex flex-wrap gap-2 pt-4 border-t border-rule">
-          {canActOnCase && (
-            <>
-              <button onClick={() => setShowIncidentModal(true)} className="px-3 py-1.5 text-xs font-bold text-accent border border-accent hover:bg-page">+ Log Incident</button>
-              <button onClick={() => setShowActionModal(true)}   className="px-3 py-1.5 text-xs font-bold text-accent border border-accent hover:bg-page">+ Issue Action</button>
-              {isHrMgr && !c.committee && (
-                <button onClick={() => setShowInquiryModal(true)} className="px-3 py-1.5 text-xs font-bold text-accent border border-accent hover:bg-page">+ Form Inquiry</button>
+        {hasActions && (
+          <div className="mt-5 pt-5 border-t border-rule flex flex-wrap gap-2.5">
+            {canResolve && <Button onClick={resolve} icon="check">Resolve</Button>}
+            {canFileAppeal && <Button onClick={() => setShowAppealModal(true)}>File an appeal</Button>}
+            {canActOnCase && (
+              <>
+                <Button variant="secondary" icon="plus" onClick={() => setShowIncidentModal(true)}>Log incident</Button>
+                <Button variant="secondary" icon="plus" onClick={() => setShowActionModal(true)}>Issue action</Button>
+                {isHrMgr && !c.committee && (
+                  <Button variant="secondary" icon="users" onClick={() => setShowInquiryModal(true)}>Form inquiry</Button>
+                )}
+                <Button variant="secondary" icon="arrowRight" onClick={escalate}>Escalate</Button>
+              </>
+            )}
+            {isHr && c.status === 'RESOLVED' && <Button variant="secondary" onClick={close}>Close case</Button>}
+            {canWithdraw && !isHr && <Button variant="danger" onClick={withdraw}>Withdraw</Button>}
+          </div>
+        )}
+      </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+        {/* Main column */}
+        <div className="lg:col-span-2 flex flex-col gap-5">
+          <Card>
+            <CardHeader title="Incidents" caption={`${c.incidents.length} logged`} />
+            {c.incidents.length === 0 ? <Empty text="No incidents logged yet." /> : (
+              <ul className="flex flex-col">
+                {c.incidents.map(i => (
+                  <li key={i.id} className="py-3 border-t border-rule first:border-t-0 first:pt-0">
+                    <p className="text-xs text-muted tabular-nums mb-1">
+                      {new Date(i.occurredAt).toLocaleString('en-SG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                    <p className="text-sm text-ink">{i.description}</p>
+                    {i.location && <p className="text-[13px] text-muted mt-1">Location: {i.location}</p>}
+                    {i.witnesses?.length > 0 && <p className="text-[13px] text-muted mt-0.5">Witnesses: {i.witnesses.join(', ')}</p>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          <Card>
+            <CardHeader title="Actions" caption={`${c.actions.length} issued`} />
+            {c.actions.length === 0 ? <Empty text="No actions issued yet." /> : (
+              <ul className="flex flex-col">
+                {c.actions.map(a => (
+                  <li key={a.id} className="py-3 border-t border-rule first:border-t-0 first:pt-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-ink">{sentence(a.actionType)}</p>
+                        <p className="text-xs text-muted mt-0.5 tabular-nums">{fmtDate(a.actionDate)} · by {a.performedByName || '—'}</p>
+                      </div>
+                      {a.acknowledged ? (
+                        <Badge tone="ok"><Icon name="check" size={13} strokeWidth={2.5} className="mr-1" />Acknowledged</Badge>
+                      ) : isSubject ? (
+                        <Button size="sm" variant="secondary" onClick={() => acknowledgeAction(a.id)}>Acknowledge</Button>
+                      ) : (
+                        <Badge tone="warn">Not acknowledged</Badge>
+                      )}
+                    </div>
+                    {a.notes && <p className="text-[13px] text-ink mt-2">{a.notes}</p>}
+                    {a.suspensionPaid !== null && a.actionType === 'SUSPENSION' && (
+                      <p className="text-[13px] font-semibold text-ink mt-1">{a.suspensionPaid ? 'With pay' : 'Without pay'}</p>
+                    )}
+                    {a.showCauseDeadline && (
+                      <p className="text-[13px] font-semibold text-ink mt-1 tabular-nums">Reply by {fmtDate(a.showCauseDeadline)}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          {c.committee && (
+            <Card>
+              <CardHeader title="Inquiry committee" />
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Meta label="Chair" value={c.committee.chairName} />
+                <Meta label="Members" value={(c.committee.memberNames || []).join(', ') || '—'} />
+                {c.committee.hearingDate && <Meta label="Hearing" value={fmtDate(c.committee.hearingDate)} />}
+                <div className="sm:col-span-2">
+                  <dt className="text-[12.5px] font-semibold text-muted">Scope</dt>
+                  <dd className="text-sm text-ink mt-0.5">{c.committee.scope}</dd>
+                </div>
+              </dl>
+              {c.committee.reportSummary && (
+                <div className="mt-4 px-4 py-3 rounded-control bg-page border border-rule">
+                  <p className="text-[12.5px] font-semibold text-muted mb-1">Report</p>
+                  <p className="text-sm text-ink">{c.committee.reportSummary}</p>
+                  {c.committee.recommendation && (
+                    <p className="text-sm text-ink mt-2"><span className="font-semibold">Recommendation:</span> {c.committee.recommendation}</p>
+                  )}
+                </div>
               )}
-              <button onClick={escalate} className="px-3 py-1.5 text-xs font-bold text-ink border border-highlight hover:bg-page">Escalate</button>
-            </>
+            </Card>
           )}
-          {canResolve && (
-            <button onClick={resolve} className="px-3 py-1.5 text-xs font-bold text-accent border border-accent hover:bg-page">Resolve</button>
-          )}
-          {isHr && c.status === 'RESOLVED' && (
-            <button onClick={close} className="px-3 py-1.5 text-xs font-bold text-ink border border-rule hover:bg-page">Close</button>
-          )}
-          {canFileAppeal && (
-            <button onClick={() => setShowAppealModal(true)} className="px-3 py-1.5 text-xs font-bold text-ink border border-ink hover:bg-page">File Appeal</button>
-          )}
-          {canWithdraw && !isHr && (
-            <button onClick={withdraw} className="px-3 py-1.5 text-xs font-bold text-muted border border-rule hover:bg-page">Withdraw</button>
+
+          {c.appeals.length > 0 && (
+            <Card>
+              <CardHeader title="Appeals" caption={`${c.appeals.length} filed`} />
+              <ul className="flex flex-col">
+                {c.appeals.map(a => (
+                  <li key={a.id} className="py-3 border-t border-rule first:border-t-0 first:pt-0">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <p className="text-[13px] text-muted tabular-nums">Filed {fmtDate(a.filedAt)} by {a.filedByName || '—'}</p>
+                      <Badge tone={APPEAL_STATUS_TONE[a.status] ?? 'neutral'}>{sentence(a.status)}</Badge>
+                    </div>
+                    <p className="text-sm text-ink"><span className="font-semibold">Grounds:</span> {a.groundsForAppeal}</p>
+                    {a.outcomeNotes && <p className="text-sm text-ink mt-1"><span className="font-semibold">Outcome:</span> {a.outcomeNotes}</p>}
+                    {a.status === 'PENDING' && isHrMgr && (
+                      <Button size="sm" variant="ghost" className="mt-2 -ml-3" onClick={() => decideAppeal(a.id)}>Decide appeal</Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </Card>
           )}
         </div>
-      </div>
 
-      {/* Three-column layout: Incidents, Actions, Timeline */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Incidents */}
-        <Panel title={`Incidents (${c.incidents.length})`}>
-          {c.incidents.length === 0 ? <Empty text="No incidents logged" /> : (
-            <div className="space-y-2">
-              {c.incidents.map(i => (
-                <div key={i.id} className="border border-rule p-3">
-                  <p className="text-[10px] font-black text-muted uppercase tracking-wider mb-1">{new Date(i.occurredAt).toLocaleString('en-SG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
-                  <p className="text-sm text-ink">{i.description}</p>
-                  {i.location && <p className="text-xs text-muted mt-1">📍 {i.location}</p>}
-                  {i.witnesses?.length > 0 && <p className="text-xs text-muted mt-1">Witnesses: {i.witnesses.join(', ')}</p>}
-                </div>
-              ))}
-            </div>
-          )}
-        </Panel>
-
-        {/* Actions */}
-        <Panel title={`Actions (${c.actions.length})`}>
-          {c.actions.length === 0 ? <Empty text="No actions issued" /> : (
-            <div className="space-y-2">
-              {c.actions.map(a => (
-                <div key={a.id} className="border border-rule p-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-xs font-black text-ink uppercase tracking-wider">{a.actionType.replace(/_/g, ' ')}</p>
-                    {a.acknowledged ? (
-                      <span className="text-[10px] font-black text-accent uppercase tracking-widest">✓ Acked</span>
-                    ) : isSubject ? (
-                      <button onClick={() => acknowledgeAction(a.id)} className="text-[10px] font-black text-accent hover:text-accent uppercase tracking-widest">Acknowledge</button>
-                    ) : null}
-                  </div>
-                  <p className="text-[10px] font-bold text-muted mb-1">{new Date(a.actionDate).toLocaleDateString('en-SG')} · by {a.performedByName || '—'}</p>
-                  {a.notes && <p className="text-xs text-ink mt-1">{a.notes}</p>}
-                  {a.suspensionPaid !== null && a.actionType === 'SUSPENSION' && (
-                    <p className="text-xs text-muted mt-1 font-bold">{a.suspensionPaid ? 'WITH pay' : 'WITHOUT pay'}</p>
-                  )}
-                  {a.showCauseDeadline && (
-                    <p className="text-xs text-ink mt-1 font-bold">Reply by: {new Date(a.showCauseDeadline).toLocaleDateString('en-SG')}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </Panel>
-
-        {/* Timeline */}
-        <Panel title={`Timeline (${c.timeline.length})`}>
-          {c.timeline.length === 0 ? <Empty text="No timeline events" /> : (
-            <div className="space-y-2">
-              {c.timeline.map(t => (
-                <div key={t.id} className="border-l-2 border-rule pl-3 py-1">
-                  <p className="text-[10px] font-black text-muted uppercase tracking-wider">{new Date(t.createdAt).toLocaleString('en-SG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
-                  <p className="text-xs font-bold text-ink">{t.event.replace(/_/g, ' ').replace(/:/g, ' · ')}</p>
-                  {t.actorName && <p className="text-xs text-muted">by {t.actorName}</p>}
-                  {t.detail && <p className="text-xs text-muted mt-0.5 italic">{t.detail}</p>}
-                </div>
-              ))}
-            </div>
-          )}
-        </Panel>
-      </div>
-
-      {/* Inquiry Committee */}
-      {c.committee && (
-        <Panel title="Inquiry Committee">
-          <div className="space-y-2">
-            <p className="text-sm"><span className="font-bold">Chair:</span> {c.committee.chairName}</p>
-            <p className="text-sm"><span className="font-bold">Members:</span> {(c.committee.memberNames || []).join(', ') || '—'}</p>
-            <p className="text-sm"><span className="font-bold">Scope:</span> {c.committee.scope}</p>
-            {c.committee.hearingDate && <p className="text-sm"><span className="font-bold">Hearing:</span> {new Date(c.committee.hearingDate).toLocaleDateString('en-SG')}</p>}
-            {c.committee.reportSummary && (
-              <div className="mt-2 p-3 bg-page ">
-                <p className="text-xs font-black text-ink uppercase mb-1">Report</p>
-                <p className="text-sm text-ink">{c.committee.reportSummary}</p>
-                {c.committee.recommendation && <p className="text-sm text-ink mt-2"><span className="font-bold">Recommendation:</span> {c.committee.recommendation}</p>}
-              </div>
-            )}
-          </div>
-        </Panel>
-      )}
-
-      {/* Appeals */}
-      {c.appeals.length > 0 && (
-        <Panel title={`Appeals (${c.appeals.length})`}>
-          <div className="space-y-3">
-            {c.appeals.map(a => (
-              <div key={a.id} className="border border-rule p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-bold text-ink">
-                    Filed {new Date(a.filedAt).toLocaleDateString('en-SG')} by {a.filedByName || '—'}
+        {/* Side column */}
+        <Card className="lg:sticky lg:top-4">
+          <CardHeader title="Timeline" caption={`${c.timeline.length} event${c.timeline.length === 1 ? '' : 's'}`} />
+          {c.timeline.length === 0 ? <Empty text="Nothing has happened on this case yet." /> : (
+            <ol className="flex flex-col max-h-[560px] overflow-y-auto -mr-2 pr-2">
+              {c.timeline.map((t, i) => (
+                <li key={t.id} className="relative pl-5 pb-4 last:pb-0">
+                  <span className="absolute left-0 top-1.5 w-2 h-2 rounded-full bg-accent" aria-hidden="true" />
+                  {i < c.timeline.length - 1 && <span className="absolute left-[3px] top-4 bottom-0 w-0.5 bg-rule" aria-hidden="true" />}
+                  <p className="text-xs text-muted tabular-nums">
+                    {new Date(t.createdAt).toLocaleString('en-SG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </p>
-                  <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest  ${
-                    a.status === 'PENDING' ? 'bg-page text-ink' :
-                    a.status === 'UPHELD'  ? 'bg-page text-accent' :
-                    a.status === 'PARTIALLY_UPHELD' ? 'bg-page text-ink' :
-                                              'bg-page text-ink'
-                  }`}>{a.status}</span>
-                </div>
-                <p className="text-sm text-ink mt-1"><span className="font-bold">Grounds:</span> {a.groundsForAppeal}</p>
-                {a.outcomeNotes && <p className="text-sm text-ink mt-1"><span className="font-bold">Outcome:</span> {a.outcomeNotes}</p>}
-                {a.status === 'PENDING' && isHrMgr && (
-                  <button onClick={() => decideAppeal(a.id)} className="mt-2 text-xs font-bold text-accent hover:text-accent">Decide Appeal →</button>
-                )}
-              </div>
-            ))}
-          </div>
-        </Panel>
-      )}
+                  <p className="text-[13px] font-semibold text-ink">{sentence(t.event.replace(/:/g, ' · '))}</p>
+                  {t.actorName && <p className="text-xs text-muted">by {t.actorName}</p>}
+                  {t.detail && <p className="text-xs text-muted mt-0.5">{t.detail}</p>}
+                </li>
+              ))}
+            </ol>
+          )}
+        </Card>
+      </div>
 
       {/* Modals */}
       {showActionModal && (
@@ -385,26 +414,30 @@ export default function CaseDetailPage() {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function Meta({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <p className="text-[10px] font-black text-muted uppercase tracking-wider">{label}</p>
-      <p className="text-sm font-bold text-ink mt-0.5">{value}</p>
-    </div>
-  );
-}
-
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-paper border border-rule overflow-hidden">
-      <div className="px-4 py-3 bg-page border-b border-rule">
-        <h3 className="text-xs font-black text-ink uppercase tracking-widest">{title}</h3>
-      </div>
-      <div className="p-4 max-h-[450px] overflow-y-auto">{children}</div>
+    <div className="min-w-0">
+      <dt className="text-[12.5px] font-semibold text-muted">{label}</dt>
+      <dd className="text-sm font-semibold text-ink mt-0.5 break-words">{value}</dd>
     </div>
   );
 }
 
 function Empty({ text }: { text: string }) {
-  return <p className="text-xs text-muted italic text-center py-6">{text}</p>;
+  return <p className="text-[13px] text-muted py-4">{text}</p>;
+}
+
+function ErrorText({ error }: { error: string }) {
+  return error ? <p role="alert" className="text-[13px] text-danger">{error}</p> : null;
+}
+
+function ModalActions({ onSave, onClose, saving, saveLabel, disabled, reason }: { onSave: () => void; onClose: () => void; saving: boolean; saveLabel: string; disabled?: boolean; reason?: string }) {
+  return (
+    <>
+      <Button variant="secondary" onClick={onClose}>Cancel</Button>
+      <Button onClick={onSave} disabled={saving || disabled} reason={!saving && disabled ? reason : undefined}>
+        {saving ? 'Saving…' : saveLabel}
+      </Button>
+    </>
+  );
 }
 
 // ─── Action Modal ────────────────────────────────────────────────────────────
@@ -422,7 +455,7 @@ function ActionModal({ caseId, severity, stage, onClose, onSuccess }: { caseId: 
   const [error, setError] = useState('');
 
   useEffect(() => {
-    apiFetch(`/hr-cases/${caseId}/recommend-next-action`)
+    apiFetchRaw(`/hr-cases/${caseId}/recommend-next-action`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.recommended) { setRecommended(d.recommended); setForm(f => ({ ...f, actionType: d.recommended })); } })
       .catch(() => {});
@@ -438,7 +471,7 @@ function ActionModal({ caseId, severity, stage, onClose, onSuccess }: { caseId: 
     if (form.effectiveTo)   body.effectiveTo   = form.effectiveTo;
     if (form.actionType === 'SUSPENSION')   body.suspensionPaid    = form.suspensionPaid;
     if (form.actionType === 'SHOW_CAUSE' && form.showCauseDeadline) body.showCauseDeadline = form.showCauseDeadline;
-    const res = await apiFetch(`/hr-cases/${caseId}/actions`, {
+    const res = await apiFetchRaw(`/hr-cases/${caseId}/actions`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
     if (res.ok) onSuccess();
@@ -447,37 +480,39 @@ function ActionModal({ caseId, severity, stage, onClose, onSuccess }: { caseId: 
   }
 
   return (
-    <Modal title="Issue Action" onClose={onClose}>
-      {recommended && (
-        <div className="p-3 bg-page border border-accent text-xs text-accent">
-          <strong>Recommended:</strong> {recommended.replace(/_/g, ' ')} (based on severity & prior actions)
-        </div>
-      )}
-      <Field label="Action Type" required>
-        <select value={form.actionType} onChange={e => setForm({...form, actionType: e.target.value})} className="input">
-          {ACTION_TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
-        </select>
-      </Field>
-      <Field label="Notes">
-        <textarea rows={3} value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} className="input resize-none" />
-      </Field>
-      {form.actionType === 'SUSPENSION' && (
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="From"><input type="date" value={form.effectiveFrom} onChange={e => setForm({...form, effectiveFrom: e.target.value})} className="input" /></Field>
-          <Field label="To"><input type="date" value={form.effectiveTo} onChange={e => setForm({...form, effectiveTo: e.target.value})} className="input" /></Field>
-          <label className="flex items-center gap-2 text-sm col-span-2">
-            <input type="checkbox" checked={form.suspensionPaid} onChange={e => setForm({...form, suspensionPaid: e.target.checked})} />
-            Suspension WITH pay
-          </label>
-        </div>
-      )}
-      {form.actionType === 'SHOW_CAUSE' && (
-        <Field label="Reply deadline">
-          <input type="date" value={form.showCauseDeadline} onChange={e => setForm({...form, showCauseDeadline: e.target.value})} className="input" />
+    <Modal open onClose={onClose} title="Issue an action" footer={<ModalActions onSave={save} onClose={onClose} saving={saving} saveLabel="Issue action" />}>
+      <div className="flex flex-col gap-4">
+        {recommended && (
+          <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-control bg-tint text-[13px] text-ink">
+            <Icon name="star" size={16} className="text-accent mt-px" />
+            <p><span className="font-semibold">Recommended: {sentence(recommended)}</span>, based on the severity and earlier actions.</p>
+          </div>
+        )}
+        <Field label="Action type" required>
+          <Select value={form.actionType} onChange={e => setForm({...form, actionType: e.target.value})}>
+            {ACTION_TYPES.map(t => <option key={t} value={t}>{sentence(t)}</option>)}
+          </Select>
         </Field>
-      )}
-      {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
-      <ModalFooter onSave={save} onClose={onClose} saving={saving} saveLabel="Issue Action" />
+        <Field label="Notes">
+          <Textarea rows={3} value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} />
+        </Field>
+        {form.actionType === 'SUSPENSION' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="From"><Input type="date" value={form.effectiveFrom} onChange={e => setForm({...form, effectiveFrom: e.target.value})} /></Field>
+            <Field label="To"><Input type="date" value={form.effectiveTo} onChange={e => setForm({...form, effectiveTo: e.target.value})} /></Field>
+            <label className="sm:col-span-2 flex items-center gap-2.5 text-sm text-ink cursor-pointer">
+              <input type="checkbox" className="w-4 h-4 accent-accent" checked={form.suspensionPaid} onChange={e => setForm({...form, suspensionPaid: e.target.checked})} />
+              Suspension with pay
+            </label>
+          </div>
+        )}
+        {form.actionType === 'SHOW_CAUSE' && (
+          <Field label="Reply deadline">
+            <Input type="date" value={form.showCauseDeadline} onChange={e => setForm({...form, showCauseDeadline: e.target.value})} />
+          </Field>
+        )}
+        <ErrorText error={error} />
+      </div>
     </Modal>
   );
 }
@@ -490,7 +525,7 @@ function IncidentModal({ caseId, onClose, onSuccess }: { caseId: string; onClose
 
   async function save() {
     setSaving(true); setError('');
-    const res = await apiFetch(`/hr-cases/${caseId}/incidents`, {
+    const res = await apiFetchRaw(`/hr-cases/${caseId}/incidents`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         occurredAt: form.occurredAt,
@@ -505,19 +540,20 @@ function IncidentModal({ caseId, onClose, onSuccess }: { caseId: string; onClose
   }
 
   return (
-    <Modal title="Log Incident" onClose={onClose}>
-      <Field label="When did it occur?" required>
-        <input type="datetime-local" value={form.occurredAt} onChange={e => setForm({...form, occurredAt: e.target.value})} className="input" />
-      </Field>
-      <Field label="Location"><input value={form.location} onChange={e => setForm({...form, location: e.target.value})} className="input" /></Field>
-      <Field label="Description" required>
-        <textarea rows={4} value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="input resize-none" />
-      </Field>
-      <Field label="Witnesses (comma-separated)">
-        <input value={form.witnesses} onChange={e => setForm({...form, witnesses: e.target.value})} className="input" placeholder="Name 1, Name 2" />
-      </Field>
-      {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
-      <ModalFooter onSave={save} onClose={onClose} saving={saving} saveLabel="Log Incident" />
+    <Modal open onClose={onClose} title="Log an incident" footer={<ModalActions onSave={save} onClose={onClose} saving={saving} saveLabel="Log incident" />}>
+      <div className="flex flex-col gap-4">
+        <Field label="When did it happen?" required>
+          <Input type="datetime-local" value={form.occurredAt} onChange={e => setForm({...form, occurredAt: e.target.value})} />
+        </Field>
+        <Field label="Location"><Input value={form.location} onChange={e => setForm({...form, location: e.target.value})} /></Field>
+        <Field label="Description" required>
+          <Textarea rows={4} value={form.description} onChange={e => setForm({...form, description: e.target.value})} />
+        </Field>
+        <Field label="Witnesses" help="Separate names with commas.">
+          <Input value={form.witnesses} onChange={e => setForm({...form, witnesses: e.target.value})} placeholder="Name 1, Name 2" />
+        </Field>
+        <ErrorText error={error} />
+      </div>
     </Modal>
   );
 }
@@ -532,7 +568,7 @@ function InquiryModal({ caseId, onClose, onSuccess }: { caseId: string; onClose:
 
   async function save() {
     setSaving(true); setError('');
-    const res = await apiFetch(`/hr-cases/${caseId}/inquiry`, {
+    const res = await apiFetchRaw(`/hr-cases/${caseId}/inquiry`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chairId: form.chairId, chairName: form.chairName,
@@ -547,19 +583,20 @@ function InquiryModal({ caseId, onClose, onSuccess }: { caseId: string; onClose:
   }
 
   return (
-    <Modal title="Form Inquiry Committee" onClose={onClose}>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Chair Employee ID" required><input value={form.chairId} onChange={e => setForm({...form, chairId: e.target.value})} className="input" /></Field>
-        <Field label="Chair Name" required><input value={form.chairName} onChange={e => setForm({...form, chairName: e.target.value})} className="input" /></Field>
+    <Modal open onClose={onClose} title="Form an inquiry committee" footer={<ModalActions onSave={save} onClose={onClose} saving={saving} saveLabel="Form committee" />}>
+      <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Chair employee ID" required><Input value={form.chairId} onChange={e => setForm({...form, chairId: e.target.value})} /></Field>
+          <Field label="Chair name" required><Input value={form.chairName} onChange={e => setForm({...form, chairName: e.target.value})} /></Field>
+        </div>
+        <Field label="Member IDs" help="Separate IDs with commas."><Input value={form.members} onChange={e => setForm({...form, members: e.target.value})} /></Field>
+        <Field label="Member names" help="Separate names with commas, in the same order as the IDs."><Input value={form.memberNames} onChange={e => setForm({...form, memberNames: e.target.value})} /></Field>
+        <Field label="Scope of the inquiry" required>
+          <Textarea rows={3} value={form.scope} onChange={e => setForm({...form, scope: e.target.value})} />
+        </Field>
+        <Field label="Hearing date"><Input type="date" value={form.hearingDate} onChange={e => setForm({...form, hearingDate: e.target.value})} /></Field>
+        <ErrorText error={error} />
       </div>
-      <Field label="Member IDs (comma-separated)"><input value={form.members} onChange={e => setForm({...form, members: e.target.value})} className="input" /></Field>
-      <Field label="Member Names (comma-separated)"><input value={form.memberNames} onChange={e => setForm({...form, memberNames: e.target.value})} className="input" /></Field>
-      <Field label="Scope of Inquiry" required>
-        <textarea rows={3} value={form.scope} onChange={e => setForm({...form, scope: e.target.value})} className="input resize-none" />
-      </Field>
-      <Field label="Hearing Date"><input type="date" value={form.hearingDate} onChange={e => setForm({...form, hearingDate: e.target.value})} className="input" /></Field>
-      {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
-      <ModalFooter onSave={save} onClose={onClose} saving={saving} saveLabel="Form Committee" />
     </Modal>
   );
 }
@@ -572,7 +609,7 @@ function AppealModal({ caseId, onClose, onSuccess }: { caseId: string; onClose: 
 
   async function save() {
     setSaving(true); setError('');
-    const res = await apiFetch(`/hr-cases/${caseId}/appeal`, {
+    const res = await apiFetchRaw(`/hr-cases/${caseId}/appeal`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ groundsForAppeal: grounds }),
     });
@@ -582,59 +619,18 @@ function AppealModal({ caseId, onClose, onSuccess }: { caseId: string; onClose: 
   }
 
   return (
-    <Modal title="File Appeal" onClose={onClose}>
-      <Field label="Grounds for Appeal" required>
-        <textarea rows={5} value={grounds} onChange={e => setGrounds(e.target.value)} className="input resize-none" placeholder="Explain why you are appealing this decision" />
-      </Field>
-      {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
-      <ModalFooter onSave={save} onClose={onClose} saving={saving} saveLabel="Submit Appeal" disabled={!grounds.trim()} />
-    </Modal>
-  );
-}
-
-// ─── Modal scaffolding ───────────────────────────────────────────────────────
-function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow/40 backdrop- p-4">
-      <div className="bg-paper w-full max-w-lg border border-rule max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-rule sticky top-0 bg-paper flex items-center justify-between">
-          <h3 className="text-sm font-black text-ink">{title}</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center hover:bg-page text-muted text-lg">×</button>
-        </div>
-        <div className="p-4 sm:p-6 space-y-4">{children}</div>
+    <Modal
+      open
+      onClose={onClose}
+      title="File an appeal"
+      footer={<ModalActions onSave={save} onClose={onClose} saving={saving} saveLabel="Submit appeal" disabled={!grounds.trim()} reason="Explain your grounds first" />}
+    >
+      <div className="flex flex-col gap-4">
+        <Field label="Grounds for appeal" required>
+          <Textarea rows={5} value={grounds} onChange={e => setGrounds(e.target.value)} placeholder="Explain why you are appealing this decision" />
+        </Field>
+        <ErrorText error={error} />
       </div>
-      <style jsx>{`
-        :global(.input) {
-          width: 100%; border: 1px solid var(--rule);
-          padding: 0.6rem 0.9rem; font-size: 0.875rem; outline: none;
-          transition: all 0.15s;
-        }
-        :global(.input:focus) {
-          border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
-        }
-      `}</style>
-    </div>
-  );
-}
-
-function ModalFooter({ onSave, onClose, saving, saveLabel, disabled }: { onSave: () => void; onClose: () => void; saving: boolean; saveLabel: string; disabled?: boolean }) {
-  return (
-    <div className="flex gap-3 pt-1">
-      <button onClick={onSave} disabled={saving || disabled} className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
-        {saving ? 'Saving…' : saveLabel}
-      </button>
-      <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
-    </div>
-  );
-}
-
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-xs font-black text-ink uppercase tracking-wider mb-1.5">
-        {label}{required && <span className="text-ink"> *</span>}
-      </label>
-      {children}
-    </div>
+    </Modal>
   );
 }

@@ -49,4 +49,11 @@ export const MIGRATED: string[] = [
   'app/(dashboard)/recruitment/',
   'app/(dashboard)/performance/',
   'app/(dashboard)/training/',
+  // redesign/reports (Form2 (L))
+  'app/(dashboard)/notifications/',
+  'app/(dashboard)/support/',
+  'app/(dashboard)/surveys/',
+  'app/(dashboard)/hr-cases/',
+  'app/(dashboard)/documents/',
+  'app/(dashboard)/reports/',
 ];
