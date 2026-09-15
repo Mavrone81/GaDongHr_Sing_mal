@@ -6,7 +6,7 @@ export function Avatar({ name, initials, size = 32, tone = 'accent', className =
   return (
     <span
       className={`inline-flex items-center justify-center rounded-full font-bold shrink-0 ${cls} ${className}`}
-      style={{ width: size, height: size, fontSize: Math.round(size * 0.36) }}
+      style={{ width: size, height: size, fontSize: Math.max(12, Math.round(size * 0.36)) }}
       aria-hidden={name ? undefined : true}
       title={name}
     >
