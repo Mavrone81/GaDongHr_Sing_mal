@@ -96,6 +96,13 @@ export function usePayrollAdmin() {
   const [variance, setVariance] = useState<any>(null);
   const [varianceLoading, setVarianceLoading] = useState(false);
 
+  // ── Consolidate (Merge) confirmation ────────────────────────────────────────
+  const [consolidateTarget, setConsolidateTarget] = useState<PayrollRun | null>(null);
+  const [consolidateRuns, setConsolidateRuns] = useState<PayrollRun[]>([]);
+  const [consolidateTotal, setConsolidateTotal] = useState<number | null>(null);
+  const [consolidateLoading, setConsolidateLoading] = useState(false);
+  const [consolidateBusy, setConsolidateBusy] = useState(false);
+
   // ── DRC quota alert state ──────────────────────────────────────────────────
   const [drcResults, setDrcResults] = useState<any[]>([]);
   const [drcLoaded, setDrcLoaded] = useState(false);
@@ -368,12 +375,44 @@ export function usePayrollAdmin() {
   };
 
   // Merge supplemental runs into one consolidated payslip per employee.
-  const consolidateRun = async (run: PayrollRun) => {
+  // Consolidation is irreversible and touches money, so it now goes through a
+  // confirmation that names the runs being merged and their combined net total.
+  // openConsolidate gathers the finalised runs for the period and fetches their
+  // net totals for the dialog; confirmConsolidate fires the same POST as before.
+  const openConsolidate = (run: PayrollRun) => {
+    const merged = [run, ...runs.filter(r => r.period === run.period && r.id !== run.id && r.status === 'FINALISED')];
+    setConsolidateTarget(run);
+    setConsolidateRuns(merged);
+    setConsolidateTotal(null);
+    setConsolidateLoading(true);
+    Promise.all(merged.map(r =>
+      apiFetch(`/payroll/runs/${r.id}/payslips`)
+        .then((d: any) => (d.payslips ?? []).reduce((s: number, ps: any) => s + (ps.netPay ?? 0), 0))
+        .catch(() => 0),
+    ))
+      .then(totals => setConsolidateTotal(totals.reduce((a, b) => a + b, 0)))
+      .finally(() => setConsolidateLoading(false));
+  };
+
+  const cancelConsolidate = () => {
+    setConsolidateTarget(null);
+    setConsolidateRuns([]);
+    setConsolidateTotal(null);
+  };
+
+  const confirmConsolidate = async () => {
+    if (!consolidateTarget) return;
+    const run = consolidateTarget;
+    setConsolidateBusy(true);
     try {
       await apiFetch(`/payroll/runs/${run.id}/consolidate`, { method: 'POST' });
       handleActionToast(`Payslips consolidated for ${fmtPeriod(run.period)}.`);
+      setConsolidateTarget(null);
+      setConsolidateRuns([]);
+      setConsolidateTotal(null);
       await loadRuns();
     } catch (e: any) { handleActionToast(e.message || 'Consolidation failed'); }
+    finally { setConsolidateBusy(false); }
   };
 
   const actuallyCreateRun = async () => {
@@ -594,6 +633,11 @@ export function usePayrollAdmin() {
     conflictSalaryMap, setConflictSalaryMap,
     variance,
     varianceLoading,
+    consolidateTarget,
+    consolidateRuns,
+    consolidateTotal,
+    consolidateLoading,
+    consolidateBusy,
     drcResults,
     drcLoaded,
     cpfSubmissions,
@@ -625,7 +669,9 @@ export function usePayrollAdmin() {
     downloadCpfFile,
     downloadGiro,
     openGiroModal,
-    consolidateRun,
+    openConsolidate,
+    cancelConsolidate,
+    confirmConsolidate,
     actuallyCreateRun,
     voidAndReplace,
     handleExecute,

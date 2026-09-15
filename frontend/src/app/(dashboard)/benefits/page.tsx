@@ -13,7 +13,7 @@
 import React, { useState } from 'react';
 import { TONES } from '@/lib/statusTone';
 import { apiFetchRaw } from '@/lib/api';
-import { PageHeader, Card, CardHeader, Stat, DataTable, Button, Field, Input, Select, Textarea, Modal, EmptyState, Icon } from '@/components/ui';
+import { PageHeader, Card, CardHeader, Stat, Tabs, DataTable, Button, Field, Input, Select, Textarea, Modal, EmptyState, Icon } from '@/components/ui';
 import type { Column } from '@/components/ui';
 import {
   useBenefits,
@@ -311,9 +311,6 @@ export default function BenefitsPage() {
   const stats = dashboard?.enrollmentSummary || {};
   const claimsStats = dashboard?.claimsSummary || {};
 
-  const tabBtn = (active: boolean) =>
-    `px-1 pb-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${active ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'}`;
-
   return (
     <div className="max-w-7xl mx-auto flex flex-col gap-6">
       <PageHeader
@@ -331,19 +328,17 @@ export default function BenefitsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-5 border-b border-rule flex-wrap">
-        {([
-          ['plans', 'Plans', plans.length],
-          ['enrollments', 'Enrollments', allEnrollments.length],
-          ['claims', 'Claims', allClaims.length],
-          ['openEnroll', 'Open enrollment', allPeriods.length],
-          ['flexi', 'Flexi benefits', allFlexiWallets.length],
-        ] as const).map(([id, label, n]) => (
-          <button key={id} onClick={() => setHrTab(id)} className={tabBtn(hrTab === id)}>
-            {label} <span className="text-muted tabular-nums">{n}</span>
-          </button>
-        ))}
-      </div>
+      <Tabs
+        active={hrTab}
+        onChange={(id) => setHrTab(id)}
+        items={[
+          { id: 'plans', label: 'Plans', count: plans.length },
+          { id: 'enrollments', label: 'Enrollments', count: allEnrollments.length },
+          { id: 'claims', label: 'Claims', count: allClaims.length },
+          { id: 'openEnroll', label: 'Open enrollment', count: allPeriods.length },
+          { id: 'flexi', label: 'Flexi benefits', count: allFlexiWallets.length },
+        ]}
+      />
 
       {/* Plans */}
       {hrTab === 'plans' && (
@@ -482,18 +477,16 @@ export default function BenefitsPage() {
       {/* Flexi benefits */}
       {hrTab === 'flexi' && (
         <div className="flex flex-col gap-4">
-          <div className="flex gap-5 border-b border-rule flex-wrap">
-            {([
-              ['wallets', 'Wallets', allFlexiWallets.length],
-              ['claims', 'Claims', allFlexiClaims.length],
-              ['config', 'Config', flexiConfigs.length],
-              ['yearend', 'Year-end', 0],
-            ] as const).map(([id, label, n]) => (
-              <button key={id} onClick={() => setFlexiSubTab(id)} className={tabBtn(flexiSubTab === id)}>
-                {label}{n > 0 && <span className="text-muted tabular-nums"> {n}</span>}
-              </button>
-            ))}
-          </div>
+          <Tabs
+            active={flexiSubTab}
+            onChange={(id) => setFlexiSubTab(id)}
+            items={[
+              { id: 'wallets', label: 'Wallets', count: allFlexiWallets.length },
+              { id: 'claims', label: 'Claims', count: allFlexiClaims.length },
+              { id: 'config', label: 'Config', count: flexiConfigs.length },
+              { id: 'yearend', label: 'Year-end' },
+            ]}
+          />
 
           <div className="flex flex-wrap items-end gap-3">
             <Field label="Year" className="w-28">
