@@ -449,6 +449,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Auto-close drawer on route change
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
+  // Drawer focus: open → focus its Close button; close (Esc, backdrop, Close,
+  // or a link) → focus goes back to whatever opened it. While open, Tab stays
+  // inside. When closed it is visibility:hidden, so none of its links are in
+  // the Tab order or the accessibility tree.
+  const drawerRef = useRef<HTMLElement>(null);
+  const drawerCloseRef = useRef<HTMLButtonElement>(null);
+  const drawerOpener = useRef<HTMLElement | null>(null);
+  const drawerWasOpen = useRef(false);
+  const sidebarOpenRef = useRef(false);
+  sidebarOpenRef.current = sidebarOpen;
+  const openDrawer = (opener: HTMLElement) => { drawerOpener.current = opener; setSidebarOpen(true); };
+  useEffect(() => {
+    if (sidebarOpen) {
+      drawerCloseRef.current?.focus();
+    } else if (drawerWasOpen.current) {
+      const a = document.activeElement;
+      if (!a || a === document.body || drawerRef.current?.contains(a)) drawerOpener.current?.focus();
+    }
+    drawerWasOpen.current = sidebarOpen;
+  }, [sidebarOpen]);
+
   // ⌘K palette + user menu
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -457,6 +478,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPaletteOpen((v) => !v); }
       if (e.key === 'Escape') { setMenuOpen(false); setSidebarOpen(false); }
+      if (e.key === 'Tab' && sidebarOpenRef.current && drawerRef.current) {
+        const f = Array.from(drawerRef.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled])'));
+        if (!f.length) return;
+        const first = f[0], last = f[f.length - 1];
+        const a = document.activeElement as HTMLElement | null;
+        const inside = !!a && drawerRef.current.contains(a);
+        if (e.shiftKey && (a === first || !inside)) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && (a === last || !inside)) { e.preventDefault(); first.focus(); }
+      }
     };
     const onClick = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false); };
     window.addEventListener('keydown', onKey);
@@ -586,11 +616,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="fixed inset-0 z-40 bg-ink/40 lg:hidden" onClick={() => setSidebarOpen(false)} aria-hidden="true" />
       )}
       <aside
-        className={`w-60 bg-paper border-r border-rule flex flex-col z-50 shrink-0 fixed inset-y-0 left-0 px-3 pt-[18px] pb-3.5 transition-transform duration-200 lg:hidden ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        ref={drawerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation"
+        className={`w-60 bg-paper border-r border-rule flex flex-col z-50 shrink-0 fixed inset-y-0 left-0 px-3 pt-[18px] pb-3.5 transition-[transform,visibility] duration-200 lg:hidden ${
+          sidebarOpen ? 'translate-x-0 visible' : '-translate-x-full invisible'
         }`}
-        aria-hidden={!sidebarOpen}
       >
+        <button
+          ref={drawerCloseRef}
+          type="button"
+          onClick={() => setSidebarOpen(false)}
+          aria-label="Close navigation"
+          className="absolute top-3 right-3 w-9 h-9 flex items-center justify-center rounded-control text-muted hover:bg-page hover:text-ink"
+        >
+          <Icon name="x" size={18} />
+        </button>
         {sidebarBody}
       </aside>
 
@@ -605,7 +647,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex items-center gap-2 min-w-0">
             <button
               type="button"
-              onClick={() => setSidebarOpen(true)}
+              onClick={(e) => openDrawer(e.currentTarget)}
               className="lg:hidden w-9 h-9 -ml-2 flex items-center justify-center rounded-control text-muted hover:bg-page"
               aria-label="Open navigation menu"
             >
@@ -678,7 +720,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </Link>
             );
           })}
-          <button type="button" onClick={() => setSidebarOpen(true)} className="flex flex-col items-center justify-center gap-1 text-xs font-semibold text-muted">
+          <button type="button" onClick={(e) => openDrawer(e.currentTarget)} aria-label="More: open navigation" className="flex flex-col items-center justify-center gap-1 text-xs font-semibold text-muted">
             <Icon name="more" size={20} />
             <span>More</span>
           </button>
