@@ -29,7 +29,10 @@ jest.mock('@/lib/api', () => ({
   apiFetchRaw: jest.fn((path: string) => {
     if (path === '/offboarding') return json([CASE]);
     if (path === '/offboarding/c1') return json(CASE);
-    if (path === '/assets/employee/e1') return json([]);
+    // Resolves a tick later, as in production: the case lands while the view is
+    // still loading its assets. (Resolving both at once hid a bug where the
+    // heading was looked for before it existed.)
+    if (path === '/assets/employee/e1') return new Promise((r) => setTimeout(() => r({ ok: true, status: 200, json: () => Promise.resolve([]) }), 30));
     return json({});
   }),
   apiFetch: jest.fn((path: string) => {
