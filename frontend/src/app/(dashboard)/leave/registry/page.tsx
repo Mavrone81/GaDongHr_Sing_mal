@@ -31,7 +31,7 @@ interface LeaveDetail {
   halfDaySlot: string | null;
   leaveType?: { code: string; name: string; isPaid: boolean; requiresDocument: boolean };
   employee?: { id: string; fullName: string; employeeCode: string; department: string; designation: string; workEmail: string; profilePhotoUrl: string | null };
-  attachment?: { fileName: string; mimeType: string; downloadUrl: string } | null;
+  attachment?: { fileName: string; mimeType?: string | null; downloadUrl: string } | null;
   approvalSteps?: { step: number; approvedByEmpId: string; approvedAt: string }[];
 }
 
@@ -340,7 +340,7 @@ function AdminLeaveView() {
       .then(async (d: LeaveDetail) => {
         setDetail(d);
         // For image attachments, fetch with auth header and create an object URL
-        if (d.attachment && d.attachment.mimeType.startsWith('image/')) {
+        if (d.attachment?.mimeType?.startsWith('image/')) {
           try {
             const res = await apiFetchRaw(d.attachment.downloadUrl);
             if (res.ok) {
@@ -707,7 +707,7 @@ function LeaveDetailBody({ detail, loading, attachmentObjectUrl, onDownload }: {
         </div>
         {!detail.attachment ? (
           <div className="px-4 py-5 rounded-control border border-dashed border-rule text-center text-sm text-faint">No attachment provided</div>
-        ) : detail.attachment.mimeType.startsWith('image/') ? (
+        ) : detail.attachment.mimeType?.startsWith('image/') ? (
           <div className="rounded-control border border-rule overflow-hidden bg-page">
             {attachmentObjectUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -723,7 +723,7 @@ function LeaveDetailBody({ detail, loading, attachmentObjectUrl, onDownload }: {
               <Icon name="file" size={20} className="text-muted shrink-0" />
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-ink truncate">{detail.attachment.fileName}</p>
-                <p className="text-xs text-muted">{detail.attachment.mimeType === 'application/pdf' ? 'PDF document' : detail.attachment.mimeType}</p>
+                <p className="text-xs text-muted">{detail.attachment.mimeType === 'application/pdf' ? 'PDF document' : detail.attachment.mimeType || 'File'}</p>
               </div>
             </div>
             <Button size="sm" variant="secondary" onClick={onDownload}>{detail.attachment.mimeType === 'application/pdf' ? 'Open' : 'Download'}</Button>
