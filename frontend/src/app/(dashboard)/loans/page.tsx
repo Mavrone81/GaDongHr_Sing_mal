@@ -185,7 +185,7 @@ export default function LoansPage() {
                   <button
                     type="button"
                     onClick={() => router.push(`/loans/${l.id}`)}
-                    className="text-left p-4 sm:p-5 hover:bg-page transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                    className="text-left p-4 sm:p-5 hover:bg-page transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
                       <div className="flex items-center gap-2 flex-wrap min-w-0">
