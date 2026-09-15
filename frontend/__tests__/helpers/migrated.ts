@@ -11,6 +11,7 @@ export const MIGRATED: string[] = [
   'components/ui/',
   'app/layout.tsx',
   'app/(dashboard)/loans/',
+  'app/(dashboard)/payroll/',
   // redesign/shell adds: components/auth/, components/CommandPalette.tsx,
   // components/NotificationBell.tsx, components/TrialBanner.tsx,
   // app/(dashboard)/layout.tsx, app/login/, app/register/, app/auth/*

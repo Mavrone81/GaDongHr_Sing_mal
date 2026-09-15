@@ -390,11 +390,7 @@ export function usePayrollAdmin() {
     } catch (e: any) {
       const msg = e.message || 'Failed to initiate payroll run';
       // Re-show the conflict dialog with the error so it's not missed as a brief toast
-      if (msg.includes('already exists')) {
-        handleActionToast(`⛔ ${msg}`);
-      } else {
-        handleActionToast(msg);
-      }
+      handleActionToast(msg);
     } finally {
       setIsProcessing(false);
     }
