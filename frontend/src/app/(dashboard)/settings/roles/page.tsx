@@ -51,6 +51,7 @@ export default function RoleManagementPage() {
   const [newRoleName, setNewRoleName] = useState('');
   const [newRoleDesc, setNewRoleDesc] = useState('');
   const [creating, setCreating] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<Role | null>(null);
 
   // Same call shape as before; the shared toast (root layout) does the display and timing.
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
@@ -112,8 +113,14 @@ export default function RoleManagementPage() {
     } finally { setCreating(false); }
   };
 
-  const handleDeleteRole = async (role: Role) => {
-    if (!confirm(`Delete role "${role.name}"? This cannot be undone.`)) return;
+  // Delete asks first in a kit Modal (it used the browser's confirm()); the
+  // request itself is unchanged and runs only from the Modal's Delete button.
+  const handleDeleteRole = (role: Role) => setPendingDelete(role);
+
+  const confirmDeleteRole = async () => {
+    const role = pendingDelete;
+    if (!role) return;
+    setPendingDelete(null);
     try {
       await apiFetch(`/roles/${role.id}`, { method: 'DELETE' });
       await fetchAll();
@@ -146,6 +153,25 @@ export default function RoleManagementPage() {
 
   return (
     <>
+      {/* Delete role */}
+      <Modal
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        title={pendingDelete ? `Delete ${sentenceCase(pendingDelete.name)}?` : 'Delete role'}
+        caption="This cannot be undone."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setPendingDelete(null)}>Cancel</Button>
+            <Button variant="danger" onClick={confirmDeleteRole}>Delete role</Button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink">
+          Anyone who currently holds <strong className="font-semibold">{pendingDelete ? sentenceCase(pendingDelete.name) : ''}</strong> should
+          be moved to another role first — check the Users page before deleting.
+        </p>
+      </Modal>
+
       {/* Create role */}
       <Modal
           open={showCreate}
