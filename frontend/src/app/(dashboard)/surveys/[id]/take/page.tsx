@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { apiFetchRaw } from '@/lib/api';
@@ -45,6 +45,12 @@ export default function TakeSurveyPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
+
+  // A failed submit shows an inline alert; move focus to it so keyboard and
+  // screen-reader users land on the message instead of <body> (the Submit
+  // button disables while sending, which drops focus).
+  const alertRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (error && survey) alertRef.current?.focus(); }, [error, survey]);
 
   async function load() {
     setLoading(true);
@@ -182,7 +188,7 @@ export default function TakeSurveyPage() {
       ))}
 
       {error && (
-        <div role="alert" className="flex items-start gap-2.5 px-3.5 py-3 rounded-control bg-danger-bg text-[13px] text-danger">
+        <div ref={alertRef} tabIndex={-1} role="alert" className="flex items-start gap-2.5 px-3.5 py-3 rounded-control bg-danger-bg text-[13px] text-danger">
           <Icon name="alert" size={17} className="mt-px" />
           {error}
         </div>
