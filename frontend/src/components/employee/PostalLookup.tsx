@@ -1,5 +1,7 @@
 'use client';
 import { useState } from 'react';
+import { Button, Icon } from '@/components/ui';
+import { Spinner } from './RecordParts';
 
 interface Result {
   BLK_NO: string;
@@ -63,43 +65,27 @@ export function PostalLookup({ value, onChange }: Props) {
     <div className="flex flex-col gap-2">
       {/* Postal code search row */}
       <div className="flex gap-2">
-        <div className="relative flex-1">
-          <input
-            type="text"
-            value={postal}
-            onChange={e => { setPostal(e.target.value); setError(''); }}
-            onKeyDown={e => e.key === 'Enter' && lookup()}
-            placeholder="SG Postal code (e.g. 238859)"
-            maxLength={8}
-            className="w-full px-4 py-2.5 text-sm border border-accent focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent font-bold bg-paper transition-all"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={lookup}
-          disabled={loading}
-          className="px-4 py-2.5 bg-accent text-paper text-[10px] font-black uppercase tracking-wider hover:bg-accent transition-all disabled:opacity-50 shrink-0 flex items-center gap-2"
-        >
-          {loading ? (
-            <svg className="w-3.5 h-3.5 animate-spin rounded-full" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg>
-          ) : (
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          )}
-          Lookup
-        </button>
+        <input
+          type="text"
+          value={postal}
+          onChange={e => { setPostal(e.target.value); setError(''); }}
+          onKeyDown={e => e.key === 'Enter' && lookup()}
+          placeholder="Singapore postal code, e.g. 238859"
+          aria-label="Postal code"
+          inputMode="numeric"
+          maxLength={8}
+          className="flex-1 min-w-0 h-[42px] px-3 rounded-control border border-rule bg-paper text-sm text-ink placeholder:text-muted outline-none transition-colors focus:border-accent"
+        />
+        <Button variant="secondary" icon={loading ? undefined : 'search'} onClick={lookup} disabled={loading} className="shrink-0">
+          {loading && <Spinner />}
+          Find address
+        </Button>
       </div>
 
-      {/* Results dropdown */}
+      {/* Results */}
       {results.length > 0 && (
-        <div className="bg-paper border border-accent overflow-hidden">
-          <div className="px-3 py-2 bg-page border-b border-accent">
-            <p className="text-[9px] font-black text-accent uppercase tracking-widest">Select matching address</p>
-          </div>
+        <div className="bg-paper border border-rule rounded-control overflow-hidden" role="listbox" aria-label="Matching addresses">
+          <p className="px-4 py-2 bg-pill border-b border-rule text-xs font-semibold text-muted">Choose the matching address</p>
           {results.map((r, i) => {
             const line1 = [r.BLK_NO, r.ROAD_NAME].filter(Boolean).join(' ');
             const line2 = r.BUILDING && r.BUILDING !== 'NIL' ? r.BUILDING : null;
@@ -107,12 +93,14 @@ export function PostalLookup({ value, onChange }: Props) {
               <button
                 key={i}
                 type="button"
+                role="option"
+                aria-selected={false}
                 onClick={() => pick(r)}
-                className="w-full text-left px-4 py-3 hover:bg-page transition-all border-b border-rule last:border-0"
+                className="w-full text-left px-4 py-3 hover:bg-page transition-colors border-b border-rule last:border-0"
               >
-                <p className="text-xs font-black text-ink">{line1}</p>
-                {line2 && <p className="text-[10px] font-bold text-muted mt-0.5">{line2}</p>}
-                <p className="text-[10px] font-bold text-muted mt-0.5">Singapore {r.POSTAL}</p>
+                <p className="text-sm font-semibold text-ink">{line1}</p>
+                {line2 && <p className="text-xs text-muted mt-0.5">{line2}</p>}
+                <p className="text-xs text-muted mt-0.5 tabular-nums">Singapore {r.POSTAL}</p>
               </button>
             );
           })}
@@ -120,10 +108,8 @@ export function PostalLookup({ value, onChange }: Props) {
       )}
 
       {error && (
-        <p className="text-[10px] font-bold text-ink flex items-center gap-1.5">
-          <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
+        <p className="text-xs text-danger flex items-center gap-1.5" role="alert">
+          <Icon name="alert" size={14} />
           {error}
         </p>
       )}
@@ -134,18 +120,18 @@ export function PostalLookup({ value, onChange }: Props) {
           type="text"
           value={value}
           onChange={e => onChange(e.target.value)}
-          placeholder={searched ? 'Type address manually…' : 'Auto-filled by postal lookup or type manually…'}
-          className="w-full px-4 py-2.5 text-sm border border-accent focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent font-bold bg-paper transition-all"
+          placeholder={searched ? 'Type the address…' : 'Filled in by the lookup, or type it…'}
+          aria-label="Address"
+          className="w-full h-[42px] pl-3 pr-10 rounded-control border border-rule bg-paper text-sm text-ink placeholder:text-muted outline-none transition-colors focus:border-accent"
         />
         {value && (
           <button
             type="button"
             onClick={() => onChange('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-muted transition-all"
+            aria-label="Clear address"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-control text-muted hover:text-ink hover:bg-page"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <Icon name="x" size={16} />
           </button>
         )}
       </div>

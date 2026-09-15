@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import GaDongLogo from '@/components/GaDongLogo';
+import { Button, Card, Field, Input, Select } from '@/components/ui';
+import { Notice } from '@/components/employee/RecordParts';
 
 function apiUrl() {
   return process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:4000/api`;
@@ -41,59 +44,57 @@ export default function CompanySetupPage() {
     }
   }
 
+  const nameMissing = error === 'Legal company name is required.';
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-page p-6">
-      <form onSubmit={submit} className="w-full max-w-xl border border-rule bg-paper p-8 ">
-        <div className="text-xs font-black uppercase tracking-[0.2em] text-accent">Step 1 of 1</div>
-        <h1 className="mt-1 text-2xl font-black text-ink">Set up your company</h1>
-        <p className="mt-1 text-sm text-muted">A few details so we can tailor payroll & statutory config to {form.country}.</p>
+    <div className="min-h-screen bg-page font-sans text-ink">
+      <div className="mx-auto flex w-full max-w-[640px] flex-col gap-6 px-4 py-8 sm:py-12">
+        <GaDongLogo variant="light" markSize={30} />
 
-        {error && <div className="mt-4 bg-page border border-ink px-4 py-2.5 text-sm text-ink">{error}</div>}
+        <form onSubmit={submit}>
+          <Card padding="p-0">
+            <div className="px-5 pt-6 pb-5 sm:px-7 border-b border-rule">
+              <h1 className="text-[24px] font-extrabold tracking-[-0.02em] text-ink">Set up your company</h1>
+              <p className="mt-1 text-sm text-muted">A few details so payroll and statutory settings match {form.country === 'SG' ? 'Singapore' : form.country}. You can change them later in Settings.</p>
+            </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-4">
-          <Field label="Legal company name" required full>
-            <input className={INPUT} value={form.legalName} onChange={(e) => set('legalName', e.target.value)} placeholder="Acme Pte Ltd" required />
-          </Field>
-          <Field label="Registration no. (UEN / SSM)">
-            <input className={INPUT} value={form.registrationNo} onChange={(e) => set('registrationNo', e.target.value)} placeholder="201912345A" />
-          </Field>
-          <Field label="Industry">
-            <select className={INPUT} value={form.industry} onChange={(e) => set('industry', e.target.value)}>
-              {INDUSTRIES.map((i) => <option key={i} value={i}>{i}</option>)}
-            </select>
-          </Field>
-          <Field label="Address line 1" full>
-            <input className={INPUT} value={form.addressLine1} onChange={(e) => set('addressLine1', e.target.value)} placeholder="1 Raffles Place" />
-          </Field>
-          <Field label="Address line 2" full>
-            <input className={INPUT} value={form.addressLine2} onChange={(e) => set('addressLine2', e.target.value)} placeholder="#20-01" />
-          </Field>
-          <Field label="Postal code">
-            <input className={INPUT} value={form.postalCode} onChange={(e) => set('postalCode', e.target.value)} placeholder="048616" />
-          </Field>
-          <Field label="City">
-            <input className={INPUT} value={form.city} onChange={(e) => set('city', e.target.value)} placeholder="Singapore" />
-          </Field>
-        </div>
+            <div className="flex flex-col gap-5 px-5 py-6 sm:px-7">
+              {error && !nameMissing && <Notice tone="danger">{error}</Notice>}
 
-        <button type="submit" disabled={loading} className="mt-6 w-full bg-accent py-3 font-bold text-paper hover:bg-accent disabled:opacity-60">
-          {loading ? 'Saving…' : 'Finish & enter dashboard'}
-        </button>
-        <button type="button" onClick={() => router.push('/')} className="mt-2 w-full py-2 text-sm font-semibold text-muted hover:text-ink">
-          Skip for now
-        </button>
-      </form>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Legal company name" required className="sm:col-span-2" error={nameMissing ? 'Enter the name as registered with ACRA or SSM' : undefined}>
+                  <Input value={form.legalName} onChange={(e) => set('legalName', e.target.value)} placeholder="Acme Pte Ltd" required invalid={nameMissing} autoComplete="organization" />
+                </Field>
+                <Field label="Registration number" help="UEN or SSM number">
+                  <Input value={form.registrationNo} onChange={(e) => set('registrationNo', e.target.value)} placeholder="201912345A" />
+                </Field>
+                <Field label="Industry">
+                  <Select value={form.industry} onChange={(e) => set('industry', e.target.value)}>
+                    {INDUSTRIES.map((i) => <option key={i} value={i}>{i}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Address line 1" className="sm:col-span-2">
+                  <Input value={form.addressLine1} onChange={(e) => set('addressLine1', e.target.value)} placeholder="1 Raffles Place" autoComplete="address-line1" />
+                </Field>
+                <Field label="Address line 2" className="sm:col-span-2">
+                  <Input value={form.addressLine2} onChange={(e) => set('addressLine2', e.target.value)} placeholder="#20-01" autoComplete="address-line2" />
+                </Field>
+                <Field label="Postal code">
+                  <Input value={form.postalCode} onChange={(e) => set('postalCode', e.target.value)} placeholder="048616" inputMode="numeric" autoComplete="postal-code" />
+                </Field>
+                <Field label="City">
+                  <Input value={form.city} onChange={(e) => set('city', e.target.value)} placeholder="Singapore" autoComplete="address-level2" />
+                </Field>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 rounded-b-card flex flex-col-reverse gap-2.5 border-t border-rule bg-paper px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+              <Button variant="ghost" onClick={() => router.push('/')}>Skip for now</Button>
+              <Button type="submit" disabled={loading}>{loading ? 'Saving…' : 'Finish and go to dashboard'}</Button>
+            </div>
+          </Card>
+        </form>
+      </div>
     </div>
-  );
-}
-
-const INPUT = 'w-full border border-rule px-3 py-2.5 text-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent';
-
-function Field({ label, required, full, children }: { label: string; required?: boolean; full?: boolean; children: React.ReactNode }) {
-  return (
-    <label className={`block ${full ? 'col-span-2' : ''}`}>
-      <span className="mb-1 block text-xs font-semibold text-ink">{label}{required && <span className="text-ink"> *</span>}</span>
-      {children}
-    </label>
   );
 }

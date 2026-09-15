@@ -2,16 +2,18 @@
 
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
+import { Badge, Card, EmptyState, PageHeader } from '@/components/ui';
+import { PageLoading, PersonAvatar } from '@/components/employee/RecordParts';
 
 const READINESS_LABEL: Record<string, string> = {
-  READY_NOW: 'Ready Now',
-  ONE_YEAR:  '1 Year',
-  TWO_YEARS: '2 Years',
+  READY_NOW: 'Ready now',
+  ONE_YEAR:  'Ready in 1 year',
+  TWO_YEARS: 'Ready in 2 years',
 };
-const READINESS_COLOR: Record<string, string> = {
-  READY_NOW: 'bg-accent text-accent border border-accent',
-  ONE_YEAR:  'bg-highlight text-highlight border border-highlight',
-  TWO_YEARS: 'bg-muted text-muted border border-rule',
+const READINESS_TONE: Record<string, 'ok' | 'accent' | 'neutral'> = {
+  READY_NOW: 'ok',
+  ONE_YEAR:  'accent',
+  TWO_YEARS: 'neutral',
 };
 
 function empName(e?: { firstName: string; lastName: string } | null) {
@@ -23,43 +25,47 @@ export default function MyTeamSuccessionPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch('/api/performance/succession/my-team').then(setData).finally(() => setLoading(false));
+    apiFetch('/performance/succession/my-team').then(setData).finally(() => setLoading(false));
   }, []);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-paper">Team Succession</h1>
-        <p className="text-sm text-muted mt-1">View which team members are nominated as key-position successors</p>
-      </div>
+    <div className="flex flex-col gap-5 max-w-4xl">
+      <PageHeader
+        title="Team succession"
+        subtitle="Which of your direct reports are nominated as successors for key positions"
+      />
 
       {loading ? (
-        <p className="text-muted text-sm">Loading…</p>
+        <PageLoading />
       ) : !data || data.teamMembers.length === 0 ? (
-        <div className="text-center py-16 text-muted">
-          <p className="text-4xl mb-3">◈</p>
-          <p className="text-sm">None of your direct reports are currently nominated as successors.</p>
-        </div>
+        <Card padding="p-0">
+          <EmptyState
+            icon="users"
+            title="No nominations in your team"
+            description="None of your direct reports are currently nominated as successors."
+          />
+        </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="flex flex-col gap-4">
           {data.teamMembers.map((member: any) => (
-            <div key={member.employeeId} className="bg-shadow border border-shadow p-4">
-              <div className="mb-3">
-                <p className="text-sm font-semibold text-paper">{empName(member._employee)}</p>
-                <p className="text-xs text-muted">{member.employeeId}</p>
+            <Card key={member.employeeId}>
+              <div className="mb-3 flex items-center gap-3">
+                <PersonAvatar name={empName(member._employee)} size={36} />
+                <div className="min-w-0">
+                  <p className="text-[15px] font-bold text-ink">{empName(member._employee)}</p>
+                  <p className="text-xs text-muted tabular-nums">{member.employeeId}</p>
+                </div>
               </div>
-              <div className="space-y-2">
+              <div className="flex flex-col">
                 {member.nominations.map((nom: any) => (
-                  <div key={nom.nomineeId} className="flex flex-wrap items-center gap-2 bg-muted px-3 py-2">
-                    <p className="text-sm text-paper flex-1 min-w-0">{nom.jobTitle}</p>
-                    {nom.department && <p className="text-xs text-muted">{nom.department}</p>}
-                    <span className={`text-xs font-medium px-2 py-0.5  ${READINESS_COLOR[nom.readiness]}`}>
-                      {READINESS_LABEL[nom.readiness]}
-                    </span>
+                  <div key={nom.nomineeId} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-rule py-2.5">
+                    <p className="min-w-0 flex-1 text-sm font-semibold text-ink">{nom.jobTitle}</p>
+                    {nom.department && <p className="text-[13px] text-muted">{nom.department}</p>}
+                    <Badge tone={READINESS_TONE[nom.readiness] ?? 'neutral'}>{READINESS_LABEL[nom.readiness] ?? nom.readiness}</Badge>
                   </div>
                 ))}
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}

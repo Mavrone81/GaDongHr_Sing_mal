@@ -1,5 +1,6 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
+import { Icon } from '@/components/ui';
 
 const COUNTRIES = [
   'Afghanistan','Albania','Algeria','Andorra','Angola','Antigua and Barbuda','Argentina',
@@ -69,53 +70,51 @@ export function CountrySelect({ value, onChange, disabled }: Props) {
       <button
         type="button"
         onClick={() => !disabled && setOpen(o => !o)}
-        className="w-full text-left px-4 py-2.5 border border-accent bg-paper text-sm font-bold text-ink flex items-center justify-between hover:border-accent focus:outline-none focus:ring-2 focus:ring-accent transition-all"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="w-full h-[42px] px-3 rounded-control border border-rule bg-paper text-left text-sm text-ink flex items-center justify-between gap-2 transition-colors hover:border-accent focus:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent disabled:bg-pill disabled:text-muted"
       >
-        <span className={value ? 'text-ink' : 'text-muted font-normal'}>
+        <span className={`truncate ${value ? 'text-ink' : 'text-muted'}`}>
           {value || 'Select country…'}
         </span>
-        <svg className={`w-4 h-4 text-muted transition-transform ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
+        <Icon name="chevronDown" size={16} className={`text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 right-0 z-50 mt-1.5 bg-paper border border-rule overflow-hidden">
-          <div className="p-2.5 border-b border-rule bg-page">
+        <div className="absolute top-full left-0 right-0 z-50 mt-1.5 bg-paper border border-rule rounded-card shadow-card overflow-hidden">
+          <div className="p-2.5 border-b border-rule">
             <div className="relative">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+              <Icon name="search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
               <input
                 ref={inputRef}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search countries…"
-                className="w-full pl-9 pr-3 py-2 text-sm border border-rule focus:outline-none focus:border-accent font-bold bg-paper"
+                aria-label="Search countries"
+                className="w-full h-9 pl-9 pr-3 rounded-control border border-rule bg-paper text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent"
               />
             </div>
           </div>
-          <div className="max-h-56 overflow-y-auto">
+          <div className="max-h-56 overflow-y-auto" role="listbox" aria-label="Countries">
             {filtered.length > 0 ? filtered.map(country => (
               <button
                 key={country}
                 type="button"
+                role="option"
+                aria-selected={value === country}
                 onClick={() => { onChange(country); setOpen(false); setSearch(''); }}
-                className={`w-full text-left px-4 py-2.5 text-sm transition-all flex items-center justify-between ${
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${
                   value === country
-                    ? 'bg-page text-accent font-black'
-                    : 'text-ink font-bold hover:bg-page'
+                    ? 'bg-tint text-accent font-semibold'
+                    : 'text-ink hover:bg-page'
                 }`}
               >
                 {country}
-                {value === country && (
-                  <svg className="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
+                {value === country && <Icon name="check" size={16} strokeWidth={2.5} className="text-accent" />}
               </button>
             )) : (
-              <div className="px-4 py-8 text-center text-sm text-muted font-bold">No countries found</div>
+              <div className="px-4 py-8 text-center text-sm text-muted">No countries match “{search}”</div>
             )}
           </div>
         </div>

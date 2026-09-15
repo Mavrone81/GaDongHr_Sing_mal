@@ -1,9 +1,12 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { TONES } from '@/lib/statusTone';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import {
+  Badge, Button, Card, CardHeader, DataTable, EmptyState, Field, Icon, Input, Modal, PageHeader, Select, SplitPane, Stat, Tabs, Textarea,
+} from '@/components/ui';
+import { Notice, PageLoading } from '@/components/employee/RecordParts';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface KeyPosition {
@@ -62,41 +65,40 @@ interface NineBoxItem {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const RISK_COLOR: Record<string, string> = {
-  HIGH:   'bg-ink text-ink border border-ink',
-  MEDIUM: 'bg-highlight text-highlight border border-highlight',
-  LOW:    'bg-accent text-accent border border-accent',
+const RISK_TONE: Record<string, 'danger' | 'warn' | 'ok'> = {
+  HIGH:   'danger',
+  MEDIUM: 'warn',
+  LOW:    'ok',
 };
+const RISK_LABEL: Record<string, string> = { HIGH: 'High risk', MEDIUM: 'Medium risk', LOW: 'Low risk' };
 
-const READINESS_COLOR: Record<string, string> = {
-  READY_NOW: 'bg-accent text-accent border border-accent',
-  ONE_YEAR:  'bg-highlight text-highlight border border-highlight',
-  TWO_YEARS: 'bg-muted text-muted border border-rule',
+const READINESS_TONE: Record<string, 'ok' | 'accent' | 'neutral'> = {
+  READY_NOW: 'ok',
+  ONE_YEAR:  'accent',
+  TWO_YEARS: 'neutral',
 };
 
 const READINESS_LABEL: Record<string, string> = {
-  READY_NOW: 'Ready Now',
-  ONE_YEAR:  '1 Year',
-  TWO_YEARS: '2 Years',
+  READY_NOW: 'Ready now',
+  ONE_YEAR:  'Ready in 1 year',
+  TWO_YEARS: 'Ready in 2 years',
 };
+const READINESS_SHORT: Record<string, string> = { READY_NOW: 'now', ONE_YEAR: '1 yr', TWO_YEARS: '2 yrs' };
 
-const DEV_STATUS_COLOR: Record<string, string> = {
-  PENDING: TONES.pending,
-  IN_PROGRESS: TONES.active,
-  COMPLETED: TONES.done,
-  CANCELLED: TONES.inert,
-};
+const POT_LABEL: Record<number, string> = { 1: 'Low', 2: 'Medium', 3: 'High' };
 
-const POT_LABEL: Record<number, string> = { 1: 'Low', 2: 'Med', 3: 'High' };
-const BOX_COLOR: Record<number, string> = {
-  1: 'bg-accent',   2: 'bg-accent',  3: 'bg-accent',
-  4: 'bg-highlight',  5: 'bg-muted',   6: 'bg-accent',
-  7: 'bg-ink',    8: 'bg-highlight',  9: 'bg-accent',
+/** 9-box grounds: the high-potential/high-performance corner is tinted, the underperformer box warns. */
+const BOX_GROUND: Record<number, string> = {
+  1: 'bg-page',  2: 'bg-tint', 3: 'bg-tint',
+  4: 'bg-page',  5: 'bg-paper', 6: 'bg-tint',
+  7: 'bg-danger-bg', 8: 'bg-page', 9: 'bg-page',
 };
 
 function empName(e?: { firstName: string; lastName: string } | null) {
   return e ? `${e.firstName} ${e.lastName}` : '—';
 }
+
+const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
 
 // ── Add Position Modal ────────────────────────────────────────────────────────
 function AddPositionModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
@@ -108,7 +110,7 @@ function AddPositionModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
     e.preventDefault();
     setSaving(true); setErr('');
     try {
-      await apiFetch('/api/performance/key-positions', {
+      await apiFetch('/performance/key-positions', {
         method: 'POST',
         body: JSON.stringify({ ...form, currentHolderId: form.currentHolderId || null }),
       });
@@ -118,41 +120,34 @@ function AddPositionModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow">
-      <div className="bg-shadow border border-rule p-6 w-full max-w-md ">
-        <h2 className="text-lg font-semibold text-paper mb-4">Add Key Position</h2>
-        <form onSubmit={submit} className="space-y-3">
-          {err && <p className="text-ink text-sm">{err}</p>}
-          <div>
-            <label className="text-xs text-muted uppercase tracking-wide">Job Title *</label>
-            <input className="w-full mt-1 bg-muted border border-rule text-paper text-sm px-3 py-2"
-              value={form.jobTitle} onChange={e => setForm(f => ({ ...f, jobTitle: e.target.value }))} required />
-          </div>
-          <div>
-            <label className="text-xs text-muted uppercase tracking-wide">Department</label>
-            <input className="w-full mt-1 bg-muted border border-rule text-paper text-sm px-3 py-2"
-              value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))} />
-          </div>
-          <div>
-            <label className="text-xs text-muted uppercase tracking-wide">Description</label>
-            <textarea className="w-full mt-1 bg-muted border border-rule text-paper text-sm px-3 py-2 h-20 resize-none"
-              value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-          </div>
-          <div>
-            <label className="text-xs text-muted uppercase tracking-wide">Current Holder Employee ID</label>
-            <input className="w-full mt-1 bg-muted border border-rule text-paper text-sm px-3 py-2"
-              placeholder="Optional"
-              value={form.currentHolderId} onChange={e => setForm(f => ({ ...f, currentHolderId: e.target.value }))} />
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-muted hover:text-paper">Cancel</button>
-            <button type="submit" disabled={saving} className="px-4 py-2 bg-accent hover:bg-accent text-paper text-sm font-medium disabled:opacity-50">
-              {saving ? 'Saving…' : 'Create Position'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <Modal
+      open
+      onClose={onClose}
+      title="Add key position"
+      caption="A role the business cannot leave empty. You can nominate successors once it exists."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="submit" form="add-position-form" disabled={saving}>{saving ? 'Saving…' : 'Create position'}</Button>
+        </>
+      }
+    >
+      <form id="add-position-form" onSubmit={submit} className="flex flex-col gap-4">
+        {err && <Notice tone="danger">{err}</Notice>}
+        <Field label="Job title" required>
+          <Input value={form.jobTitle} onChange={e => setForm(f => ({ ...f, jobTitle: e.target.value }))} required />
+        </Field>
+        <Field label="Department">
+          <Input value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))} />
+        </Field>
+        <Field label="Description">
+          <Textarea rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+        </Field>
+        <Field label="Current holder" help="Optional — the holder's employee ID">
+          <Input value={form.currentHolderId} onChange={e => setForm(f => ({ ...f, currentHolderId: e.target.value }))} />
+        </Field>
+      </form>
+    </Modal>
   );
 }
 
@@ -166,7 +161,7 @@ function NominateModal({ positionId, onClose, onSaved }: { positionId: string; o
     e.preventDefault();
     setSaving(true); setErr('');
     try {
-      await apiFetch(`/api/performance/key-positions/${positionId}/nominees`, {
+      await apiFetch(`/performance/key-positions/${positionId}/nominees`, {
         method: 'POST',
         body: JSON.stringify({ ...form, potentialBand: parseInt(form.potentialBand) }),
       });
@@ -176,48 +171,43 @@ function NominateModal({ positionId, onClose, onSaved }: { positionId: string; o
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow">
-      <div className="bg-shadow border border-rule p-6 w-full max-w-md ">
-        <h2 className="text-lg font-semibold text-paper mb-4">Nominate Successor</h2>
-        <form onSubmit={submit} className="space-y-3">
-          {err && <p className="text-ink text-sm">{err}</p>}
-          <div>
-            <label className="text-xs text-muted uppercase tracking-wide">Employee ID *</label>
-            <input className="w-full mt-1 bg-muted border border-rule text-paper text-sm px-3 py-2"
-              value={form.employeeId} onChange={e => setForm(f => ({ ...f, employeeId: e.target.value }))} required />
-          </div>
-          <div>
-            <label className="text-xs text-muted uppercase tracking-wide">Readiness *</label>
-            <select className="w-full mt-1 bg-muted border border-rule text-paper text-sm px-3 py-2"
-              value={form.readiness} onChange={e => setForm(f => ({ ...f, readiness: e.target.value }))}>
-              <option value="READY_NOW">Ready Now</option>
-              <option value="ONE_YEAR">1 Year</option>
-              <option value="TWO_YEARS">2 Years</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-muted uppercase tracking-wide">Potential Band *</label>
-            <select className="w-full mt-1 bg-muted border border-rule text-paper text-sm px-3 py-2"
-              value={form.potentialBand} onChange={e => setForm(f => ({ ...f, potentialBand: e.target.value }))}>
+    <Modal
+      open
+      onClose={onClose}
+      title="Nominate a successor"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="submit" form="nominate-form" disabled={saving}>{saving ? 'Saving…' : 'Nominate'}</Button>
+        </>
+      }
+    >
+      <form id="nominate-form" onSubmit={submit} className="flex flex-col gap-4">
+        {err && <Notice tone="danger">{err}</Notice>}
+        <Field label="Employee ID" required>
+          <Input value={form.employeeId} onChange={e => setForm(f => ({ ...f, employeeId: e.target.value }))} required />
+        </Field>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Readiness" required>
+            <Select value={form.readiness} onChange={e => setForm(f => ({ ...f, readiness: e.target.value }))}>
+              <option value="READY_NOW">Ready now</option>
+              <option value="ONE_YEAR">Ready in 1 year</option>
+              <option value="TWO_YEARS">Ready in 2 years</option>
+            </Select>
+          </Field>
+          <Field label="Potential" required>
+            <Select value={form.potentialBand} onChange={e => setForm(f => ({ ...f, potentialBand: e.target.value }))}>
               <option value="3">High (3)</option>
               <option value="2">Medium (2)</option>
               <option value="1">Low (1)</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-muted uppercase tracking-wide">Notes</label>
-            <textarea className="w-full mt-1 bg-muted border border-rule text-paper text-sm px-3 py-2 h-16 resize-none"
-              value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-muted hover:text-paper">Cancel</button>
-            <button type="submit" disabled={saving} className="px-4 py-2 bg-accent hover:bg-accent text-paper text-sm font-medium disabled:opacity-50">
-              {saving ? 'Saving…' : 'Nominate'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+            </Select>
+          </Field>
+        </div>
+        <Field label="Notes">
+          <Textarea rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+        </Field>
+      </form>
+    </Modal>
   );
 }
 
@@ -231,7 +221,7 @@ function DevPlanModal({ nomineeId, onClose, onSaved }: { nomineeId: string; onCl
     e.preventDefault();
     setSaving(true); setErr('');
     try {
-      await apiFetch(`/api/performance/nominees/${nomineeId}/dev-plans`, {
+      await apiFetch(`/performance/nominees/${nomineeId}/dev-plans`, {
         method: 'POST',
         body: JSON.stringify({ ...form, trainingProgramId: form.trainingProgramId || null, targetDate: form.targetDate || null }),
       });
@@ -241,50 +231,39 @@ function DevPlanModal({ nomineeId, onClose, onSaved }: { nomineeId: string; onCl
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow">
-      <div className="bg-shadow border border-rule p-6 w-full max-w-md ">
-        <h2 className="text-lg font-semibold text-paper mb-4">Add Development Plan</h2>
-        <form onSubmit={submit} className="space-y-3">
-          {err && <p className="text-ink text-sm">{err}</p>}
-          <div>
-            <label className="text-xs text-muted uppercase tracking-wide">Competency Gap *</label>
-            <input className="w-full mt-1 bg-muted border border-rule text-paper text-sm px-3 py-2"
-              placeholder="e.g. Strategic planning skills"
-              value={form.competencyGap} onChange={e => setForm(f => ({ ...f, competencyGap: e.target.value }))} required />
-          </div>
-          <div>
-            <label className="text-xs text-muted uppercase tracking-wide">Development Action *</label>
-            <input className="w-full mt-1 bg-muted border border-rule text-paper text-sm px-3 py-2"
-              placeholder="e.g. Enroll in Executive Leadership Program"
-              value={form.action} onChange={e => setForm(f => ({ ...f, action: e.target.value }))} required />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted uppercase tracking-wide">Training Program ID</label>
-              <input className="w-full mt-1 bg-muted border border-rule text-paper text-sm px-3 py-2"
-                placeholder="Optional"
-                value={form.trainingProgramId} onChange={e => setForm(f => ({ ...f, trainingProgramId: e.target.value }))} />
-            </div>
-            <div>
-              <label className="text-xs text-muted uppercase tracking-wide">Target Date</label>
-              <input type="date" className="w-full mt-1 bg-muted border border-rule text-paper text-sm px-3 py-2"
-                value={form.targetDate} onChange={e => setForm(f => ({ ...f, targetDate: e.target.value }))} />
-            </div>
-          </div>
-          <div>
-            <label className="text-xs text-muted uppercase tracking-wide">Notes</label>
-            <textarea className="w-full mt-1 bg-muted border border-rule text-paper text-sm px-3 py-2 h-16 resize-none"
-              value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-muted hover:text-paper">Cancel</button>
-            <button type="submit" disabled={saving} className="px-4 py-2 bg-accent hover:bg-accent text-paper text-sm font-medium disabled:opacity-50">
-              {saving ? 'Saving…' : 'Add Plan'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <Modal
+      open
+      onClose={onClose}
+      title="Add a development plan"
+      caption="What the successor needs to close the gap, and by when."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="submit" form="dev-plan-form" disabled={saving}>{saving ? 'Saving…' : 'Add plan'}</Button>
+        </>
+      }
+    >
+      <form id="dev-plan-form" onSubmit={submit} className="flex flex-col gap-4">
+        {err && <Notice tone="danger">{err}</Notice>}
+        <Field label="Competency gap" required>
+          <Input placeholder="e.g. Strategic planning" value={form.competencyGap} onChange={e => setForm(f => ({ ...f, competencyGap: e.target.value }))} required />
+        </Field>
+        <Field label="Development action" required>
+          <Input placeholder="e.g. Executive leadership programme" value={form.action} onChange={e => setForm(f => ({ ...f, action: e.target.value }))} required />
+        </Field>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Training programme ID" help="Optional">
+            <Input value={form.trainingProgramId} onChange={e => setForm(f => ({ ...f, trainingProgramId: e.target.value }))} />
+          </Field>
+          <Field label="Target date">
+            <Input type="date" value={form.targetDate} onChange={e => setForm(f => ({ ...f, targetDate: e.target.value }))} />
+          </Field>
+        </div>
+        <Field label="Notes">
+          <Textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+        </Field>
+      </form>
+    </Modal>
   );
 }
 
@@ -298,7 +277,7 @@ function PositionDetail({ position, onClose, onRefresh }: { position: KeyPositio
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await apiFetch(`/api/performance/key-positions/${position.id}`);
+      const data = await apiFetch(`/performance/key-positions/${position.id}`);
       setDetail(data);
     } finally { setLoading(false); }
   }, [position.id]);
@@ -307,12 +286,12 @@ function PositionDetail({ position, onClose, onRefresh }: { position: KeyPositio
 
   async function removeNominee(id: string) {
     if (!confirm('Remove this nominee?')) return;
-    await apiFetch(`/api/performance/nominees/${id}`, { method: 'DELETE' });
+    await apiFetch(`/performance/nominees/${id}`, { method: 'DELETE' });
     load(); onRefresh();
   }
 
   async function updateDevStatus(planId: string, status: string) {
-    await apiFetch(`/api/performance/dev-plans/${planId}`, {
+    await apiFetch(`/performance/dev-plans/${planId}`, {
       method: 'PUT',
       body: JSON.stringify({ status }),
     });
@@ -322,127 +301,103 @@ function PositionDetail({ position, onClose, onRefresh }: { position: KeyPositio
   const pos = detail ?? position;
 
   return (
-    <div className="fixed inset-0 z-40 flex">
-      <div className="flex-1 bg-shadow" onClick={onClose} />
-      <div className="w-full max-w-2xl bg-shadow border-l border-shadow overflow-y-auto flex flex-col">
-        {/* Header */}
-        <div className="sticky top-0 bg-shadow border-b border-shadow px-6 py-4 flex items-center justify-between z-10">
-          <div>
-            <h2 className="text-lg font-semibold text-paper">{pos.jobTitle}</h2>
-            {pos.department && <p className="text-sm text-muted">{pos.department}</p>}
+    <Card padding="p-0">
+      <div className="flex items-start justify-between gap-4 px-5 pt-5 pb-4 border-b border-rule">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h2 className="text-lg font-bold text-ink">{pos.jobTitle}</h2>
+            <Badge tone={RISK_TONE[pos.riskLevel]}>{RISK_LABEL[pos.riskLevel]}</Badge>
           </div>
-          <div className="flex items-center gap-3">
-            <span className={`text-xs font-medium px-2 py-1  ${RISK_COLOR[pos.riskLevel]}`}>
-              {pos.riskLevel} RISK
-            </span>
-            <button onClick={onClose} className="text-muted hover:text-paper text-xl leading-none">×</button>
-          </div>
+          {pos.department && <p className="mt-0.5 text-sm text-muted">{pos.department}</p>}
         </div>
+        <button type="button" onClick={onClose} aria-label="Close position" className="hidden xl:flex -mr-2 w-9 h-9 items-center justify-center rounded-control text-muted hover:bg-page hover:text-ink">
+          <Icon name="x" size={18} />
+        </button>
+      </div>
 
-        <div className="p-6 space-y-6 flex-1">
-          {/* Description */}
-          {pos.description && (
-            <p className="text-sm text-muted">{pos.description}</p>
-          )}
+      <div className="flex flex-col gap-5 p-5">
+        {pos.description && <p className="text-sm text-ink">{pos.description}</p>}
 
-          {/* Current Holder */}
-          {pos._currentHolder && (
-            <div className="bg-shadow border border-rule p-3">
-              <p className="text-xs text-muted uppercase tracking-wide mb-1">Current Holder</p>
-              <p className="text-sm text-paper">{empName(pos._currentHolder)}</p>
-            </div>
-          )}
+        {pos._currentHolder && (
+          <div className="flex items-center justify-between gap-3 rounded-control bg-page px-4 py-3 text-[13.5px]">
+            <span className="text-muted">Current holder</span>
+            <span className="font-semibold text-ink">{empName(pos._currentHolder)}</span>
+          </div>
+        )}
 
-          {/* Nominees */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-paper uppercase tracking-wide">
-                Successor Pool ({pos.nominees.length})
-              </h3>
-              <button onClick={() => setNominateOpen(true)}
-                className="text-xs bg-accent hover:bg-accent text-paper px-3 py-1 ">
-                + Nominate
-              </button>
-            </div>
+        <div>
+          <CardHeader
+            title={<>Successor pool <span className="text-muted font-semibold tabular-nums">{pos.nominees.length}</span></>}
+            action={<Button size="sm" icon="plus" onClick={() => setNominateOpen(true)}>Nominate</Button>}
+          />
 
-            {loading ? (
-              <p className="text-sm text-muted">Loading…</p>
-            ) : pos.nominees.length === 0 ? (
-              <p className="text-sm text-muted italic">No nominees yet — high succession risk.</p>
-            ) : (
-              <div className="space-y-3">
-                {pos.nominees.map(n => (
-                  <div key={n.id} className="bg-shadow border border-shadow p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-medium text-paper">{empName(n._employee)}</p>
-                        <p className="text-xs text-muted">{n.employeeId}</p>
-                        {n._employee?.department && <p className="text-xs text-muted">{n._employee.department}</p>}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-medium px-2 py-0.5  ${READINESS_COLOR[n.readiness]}`}>
-                          {READINESS_LABEL[n.readiness]}
-                        </span>
-                        <span className="text-xs bg-muted text-muted px-2 py-0.5 ">
-                          Pot: {POT_LABEL[n.potentialBand]}
-                        </span>
-                        <button onClick={() => removeNominee(n.id)} className="text-ink hover:text-ink text-xs ml-1">✕</button>
-                      </div>
+          {loading ? (
+            <p className="text-sm text-muted">Loading successors…</p>
+          ) : pos.nominees.length === 0 ? (
+            <Notice tone="warn" title="No successors yet">Nobody is nominated, so this position is at high succession risk.</Notice>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {pos.nominees.map(n => (
+                <div key={n.id} className="rounded-control border border-rule p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-ink">{empName(n._employee)}</p>
+                      <p className="text-xs text-muted tabular-nums">{n.employeeId}{n._employee?.department ? ` · ${n._employee.department}` : ''}</p>
                     </div>
-                    {n.notes && <p className="text-xs text-muted mt-2 italic">{n.notes}</p>}
-
-                    {/* Dev Plans */}
-                    <div className="mt-3 border-t border-shadow pt-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs text-muted uppercase tracking-wide">Development Plans</p>
-                        <button onClick={() => setDevPlanNomineeId(n.id)}
-                          className="text-xs text-accent hover:text-accent">+ Add</button>
-                      </div>
-                      {(n.devPlans || []).length === 0 ? (
-                        <p className="text-xs text-muted italic">No development plans.</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {n.devPlans.map(dp => (
-                            <div key={dp.id} className="bg-shadow border border-rule p-2 flex items-start justify-between gap-2">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-medium text-paper truncate">{dp.competencyGap}</p>
-                                <p className="text-xs text-muted truncate">{dp.action}</p>
-                                {dp.targetDate && (
-                                  <p className="text-xs text-muted">Due: {new Date(dp.targetDate).toLocaleDateString()}</p>
-                                )}
-                              </div>
-                              <select
-                                value={dp.status}
-                                onChange={e => updateDevStatus(dp.id, e.target.value)}
-                                className="text-xs bg-muted border border-rule text-paper px-1 py-0.5 shrink-0">
-                                <option value="PENDING">Pending</option>
-                                <option value="IN_PROGRESS">In Progress</option>
-                                <option value="COMPLETED">Completed</option>
-                                <option value="CANCELLED">Cancelled</option>
-                              </select>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone={READINESS_TONE[n.readiness]}>{READINESS_LABEL[n.readiness]}</Badge>
+                      <Badge tone="neutral">{POT_LABEL[n.potentialBand]} potential</Badge>
+                      <Button size="sm" variant="danger" onClick={() => removeNominee(n.id)} aria-label={`Remove ${empName(n._employee)} from the pool`}>Remove</Button>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+                  {n.notes && <p className="mt-2 text-[13px] text-muted">{n.notes}</p>}
 
-        {/* Modals */}
-        {nominateOpen && (
-          <NominateModal positionId={position.id} onClose={() => setNominateOpen(false)}
-            onSaved={() => { setNominateOpen(false); load(); onRefresh(); }} />
-        )}
-        {devPlanNomineeId && (
-          <DevPlanModal nomineeId={devPlanNomineeId} onClose={() => setDevPlanNomineeId(null)}
-            onSaved={() => { setDevPlanNomineeId(null); load(); }} />
-        )}
+                  <div className="mt-3 border-t border-rule pt-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-[13px] font-semibold text-ink">Development plans</p>
+                      <Button size="sm" variant="ghost" icon="plus" onClick={() => setDevPlanNomineeId(n.id)}>Add plan</Button>
+                    </div>
+                    {(n.devPlans || []).length === 0 ? (
+                      <p className="text-[13px] text-muted">No development plans yet.</p>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        {n.devPlans.map(dp => (
+                          <div key={dp.id} className="flex flex-col gap-2 rounded-control bg-page p-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[13.5px] font-semibold text-ink">{dp.competencyGap}</p>
+                              <p className="text-[13px] text-muted">{dp.action}</p>
+                              {dp.targetDate && <p className="text-xs text-muted tabular-nums">Due {fmtDate(dp.targetDate)}</p>}
+                            </div>
+                            <label className="flex items-center gap-2 text-xs text-muted sm:w-44 shrink-0">
+                              <span className="sr-only">Plan status</span>
+                              <Select value={dp.status} onChange={e => updateDevStatus(dp.id, e.target.value)} className="h-9">
+                                <option value="PENDING">Pending</option>
+                                <option value="IN_PROGRESS">In progress</option>
+                                <option value="COMPLETED">Completed</option>
+                                <option value="CANCELLED">Cancelled</option>
+                              </Select>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      {nominateOpen && (
+        <NominateModal positionId={position.id} onClose={() => setNominateOpen(false)}
+          onSaved={() => { setNominateOpen(false); load(); onRefresh(); }} />
+      )}
+      {devPlanNomineeId && (
+        <DevPlanModal nomineeId={devPlanNomineeId} onClose={() => setDevPlanNomineeId(null)}
+          onSaved={() => { setDevPlanNomineeId(null); load(); }} />
+      )}
+    </Card>
   );
 }
 
@@ -452,84 +407,75 @@ function NineBoxView() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch('/api/performance/nine-box').then(setData).finally(() => setLoading(false));
+    apiFetch('/performance/nine-box').then(setData).finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <p className="text-muted text-sm p-4">Loading 9-box…</p>;
+  if (loading) return <PageLoading label="Loading the 9-box grid…" />;
   if (!data) return null;
 
   const BOX_META: Record<number, { row: number; col: number; label: string }> = {
-    1: { row: 0, col: 0, label: 'Potential Gem' },
-    2: { row: 0, col: 1, label: 'Rising Star' },
+    1: { row: 0, col: 0, label: 'Potential gem' },
+    2: { row: 0, col: 1, label: 'Rising star' },
     3: { row: 0, col: 2, label: 'Star' },
     4: { row: 1, col: 0, label: 'Dilemma' },
-    5: { row: 1, col: 1, label: 'Core Employee' },
-    6: { row: 1, col: 2, label: 'High Performer' },
+    5: { row: 1, col: 1, label: 'Core employee' },
+    6: { row: 1, col: 2, label: 'High performer' },
     7: { row: 2, col: 0, label: 'Underperformer' },
-    8: { row: 2, col: 1, label: 'Solid Contributor' },
+    8: { row: 2, col: 1, label: 'Solid contributor' },
     9: { row: 2, col: 2, label: 'Expert' },
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-4 text-xs text-muted">
-        <span className="flex items-center gap-1"><span className="w-2 h-2 bg-accent inline-block" /> READY_NOW</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 bg-highlight inline-block" /> 1 YEAR</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 bg-muted inline-block" /> 2 YEARS</span>
-      </div>
-
-      {/* Y-axis label */}
-      <div className="flex gap-2">
-        <div className="flex flex-col items-center justify-center w-6 shrink-0">
-          <span className="text-xs text-muted -rotate-90 whitespace-nowrap">Potential ↑</span>
-        </div>
-        <div className="flex-1">
-          {/* Column headers */}
-          <div className="grid grid-cols-3 gap-2 mb-2 pl-0">
-            {['Low Perf', 'Med Perf', 'High Perf'].map(h => (
-              <div key={h} className="text-xs text-muted text-center">{h}</div>
+    <div className="flex flex-col gap-4">
+      <Card>
+        <CardHeader title="9-box grid" caption="Successors placed by potential (rows) and performance (columns). Readiness is shown after each name." />
+        <div className="overflow-x-auto">
+          <div className="min-w-[600px]">
+            <div className="grid grid-cols-[112px_repeat(3,minmax(0,1fr))] gap-2 mb-2">
+              <span />
+              {['Low performance', 'Medium performance', 'High performance'].map(h => (
+                <div key={h} className="text-xs font-semibold text-muted text-center">{h}</div>
+              ))}
+            </div>
+            {['High potential', 'Medium potential', 'Low potential'].map((rowLabel, rIdx) => (
+              <div key={rIdx} className="grid grid-cols-[112px_repeat(3,minmax(0,1fr))] gap-2 mb-2">
+                <div className="flex items-center text-xs font-semibold text-muted">{rowLabel}</div>
+                {[1, 2, 3].map(cIdx => {
+                  const boxNum = rIdx * 3 + cIdx;
+                  const items = data.byBox[boxNum] || [];
+                  return (
+                    <div key={boxNum} className={`min-h-[96px] rounded-control border border-rule p-3 ${BOX_GROUND[boxNum]}`}>
+                      <p className="mb-1.5 flex items-center justify-between text-xs font-semibold text-ink">
+                        {BOX_META[boxNum].label}
+                        <span className="text-muted tabular-nums">{items.length}</span>
+                      </p>
+                      {items.length === 0 ? (
+                        <p className="text-xs text-muted">No one here</p>
+                      ) : (
+                        items.map(item => (
+                          <div key={item.nomineeId} className="flex items-baseline justify-between gap-2 text-[13px] text-ink">
+                            <span className="truncate">{empName(item._employee) || item.employeeId}</span>
+                            <span className="shrink-0 text-xs text-muted">{READINESS_SHORT[item.readiness] ?? ''}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             ))}
           </div>
-          {/* Row labels + grid */}
-          {['High Pot', 'Med Pot', 'Low Pot'].map((rowLabel, rIdx) => (
-            <div key={rIdx} className="flex gap-2 mb-2 items-stretch">
-              <div className="w-14 shrink-0 flex items-center">
-                <span className="text-xs text-muted">{rowLabel}</span>
-              </div>
-              {[1, 2, 3].map(cIdx => {
-                const boxNum = rIdx * 3 + cIdx;
-                const items = data.byBox[boxNum] || [];
-                return (
-                  <div key={boxNum} className={`flex-1 min-h-[80px]  p-2 ${BOX_COLOR[boxNum]} border border-shadow`}>
-                    <p className="text-xs font-medium text-muted mb-1">{BOX_META[boxNum].label}</p>
-                    {items.length === 0 ? (
-                      <p className="text-xs text-ink italic">—</p>
-                    ) : (
-                      items.map(item => (
-                        <div key={item.nomineeId} className="text-xs text-paper flex items-center gap-1 mb-0.5">
-                          <span className={`w-1.5 h-1.5  shrink-0 ${
-                            item.readiness === 'READY_NOW' ? 'bg-accent' :
-                            item.readiness === 'ONE_YEAR'  ? 'bg-highlight'   : 'bg-muted'
-                          }`} />
-                          <span className="truncate">{empName(item._employee) || item.employeeId}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
         </div>
-      </div>
+      </Card>
 
       {data.unplaced.length > 0 && (
-        <div className="bg-highlight border border-highlight p-3">
-          <p className="text-xs font-medium text-highlight mb-1">Unplaced ({data.unplaced.length}) — no finalised appraisal</p>
-          {data.unplaced.map((u: any) => (
-            <p key={u.nomineeId} className="text-xs text-muted">{empName(u._employee) || u.employeeId}: {u.reason}</p>
-          ))}
-        </div>
+        <Notice tone="warn" title={`${data.unplaced.length} not placed — no finalised appraisal`}>
+          <ul className="mt-1 flex flex-col gap-0.5">
+            {data.unplaced.map((u: any) => (
+              <li key={u.nomineeId}>{empName(u._employee) || u.employeeId}: {u.reason}</li>
+            ))}
+          </ul>
+        </Notice>
       )}
     </div>
   );
@@ -541,61 +487,46 @@ function RiskReportView() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch('/api/performance/succession/risk-report').then(setReport).finally(() => setLoading(false));
+    apiFetch('/performance/succession/risk-report').then(setReport).finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <p className="text-muted text-sm p-4">Loading risk report…</p>;
+  if (loading) return <PageLoading label="Loading the risk report…" />;
   if (!report) return null;
 
   return (
-    <div className="space-y-4">
-      {/* Summary */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: 'High Risk', value: report.summary.high, color: 'text-ink' },
-          { label: 'Medium Risk', value: report.summary.medium, color: 'text-ink' },
-          { label: 'Low Risk', value: report.summary.low, color: 'text-accent' },
-        ].map(s => (
-          <div key={s.label} className="bg-shadow border border-shadow p-3 text-center">
-            <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-            <p className="text-xs text-muted mt-1">{s.label}</p>
-          </div>
-        ))}
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Stat label="High risk" value={report.summary.high} note="No ready successor" />
+        <Stat label="Medium risk" value={report.summary.medium} />
+        <Stat label="Low risk" value={report.summary.low} />
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-xs text-muted uppercase border-b border-shadow">
-              <th className="text-left py-2 pr-4">Position</th>
-              <th className="text-left py-2 pr-4">Dept</th>
-              <th className="text-center py-2 pr-4">Risk</th>
-              <th className="text-center py-2 pr-4">Nominees</th>
-              <th className="text-center py-2 pr-4">Ready Now</th>
-              <th className="text-center py-2 pr-4">1 Year</th>
-              <th className="text-center py-2">2 Years</th>
-            </tr>
-          </thead>
-          <tbody>
-            {report.rows.map((row: any) => (
-              <tr key={row.positionId} className="border-b border-shadow hover:bg-shadow">
-                <td className="py-2 pr-4 text-paper font-medium">{row.jobTitle}</td>
-                <td className="py-2 pr-4 text-muted">{row.department || '—'}</td>
-                <td className="py-2 pr-4 text-center">
-                  <span className={`text-xs font-medium px-2 py-0.5  ${RISK_COLOR[row.riskLevel]}`}>
-                    {row.riskLevel}
-                  </span>
-                </td>
-                <td className="py-2 pr-4 text-center text-muted">{row.totalNominees}</td>
-                <td className="py-2 pr-4 text-center text-accent">{row.readyCounts.READY_NOW || 0}</td>
-                <td className="py-2 pr-4 text-center text-ink">{row.readyCounts.ONE_YEAR || 0}</td>
-                <td className="py-2 text-center text-muted">{row.readyCounts.TWO_YEARS || 0}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        aria-label="Succession risk by position"
+        rows={report.rows as any[]}
+        rowKey={(row: any) => row.positionId}
+        columns={[
+          { key: 'pos', label: 'Position', width: 'minmax(0, 1.6fr)', render: (row: any) => <span className="font-semibold">{row.jobTitle}</span> },
+          { key: 'dept', label: 'Department', render: (row: any) => <span className="text-muted">{row.department || '—'}</span> },
+          { key: 'risk', label: 'Risk', width: '120px', render: (row: any) => <Badge tone={RISK_TONE[row.riskLevel]}>{RISK_LABEL[row.riskLevel] ?? row.riskLevel}</Badge> },
+          { key: 'n', label: 'Nominees', width: '90px', align: 'right', numeric: true, render: (row: any) => row.totalNominees },
+          { key: 'now', label: 'Ready now', width: '90px', align: 'right', numeric: true, render: (row: any) => row.readyCounts.READY_NOW || 0 },
+          { key: 'y1', label: '1 year', width: '80px', align: 'right', numeric: true, render: (row: any) => row.readyCounts.ONE_YEAR || 0 },
+          { key: 'y2', label: '2 years', width: '80px', align: 'right', numeric: true, render: (row: any) => row.readyCounts.TWO_YEARS || 0 },
+        ]}
+        mobileCard={(row: any) => (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-start justify-between gap-3">
+              <span className="font-semibold text-ink">{row.jobTitle}</span>
+              <Badge tone={RISK_TONE[row.riskLevel]}>{RISK_LABEL[row.riskLevel] ?? row.riskLevel}</Badge>
+            </div>
+            <span className="text-xs text-muted tabular-nums">
+              {row.department || 'No department'} · {row.totalNominees} nominees · {row.readyCounts.READY_NOW || 0} ready now
+            </span>
+          </div>
+        )}
+        empty={<EmptyState icon="shield" title="No key positions to report on" description="Add key positions to see their succession risk here." />}
+      />
     </div>
   );
 }
@@ -617,8 +548,8 @@ export default function SuccessionPage() {
     setLoading(true);
     try {
       const [posData, dashData] = await Promise.all([
-        apiFetch('/api/performance/key-positions'),
-        apiFetch('/api/performance/succession/dashboard'),
+        apiFetch('/performance/key-positions'),
+        apiFetch('/performance/succession/dashboard'),
       ]);
       setPositions(posData);
       setDashboard(dashData);
@@ -629,128 +560,120 @@ export default function SuccessionPage() {
 
   const filtered = riskFilter ? positions.filter(p => p.riskLevel === riskFilter) : positions;
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-paper">Succession Planning</h1>
-          <p className="text-sm text-muted mt-1">Key position identification, talent pool management, and 9-box grid</p>
-        </div>
-        {isHR && (
-          <button onClick={() => setAddOpen(true)}
-            className="px-4 py-2 bg-accent hover:bg-accent text-paper text-sm font-medium ">
-            + Add Key Position
-          </button>
-        )}
-      </div>
-
-      {/* Dashboard KPI Cards */}
-      {dashboard && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { label: 'Key Positions', value: dashboard.totalPositions, color: 'text-paper' },
-            { label: 'Total Nominees', value: dashboard.totalNominees, color: 'text-accent' },
-            { label: 'Ready Now', value: dashboard.byReadiness.readyNow, color: 'text-accent' },
-            { label: 'Coverage Rate', value: `${dashboard.coverageRate}%`, color: dashboard.coverageRate >= 70 ? 'text-accent' : 'text-ink' },
-          ].map(kpi => (
-            <div key={kpi.label} className="bg-shadow border border-shadow p-4">
-              <p className={`text-2xl font-bold ${kpi.color}`}>{kpi.value}</p>
-              <p className="text-xs text-muted mt-1">{kpi.label}</p>
+  const positionList = loading ? (
+    <PageLoading label="Loading key positions…" />
+  ) : filtered.length === 0 ? (
+    <Card padding="p-0">
+      <EmptyState
+        icon="shield"
+        title={riskFilter ? `No ${RISK_LABEL[riskFilter].toLowerCase()} positions` : 'No key positions yet'}
+        description={riskFilter ? 'Try another risk level.' : isHR ? 'Add the roles the business cannot leave empty, then nominate successors for each.' : 'HR has not defined any key positions yet.'}
+        action={!riskFilter && isHR ? <Button icon="plus" onClick={() => setAddOpen(true)}>Add key position</Button> : undefined}
+      />
+    </Card>
+  ) : (
+    <div className={`grid gap-3 ${selectedPosition ? 'grid-cols-1' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
+      {filtered.map(pos => {
+        const readyNow = pos.nominees.filter(n => n.readiness === 'READY_NOW').length;
+        const selected = selectedPosition?.id === pos.id;
+        return (
+          <button
+            key={pos.id}
+            type="button"
+            onClick={() => setSelectedPosition(pos)}
+            aria-current={selected ? 'true' : undefined}
+            className={`flex flex-col gap-3 rounded-card border bg-paper p-4 text-left shadow-card transition-colors hover:border-accent ${selected ? 'border-accent ring-2 ring-accent/20' : 'border-rule'}`}
+          >
+            <div className="flex w-full items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[15px] font-bold text-ink">{pos.jobTitle}</p>
+                {pos.department && <p className="text-[13px] text-muted">{pos.department}</p>}
+              </div>
+              <Badge tone={RISK_TONE[pos.riskLevel]}>{RISK_LABEL[pos.riskLevel]}</Badge>
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* High-Risk Alert */}
-      {dashboard && dashboard.byRisk.high > 0 && (
-        <div className="bg-ink border border-ink p-3 flex items-start gap-2">
-          <span className="text-ink mt-0.5">⚠</span>
-          <div>
-            <p className="text-sm font-medium text-ink">
-              {dashboard.byRisk.high} position{dashboard.byRisk.high > 1 ? 's' : ''} at HIGH succession risk
-            </p>
-            <p className="text-xs text-ink mt-0.5">
-              {dashboard.highRiskPositions.slice(0, 3).map(p => p.jobTitle).join(', ')}
-              {dashboard.highRiskPositions.length > 3 ? ` +${dashboard.highRiskPositions.length - 3} more` : ''}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex gap-1 bg-shadow border border-shadow p-1 w-fit">
-        {(['positions', 'nine-box', 'risk-report'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-1.5 text-sm  font-medium transition-colors ${
-              tab === t ? 'bg-accent text-paper' : 'text-muted hover:text-paper'
-            }`}>
-            {t === 'positions' ? 'Key Positions' : t === 'nine-box' ? '9-Box Grid' : 'Risk Report'}
+            <div className="flex items-center gap-3 text-[13px] text-muted tabular-nums">
+              <span>{pos.nominees.length} nominee{pos.nominees.length !== 1 ? 's' : ''}</span>
+              {readyNow > 0 && <span className="font-semibold text-ok">{readyNow} ready now</span>}
+            </div>
           </button>
-        ))}
-      </div>
+        );
+      })}
+    </div>
+  );
 
-      {/* Tab Content */}
+  return (
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Succession planning"
+        subtitle="Key positions, successor pools and the 9-box grid"
+        actions={isHR ? <Button icon="plus" onClick={() => setAddOpen(true)}>Add key position</Button> : undefined}
+      />
+
+      {dashboard && (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Stat label="Key positions" value={dashboard.totalPositions} />
+          <Stat label="Successors nominated" value={dashboard.totalNominees} />
+          <Stat label="Ready now" value={dashboard.byReadiness.readyNow} />
+          <Stat
+            label="Coverage"
+            value={`${dashboard.coverageRate}%`}
+            note={<span className={dashboard.coverageRate >= 70 ? 'text-ok' : 'text-warn'}>{dashboard.coverageRate >= 70 ? 'On target (70%)' : 'Below the 70% target'}</span>}
+          />
+        </div>
+      )}
+
+      {dashboard && dashboard.byRisk.high > 0 && (
+        <Notice tone="danger" title={`${dashboard.byRisk.high} position${dashboard.byRisk.high > 1 ? 's' : ''} at high succession risk`}>
+          {dashboard.highRiskPositions.slice(0, 3).map(p => p.jobTitle).join(', ')}
+          {dashboard.highRiskPositions.length > 3 ? ` and ${dashboard.highRiskPositions.length - 3} more` : ''}
+        </Notice>
+      )}
+
+      <Tabs<'positions' | 'nine-box' | 'risk-report'>
+        items={[
+          { id: 'positions', label: 'Key positions', count: positions.length },
+          { id: 'nine-box', label: '9-box grid' },
+          { id: 'risk-report', label: 'Risk report' },
+        ]}
+        active={tab}
+        onChange={setTab}
+      />
+
       {tab === 'positions' && (
-        <div className="space-y-4">
-          {/* Filter */}
-          <div className="flex gap-2">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by risk">
             {['', 'HIGH', 'MEDIUM', 'LOW'].map(r => (
-              <button key={r} onClick={() => setRiskFilter(r)}
-                className={`text-xs px-3 py-1  border transition-colors ${
-                  riskFilter === r ? 'bg-muted border-rule text-paper' : 'border-shadow text-muted hover:border-rule'
-                }`}>
-                {r || 'All'}
+              <button
+                key={r}
+                type="button"
+                onClick={() => setRiskFilter(r)}
+                aria-pressed={riskFilter === r}
+                className={`h-8 rounded-full border px-3.5 text-[13px] font-semibold transition-colors ${
+                  riskFilter === r ? 'border-accent bg-tint text-accent' : 'border-rule bg-paper text-muted hover:text-ink'
+                }`}
+              >
+                {r ? RISK_LABEL[r] : 'All'}
               </button>
             ))}
           </div>
 
-          {loading ? (
-            <p className="text-muted text-sm">Loading positions…</p>
-          ) : filtered.length === 0 ? (
-            <div className="text-center py-16 text-muted">
-              <p className="text-4xl mb-3">◈</p>
-              <p className="text-sm">No key positions defined yet.</p>
-              {isHR && <p className="text-xs mt-1">Click "Add Key Position" to get started.</p>}
-            </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map(pos => (
-                <button key={pos.id} onClick={() => setSelectedPosition(pos)}
-                  className="bg-shadow border border-shadow hover:border-rule p-4 text-left transition-colors">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-paper truncate">{pos.jobTitle}</p>
-                      {pos.department && <p className="text-xs text-muted">{pos.department}</p>}
-                    </div>
-                    <span className={`text-xs font-medium px-2 py-0.5  shrink-0 ${RISK_COLOR[pos.riskLevel]}`}>
-                      {pos.riskLevel}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex items-center gap-3 text-xs text-muted">
-                    <span>{pos.nominees.length} nominee{pos.nominees.length !== 1 ? 's' : ''}</span>
-                    {pos.nominees.filter(n => n.readiness === 'READY_NOW').length > 0 && (
-                      <span className="text-accent">
-                        {pos.nominees.filter(n => n.readiness === 'READY_NOW').length} ready now
-                      </span>
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
+          {selectedPosition ? (
+            <SplitPane
+              list={positionList}
+              hasDetail
+              onBack={() => setSelectedPosition(null)}
+              backLabel="All key positions"
+              detail={<PositionDetail key={selectedPosition.id} position={selectedPosition} onClose={() => setSelectedPosition(null)} onRefresh={loadAll} />}
+            />
+          ) : positionList}
         </div>
       )}
 
       {tab === 'nine-box' && <NineBoxView />}
       {tab === 'risk-report' && <RiskReportView />}
 
-      {/* Modals */}
       {addOpen && (
         <AddPositionModal onClose={() => setAddOpen(false)} onSaved={() => { setAddOpen(false); loadAll(); }} />
-      )}
-      {selectedPosition && (
-        <PositionDetail position={selectedPosition} onClose={() => setSelectedPosition(null)} onRefresh={loadAll} />
       )}
     </div>
   );
