@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useState, useEffect } from 'react';
+import { Fragment, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { apiFetch, apiFetchRaw } from '@/lib/api';
 import {
@@ -653,16 +653,59 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
     return () => clearInterval(tick);
   }, [lastRefreshed]);
 
+  // Keyboard behaviour copied from the kit Modal (which this dialog cannot be,
+  // because of printing): focus moves in on open, Tab / Shift+Tab stay inside,
+  // Escape closes, and focus returns to the opener (the Run button) on close.
+  // The opener is captured on the first render, before anything inside mounts.
+  // Its own stack is enough: nothing opens over this dialog, and its backdrop
+  // blocks every other Run button while it is up.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const returnTo = useRef<HTMLElement | null>(typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const phase = loading ? 'loading' : (!data || !data.kpis || !Array.isArray(data.trend)) ? 'error' : 'ready';
+
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const opener = returnTo.current;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { onCloseRef.current(); return; }
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      const focusables = Array.from(panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter((el) => !el.closest('[hidden], [aria-hidden="true"]'));
+      if (focusables.length === 0) { e.preventDefault(); panelRef.current.focus(); return; }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      const inside = !!active && panelRef.current.contains(active);
+      if (e.shiftKey && (active === first || !inside)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (active === last || !inside)) { e.preventDefault(); first.focus(); }
+    };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+      opener?.focus?.();
+    };
+  }, []);
+
+  // Each state moves focus to its obvious target: the panel while loading,
+  // "Try again" on failure, Close once the dashboard is up. A background
+  // refresh does not change the phase, so it never steals focus.
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const target = panel.querySelector<HTMLElement>('[data-autofocus]') ?? panel;
+    target.focus();
+  }, [phase]);
 
   if (loading) {
     return (
       <div className="fixed inset-0 z-[80] flex items-center justify-center bg-ink/40">
-        <div className="flex flex-col items-center gap-3 px-10 py-8 bg-paper border border-rule rounded-card shadow-card">
+        <div ref={panelRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Executive workforce dashboard, loading"
+          className="flex flex-col items-center gap-3 px-10 py-8 bg-paper border border-rule rounded-card shadow-card">
           <div className="w-8 h-8 border-2 border-rule border-t-accent animate-spin rounded-full" role="status" aria-label="Loading dashboard" />
           <p className="text-sm text-muted">Loading the dashboard…</p>
         </div>
@@ -676,14 +719,14 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
   if (!data || !data.kpis || !Array.isArray(data.trend)) {
     return (
       <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-ink/40 sm:p-4" onMouseDown={onClose}>
-        <div role="alertdialog" aria-modal="true" aria-labelledby="wf-dash-error" onMouseDown={e => e.stopPropagation()}
+        <div ref={panelRef} tabIndex={-1} role="alertdialog" aria-modal="true" aria-labelledby="wf-dash-error" onMouseDown={e => e.stopPropagation()}
           className="w-full sm:max-w-md bg-paper border border-rule rounded-t-card sm:rounded-card shadow-card p-6 flex flex-col items-center text-center gap-3">
           <span className="flex items-center justify-center w-11 h-11 rounded-full bg-danger-bg text-danger" aria-hidden="true"><Icon name="alert" size={22} /></span>
           <h2 id="wf-dash-error" className="text-[17px] font-bold text-ink">The workforce dashboard could not be loaded</h2>
           <p className="text-[13px] text-muted">The report service returned no data. Try again, or run one of the other reports.</p>
           <div className="flex gap-2.5 mt-2">
             <Button variant="secondary" onClick={onClose}>Close</Button>
-            <Button onClick={() => loadAll()}>Try again</Button>
+            <Button data-autofocus onClick={() => loadAll()}>Try again</Button>
           </div>
         </div>
       </div>
@@ -751,6 +794,8 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
     <div data-print-root className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-ink/40 sm:p-4 print:p-0 print:bg-transparent print:inset-auto print:static print:block" onMouseDown={onClose}>
       <style>{PRINT_CSS}</style>
       <div
+        ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="wf-dash-title"
@@ -768,7 +813,7 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
           <div className="flex items-center gap-2 print:hidden">
             <Button size="sm" variant="secondary" onClick={() => loadAll(true)} disabled={refreshing}>Refresh</Button>
             <Button size="sm" variant="secondary" icon="download" onClick={() => window.print()}>Print or save as PDF</Button>
-            <button type="button" onClick={onClose} aria-label="Close" className="w-9 h-9 flex items-center justify-center rounded-control text-muted hover:bg-page hover:text-ink">
+            <button type="button" data-autofocus onClick={onClose} aria-label="Close" className="w-9 h-9 flex items-center justify-center rounded-control text-muted hover:bg-page hover:text-ink">
               <Icon name="x" size={18} />
             </button>
           </div>
