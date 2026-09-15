@@ -6,7 +6,8 @@
  *  - Modal let Tab leave the dialog into the page under the backdrop.
  */
 import { fireEvent, render, screen } from '@testing-library/react';
-import { DataTable, Modal } from '../src/components/ui';
+import { useState } from 'react';
+import { DataTable, Modal, SplitPane } from '../src/components/ui';
 
 type Row = { id: string; name: string };
 const ROWS: Row[] = [{ id: 'a', name: 'Acme' }];
@@ -86,5 +87,57 @@ describe('Modal focus trap', () => {
     screen.getByText('Outside').focus();
     fireEvent.keyDown(document, { key: 'Tab' });
     expect(document.activeElement).toBe(screen.getByLabelText('Close'));
+  });
+});
+
+describe('SplitPane focus (narrow screens)', () => {
+  function Inbox({ removeOnApprove = false }: { removeOnApprove?: boolean }) {
+    const [items, setItems] = useState(['a', 'b']);
+    const [sel, setSel] = useState<string | null>(null);
+    return (
+      <SplitPane
+        hasDetail={sel !== null}
+        onBack={() => setSel(null)}
+        list={<ul>{items.map((i) => <li key={i}><button type="button" onClick={() => setSel(i)}>Row {i}</button></li>)}</ul>}
+        detail={<div><h2>Detail {sel}</h2><button type="button" onClick={() => { if (removeOnApprove) setItems((l) => l.filter((x) => x !== sel)); setSel(null); }}>Approve</button></div>}
+      />
+    );
+  }
+
+  beforeAll(() => {
+    // jsdom has no layout: report a narrow viewport.
+    window.matchMedia = ((q: string) => ({ matches: false, media: q, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, onchange: null, dispatchEvent: () => false })) as unknown as typeof window.matchMedia;
+  });
+
+  it('moves focus into the detail when a row opens it', () => {
+    render(<Inbox />);
+    const row = screen.getByText('Row a');
+    row.focus();
+    fireEvent.click(row);
+    expect(document.activeElement).toBe(screen.getByRole('region', { name: 'Details' }));
+  });
+
+  it('returns focus to the opening row on Back', () => {
+    render(<Inbox />);
+    const row = screen.getByText('Row b');
+    row.focus();
+    fireEvent.click(row);
+    const back = screen.getByText('Back to list');
+    back.focus();
+    fireEvent.click(back);
+    expect(document.activeElement).toBe(screen.getByText('Row b'));
+  });
+
+  it('falls back to the list when the opening row is gone after Approve', () => {
+    render(<Inbox removeOnApprove />);
+    const row = screen.getByText('Row a');
+    row.focus();
+    fireEvent.click(row);
+    const approve = screen.getByText('Approve');
+    approve.focus();
+    fireEvent.click(approve);
+    expect(screen.queryByText('Row a')).toBeNull();
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.contains(screen.getByText('Row b'))).toBe(true);
   });
 });
