@@ -456,6 +456,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPaletteOpen((v) => !v); }
+      if (e.key === 'Escape') { setMenuOpen(false); setSidebarOpen(false); }
     };
     const onClick = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false); };
     window.addEventListener('keydown', onKey);
@@ -578,7 +579,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       )}
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer. The same sidebar body renders twice (drawer below lg,
+          static aside at lg+); each is display:none at the other breakpoint,
+          so keep the lg:hidden / hidden lg:flex pair together. */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 bg-ink/40 lg:hidden" onClick={() => setSidebarOpen(false)} aria-hidden="true" />
       )}
@@ -643,14 +646,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {initials}
               </button>
               {menuOpen && (
-                <div className="absolute right-0 top-11 w-64 bg-paper border border-rule rounded-card shadow-card z-50 overflow-hidden">
+                <div role="menu" aria-label="Account" className="absolute right-0 top-11 w-64 bg-paper border border-rule rounded-card shadow-card z-50 overflow-hidden">
                   <div className="px-4 py-3 border-b border-rule">
                     <div className="text-sm font-bold text-ink truncate">{user?.name || 'User'}</div>
                     <div className="text-xs text-muted truncate">{user?.email || ''}</div>
                     <div className="mt-1.5"><Badge tone={isSuperAdmin ? 'accent' : 'neutral'}>{roleLabel}</Badge></div>
                   </div>
-                  <Link href="/settings" className="flex items-center gap-2.5 px-4 h-10 text-sm text-ink hover:bg-page"><Icon name="settings" size={16} className="text-muted" />Settings</Link>
-                  <button type="button" onClick={doLogout} className="w-full flex items-center gap-2.5 px-4 h-10 text-sm text-ink hover:bg-page text-left"><Icon name="logout" size={16} className="text-muted" />Sign out</button>
+                  <Link role="menuitem" href="/settings" className="flex items-center gap-2.5 px-4 h-10 text-sm text-ink hover:bg-page"><Icon name="settings" size={16} className="text-muted" />Settings</Link>
+                  <button role="menuitem" type="button" onClick={doLogout} className="w-full flex items-center gap-2.5 px-4 h-10 text-sm text-ink hover:bg-page text-left"><Icon name="logout" size={16} className="text-muted" />Sign out</button>
                 </div>
               )}
             </div>

@@ -51,4 +51,4 @@ export function AuthTitle({ title, sub }: { title: string; sub?: ReactNode }) {
   );
 }
 
-export const AUTH_PRIMARY = 'w-full h-[46px] rounded-control bg-accent text-on-accent text-[15px] font-bold flex items-center justify-center gap-2 hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-60 disabled:cursor-not-allowed';
+export const AUTH_PRIMARY = 'w-full h-[46px] rounded-control bg-accent text-on-accent text-[15px] font-bold flex items-center justify-center gap-2 hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed';
