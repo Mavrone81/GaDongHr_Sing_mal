@@ -1,9 +1,13 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { pwStrength } from '@/lib/passwordReset';
+import { Avatar, Badge, Button, Card, DataTable, EmptyState, Field, Icon, Input, Modal, SearchInput, Select, Tabs, type Column } from '@/components/ui';
+import { SectionHeader } from '../_components/SectionHeader';
+import { Notice, type NoticeMsg } from '../_components/Notice';
+import { sentenceCase } from '../_components/format';
 
 interface User {
   id: string;
@@ -21,25 +25,30 @@ interface Role { id: string; name: string; }
 
 type PanelTab = 'role' | 'password' | 'mfa';
 
-const ROLE_COLORS: Record<string, string> = {
-  SUPER_ADMIN:      'bg-page text-accent border-accent',
-  ADMIN:            'bg-page text-accent border-accent',
-  IT_ADMIN:         'bg-page text-ink border-ink',
-  HR_ADMIN:         'bg-page text-accent border-accent',
-  HR_MANAGER:       'bg-page text-accent border-accent',
-  PAYROLL_OFFICER:  'bg-page text-accent border-accent',
-  FINANCE_ADMIN:    'bg-page text-accent border-accent',
-  RECRUITER:        'bg-page text-ink border-highlight',
-  TRAINING_MANAGER: 'bg-page text-ink border-highlight',
-  LINE_MANAGER:     'bg-page text-accent border-accent',
-  EMPLOYEE:         'bg-page text-ink border-rule',
-};
+/** Admin-tier roles read as accent; everyone else neutral. The label tells roles apart, not the colour. */
+const ADMIN_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'IT_ADMIN', 'HR_ADMIN', 'FINANCE_ADMIN']);
+const roleTone = (role: string) => (ADMIN_ROLES.has(role) ? 'accent' : 'neutral');
+
+/** Strength meter segments on the token scale (pwStrength's own classes predate the tokens). */
+const STRENGTH_BAR = ['', 'bg-danger', 'bg-warn', 'bg-warn', 'bg-ok', 'bg-ok'];
+
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
+
+function StatusBadge({ active }: { active: boolean }) {
+  return <Badge tone={active ? 'ok' : 'danger'}>{active ? 'Active' : 'Locked'}</Badge>;
+}
+
+function MfaBadge({ enabled }: { enabled: boolean }) {
+  return enabled
+    ? <Badge tone="ok"><Icon name="shield" size={13} strokeWidth={2} className="mr-1" />MFA on</Badge>
+    : <Badge>MFA not set up</Badge>;
+}
 
 // ─── Password strength ────────────────────────────────────────────────────────
 // pwStrength now lives in @/lib/passwordReset so the self-service reset page
 // shares the identical meter.
 
-// ─── Adjust Clearances Panel ──────────────────────────────────────────────────
+// ─── Manage-access drawer ─────────────────────────────────────────────────────
 function AdjustPanel({
   user, roles, onClose, onRefresh,
 }: {
@@ -50,7 +59,7 @@ function AdjustPanel({
   // Role tab
   const [updateRole, setUpdateRole]   = useState(user.role);
   const [roleLoading, setRoleLoading] = useState(false);
-  const [roleMsg, setRoleMsg]         = useState('');
+  const [roleMsg, setRoleMsg]         = useState<NoticeMsg>(null);
 
   // Password tab
   const [pw, setPw]             = useState('');
@@ -62,29 +71,29 @@ function AdjustPanel({
 
   // MFA tab
   const [mfaLoading, setMfaLoading] = useState(false);
-  const [mfaMsg, setMfaMsg]         = useState('');
+  const [mfaMsg, setMfaMsg]         = useState<NoticeMsg>(null);
   const [mfaConfirm, setMfaConfirm] = useState(false);
 
   const handleRoleSave = async () => {
-    setRoleLoading(true); setRoleMsg('');
+    setRoleLoading(true); setRoleMsg(null);
     try {
       await apiFetch(`/users/${user.id}`, {
         method: 'PUT',
         body: JSON.stringify({ role: updateRole }),
       });
-      setRoleMsg('✓ Role updated successfully.');
+      setRoleMsg({ tone: 'ok', text: 'Role updated successfully.' });
       onRefresh();
-    } catch (e) { setRoleMsg(`✗ ${(e as Error).message || 'Update failed.'}`); }
+    } catch (e) { setRoleMsg({ tone: 'danger', text: (e as Error).message || 'Update failed.' }); }
     setRoleLoading(false);
   };
 
   const handleToggleActive = async () => {
-    setRoleLoading(true); setRoleMsg('');
+    setRoleLoading(true); setRoleMsg(null);
     try {
       await apiFetch(`/users/${user.id}/toggle-active`, { method: 'PATCH' });
-      setRoleMsg(`✓ Account ${user.isActive ? 'locked' : 'unlocked'}.`);
+      setRoleMsg({ tone: 'ok', text: `Account ${user.isActive ? 'locked' : 'unlocked'}.` });
       onRefresh();
-    } catch (e) { setRoleMsg(`✗ ${(e as Error).message || 'Failed.'}`); }
+    } catch (e) { setRoleMsg({ tone: 'danger', text: (e as Error).message || 'Failed.' }); }
     setRoleLoading(false);
   };
 
@@ -98,242 +107,193 @@ function AdjustPanel({
         method: 'POST',
         body: JSON.stringify({ newPassword: pw }),
       });
-      setPwMsg('✓ Password reset. All active sessions invalidated.');
+      setPwMsg('Password reset. All active sessions invalidated.');
       setPw(''); setPwConfirm('');
-    } catch (e) { setPwError((e as Error).message || '✗ Reset failed.'); }
+    } catch (e) { setPwError((e as Error).message || 'Reset failed.'); }
     setPwLoading(false);
   };
 
   const handleMfaReset = async () => {
-    setMfaLoading(true); setMfaMsg('');
+    setMfaLoading(true); setMfaMsg(null);
     try {
       await apiFetch(`/users/${user.id}/reset-mfa`, { method: 'POST' });
-      setMfaMsg('✓ MFA cleared. User must re-enrol on next login.');
+      setMfaMsg({ tone: 'ok', text: 'MFA cleared. User must re-enrol on next login.' });
       setMfaConfirm(false); onRefresh();
-    } catch (e) { setMfaMsg(`✗ ${(e as Error).message || 'Reset failed.'}`); }
+    } catch (e) { setMfaMsg({ tone: 'danger', text: (e as Error).message || 'Reset failed.' }); }
     setMfaLoading(false);
   };
 
-  const strength = pwStrength(pw);
-  const initials = user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  // The reset button and its confirm row swap in place; move focus with the swap
+  // (onto Cancel when the confirm appears, back to the button when it goes) so
+  // keyboard focus never falls to <body>. Only a real change moves focus (so the
+  // open render — and Strict Mode's doubled effect — leave the Modal's focus alone).
+  const resetRowRef = useRef<HTMLDivElement>(null);
+  const confirmRowRef = useRef<HTMLDivElement>(null);
+  const prevConfirm = useRef(mfaConfirm);
+  useEffect(() => {
+    if (prevConfirm.current === mfaConfirm) return;
+    prevConfirm.current = mfaConfirm;
+    const row = mfaConfirm ? confirmRowRef.current : resetRowRef.current;
+    row?.querySelector<HTMLButtonElement>('button')?.focus();
+  }, [mfaConfirm]);
 
-  const TABS: { key: PanelTab; label: string; icon: React.ReactNode }[] = [
-    {
-      key: 'role', label: 'Access & Role',
-      icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>,
-    },
-    {
-      key: 'password', label: 'Reset Password',
-      icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>,
-    },
-    {
-      key: 'mfa', label: 'MFA',
-      icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" /></svg>,
-    },
+  const strength = pwStrength(pw);
+  const mismatch = !!pwConfirm && pw !== pwConfirm;
+
+  const TABS: { id: PanelTab; label: string }[] = [
+    { id: 'role', label: 'Access and role' },
+    { id: 'password', label: 'Reset password' },
+    { id: 'mfa', label: 'MFA' },
   ];
 
+  const spinner = <svg className="w-4 h-4 animate-spin rounded-full" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>;
+
+  // The dialog chrome (focus-in, Tab trap, Escape, focus return) is the kit Modal
+  // the page wraps this in; `onClose` is kept for parity with the old drawer API.
+  void onClose;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-end bg-shadow backdrop-" onClick={onClose}>
-      <div
-        className="relative h-full w-full max-w-lg bg-paper flex flex-col animate-in slide-in-from-right duration-300"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center gap-4 px-7 py-6 border-b border-rule shrink-0">
-          <div className="w-12 h-12 bg-shadow flex items-center justify-center text-sm font-black text-accent shrink-0">
-            {initials}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-black text-ink truncate">{user.name}</p>
-            <p className="text-[10px] font-bold text-muted truncate">{user.email}</p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-page transition-all text-muted hover:text-ink">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+    <div className="-mx-5 flex flex-col">
+        <Tabs items={TABS} active={tab} onChange={setTab} className="px-3" />
 
-        {/* Tab bar */}
-        <div className="flex border-b border-rule shrink-0 px-4">
-          {TABS.map(t => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`flex items-center gap-2 px-4 py-4 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${
-                tab === t.key ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'
-              }`}
-            >
-              {t.icon}
-              {t.label}
-            </button>
-          ))}
-        </div>
+        <div className="px-5 pt-5">
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-7">
-
-          {/* ── ACCESS & ROLE ─────────────────────────────────────────────── */}
+          {/* ── Access and role ─────────────────────────────────────────── */}
           {tab === 'role' && (
-            <div className="flex flex-col gap-6">
-              <div>
-                <p className="label-form mb-1.5">Current Role</p>
-                <span className={`text-xs font-black px-3 py-1.5  border ${ROLE_COLORS[user.role] ?? ROLE_COLORS.EMPLOYEE}`}>
-                  {user.role.replace(/_/g, ' ')}
-                </span>
+            <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[12.5px] font-semibold text-muted">Current role</span>
+                <div><Badge tone={roleTone(user.role)}>{sentenceCase(user.role)}</Badge></div>
               </div>
 
-              <div>
-                <label className="label-form block mb-1.5">Assign New Role</label>
-                <div className="relative">
-                  <select
-                    value={updateRole}
-                    onChange={e => setUpdateRole(e.target.value)}
-                    className="w-full appearance-none bg-paper border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:border-accent pr-8 cursor-pointer"
-                  >
-                    {roles.map(r => (
-                      <option key={r.id} value={r.name}>{r.name.replace(/_/g, ' ')}</option>
-                    ))}
-                  </select>
-                  <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
+              <Field label="Assign a new role">
+                <Select value={updateRole} onChange={e => setUpdateRole(e.target.value)}>
+                  {roles.map(r => (
+                    <option key={r.id} value={r.name}>{sentenceCase(r.name)}</option>
+                  ))}
+                </Select>
+              </Field>
+
+              <div className="flex flex-col gap-1.5">
+                <Button
+                  className="w-full"
+                  onClick={handleRoleSave}
+                  disabled={roleLoading || updateRole === user.role}
+                >
+                  {roleLoading ? 'Saving…' : 'Save role'}
+                </Button>
+                {!roleLoading && updateRole === user.role && (
+                  <span className="text-xs text-muted">Choose a different role to save.</span>
+                )}
               </div>
 
-              <button
-                onClick={handleRoleSave}
-                disabled={roleLoading || updateRole === user.role}
-                className="w-full py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all disabled:opacity-40 "
-              >
-                {roleLoading ? 'Saving…' : 'Save Role'}
-              </button>
+              {roleMsg && <Notice tone={roleMsg.tone}>{roleMsg.text}</Notice>}
 
-              {roleMsg && (
-                <p className={`text-[10px] font-black text-center ${roleMsg.startsWith('✓') ? 'text-accent' : 'text-ink'}`}>{roleMsg}</p>
-              )}
-
-              <div className="border-t border-rule pt-6">
-                <p className="label-form mb-3">Account Status</p>
-                <div className="flex items-center justify-between p-4 border border-rule bg-page">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2.5 h-2.5  ${user.isActive ? 'bg-accent shadow-[0_0_6px_rgba(16,185,129,0.5)]' : 'bg-ink'}`} />
-                    <div>
-                      <p className="text-xs font-black text-ink uppercase">{user.isActive ? 'Active' : 'Locked'}</p>
-                      {user.lastLoginAt && (
-                        <p className="text-[9px] font-bold text-muted mt-0.5">
-                          Last login: {new Date(user.lastLoginAt).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </p>
-                      )}
-                    </div>
+              <div className="flex flex-col gap-3 border-t border-rule pt-5">
+                <span className="text-[12.5px] font-semibold text-muted">Account status</span>
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-rule bg-page p-4">
+                  <div className="flex flex-col gap-1">
+                    <StatusBadge active={user.isActive} />
+                    {user.lastLoginAt && (
+                      <p className="text-xs text-muted">
+                        Last sign-in <span className="tabular-nums">{fmtDate(user.lastLoginAt)}</span>
+                      </p>
+                    )}
                   </div>
-                  <button
+                  <Button
+                    size="sm"
+                    variant={user.isActive ? 'danger' : 'secondary'}
+                    icon={user.isActive ? 'lock' : undefined}
                     onClick={handleToggleActive}
                     disabled={roleLoading}
-                    className={`px-4 py-2 text-[9px] font-black uppercase tracking-widest  transition-all border ${
-                      user.isActive
-                        ? 'border-ink text-ink bg-page hover:bg-page'
-                        : 'border-accent text-accent bg-page hover:bg-page'
-                    }`}
                   >
-                    {user.isActive ? 'Lock Account' : 'Unlock Account'}
-                  </button>
+                    {user.isActive ? 'Lock account' : 'Unlock account'}
+                  </Button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* ── RESET PASSWORD ────────────────────────────────────────────── */}
+          {/* ── Reset password ──────────────────────────────────────────── */}
           {tab === 'password' && (
             <div className="flex flex-col gap-5">
-              <div className="p-4 bg-page border border-highlight flex gap-3">
-                <svg className="w-4 h-4 text-ink shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <p className="text-[10px] font-bold text-ink leading-relaxed">
-                  Setting a new password will immediately invalidate all active sessions for <strong>{user.name}</strong>. They will need to log in again.
-                </p>
-              </div>
+              <Notice tone="warn">
+                Setting a new password immediately signs <strong>{user.name}</strong> out of every session. They will need to sign in again.
+              </Notice>
 
-              <div>
-                <label className="label-form block mb-1.5">New Password</label>
+              <Field label="New password" required>
                 <div className="relative">
-                  <input
+                  <Input
                     type={showPw ? 'text' : 'password'}
                     value={pw}
                     onChange={e => setPw(e.target.value)}
-                    placeholder="Min. 8 characters"
-                    className="w-full border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:border-accent pr-12 bg-paper"
+                    placeholder="At least 8 characters"
+                    className="pr-16"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPw(s => !s)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink text-[9px] font-black uppercase"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-control px-2 py-1 text-[13px] font-semibold text-accent hover:bg-tint"
                   >
                     {showPw ? 'Hide' : 'Show'}
                   </button>
                 </div>
+              </Field>
 
-                {/* Strength bar */}
-                {pw && (
-                  <div className="mt-2">
-                    <div className="flex gap-1 mb-1">
-                      {[1,2,3,4,5].map(i => (
-                        <div key={i} className={`h-1.5 flex-1  transition-all ${i <= strength.score ? strength.color : 'bg-rule'}`} />
-                      ))}
-                    </div>
-                    <p className={`text-[9px] font-black uppercase tracking-widest ${strength.score >= 3 ? 'text-accent' : 'text-ink'}`}>
-                      {strength.label}
-                    </p>
+              {pw && (
+                <div className="-mt-3 flex flex-col gap-1.5">
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map(i => (
+                      <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${i <= strength.score ? STRENGTH_BAR[strength.score] : 'bg-rule'}`} />
+                    ))}
                   </div>
-                )}
-              </div>
+                  <p aria-live="polite" className={`text-xs font-semibold ${strength.score >= 3 ? 'text-ok' : 'text-muted'}`}>
+                    Strength: {strength.label.toLowerCase()}
+                  </p>
+                </div>
+              )}
 
-              <div>
-                <label className="label-form block mb-1.5">Confirm Password</label>
-                <input
+              <Field label="Confirm password" required error={mismatch ? 'Passwords do not match.' : undefined}>
+                <Input
                   type={showPw ? 'text' : 'password'}
                   value={pwConfirm}
                   onChange={e => setPwConfirm(e.target.value)}
-                  placeholder="Re-enter password"
-                  className={`w-full border  px-4 py-3 text-sm font-bold text-ink focus:outline-none bg-paper transition-all ${
-                    pwConfirm && pw !== pwConfirm ? 'border-ink focus:border-ink' : 'border-rule focus:border-accent'
-                  }`}
+                  placeholder="Re-enter the password"
+                  invalid={mismatch}
                 />
-                {pwConfirm && pw !== pwConfirm && (
-                  <p className="text-[9px] font-black text-ink mt-1">Passwords do not match</p>
+              </Field>
+
+              {pwError && <Notice tone="danger">{pwError}</Notice>}
+              {pwMsg   && <Notice tone="ok">{pwMsg}</Notice>}
+
+              <div className="flex flex-col gap-1.5">
+                <Button
+                  className="w-full"
+                  onClick={handlePasswordReset}
+                  disabled={pwLoading || !pw || pw !== pwConfirm}
+                >
+                  {pwLoading && spinner}
+                  {pwLoading ? 'Resetting…' : 'Set new password'}
+                </Button>
+                {!pwLoading && (!pw || pw !== pwConfirm) && (
+                  <span className="text-xs text-muted">{!pw ? 'Enter a new password first.' : 'Both passwords must match.'}</span>
                 )}
               </div>
-
-              {pwError && <p className="text-[10px] font-black text-ink bg-page px-4 py-2.5 border border-ink">{pwError}</p>}
-              {pwMsg   && <p className="text-[10px] font-black text-accent bg-page px-4 py-2.5 border border-accent">{pwMsg}</p>}
-
-              <button
-                onClick={handlePasswordReset}
-                disabled={pwLoading || !pw || pw !== pwConfirm}
-                className="w-full py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all disabled:opacity-40 flex items-center justify-center gap-2"
-              >
-                {pwLoading && <svg className="w-3.5 h-3.5 animate-spin rounded-full" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>}
-                {pwLoading ? 'Resetting…' : 'Set New Password'}
-              </button>
             </div>
           )}
 
-          {/* ── MFA ──────────────────────────────────────────────────────── */}
+          {/* ── MFA ─────────────────────────────────────────────────────── */}
           {tab === 'mfa' && (
-            <div className="flex flex-col gap-6">
-              {/* MFA Status card */}
-              <div className={`p-5  border flex items-start gap-4 ${user.mfaEnabled ? 'bg-page border-accent' : 'bg-page border-rule'}`}>
-                <div className={`w-10 h-10  flex items-center justify-center shrink-0 ${user.mfaEnabled ? 'bg-page' : 'bg-page'}`}>
-                  <svg className={`w-5 h-5 ${user.mfaEnabled ? 'text-accent' : 'text-muted'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
-                  </svg>
+            <div className="flex flex-col gap-5">
+              <div className="flex items-start gap-4 rounded-control border border-rule bg-page p-4">
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-control ${user.mfaEnabled ? 'bg-tint text-accent' : 'bg-pill text-muted'}`}>
+                  <Icon name="shield" size={20} />
                 </div>
-                <div>
-                  <p className={`text-sm font-black ${user.mfaEnabled ? 'text-accent' : 'text-ink'}`}>
-                    MFA is {user.mfaEnabled ? 'Enabled' : 'Not Configured'}
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm font-bold text-ink">
+                    MFA is {user.mfaEnabled ? 'on' : 'not set up'}
                   </p>
-                  <p className={`text-[10px] font-bold mt-0.5 ${user.mfaEnabled ? 'text-accent' : 'text-muted'}`}>
+                  <p className="text-[13px] text-muted">
                     {user.mfaEnabled
                       ? 'Time-based one-time password (TOTP) is active for this account.'
                       : 'This user has not set up multi-factor authentication yet.'}
@@ -341,79 +301,59 @@ function AdjustPanel({
                 </div>
               </div>
 
-              {/* Reset MFA section */}
               {user.mfaEnabled && (
                 <div className="flex flex-col gap-4">
-                  <div className="p-4 bg-page border border-ink flex gap-3">
-                    <svg className="w-4 h-4 text-ink shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    <p className="text-[10px] font-bold text-ink leading-relaxed">
-                      Resetting MFA will <strong>clear the authenticator secret</strong> and invalidate all active sessions. The user will need to re-enrol using their authenticator app on next login.
-                    </p>
-                  </div>
+                  <Notice tone="warn">
+                    Resetting MFA <strong>clears the authenticator secret</strong> and signs the user out of every session. They re-enrol with their authenticator app at next sign-in.
+                  </Notice>
 
                   {!mfaConfirm ? (
-                    <button
-                      onClick={() => setMfaConfirm(true)}
-                      className="w-full py-3 border-2 border-ink text-ink text-[10px] font-black uppercase tracking-widest hover:bg-page transition-all"
-                    >
-                      Reset MFA for {user.name}
-                    </button>
+                    <div ref={resetRowRef}>
+                      <Button variant="danger" className="w-full" onClick={() => setMfaConfirm(true)}>
+                        Reset MFA for {user.name}
+                      </Button>
+                    </div>
                   ) : (
-                    <div className="flex flex-col gap-3 p-4 bg-page border border-ink ">
-                      <p className="text-[10px] font-black text-ink uppercase tracking-widest">Confirm MFA Reset</p>
-                      <p className="text-xs font-bold text-ink">Are you sure? This cannot be undone. The user will be logged out immediately.</p>
+                    <div ref={confirmRowRef} role="group" aria-label={`Confirm MFA reset for ${user.name}`} className="flex flex-col gap-3 rounded-control border border-danger bg-paper p-4">
+                      <p className="text-sm font-bold text-ink">Reset MFA for {user.name}?</p>
+                      <p className="text-[13px] text-muted">This cannot be undone. The user is signed out immediately.</p>
                       <div className="flex gap-3">
-                        <button
-                          onClick={() => setMfaConfirm(false)}
-                          className="flex-1 py-2.5 border border-rule text-ink text-[9px] font-black uppercase tracking-widest hover:bg-page transition-all"
-                        >
+                        <Button variant="secondary" className="flex-1" onClick={() => setMfaConfirm(false)}>
                           Cancel
-                        </button>
-                        <button
-                          onClick={handleMfaReset}
-                          disabled={mfaLoading}
-                          className="flex-1 py-2.5 bg-ink text-paper text-[9px] font-black uppercase tracking-widest hover:bg-ink transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                        >
-                          {mfaLoading && <svg className="w-3 h-3 animate-spin rounded-full" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>}
-                          {mfaLoading ? 'Resetting…' : 'Confirm Reset'}
-                        </button>
+                        </Button>
+                        <Button variant="danger" className="flex-1" onClick={handleMfaReset} disabled={mfaLoading}>
+                          {mfaLoading && spinner}
+                          {mfaLoading ? 'Resetting…' : 'Confirm reset'}
+                        </Button>
                       </div>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Not enrolled state */}
               {!user.mfaEnabled && (
-                <div className="p-5 bg-page border border-rule flex flex-col gap-3">
-                  <p className="text-[10px] font-black text-ink uppercase tracking-widest">How MFA enrolment works</p>
-                  <ol className="flex flex-col gap-2">
+                <div className="flex flex-col gap-3 rounded-control border border-rule bg-page p-4">
+                  <p className="text-sm font-bold text-ink">How MFA enrolment works</p>
+                  <ol className="flex flex-col gap-2.5">
                     {[
                       'User logs in with their email and password',
                       'They visit Account Settings → Setup MFA',
                       'They scan the QR code with an authenticator app (Google Authenticator, Authy, etc.)',
                       'MFA is active on next login',
                     ].map((step, i) => (
-                      <li key={i} className="flex items-start gap-3 text-[10px] font-bold text-muted">
-                        <span className="w-5 h-5 bg-page text-accent font-black text-[9px] flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
-                        {step}
+                      <li key={i} className="flex items-start gap-3 text-[13px] text-ink">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-tint text-xs font-bold text-accent tabular-nums">{i + 1}</span>
+                        <span className="pt-0.5">{step}</span>
                       </li>
                     ))}
                   </ol>
                 </div>
               )}
 
-              {mfaMsg && (
-                <p className={`text-[10px] font-black px-4 py-2.5  border ${mfaMsg.startsWith('✓') ? 'text-accent bg-page border-accent' : 'text-ink bg-page border-ink'}`}>
-                  {mfaMsg}
-                </p>
-              )}
+              {mfaMsg && <Notice tone={mfaMsg.tone}>{mfaMsg.text}</Notice>}
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 }
@@ -446,6 +386,10 @@ export default function UserManagementPage() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Stable identity: Modal re-runs its focus effect whenever onClose changes,
+  // which would pull focus out of the inputs on every keystroke.
+  const closeCreate = useCallback(() => { setIsCreateOpen(false); setCreateError(''); }, []);
 
   const handleCreateUser = async () => {
     if (!newUser.name || !newUser.email || !newUser.password) return;
@@ -481,204 +425,174 @@ export default function UserManagementPage() {
   function toggleUserSort(col: typeof userSort.col) {
     setUserSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
   }
-  function UserSortIcon({ col }: { col: typeof userSort.col }) {
-    return <span className="text-[8px] ml-1">{userSort.col === col ? (userSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  function SortHeader({ col, label }: { col: typeof userSort.col; label: string }) {
+    const on = userSort.col === col;
+    return (
+      <button
+        type="button"
+        onClick={() => toggleUserSort(col)}
+        aria-label={`Sort by ${label.toLowerCase()}${on ? (userSort.dir === 'asc' ? ', ascending' : ', descending') : ''}`}
+        className={`inline-flex items-center gap-1 hover:text-ink ${on ? 'text-ink' : ''}`}
+      >
+        {label}
+        {on && <Icon name="chevronDown" size={13} strokeWidth={2.25} className={userSort.dir === 'asc' ? 'rotate-180' : ''} />}
+      </button>
+    );
   }
 
   if (loading) return (
-    <div className="flex flex-col items-center justify-center p-24 gap-4">
+    <div className="flex flex-col items-center justify-center gap-4 p-24">
       <div className="h-10 w-10 border-4 border-accent border-t-transparent animate-spin rounded-full" />
-      <p className="eyebrow-tight animate-pulse">Loading identities…</p>
+      <p className="text-sm text-muted">Loading users…</p>
     </div>
   );
 
   if (!hasPermission('user:manage')) return (
-    <div className="p-24 text-center">
-      <div className="inline-flex items-center justify-center w-16 h-16 bg-page text-3xl mb-6">🚫</div>
-      <h2 className="text-xl font-black text-ink uppercase tracking-widest">Access Denied</h2>
-    </div>
+    <Card padding="p-0">
+      <EmptyState
+        icon="lock"
+        title="You don't have access to user management"
+        description="This needs the user:manage permission. Ask a Super Admin if you should have it."
+      />
+    </Card>
   );
 
-  return (
-    <div className="flex flex-col gap-6 pb-20">
+  const missingRequired = !newUser.name || !newUser.email || !newUser.password;
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-paper p-6 border border-rule ">
-        <div>
-          <h1 className="text-xl font-black text-ink tracking-tight">User Management</h1>
-          <p className="eyebrow-tight mt-0.5 flex items-center gap-2">
-            <span className="w-1.5 h-1.5 bg-accent animate-pulse" />
-            {users.length} identities registered
-          </p>
-        </div>
-        <button
-          onClick={() => setIsCreateOpen(true)}
-          className="flex items-center gap-2 bg-accent hover:bg-accent text-paper px-5 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all "
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          New User
-        </button>
-      </div>
-
-      {/* Search */}
-      <div className="relative">
-        <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <input
-          type="text"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search by name, email or role…"
-          className="w-full pl-11 pr-4 py-3 bg-paper border border-rule text-sm font-bold text-ink focus:outline-none focus:border-accent "
-        />
-      </div>
-
-      {/* User table */}
-      <div className="bg-paper border border-rule overflow-hidden">
-        <table className="w-full text-left">
-          <thead>
-            <tr className="bg-page border-b border-rule label-form">
-              {([
-                { col: 'name',    label: 'User' },
-                { col: 'role',    label: 'Role' },
-                { col: 'status',  label: 'Status' },
-                { col: 'mfa',     label: 'MFA' },
-                { col: 'created', label: 'Created' },
-              ] as const).map(h => (
-                <th key={h.col} className="px-6 py-4">
-                  <button onClick={() => toggleUserSort(h.col)} className="flex items-center hover:text-ink transition-colors">
-                    {h.label}<UserSortIcon col={h.col} />
-                  </button>
-                </th>
-              ))}
-              <th className="px-6 py-4 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-rule">
-            {filtered.map(u => (
-              <tr key={u.id} className="hover:bg-page transition-colors group">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 bg-shadow flex items-center justify-center text-[10px] font-black text-accent shrink-0 group-hover:scale-105 transition-transform">
-                      {u.name.substring(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="text-xs font-black text-ink uppercase tracking-wide">{u.name}</p>
-                      <p className="text-[10px] font-bold text-muted mt-0.5">{u.email}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span className={`text-[9px] font-black px-2.5 py-1  border uppercase tracking-widest ${ROLE_COLORS[u.role] ?? ROLE_COLORS.EMPLOYEE}`}>
-                    {u.role.replace(/_/g, ' ')}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2  shrink-0 ${u.isActive ? 'bg-accent shadow-[0_0_6px_rgba(16,185,129,0.5)]' : 'bg-ink'}`} />
-                    <span className="text-[10px] font-black text-ink uppercase tracking-widest">{u.isActive ? 'Active' : 'Locked'}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  {u.mfaEnabled ? (
-                    <span className="badge badge-success w-fit">
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                      </svg>
-                      Enabled
-                    </span>
-                  ) : (
-                    <span className="label-form">—</span>
-                  )}
-                </td>
-                <td className="px-6 py-4 text-[10px] font-bold text-muted">
-                  {new Date(u.createdAt).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <button
-                    onClick={() => setSelectedUser(u)}
-                    className="text-[9px] font-black text-accent uppercase tracking-widest border border-accent bg-page px-4 py-1.5 hover:bg-accent hover:text-paper hover:border-accent transition-all"
-                  >
-                    Adjust Clearances
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr><td colSpan={6} className="px-6 py-12 text-center text-sm text-muted font-bold">No users found</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Adjust Clearances side panel */}
-      {selectedUser && (
-        <AdjustPanel
-          user={selectedUser}
-          roles={roles}
-          onClose={() => setSelectedUser(null)}
-          onRefresh={() => { fetchData(); setSelectedUser(null); }}
-        />
-      )}
-
-      {/* Create User modal */}
-      {isCreateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-shadow backdrop-">
-          <div className="bg-paper w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-7 border-b border-rule">
-              <h3 className="text-lg font-black text-ink tracking-tight">Provision New User</h3>
-              <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-0.5">Register a new system identity</p>
-            </div>
-            <div className="p-7 flex flex-col gap-4">
-              {[
-                { label: 'Full Name',  key: 'name',     type: 'text',     placeholder: 'Jane Smith' },
-                { label: 'Email',      key: 'email',    type: 'email',    placeholder: 'jane@company.com' },
-                { label: 'Password',   key: 'password', type: 'password', placeholder: 'Min. 8 characters' },
-              ].map(f => (
-                <div key={f.key}>
-                  <label className="label-form block mb-1.5">{f.label}</label>
-                  <input
-                    type={f.type}
-                    value={(newUser as Record<string, string>)[f.key]}
-                    onChange={e => setNewUser({ ...newUser, [f.key]: e.target.value })}
-                    placeholder={f.placeholder}
-                    className="w-full border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:border-accent bg-paper"
-                  />
-                </div>
-              ))}
-              <div>
-                <label className="label-form block mb-1.5">Role</label>
-                <div className="relative">
-                  <select
-                    value={newUser.role}
-                    onChange={e => setNewUser({ ...newUser, role: e.target.value })}
-                    className="w-full appearance-none border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:border-accent pr-8 bg-paper cursor-pointer"
-                  >
-                    {roles.map(r => <option key={r.id} value={r.name}>{r.name.replace(/_/g, ' ')}</option>)}
-                  </select>
-                  <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </div>
-              {createError && <p className="text-[10px] font-black text-ink bg-page px-4 py-2.5 border border-ink">{createError}</p>}
-            </div>
-            <div className="px-7 pb-7 flex justify-end gap-3">
-              <button onClick={() => { setIsCreateOpen(false); setCreateError(''); }} className="px-5 py-2.5 text-[10px] font-black text-muted hover:text-ink uppercase tracking-widest transition-all">Cancel</button>
-              <button
-                onClick={handleCreateUser}
-                disabled={createLoading || !newUser.name || !newUser.email || !newUser.password}
-                className="px-6 py-2.5 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all disabled:opacity-40 "
-              >
-                {createLoading ? 'Creating…' : 'Create User'}
-              </button>
-            </div>
+  const columns: Column<User>[] = [
+    {
+      key: 'name', label: <SortHeader col="name" label="User" />, width: 'minmax(0, 1.8fr)',
+      render: (u) => (
+        <div className="flex items-center gap-3">
+          <Avatar name={u.name} size={36} tone="soft" />
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate font-semibold text-ink">{u.name}</span>
+            <span className="truncate text-[12.5px] text-muted">{u.email}</span>
           </div>
         </div>
-      )}
-    </div>
+      ),
+    },
+    { key: 'role', label: <SortHeader col="role" label="Role" />, width: '170px', render: (u) => <Badge tone={roleTone(u.role)}>{sentenceCase(u.role)}</Badge> },
+    { key: 'status', label: <SortHeader col="status" label="Status" />, width: '110px', render: (u) => <StatusBadge active={u.isActive} /> },
+    { key: 'mfa', label: <SortHeader col="mfa" label="MFA" />, width: '150px', render: (u) => <MfaBadge enabled={u.mfaEnabled} /> },
+    { key: 'created', label: <SortHeader col="created" label="Created" />, width: '120px', numeric: true, render: (u) => <span className="text-muted">{fmtDate(u.createdAt)}</span> },
+    {
+      key: 'actions', label: <span className="sr-only">Actions</span>, width: '110px', align: 'right',
+      render: (u) => <Button size="sm" variant="secondary" onClick={() => setSelectedUser(u)}>Manage</Button>,
+    },
+  ];
+
+  return (
+    <>
+      <SectionHeader
+        title="Users"
+        description={<><span className="tabular-nums">{users.length}</span> {users.length === 1 ? 'person has' : 'people have'} a sign-in to this workspace.</>}
+        actions={<Button icon="plus" onClick={() => setIsCreateOpen(true)}>New user</Button>}
+      />
+
+      <SearchInput
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        placeholder="Search by name, email or role…"
+        aria-label="Search users"
+        className="sm:max-w-sm"
+      />
+
+      <DataTable
+        aria-label="Users"
+        columns={columns}
+        rows={filtered}
+        rowKey={(u) => u.id}
+        empty={
+          <EmptyState
+            icon="users"
+            title={search ? 'No users match your search' : 'No users yet'}
+            description={search ? 'Try a name, email address or role.' : 'Create the first sign-in with New user.'}
+          />
+        }
+        footer={<span><span className="tabular-nums">{filtered.length}</span> of <span className="tabular-nums">{users.length}</span> shown</span>}
+        mobileCard={(u) => (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <Avatar name={u.name} size={36} tone="soft" />
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-sm font-semibold text-ink">{u.name}</span>
+                <span className="truncate text-[12.5px] text-muted">{u.email}</span>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <Badge tone={roleTone(u.role)}>{sentenceCase(u.role)}</Badge>
+              <StatusBadge active={u.isActive} />
+              <MfaBadge enabled={u.mfaEnabled} />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-muted">Created <span className="tabular-nums">{fmtDate(u.createdAt)}</span></span>
+              <Button size="sm" variant="secondary" onClick={() => setSelectedUser(u)}>Manage</Button>
+            </div>
+          </div>
+        )}
+      />
+
+      {/* Manage access — the kit Modal stays mounted so closing returns focus to the row's Manage button */}
+      <Modal
+        open={!!selectedUser}
+        onClose={() => setSelectedUser(null)}
+        size="lg"
+        title={selectedUser ? `Manage access — ${selectedUser.name}` : 'Manage access'}
+        caption={selectedUser?.email}
+      >
+        {selectedUser && (
+          <AdjustPanel
+            key={selectedUser.id}
+            user={selectedUser}
+            roles={roles}
+            onClose={() => setSelectedUser(null)}
+            onRefresh={() => { fetchData(); setSelectedUser(null); }}
+          />
+        )}
+      </Modal>
+
+      {/* Create user */}
+      <Modal
+        open={isCreateOpen}
+        onClose={closeCreate}
+        title="New user"
+        caption="Create a sign-in for someone in this workspace."
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeCreate}>Cancel</Button>
+            <Button onClick={handleCreateUser} disabled={createLoading || missingRequired}>
+              {createLoading ? 'Creating…' : 'Create user'}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          {[
+            { label: 'Full name', key: 'name',     type: 'text',     placeholder: 'Jane Smith' },
+            { label: 'Email',     key: 'email',    type: 'email',    placeholder: 'jane@company.com' },
+            { label: 'Password',  key: 'password', type: 'password', placeholder: 'At least 8 characters' },
+          ].map(f => (
+            <Field key={f.key} label={f.label} required>
+              <Input
+                type={f.type}
+                value={(newUser as Record<string, string>)[f.key]}
+                onChange={e => setNewUser({ ...newUser, [f.key]: e.target.value })}
+                placeholder={f.placeholder}
+              />
+            </Field>
+          ))}
+          <Field label="Role">
+            <Select value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
+              {roles.map(r => <option key={r.id} value={r.name}>{sentenceCase(r.name)}</option>)}
+            </Select>
+          </Field>
+          {!createLoading && missingRequired && (
+            <p className="text-xs text-muted">Name, email and password are required to create the user.</p>
+          )}
+          {createError && <Notice tone="danger">{createError}</Notice>}
+        </div>
+      </Modal>
+    </>
   );
 }
