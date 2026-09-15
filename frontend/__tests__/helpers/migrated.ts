@@ -17,7 +17,7 @@ export const MIGRATED: string[] = [
   'app/(dashboard)/movements/',
   'app/(dashboard)/succession/',
   'app/(dashboard)/staff/',
-  'app/(dashboard)/employees/page.tsx',
+  'app/(dashboard)/employees/',
   'components/employee/',
   'app/onboard/',
 ];
