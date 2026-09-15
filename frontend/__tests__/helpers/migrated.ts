@@ -28,4 +28,8 @@ export const MIGRATED: string[] = [
   'app/(dashboard)/leave/',
   'app/(dashboard)/claims/',
   'app/(dashboard)/attendance/',
+  'app/platform/',
+  // redesign/shell adds: components/auth/, components/CommandPalette.tsx,
+  // components/NotificationBell.tsx, components/TrialBanner.tsx,
+  // app/(dashboard)/layout.tsx, app/login/, app/register/, app/auth/*
 ];
