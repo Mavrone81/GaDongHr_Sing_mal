@@ -73,7 +73,7 @@ export function CountrySelect({ value, onChange, disabled }: Props) {
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="w-full h-[42px] px-3 rounded-control border border-rule bg-paper text-left text-sm text-ink flex items-center justify-between gap-2 transition-colors hover:border-accent focus:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 disabled:bg-pill disabled:text-muted"
+        className="w-full h-[42px] px-3 rounded-control border border-rule bg-paper text-left text-sm text-ink flex items-center justify-between gap-2 transition-colors hover:border-accent focus:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent disabled:bg-pill disabled:text-muted"
       >
         <span className={`truncate ${value ? 'text-ink' : 'text-muted'}`}>
           {value || 'Select country…'}
@@ -92,7 +92,7 @@ export function CountrySelect({ value, onChange, disabled }: Props) {
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search countries…"
                 aria-label="Search countries"
-                className="w-full h-9 pl-9 pr-3 rounded-control border border-rule bg-paper text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+                className="w-full h-9 pl-9 pr-3 rounded-control border border-rule bg-paper text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent"
               />
             </div>
           </div>

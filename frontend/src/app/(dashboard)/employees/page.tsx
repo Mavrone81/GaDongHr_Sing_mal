@@ -529,7 +529,7 @@ export default function EmployeeDirectoryPage() {
           {/* Step 2 — upload */}
           <div className="flex flex-col gap-2">
             <p className="text-sm font-semibold text-ink">2. Upload the completed file</p>
-            <label className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-control border-2 border-dashed py-8 text-center transition-colors focus-within:ring-2 focus-within:ring-accent/30 ${csvFile ? 'border-accent bg-tint' : 'border-rule hover:border-accent hover:bg-page'}`}>
+            <label className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-control border-2 border-dashed py-8 text-center transition-colors focus-within:ring-2 focus-within:ring-accent ${csvFile ? 'border-accent bg-tint' : 'border-rule hover:border-accent hover:bg-page'}`}>
               <Icon name="file" size={28} className={csvFile ? 'text-accent' : 'text-muted'} />
               {csvFile ? (
                 <span className="text-sm font-semibold text-accent tabular-nums">{csvFile} · {csvRows.length} rows read</span>

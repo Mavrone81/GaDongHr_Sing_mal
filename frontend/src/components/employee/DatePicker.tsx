@@ -83,7 +83,7 @@ export function DatePicker({ value, onChange, disabled, placeholder = 'Select da
         disabled={disabled}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="w-full h-[42px] px-3 rounded-control border border-rule bg-paper text-left text-sm text-ink flex items-center justify-between gap-2 transition-colors hover:border-accent focus:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 disabled:bg-pill disabled:text-muted"
+        className="w-full h-[42px] px-3 rounded-control border border-rule bg-paper text-left text-sm text-ink flex items-center justify-between gap-2 transition-colors hover:border-accent focus:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent disabled:bg-pill disabled:text-muted"
       >
         <span className={`tabular-nums ${displayValue ? 'text-ink' : 'text-muted'}`}>{displayValue || placeholder}</span>
         <Icon name="calendar" size={16} className="text-muted" />
