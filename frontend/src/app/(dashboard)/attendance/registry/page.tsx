@@ -125,7 +125,7 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (c: string)
           aria-checked={value === c}
           aria-label={c}
           onClick={() => onChange(c)}
-          className={`w-7 h-7 rounded-full transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${value === c ? 'ring-2 ring-offset-2 ring-ink scale-110' : 'hover:scale-105'}`}
+          className={`w-7 h-7 rounded-full transition-transform focus-visible:outline-offset-[5px] ${value === c ? 'ring-2 ring-offset-2 ring-ink scale-110' : 'hover:scale-105'}`}
           style={{ backgroundColor: c }}
         />
       ))}
@@ -977,7 +977,7 @@ const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: 
                                 disabled={isSaving}
                                 title={shift ? `${shift.name} · ${shift.startTime}–${shift.endTime}` : dateStr}
                                 aria-label={shift ? `${DAY_NAMES[d.getDay()]} ${d.getDate()}: ${shift.name}` : `${DAY_NAMES[d.getDay()]} ${d.getDate()}: no shift`}
-                                className={`w-full rounded-control border transition-colors group relative focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${isCompact ? 'min-h-[32px]' : 'min-h-[52px]'} ${isToday && !shift ? 'border-accent bg-tint/40' : ''}`}
+                                className={`w-full rounded-control border transition-colors group relative ${isCompact ? 'min-h-[32px]' : 'min-h-[52px]'} ${isToday && !shift ? 'border-accent bg-tint/40' : ''}`}
                                 style={shift ? { backgroundColor: shift.color + '1F', borderColor: shift.color + '66' } : { backgroundColor: 'transparent', borderColor: isToday ? undefined : 'var(--rule)' }}
                               >
                                 {isSaving ? (
@@ -1214,7 +1214,7 @@ function SectionHead({ title, caption, action }: { title: string; caption?: stri
 function Chip({ on, onClick, children, ariaLabel }: { on: boolean; onClick: () => void; children: React.ReactNode; ariaLabel?: string }) {
   return (
     <button type="button" aria-pressed={on} aria-label={ariaLabel} onClick={onClick}
-      className={`h-8 px-3 rounded-full text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${on ? 'bg-accent text-on-accent' : 'bg-pill text-muted hover:text-ink'}`}>
+      className={`h-8 px-3 rounded-full text-[13px] font-semibold transition-colors ${on ? 'bg-accent text-on-accent' : 'bg-pill text-muted hover:text-ink'}`}>
       {children}
     </button>
   );
@@ -1480,7 +1480,7 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {projects.map(p => (
               <button key={p.id} type="button" onClick={() => { setSelProject(p); setSubTab('working'); }}
-                className="text-left flex flex-col bg-paper border border-rule rounded-card shadow-card p-5 hover:border-accent transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
+                className="text-left flex flex-col bg-paper border border-rule rounded-card shadow-card p-5 hover:border-accent transition-colors group">
                 <div className="flex items-start justify-between mb-3">
                   <span className="flex items-center justify-center w-10 h-10 rounded-control bg-tint text-accent font-bold text-[15px]">{p.name[0].toUpperCase()}</span>
                   <Badge tone={p.isActive ? 'ok' : 'neutral'}>{p.isActive ? 'Active' : 'Archived'}</Badge>

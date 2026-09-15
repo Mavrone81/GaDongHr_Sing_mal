@@ -155,7 +155,7 @@ function ApplyLeaveModal({ onClose, onCreated, leaveTypes, balances }: ApplyModa
                     role="radio"
                     aria-checked={on}
                     onClick={() => set('typeId', t.id)}
-                    className={`flex flex-col gap-0.5 p-3 text-left rounded-control border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${on ? 'border-accent bg-tint' : 'border-rule bg-paper hover:bg-pill'}`}
+                    className={`flex flex-col gap-0.5 p-3 text-left rounded-control border transition-colors ${on ? 'border-accent bg-tint' : 'border-rule bg-paper hover:bg-pill'}`}
                   >
                     <span className="text-xs text-muted truncate">{t.name}</span>
                     {b ? (
@@ -199,7 +199,7 @@ function ApplyLeaveModal({ onClose, onCreated, leaveTypes, balances }: ApplyModa
             onChange={e => set('reason', e.target.value)}
             rows={3}
             placeholder="e.g. Family trip"
-            className="w-full px-3 py-2.5 rounded-control border border-rule bg-paper text-sm text-ink placeholder:text-faint outline-none resize-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20"
+            className="resize-none"
           />
         </Field>
 

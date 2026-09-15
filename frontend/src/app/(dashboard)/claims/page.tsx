@@ -87,7 +87,7 @@ function ClaimFields({ form, set, categories, selectedCat, gst, extra }: {
           onChange={e => set('description', e.target.value)}
           rows={3}
           placeholder="What was this expense for?"
-          className="w-full px-3 py-2.5 rounded-control border border-rule bg-paper text-sm text-ink placeholder:text-faint outline-none resize-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20"
+          className="resize-none"
         />
       </Field>
 
