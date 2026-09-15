@@ -665,6 +665,21 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
   onCloseRef.current = onClose;
   const phase = loading ? 'loading' : (!data || !data.kpis || !Array.isArray(data.trend)) ? 'error' : 'ready';
 
+  // Backdrop close, as in kit Modal v2.10: preventDefault stops the mousedown's
+  // own focus change, which otherwise lands after the unmount cleanup and moves
+  // focus from the Run button to <body>.
+  const closeFromBackdrop = (e: React.MouseEvent) => { e.preventDefault(); onCloseRef.current(); };
+
+  // Refresh disables itself while refreshing, which drops focus to <body>;
+  // give focus back to it once it is enabled again.
+  const refocusRefresh = useRef(false);
+  useEffect(() => {
+    if (!refreshing && refocusRefresh.current) {
+      refocusRefresh.current = false;
+      panelRef.current?.querySelector<HTMLElement>('[data-refresh]')?.focus();
+    }
+  }, [refreshing]);
+
   useEffect(() => {
     const opener = returnTo.current;
     const onKey = (e: KeyboardEvent) => {
@@ -718,7 +733,7 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
   // `trend.map` (payload {}). Either way, say so and offer a retry instead.
   if (!data || !data.kpis || !Array.isArray(data.trend)) {
     return (
-      <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-ink/40 sm:p-4" onMouseDown={onClose}>
+      <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-ink/40 sm:p-4" onMouseDown={closeFromBackdrop}>
         <div ref={panelRef} tabIndex={-1} role="alertdialog" aria-modal="true" aria-labelledby="wf-dash-error" onMouseDown={e => e.stopPropagation()}
           className="w-full sm:max-w-md bg-paper border border-rule rounded-t-card sm:rounded-card shadow-card p-6 flex flex-col items-center text-center gap-3">
           <span className="flex items-center justify-center w-11 h-11 rounded-full bg-danger-bg text-danger" aria-hidden="true"><Icon name="alert" size={22} /></span>
@@ -791,7 +806,7 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
   const refreshLabel = secAgo < 60 ? 'just now' : secAgo < 3600 ? `${Math.floor(secAgo / 60)}m ago` : `${Math.floor(secAgo / 3600)}h ago`;
 
   return createPortal(
-    <div data-print-root className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-ink/40 sm:p-4 print:p-0 print:bg-transparent print:inset-auto print:static print:block" onMouseDown={onClose}>
+    <div data-print-root className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-ink/40 sm:p-4 print:p-0 print:bg-transparent print:inset-auto print:static print:block" onMouseDown={closeFromBackdrop}>
       <style>{PRINT_CSS}</style>
       <div
         ref={panelRef}
@@ -811,7 +826,7 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
             </p>
           </div>
           <div className="flex items-center gap-2 print:hidden">
-            <Button size="sm" variant="secondary" onClick={() => loadAll(true)} disabled={refreshing}>Refresh</Button>
+            <Button size="sm" variant="secondary" data-refresh onClick={() => { refocusRefresh.current = true; loadAll(true); }} disabled={refreshing}>Refresh</Button>
             <Button size="sm" variant="secondary" icon="download" onClick={() => window.print()}>Print or save as PDF</Button>
             <button type="button" data-autofocus onClick={onClose} aria-label="Close" className="w-9 h-9 flex items-center justify-center rounded-control text-muted hover:bg-page hover:text-ink">
               <Icon name="x" size={18} />
