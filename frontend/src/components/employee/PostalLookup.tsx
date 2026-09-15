@@ -74,7 +74,7 @@ export function PostalLookup({ value, onChange }: Props) {
           aria-label="Postal code"
           inputMode="numeric"
           maxLength={8}
-          className="flex-1 min-w-0 h-[42px] px-3 rounded-control border border-rule bg-paper text-sm text-ink placeholder:text-muted outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20"
+          className="flex-1 min-w-0 h-[42px] px-3 rounded-control border border-rule bg-paper text-sm text-ink placeholder:text-muted outline-none transition-colors focus:border-accent"
         />
         <Button variant="secondary" icon={loading ? undefined : 'search'} onClick={lookup} disabled={loading} className="shrink-0">
           {loading && <Spinner />}
@@ -122,7 +122,7 @@ export function PostalLookup({ value, onChange }: Props) {
           onChange={e => onChange(e.target.value)}
           placeholder={searched ? 'Type the address…' : 'Filled in by the lookup, or type it…'}
           aria-label="Address"
-          className="w-full h-[42px] pl-3 pr-10 rounded-control border border-rule bg-paper text-sm text-ink placeholder:text-muted outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20"
+          className="w-full h-[42px] pl-3 pr-10 rounded-control border border-rule bg-paper text-sm text-ink placeholder:text-muted outline-none transition-colors focus:border-accent"
         />
         {value && (
           <button

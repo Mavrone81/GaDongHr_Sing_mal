@@ -73,7 +73,7 @@ interface EmployeeDocument {
 // ─── Shared input styles ───────────────────────────────────────────────────────
 // Same look as the kit's Input/Select; kept as class strings because the edit
 // form renders plain <input>/<select> elements inline.
-const IX = 'w-full h-[42px] px-3 rounded-control border border-rule bg-paper text-sm text-ink outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20';
+const IX = 'w-full h-[42px] px-3 rounded-control border border-rule bg-paper text-sm text-ink outline-none transition-colors placeholder:text-muted focus:border-accent';
 const SX = IX + ' cursor-pointer appearance-none pr-9';
 
 // Format Prisma enum values into readable labels for display
@@ -817,7 +817,7 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
                     <div className="flex flex-col gap-4">
                       <div className="flex flex-col gap-1.5">
                         <span className="text-[12.5px] font-semibold text-muted">File</span>
-                        <label className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-control border-2 border-dashed py-6 text-center focus-within:ring-2 focus-within:ring-accent/30 ${uploadFile ? 'border-accent bg-tint' : 'border-rule hover:border-accent'}`}>
+                        <label className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-control border-2 border-dashed py-6 text-center focus-within:ring-2 focus-within:ring-accent ${uploadFile ? 'border-accent bg-tint' : 'border-rule hover:border-accent'}`}>
                           <Icon name="file" size={24} className={uploadFile ? 'text-accent' : 'text-muted'} />
                           <span className="text-[13px] text-muted">{uploadFile ? uploadFile.name : 'Choose a file (up to 10 MB)'}</span>
                           <input type="file" className="sr-only" onChange={e => setUploadFile(e.target.files?.[0] ?? null)} />
