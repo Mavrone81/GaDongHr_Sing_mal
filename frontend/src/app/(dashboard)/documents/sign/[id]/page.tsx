@@ -189,9 +189,11 @@ export default function SignDocumentPage() {
   const canSign = isPending;
   const isOverdue = isPending && request.dueDate && new Date(request.dueDate) < new Date();
 
-  // Why the Sign button is off, in the order the person has to fix it.
+  // Why the Sign button is off, in the order the person has to fix it. Before
+  // the document has been read to the end, the card's caption already says so
+  // for the whole block, so the button does not repeat it.
   const signBlockedReason =
-    !hasScrolled ? 'Read the document to the end first'
+    !hasScrolled ? undefined
     : !signatoryName.trim() ? 'Type your full name'
     : !agreed ? 'Tick the agreement to continue'
     : undefined;
@@ -361,7 +363,6 @@ export default function SignDocumentPage() {
                     variant="danger"
                     onClick={() => { setShowDeclineModal(true); setDeclineError(''); setDeclineReason(''); }}
                     disabled={!hasScrolled || signing}
-                    reason={!hasScrolled ? 'Read the document first' : undefined}
                   >
                     Decline
                   </Button>
