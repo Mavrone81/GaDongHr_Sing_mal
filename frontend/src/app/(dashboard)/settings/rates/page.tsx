@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { apiFetch } from '@/lib/api';
 import { Button, Card, CardHeader, EmptyState, Icon, Tabs, useToast } from '@/components/ui';
 import { SectionHeader } from '../_components/SectionHeader';
@@ -81,10 +81,20 @@ function EditableCell({ value, onSave, suffix = '', label }: { value: string | n
   const [draft, setDraft] = useState(String(value));
   const [saving, setSaving] = useState(false);
 
+  // Leaving edit mode unmounts the input; put focus back on this cell's value
+  // button so a keyboard user keeps their place in the table (Enter, Esc,
+  // Save and Cancel all end here).
+  const valueRef = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef(false);
+  const stopEditing = () => { returnFocus.current = true; setEditing(false); };
+  useEffect(() => {
+    if (!editing && returnFocus.current) { returnFocus.current = false; valueRef.current?.focus(); }
+  }, [editing]);
+
   const commit = async () => {
-    if (draft === String(value)) { setEditing(false); return; }
+    if (draft === String(value)) { stopEditing(); return; }
     setSaving(true);
-    try { await onSave(draft); setEditing(false); } finally { setSaving(false); }
+    try { await onSave(draft); stopEditing(); } finally { setSaving(false); }
   };
 
   if (editing) {
@@ -97,13 +107,13 @@ function EditableCell({ value, onSave, suffix = '', label }: { value: string | n
           aria-label={label ? `New value for ${label}` : 'New value'}
           value={draft}
           onChange={e => setDraft(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
+          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') stopEditing(); }}
           className="h-8 w-24 rounded-control border border-accent bg-paper px-2 text-[13px] font-semibold text-ink tabular-nums"
         />
         <Button size="sm" onClick={commit} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
         <button
           type="button"
-          onClick={() => setEditing(false)}
+          onClick={stopEditing}
           aria-label="Cancel edit"
           className="flex h-8 w-8 items-center justify-center rounded-control text-muted hover:bg-pill hover:text-ink"
         >
@@ -115,6 +125,7 @@ function EditableCell({ value, onSave, suffix = '', label }: { value: string | n
 
   return (
     <button
+      ref={valueRef}
       type="button"
       onClick={() => { setDraft(String(value)); setEditing(true); }}
       className="inline-flex items-center border-b border-dashed border-rule font-semibold text-ink tabular-nums transition-colors hover:border-accent hover:text-accent"
