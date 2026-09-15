@@ -1,67 +1,72 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { Badge, Button, Card, CardHeader, Icon, Modal, Select, Tabs, useToast, type IconName } from '@/components/ui';
+import { SectionHeader } from '../_components/SectionHeader';
+import { Notice } from '../_components/Notice';
+import { Toggle } from '../_components/Toggle';
+import { sentenceCase } from '../_components/format';
 
 const ALL_ROLES = [
-  { id: 'SUPER_ADMIN',     label: 'Super Admin',     color: 'bg-page text-accent' },
-  { id: 'HR_ADMIN',        label: 'HR Admin',         color: 'bg-page text-accent' },
-  { id: 'HR_MANAGER',      label: 'HR Manager',       color: 'bg-page text-accent' },
-  { id: 'PAYROLL_OFFICER', label: 'Payroll Officer',  color: 'bg-page text-accent' },
-  { id: 'RECRUITER',       label: 'Recruiter',        color: 'bg-page text-ink' },
-  { id: 'FINANCE_ADMIN',   label: 'Finance Admin',    color: 'bg-page text-accent' },
-  { id: 'IT_ADMIN',        label: 'IT Admin',         color: 'bg-page text-ink' },
-  { id: 'LINE_MANAGER',    label: 'Line Manager',     color: 'bg-page text-accent' },
-  { id: 'EMPLOYEE',        label: 'Employee',         color: 'bg-page text-ink' },
+  { id: 'SUPER_ADMIN',     label: 'Super admin' },
+  { id: 'HR_ADMIN',        label: 'HR admin' },
+  { id: 'HR_MANAGER',      label: 'HR manager' },
+  { id: 'PAYROLL_OFFICER', label: 'Payroll officer' },
+  { id: 'RECRUITER',       label: 'Recruiter' },
+  { id: 'FINANCE_ADMIN',   label: 'Finance admin' },
+  { id: 'IT_ADMIN',        label: 'IT admin' },
+  { id: 'LINE_MANAGER',    label: 'Line manager' },
+  { id: 'EMPLOYEE',        label: 'Employee' },
 ];
 
-const PDPA_CATEGORIES = [
+const PDPA_CATEGORIES: { id: string; label: string; desc: string; icon: IconName; defaultView: string[]; defaultExport: string[] }[] = [
   {
     id: 'personal_id',
-    label: 'Personal Identifiers',
-    desc: 'NRIC, Passport No., Date of Birth, Nationality',
-    icon: '🪪',
+    label: 'Personal identifiers',
+    desc: 'NRIC, passport no., date of birth, nationality',
+    icon: 'user',
     defaultView: ['SUPER_ADMIN', 'HR_ADMIN', 'HR_MANAGER'],
     defaultExport: ['SUPER_ADMIN'],
   },
   {
     id: 'financial',
-    label: 'Financial & Payroll',
-    desc: 'Salary, Bank Account, CPF No., Tax Reference',
-    icon: '💳',
+    label: 'Financial and payroll',
+    desc: 'Salary, bank account, CPF no., tax reference',
+    icon: 'wallet',
     defaultView: ['SUPER_ADMIN', 'HR_ADMIN', 'PAYROLL_OFFICER', 'FINANCE_ADMIN'],
     defaultExport: ['SUPER_ADMIN', 'PAYROLL_OFFICER'],
   },
   {
     id: 'health',
-    label: 'Health & Medical',
+    label: 'Health and medical',
     desc: 'Medical leave reasons, health declarations, disability',
-    icon: '🏥',
+    icon: 'shield',
     defaultView: ['SUPER_ADMIN', 'HR_ADMIN'],
     defaultExport: ['SUPER_ADMIN'],
   },
   {
     id: 'contact',
-    label: 'Contact & Address',
+    label: 'Contact and address',
     desc: 'Home address, personal phone, emergency contacts',
-    icon: '📍',
+    icon: 'mail',
     defaultView: ['SUPER_ADMIN', 'HR_ADMIN', 'HR_MANAGER'],
     defaultExport: ['SUPER_ADMIN', 'HR_ADMIN'],
   },
   {
     id: 'employment',
-    label: 'Employment Details',
+    label: 'Employment details',
     desc: 'Performance ratings, disciplinary records, leave balances',
-    icon: '📋',
+    icon: 'briefcase',
     defaultView: ['SUPER_ADMIN', 'HR_ADMIN', 'HR_MANAGER', 'LINE_MANAGER', 'PAYROLL_OFFICER'],
     defaultExport: ['SUPER_ADMIN', 'HR_ADMIN'],
   },
   {
     id: 'recruitment',
-    label: 'Recruitment & Background',
+    label: 'Recruitment and background',
     desc: 'Resume, references, background check results',
-    icon: '🔍',
+    icon: 'search',
     defaultView: ['SUPER_ADMIN', 'HR_ADMIN', 'HR_MANAGER', 'RECRUITER'],
     defaultExport: ['SUPER_ADMIN', 'HR_ADMIN'],
   },
@@ -77,6 +82,13 @@ const ENCRYPTED_FIELDS = [
   { service: 'Database',         field: 'All tables',             algorithm: 'PostgreSQL TDE', status: 'config',  note: 'Enable pg_crypto or filesystem encryption for full disk encryption' },
 ];
 
+/** Encryption registry state → label and pill colour. */
+const FIELD_STATUS: Record<string, { label: string; tone: 'ok' | 'accent' | 'warn' }> = {
+  active:  { label: 'At rest',     tone: 'ok' },
+  transit: { label: 'In transit',  tone: 'accent' },
+  config:  { label: 'Needs setup', tone: 'warn' },
+};
+
 type AccessMap = Record<string, { view: string[]; export: string[] }>;
 
 function defaultAccessMap(): AccessMap {
@@ -85,17 +97,27 @@ function defaultAccessMap(): AccessMap {
   );
 }
 
-function Toggle({ on, onChange, disabled }: { on: boolean; onChange: () => void; disabled?: boolean }) {
+/** One view/export permission cell: a real checkbox control, with the reason when it can't be changed. */
+function CheckCell({ on, onChange, disabled, label, reasonId }: { on: boolean; onChange: () => void; disabled?: boolean; label: string; reasonId?: string }) {
   return (
     <button
+      type="button"
+      role="checkbox"
+      aria-checked={on}
+      aria-label={label}
+      aria-describedby={disabled ? reasonId : undefined}
       onClick={onChange}
       disabled={disabled}
-      className={`w-4 h-4  flex items-center justify-center border transition-all ${on ? 'bg-accent border-accent' : 'bg-paper border-rule'} ${disabled ? 'opacity-40 cursor-not-allowed' : 'hover:border-accent cursor-pointer'}`}
+      className={`inline-flex h-5 w-5 items-center justify-center rounded border-2 transition-colors ${
+        on ? 'border-accent bg-accent text-on-accent' : 'border-rule bg-paper'
+      } ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-accent'}`}
     >
-      {on && <svg className="w-2.5 h-2.5 text-paper" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
+      {on && <Icon name="check" size={13} strokeWidth={3} />}
     </button>
   );
 }
+
+const spinner = <svg className="animate-spin h-4 w-4 rounded-full" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>;
 
 export default function PdpaPage() {
   const { user } = useAuth();
@@ -106,7 +128,8 @@ export default function PdpaPage() {
   const [purgeScheduleEnabled, setPurgeScheduleEnabled] = useState(false);
   const [nextScheduledRun, setNextScheduledRun] = useState<string | null>(null);
   const [purgeRunning, setPurgeRunning] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
+  const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [encryptionStatus, setEncryptionStatus] = useState<'checking' | 'ok' | 'partial'>('checking');
   const [dbRoles, setDbRoles] = useState<string[]>([]);
@@ -115,8 +138,8 @@ export default function PdpaPage() {
   const canEdit = role === 'SUPER_ADMIN';
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3500);
+    // Same call shape as before; the shared toast (root layout) does the display and timing.
+    toast(msg, type === 'success' ? 'ok' : 'danger');
   };
 
   useEffect(() => {
@@ -183,8 +206,12 @@ export default function PdpaPage() {
     showToast('PDPA settings saved');
   };
 
-  const handleRunPurgeNow = async () => {
-    if (!window.confirm('This will permanently and irrecoverably delete all records that have exceeded their retention period. This cannot be undone. Continue?')) return;
+  // Run purge asks first in a kit Modal (it used window.confirm()); the request
+  // itself is unchanged and runs only from the Modal's confirm button.
+  const handleRunPurgeNow = () => setPurgeConfirmOpen(true);
+
+  const confirmRunPurge = async () => {
+    setPurgeConfirmOpen(false);
     setPurgeRunning(true);
     try {
       const result = await apiFetch('/auth/purge/run', { method: 'POST' });
@@ -203,413 +230,386 @@ export default function PdpaPage() {
   };
 
   const TABS = [
-    { id: 'access',     label: 'Data Access Control', icon: '🔐' },
-    { id: 'encryption', label: 'Encryption Status',   icon: '🔒' },
-    { id: 'retention',  label: 'Data Retention',      icon: '🗓' },
-  ] as const;
+    { id: 'access' as const,     label: 'Data access' },
+    { id: 'encryption' as const, label: 'Encryption' },
+    { id: 'retention' as const,  label: 'Retention' },
+  ];
+
+  // Why a cell is locked — points at one of the visible reasons under the legend.
+  const cellReason = (roleId: string, type: 'view' | 'export', catId: string) =>
+    !canEdit ? 'pdpa-lock-readonly'
+      : roleId === 'SUPER_ADMIN' ? 'pdpa-lock-superadmin'
+      : type === 'export' && !access[catId]?.view.includes(roleId) ? 'pdpa-lock-needs-view'
+      : undefined;
+  const cellDisabled = (roleId: string, type: 'view' | 'export', catId: string) =>
+    type === 'view'
+      ? !canEdit || roleId === 'SUPER_ADMIN'
+      : !canEdit || roleId === 'SUPER_ADMIN' || !access[catId]?.view.includes(roleId);
+
+  const statusLook: Record<typeof encryptionStatus, { icon: IconName; box: string; title: string; body: string }> = {
+    ok: { icon: 'lock', box: 'bg-ok-bg text-ok', title: 'Encryption active', body: 'All critical PDPA fields are encrypted at rest and in transit.' },
+    partial: { icon: 'alert', box: 'bg-warn-bg text-warn', title: 'Partial coverage — action recommended', body: 'Some fields rely on transport-layer encryption only.' },
+    checking: { icon: 'clock', box: 'bg-pill text-muted', title: 'Checking…', body: 'Some fields rely on transport-layer encryption only.' },
+  };
+  const look = statusLook[encryptionStatus];
 
   return (
-    <div className="flex flex-col gap-6 max-w-[1200px] mx-auto pb-16 animate-in fade-in duration-700">
-
-      {/* Header */}
-      <div className="bg-paper p-8 border border-rule flex justify-between items-start">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-2 h-2 bg-accent " />
-            <span className="text-[10px] font-black text-accent uppercase tracking-[0.4em]">PDPA 2012 Compliance</span>
-          </div>
-          <h1 className="text-3xl font-black text-ink tracking-tighter">PDPA <span className="text-accent">Compliance</span></h1>
-          <p className="text-[10px] font-black text-muted mt-1 uppercase tracking-widest">Role access control · Encryption status · Data retention</p>
-        </div>
-        {canEdit && (
-          <button onClick={handleSave} disabled={saving}
-            className="px-6 py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all disabled:opacity-60 disabled:pointer-events-none flex items-center gap-2">
-            {saving ? <><svg className="animate-spin h-3.5 w-3.5 rounded-full" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Saving…</> : 'Save Settings'}
-          </button>
-        )}
-      </div>
+    <>
+      <SectionHeader
+        title="PDPA and retention"
+        description="Who can see sensitive data, how it is encrypted, and how long it is kept."
+        actions={canEdit ? (
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <>{spinner}Saving…</> : 'Save settings'}
+          </Button>
+        ) : undefined}
+      />
 
       {!canEdit && (
-        <div className="px-5 py-4 bg-page border border-highlight flex items-center gap-3">
-          <svg className="w-4 h-4 text-ink shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
-          <p className="text-[11px] font-black text-ink uppercase tracking-widest">Read-only — Super Admin required to modify PDPA settings</p>
-        </div>
+        <Notice tone="warn">Read-only. Only a Super Admin can change PDPA settings.</Notice>
       )}
 
-      {/* Tabs */}
-      <div className="flex gap-2">
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setActiveTab(t.id)}
-            className={`flex items-center gap-2 px-5 py-2.5  text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === t.id ? 'bg-shadow text-paper ' : 'bg-paper border border-rule text-muted hover:border-rule hover:text-ink'}`}>
-            <span>{t.icon}</span>{t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs items={TABS} active={activeTab} onChange={setActiveTab} />
 
-      {/* ── Tab: Data Access Control ── */}
+      {/* ── Data access ── */}
       {activeTab === 'access' && (
-        <div className="bg-paper border border-rule overflow-hidden">
-          <div className="px-8 py-6 border-b border-rule bg-page flex items-start justify-between">
-            <div>
-              <h2 className="text-sm font-black text-ink uppercase tracking-widest">Role-Based Data Access Matrix</h2>
-              <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1">Configure which roles can view or export each PDPA-sensitive data category</p>
-            </div>
-            <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest text-muted shrink-0">
-              <div className="flex items-center gap-1.5"><div className="w-4 h-4 bg-accent border-accent flex items-center justify-center"><svg className="w-2.5 h-2.5 text-paper" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg></div>Allowed</div>
-              <div className="flex items-center gap-1.5"><div className="w-4 h-4 bg-paper border border-rule" />Denied</div>
+        <Card padding="p-0" className="overflow-hidden">
+          <div className="flex flex-col gap-3 px-5 pt-5 sm:flex-row sm:items-start sm:justify-between">
+            <CardHeader title="Who can view or export each category" caption="Per role, for each category of PDPA-sensitive data." />
+            <div className="flex shrink-0 items-center gap-4 text-[13px] text-muted">
+              <span className="flex items-center gap-1.5"><span className="flex h-4 w-4 items-center justify-center rounded border-2 border-accent bg-accent text-on-accent"><Icon name="check" size={11} strokeWidth={3} /></span>Allowed</span>
+              <span className="flex items-center gap-1.5"><span className="h-4 w-4 rounded border-2 border-rule bg-paper" />Not allowed</span>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px]">
-              <thead>
-                <tr className="border-b border-rule">
-                  <th className="text-left px-6 py-3 label-form w-56">Data Category</th>
+          {/* Visible reasons for locked (faded) cells; each locked cell is aria-describedby one of these. */}
+          <div className="mx-5 mt-3 flex flex-col gap-1 rounded-control bg-page px-3.5 py-2.5 text-[13px] text-muted">
+            <span className="font-semibold text-ink">Faded cells are locked:</span>
+            {!canEdit && <span id="pdpa-lock-readonly">Only a Super Admin can change these settings.</span>}
+            <span id="pdpa-lock-superadmin">Super Admin always has full access and can&apos;t be restricted.</span>
+            <span id="pdpa-lock-needs-view">Export needs view — grant view first to unlock export.</span>
+          </div>
+
+          {/* Desktop matrix */}
+          <div className="mt-3 hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[980px]">
+              <thead className="border-y border-rule bg-pill">
+                <tr>
+                  <th className="h-11 w-60 px-5 text-left text-xs font-bold text-muted">Data category</th>
+                  <th className="w-16 px-2 text-left text-xs font-bold text-muted"><span className="sr-only">Permission</span></th>
                   {ALL_ROLES.map(r => (
-                    <th key={r.id} className="px-2 py-3 text-center w-20">
-                      <span className={`text-[8px] font-black uppercase px-1.5 py-0.5  ${r.color}`}>{r.label.split(' ')[0]}</span>
-                    </th>
+                    <th key={r.id} className="w-20 px-1 text-center text-xs font-bold leading-tight text-muted">{r.label}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {PDPA_CATEGORIES.map((cat, ci) => (
-                  <>
-                    {/* VIEW row */}
-                    <tr key={`${cat.id}-view`} className={ci % 2 === 0 ? 'bg-page' : 'bg-paper'}>
-                      <td className="px-6 py-3" rowSpan={2}>
-                        <div className="flex items-start gap-2">
-                          <span className="text-lg shrink-0 mt-0.5">{cat.icon}</span>
-                          <div>
-                            <p className="text-[11px] font-black text-ink uppercase tracking-tight">{cat.label}</p>
-                            <p className="text-[9px] font-bold text-muted mt-0.5">{cat.desc}</p>
+                {PDPA_CATEGORIES.map(cat => (
+                  <Fragment key={cat.id}>
+                    <tr>
+                      <td className="border-b border-rule px-5 py-3 align-top" rowSpan={2}>
+                        <div className="flex items-start gap-2.5">
+                          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-control bg-tint text-accent"><Icon name={cat.icon} size={15} /></span>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[13.5px] font-semibold text-ink">{cat.label}</span>
+                            <span className="text-xs text-muted">{cat.desc}</span>
                           </div>
                         </div>
                       </td>
+                      <td className="px-2 pt-3 text-[12.5px] font-semibold text-muted">View</td>
                       {ALL_ROLES.map(r => (
-                        <td key={r.id} className="px-2 py-2 text-center">
-                          <div className="flex flex-col items-center gap-1">
-                            <span className="text-[7px] font-black text-muted uppercase tracking-widest">View</span>
-                            <Toggle
-                              on={access[cat.id]?.view.includes(r.id) ?? false}
-                              onChange={() => toggleAccess(cat.id, 'view', r.id)}
-                              disabled={!canEdit || r.id === 'SUPER_ADMIN'}
-                            />
-                          </div>
+                        <td key={r.id} className="px-1 pt-3 text-center">
+                          <CheckCell
+                            label={`${r.label} can view ${cat.label.toLowerCase()}`}
+                            on={access[cat.id]?.view.includes(r.id) ?? false}
+                            onChange={() => toggleAccess(cat.id, 'view', r.id)}
+                            disabled={cellDisabled(r.id, 'view', cat.id)}
+                            reasonId={cellReason(r.id, 'view', cat.id)}
+                          />
                         </td>
                       ))}
                     </tr>
-                    {/* EXPORT row */}
-                    <tr key={`${cat.id}-export`} className={ci % 2 === 0 ? 'bg-page' : 'bg-paper'}>
+                    <tr>
+                      <td className="border-b border-rule px-2 pb-3 pt-2 text-[12.5px] font-semibold text-muted">Export</td>
                       {ALL_ROLES.map(r => (
-                        <td key={r.id} className="px-2 py-2 text-center border-b border-rule">
-                          <div className="flex flex-col items-center gap-1">
-                            <span className="text-[7px] font-black text-muted uppercase tracking-widest">Export</span>
-                            <Toggle
-                              on={access[cat.id]?.export.includes(r.id) ?? false}
-                              onChange={() => toggleAccess(cat.id, 'export', r.id)}
-                              disabled={!canEdit || r.id === 'SUPER_ADMIN' || !access[cat.id]?.view.includes(r.id)}
-                            />
-                          </div>
+                        <td key={r.id} className="border-b border-rule px-1 pb-3 pt-2 text-center">
+                          <CheckCell
+                            label={`${r.label} can export ${cat.label.toLowerCase()}`}
+                            on={access[cat.id]?.export.includes(r.id) ?? false}
+                            onChange={() => toggleAccess(cat.id, 'export', r.id)}
+                            disabled={cellDisabled(r.id, 'export', cat.id)}
+                            reasonId={cellReason(r.id, 'export', cat.id)}
+                          />
                         </td>
                       ))}
                     </tr>
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
           </div>
 
-          <div className="px-6 py-4 bg-page border-t border-accent flex items-start gap-3">
-            <svg className="w-4 h-4 text-accent shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            <p className="text-[10px] font-bold text-accent leading-relaxed">
-              These settings control what role labels the frontend uses to gate access to PDPA-sensitive data. Super Admin always has full access and cannot be restricted. Export permission requires View permission. Changes take effect immediately after Save.
-            </p>
+          {/* Mobile: one block per category */}
+          <div className="mt-3 flex flex-col md:hidden">
+            {PDPA_CATEGORIES.map(cat => (
+              <div key={cat.id} className="border-t border-rule px-5 py-4">
+                <div className="mb-3 flex items-start gap-2.5">
+                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-control bg-tint text-accent"><Icon name={cat.icon} size={15} /></span>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-semibold text-ink">{cat.label}</span>
+                    <span className="text-xs text-muted">{cat.desc}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-[minmax(0,1fr)_56px_56px] items-center gap-y-2 text-[13px]">
+                  <span className="text-xs font-bold text-muted">Role</span>
+                  <span className="text-center text-xs font-bold text-muted">View</span>
+                  <span className="text-center text-xs font-bold text-muted">Export</span>
+                  {ALL_ROLES.map(r => (
+                    <Fragment key={r.id}>
+                      <span className="text-ink">{r.label}</span>
+                      <span className="text-center">
+                        <CheckCell label={`${r.label} can view ${cat.label.toLowerCase()}`} on={access[cat.id]?.view.includes(r.id) ?? false} onChange={() => toggleAccess(cat.id, 'view', r.id)} disabled={cellDisabled(r.id, 'view', cat.id)} reasonId={cellReason(r.id, 'view', cat.id)} />
+                      </span>
+                      <span className="text-center">
+                        <CheckCell label={`${r.label} can export ${cat.label.toLowerCase()}`} on={access[cat.id]?.export.includes(r.id) ?? false} onChange={() => toggleAccess(cat.id, 'export', r.id)} disabled={cellDisabled(r.id, 'export', cat.id)} reasonId={cellReason(r.id, 'export', cat.id)} />
+                      </span>
+                    </Fragment>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+
+          <div className="border-t border-rule px-5 py-4">
+            <Notice>
+              These settings decide which roles the app lets view or export PDPA-sensitive data. Super Admin always has full access and can&apos;t be restricted. Export needs view. Changes take effect after Save.
+            </Notice>
+          </div>
+        </Card>
       )}
 
-      {/* ── Tab: Encryption Status ── */}
+      {/* ── Encryption ── */}
       {activeTab === 'encryption' && (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4">
+          <Card>
+            <div className="flex items-center gap-4">
+              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-control ${look.box}`}>
+                <Icon name={look.icon} size={22} />
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <p className="text-[15.5px] font-bold text-ink">{look.title}</p>
+                <p className="text-[13px] text-muted">{look.body}</p>
+              </div>
+            </div>
+          </Card>
 
-          {/* Overall status card */}
-          <div className={`p-6  border flex items-center gap-5 ${encryptionStatus === 'ok' ? 'bg-page border-accent' : encryptionStatus === 'partial' ? 'bg-page border-highlight' : 'bg-page border-rule'}`}>
-            <div className={`w-12 h-12  flex items-center justify-center text-xl ${encryptionStatus === 'ok' ? 'bg-page' : encryptionStatus === 'partial' ? 'bg-page' : 'bg-page'}`}>
-              {encryptionStatus === 'ok' ? '🔒' : encryptionStatus === 'partial' ? '⚠️' : '⏳'}
-            </div>
-            <div>
-              <p className={`text-sm font-black uppercase tracking-tight ${encryptionStatus === 'ok' ? 'text-accent' : encryptionStatus === 'partial' ? 'text-ink' : 'text-ink'}`}>
-                {encryptionStatus === 'ok' ? 'Encryption Active' : encryptionStatus === 'partial' ? 'Partial Coverage — Action Recommended' : 'Checking…'}
-              </p>
-              <p className={`text-[10px] font-bold mt-0.5 uppercase tracking-widest ${encryptionStatus === 'ok' ? 'text-accent' : 'text-ink'}`}>
-                {encryptionStatus === 'ok' ? 'All critical PDPA fields are encrypted at rest and in transit' : 'Some fields rely on transport-layer encryption only'}
-              </p>
-            </div>
-          </div>
-
-          {/* Encrypted fields table */}
-          <div className="bg-paper border border-rule overflow-hidden">
-            <div className="px-8 py-6 border-b border-rule bg-page">
-              <h2 className="text-sm font-black text-ink uppercase tracking-widest">Field-Level Encryption Registry</h2>
-              <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1">PDPA Art. 24 — Protection of personal data</p>
-            </div>
-            <div className="divide-y divide-rule">
-              {ENCRYPTED_FIELDS.map((f, i) => (
-                <div key={i} className="flex items-center gap-5 px-8 py-4 hover:bg-page transition-all">
-                  <div className={`w-2 h-2  shrink-0 ${f.status === 'active' ? 'bg-accent' : f.status === 'transit' ? 'bg-accent' : 'bg-highlight'}`} />
-                  <div className="w-36 shrink-0">
-                    <span className="label-form">{f.service}</span>
+          <Card padding="px-[22px] pt-5 pb-2">
+            <CardHeader title="Field-level encryption" caption="PDPA section 24 — protection of personal data." />
+            {ENCRYPTED_FIELDS.map((f, i) => {
+              const st = FIELD_STATUS[f.status] ?? FIELD_STATUS.config;
+              return (
+                <div key={i} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-rule py-3">
+                  <span className="w-36 shrink-0 text-[12.5px] font-semibold text-muted">{f.service}</span>
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="font-mono text-[13px] font-semibold text-ink">{f.field}</span>
+                    <span className="text-xs text-muted">{f.note}</span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-black text-ink font-mono">{f.field}</p>
-                    <p className="text-[9px] font-bold text-muted mt-0.5">{f.note}</p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <span className="text-[9px] font-black font-mono text-ink px-2.5 py-1 bg-page ">{f.algorithm}</span>
-                  </div>
-                  <div className="shrink-0">
-                    <span className={`text-[8px] font-black uppercase px-2 py-1  border tracking-widest ${
-                      f.status === 'active'  ? 'bg-page text-accent border-accent' :
-                      f.status === 'transit' ? 'bg-page text-accent border-accent' :
-                                               'bg-page text-ink border-highlight'
-                    }`}>
-                      {f.status === 'active' ? '✓ At Rest' : f.status === 'transit' ? '→ Transit' : '⚠ Configure'}
-                    </span>
-                  </div>
+                  <Badge className="font-mono">{f.algorithm}</Badge>
+                  <Badge tone={st.tone}>{st.label}</Badge>
                 </div>
-              ))}
-            </div>
-            <div className="px-8 py-4 bg-page border-t border-rule flex items-center gap-6 flex-wrap">
-              {[
-                { dot: 'bg-accent', label: 'At Rest — AES-256-GCM encrypted in database' },
-                { dot: 'bg-accent',     label: 'Transit — TLS encrypted between services' },
-                { dot: 'bg-highlight',   label: 'Configure — additional setup required' },
-              ].map(l => (
-                <div key={l.label} className="flex items-center gap-2">
-                  <div className={`w-2 h-2  ${l.dot}`} />
-                  <span className="text-[9px] font-bold text-muted uppercase tracking-widest">{l.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+              );
+            })}
+            <dl className="mt-1 flex flex-wrap gap-x-6 gap-y-1.5 border-t border-rule py-3 text-[13px]">
+              <div className="flex gap-1.5"><dt className="font-semibold text-ink">At rest</dt><dd className="text-muted">AES-256-GCM in the database</dd></div>
+              <div className="flex gap-1.5"><dt className="font-semibold text-ink">In transit</dt><dd className="text-muted">TLS between services</dd></div>
+              <div className="flex gap-1.5"><dt className="font-semibold text-ink">Needs setup</dt><dd className="text-muted">extra configuration required</dd></div>
+            </dl>
+          </Card>
 
-          {/* Key management */}
-          <div className="bg-paper border border-rule overflow-hidden">
-            <div className="px-8 py-6 border-b border-rule bg-page">
-              <h2 className="text-sm font-black text-ink uppercase tracking-widest">Key Management</h2>
-            </div>
-            <div className="p-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader title="Key management" />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {[
-                { label: 'JWT Signing Key', detail: 'RS256 · 2048-bit RSA keypair', status: 'ok',   hint: 'Stored in /certs — rotate annually' },
-                { label: 'Field Encryption Key', detail: 'AES-256-GCM · 32-byte key', status: 'ok', hint: 'Set via ENCRYPTION_KEY env var' },
-                { label: 'SMTP Credentials', detail: 'TLS-authenticated relay',        status: 'ok', hint: 'Stored in container env vars' },
-                { label: 'Database Connection', detail: 'TLS encrypted PostgreSQL',    status: 'ok', hint: 'postgres:5432 with ssl=require' },
+                { label: 'JWT signing key', detail: 'RS256 · 2048-bit RSA keypair', status: 'ok',   hint: 'Stored in /certs — rotate annually' },
+                { label: 'Field encryption key', detail: 'AES-256-GCM · 32-byte key', status: 'ok', hint: 'Set via the ENCRYPTION_KEY env var' },
+                { label: 'SMTP credentials', detail: 'TLS-authenticated relay',        status: 'ok', hint: 'Stored in container env vars' },
+                { label: 'Database connection', detail: 'TLS-encrypted PostgreSQL',    status: 'ok', hint: 'postgres:5432 with ssl=require' },
               ].map(k => (
-                <div key={k.label} className="p-5 bg-page border border-rule">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[11px] font-black text-ink uppercase tracking-tight">{k.label}</p>
-                    <span className="text-[8px] font-black uppercase px-2 py-0.5 bg-page text-accent border border-accent tracking-widest">Active</span>
+                <div key={k.label} className="flex flex-col gap-1.5 rounded-control border border-rule bg-page p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-ink">{k.label}</span>
+                    <Badge tone="ok">Active</Badge>
                   </div>
-                  <p className="text-[10px] font-black text-muted font-mono mb-1">{k.detail}</p>
-                  <p className="text-[9px] font-bold text-muted uppercase tracking-widest">{k.hint}</p>
+                  <span className="font-mono text-xs text-muted">{k.detail}</span>
+                  <span className="text-xs text-muted">{k.hint}</span>
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
-      {/* ── Tab: Data Retention ── */}
+      {/* ── Retention ── */}
       {activeTab === 'retention' && (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4">
 
-          {/* Retention periods */}
-          <div className="bg-paper border border-rule overflow-hidden">
-            <div className="px-8 py-6 border-b border-rule bg-page">
-              <h2 className="text-sm font-black text-ink uppercase tracking-widest">Data Retention Periods</h2>
-              <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1">PDPA requires retention only as long as necessary for business or legal purposes · Save settings to apply to automated purge</p>
-            </div>
-            <div className="p-8 flex flex-col gap-5">
-              {[
-                { key: 'employeeRecords',    label: 'Employee Records',      desc: 'Personal data, contracts, appraisals — MOM min. 5 yrs after cessation', min: 5, rec: 7,
-                  detail: 'Purge anchor: employee termination date (endDate)' },
-                { key: 'payrollRecords',     label: 'Payroll & CPF Records', desc: 'Payslips, CPF submissions — CPF Act requires 5 years', min: 5, rec: 5,
-                  detail: 'Purge anchor: last day of payroll period (period + 1 month - 1 day)' },
-                { key: 'leaveRecords',       label: 'Leave & Attendance',    desc: 'Leave applications, attendance logs — min. 2 years (Employment Act)', min: 2, rec: 3,
-                  detail: 'Purge anchor: leave end date' },
-                { key: 'recruitmentRecords', label: 'Recruitment Data',      desc: 'CVs, interview notes — PDPA: dispose when no longer needed', min: 1, rec: 2,
-                  detail: 'Purge anchor: application creation date' },
-                { key: 'auditLogs',          label: 'System Audit Logs',     desc: 'Security and access logs — PDPA / cyber hygiene best practice', min: 1, rec: 7,
-                  detail: 'Purge anchor: log creation date' },
-              ].map(item => {
-                const val = Number(retention[item.key as keyof typeof retention]);
-                const isLow = val < item.min;
-                const cutoff = new Date();
-                cutoff.setUTCFullYear(cutoff.getUTCFullYear() - val);
-                return (
-                  <div key={item.key} className={`p-5  border ${isLow ? 'bg-page border-ink' : 'bg-page border-rule'}`}>
-                    <div className="flex items-start gap-4">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-black text-ink uppercase tracking-tight">{item.label}</p>
-                        <p className="text-[10px] font-bold text-muted mt-0.5">{item.desc}</p>
-                        <p className="text-[9px] font-bold text-muted mt-0.5 font-mono">{item.detail}</p>
-                        {isLow && (
-                          <p className="text-[9px] font-black text-ink mt-1 uppercase tracking-widest">⚠ Below statutory minimum — may violate legal requirement</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <select
-                          value={retention[item.key as keyof typeof retention]}
-                          onChange={e => setRetention(prev => ({ ...prev, [item.key]: e.target.value }))}
-                          disabled={!canEdit}
-                          className={`px-4 py-2.5  border text-sm font-black text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent transition-all appearance-none disabled:opacity-60 ${isLow ? 'bg-paper border-ink' : 'bg-paper border-rule'}`}
-                        >
-                          {[1,2,3,4,5,6,7,8,10,12,15,20].map(y => (
-                            <option key={y} value={y}>{y} year{y !== 1 ? 's' : ''}</option>
-                          ))}
-                        </select>
-                        <div className="text-right min-w-[72px]">
-                          <p className="label-form">Purge records before</p>
-                          <p className="text-[10px] font-black text-ink font-mono">{cutoff.toISOString().slice(0, 10)}</p>
-                        </div>
-                      </div>
+          <Card padding="px-[22px] pt-5 pb-2">
+            <CardHeader
+              title="Retention periods"
+              caption="PDPA allows keeping personal data only as long as a business or legal purpose needs it. Save to apply these to the automated purge."
+            />
+            {[
+              { key: 'employeeRecords',    label: 'Employee records',      desc: 'Personal data, contracts, appraisals — MOM min. 5 yrs after cessation', min: 5, rec: 7,
+                detail: 'Purge anchor: employee termination date (endDate)' },
+              { key: 'payrollRecords',     label: 'Payroll and CPF records', desc: 'Payslips, CPF submissions — CPF Act requires 5 years', min: 5, rec: 5,
+                detail: 'Purge anchor: last day of payroll period (period + 1 month - 1 day)' },
+              { key: 'leaveRecords',       label: 'Leave and attendance',  desc: 'Leave applications, attendance logs — min. 2 years (Employment Act)', min: 2, rec: 3,
+                detail: 'Purge anchor: leave end date' },
+              { key: 'recruitmentRecords', label: 'Recruitment data',      desc: 'CVs, interview notes — PDPA: dispose when no longer needed', min: 1, rec: 2,
+                detail: 'Purge anchor: application creation date' },
+              { key: 'auditLogs',          label: 'System audit logs',     desc: 'Security and access logs — PDPA / cyber hygiene best practice', min: 1, rec: 7,
+                detail: 'Purge anchor: log creation date' },
+            ].map(item => {
+              const val = Number(retention[item.key as keyof typeof retention]);
+              const isLow = val < item.min;
+              const cutoff = new Date();
+              cutoff.setUTCFullYear(cutoff.getUTCFullYear() - val);
+              return (
+                <div key={item.key} className="flex flex-col gap-3 border-t border-rule py-4 sm:flex-row sm:items-start sm:gap-4">
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="text-sm font-semibold text-ink">{item.label}</span>
+                    <span className="text-[13px] text-muted">{item.desc}</span>
+                    <span className="font-mono text-xs text-faint">{item.detail}</span>
+                    {isLow && (
+                      <span className="mt-1 flex items-center gap-1.5 text-[13px] font-semibold text-danger">
+                        <Icon name="alert" size={15} strokeWidth={2} />
+                        Below the statutory minimum of {item.min} years — this may breach a legal requirement.
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-4">
+                    <Select
+                      aria-label={`${item.label} retention`}
+                      value={retention[item.key as keyof typeof retention]}
+                      onChange={e => setRetention(prev => ({ ...prev, [item.key]: e.target.value }))}
+                      disabled={!canEdit}
+                      invalid={isLow}
+                      className="w-36"
+                    >
+                      {[1,2,3,4,5,6,7,8,10,12,15,20].map(y => (
+                        <option key={y} value={y}>{y} year{y !== 1 ? 's' : ''}</option>
+                      ))}
+                    </Select>
+                    <div className="flex min-w-[96px] flex-col text-right">
+                      <span className="text-xs text-muted">Purge records before</span>
+                      <span className="font-mono text-[13px] font-semibold text-ink">{cutoff.toISOString().slice(0, 10)}</span>
                     </div>
+                  </div>
+                </div>
+              );
+            })}
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="Automated purge"
+              caption="Runs at midnight UTC, to the exact day. Hard DELETE then VACUUM — not recoverable."
+              action={canEdit ? (
+                <span className="flex items-center gap-3">
+                  <span className="text-[13px] font-medium text-muted">{purgeScheduleEnabled ? 'On' : 'Off'}</span>
+                  <Toggle label="Scheduled purge" on={purgeScheduleEnabled} onChange={v => handleTogglePurgeSchedule(v)} />
+                </span>
+              ) : undefined}
+            />
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="flex flex-col gap-1 rounded-control bg-page p-4">
+                <span className="text-[12.5px] font-semibold text-muted">Schedule</span>
+                <span><Badge tone={purgeScheduleEnabled ? 'ok' : 'neutral'}>{purgeScheduleEnabled ? 'Active' : 'Off'}</Badge></span>
+              </div>
+              <div className="flex flex-col gap-1 rounded-control bg-page p-4">
+                <span className="text-[12.5px] font-semibold text-muted">Next scheduled run</span>
+                <span className="text-sm font-semibold text-ink tabular-nums">
+                  {nextScheduledRun ? new Date(nextScheduledRun).toLocaleString() : 'Midnight UTC'}
+                </span>
+              </div>
+              <div className="flex flex-col gap-1 rounded-control bg-page p-4">
+                <span className="text-[12.5px] font-semibold text-muted">Last run</span>
+                <span className="text-sm font-semibold text-ink tabular-nums">
+                  {purgeLog[0] ? new Date(purgeLog[0].runAt).toLocaleDateString() : 'Never run'}
+                </span>
+              </div>
+            </div>
+
+            <Notice tone="danger" className="mt-4">
+              <strong className="font-semibold">Deletion is permanent.</strong>{' '}
+              Purged records are removed with a hard <code className="rounded bg-pill px-1 font-mono">DELETE</code> followed by <code className="rounded bg-pill px-1 font-mono">VACUUM ANALYZE</code> to clear dead tuples from heap pages.
+              For full non-recoverability, make sure PostgreSQL WAL archiving is disabled or WAL files are purged on the same schedule.
+              Data is purged exactly on the anniversary of the cease date — not a day later.
+            </Notice>
+
+            {canEdit && (
+              <div className="mt-4 flex flex-col gap-3 rounded-control border border-danger p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-bold text-ink">Run a purge now</span>
+                  <span className="text-[13px] text-muted">Immediately deletes every record past its retention period. You'll be asked to confirm.</span>
+                </div>
+                <Button variant="danger" onClick={handleRunPurgeNow} disabled={purgeRunning}>
+                  {purgeRunning && spinner}
+                  {purgeRunning ? 'Purging…' : 'Run purge now'}
+                </Button>
+              </div>
+            )}
+          </Card>
+
+          {purgeLog.length > 0 && (
+            <Card padding="px-[22px] pt-5 pb-2">
+              <CardHeader
+                title="Purge history"
+                caption={<>Last <span className="tabular-nums">{purgeLog.length}</span> run{purgeLog.length !== 1 ? 's' : ''}, stored in org settings.</>}
+              />
+              {purgeLog.slice(0, 10).map((run, i) => {
+                const total = Object.values(run.results || {}).reduce((s: number, r: any) => s + (r.purged ?? 0), 0);
+                return (
+                  <div key={i} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-rule py-3">
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="text-[13px] font-semibold text-ink tabular-nums">{new Date(run.runAt).toLocaleString()}</span>
+                      {run.errors?.length > 0 && (
+                        <span className="text-xs text-danger">{run.errors.join(' · ')}</span>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className="text-[13px] font-semibold text-ink tabular-nums">{total} records purged</span>
+                      <span className="flex flex-wrap justify-end gap-2">
+                        {Object.entries(run.results || {}).map(([cat, r]: [string, any]) => r.purged > 0 && (
+                          <span key={cat} className="text-xs text-muted tabular-nums">{cat}: {r.purged}</span>
+                        ))}
+                      </span>
+                    </div>
+                    <Badge tone={run.status === 'clean' ? 'ok' : 'warn'}>{sentenceCase(String(run.status ?? ''))}</Badge>
                   </div>
                 );
               })}
-            </div>
-          </div>
-
-          {/* Automated purge schedule */}
-          <div className="bg-paper border border-rule overflow-hidden">
-            <div className="px-8 py-6 border-b border-rule bg-page flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-black text-ink uppercase tracking-widest">Automated Purge Schedule</h2>
-                <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1">
-                  Runs at midnight UTC · Exact-day precision · Hard DELETE + VACUUM (non-recoverable)
-                </p>
-              </div>
-              {canEdit && (
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-muted">
-                    {purgeScheduleEnabled ? 'Enabled' : 'Disabled'}
-                  </span>
-                  <button
-                    onClick={() => handleTogglePurgeSchedule(!purgeScheduleEnabled)}
-                    className={`relative w-12 h-6  transition-colors ${purgeScheduleEnabled ? 'bg-accent' : 'bg-rule'}`}
-                  >
-                    <div className={`absolute top-1 w-4 h-4  bg-paper shadow transition-transform ${purgeScheduleEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="p-8 flex flex-col gap-6">
-              {/* Status cards */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-page p-4 border border-rule">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-muted">Schedule Status</p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <div className={`w-2 h-2  ${purgeScheduleEnabled ? 'bg-accent' : 'bg-rule'}`} />
-                    <p className="text-sm font-black text-ink">{purgeScheduleEnabled ? 'Active' : 'Off'}</p>
-                  </div>
-                </div>
-                <div className="bg-page p-4 border border-rule">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-muted">Next Scheduled Run</p>
-                  <p className="text-sm font-black text-ink mt-2 font-mono">
-                    {nextScheduledRun ? new Date(nextScheduledRun).toLocaleString() : 'midnight UTC'}
-                  </p>
-                </div>
-                <div className="bg-page p-4 border border-rule">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-muted">Last Run</p>
-                  <p className="text-sm font-black text-ink mt-2">
-                    {purgeLog[0] ? new Date(purgeLog[0].runAt).toLocaleDateString() : 'Never run'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Security note */}
-              <div className="bg-page border border-ink p-4 flex items-start gap-3">
-                <span className="text-lg shrink-0">⚠️</span>
-                <div>
-                  <p className="text-xs font-black text-ink uppercase tracking-widest">Non-Recoverable Deletion</p>
-                  <p className="text-xs text-ink mt-1 leading-relaxed">
-                    Purged records are permanently deleted using hard <code className="bg-page px-1 font-mono">DELETE</code> followed by <code className="bg-page px-1 font-mono">VACUUM ANALYZE</code> to remove dead tuples from heap pages.
-                    For full non-recoverability, ensure PostgreSQL WAL archiving is disabled or WAL files are purged on the same schedule.
-                    Data purged exactly on the anniversary of the cease date — not a day later.
-                  </p>
-                </div>
-              </div>
-
-              {/* Manual trigger */}
-              {canEdit && (
-                <div className="flex items-center justify-between p-5 bg-shadow ">
-                  <div>
-                    <p className="text-sm font-black text-paper">Manual Purge</p>
-                    <p className="text-[10px] font-bold text-muted mt-0.5 uppercase tracking-widest">Immediately purge all records that have exceeded their retention period</p>
-                  </div>
-                  <button
-                    onClick={handleRunPurgeNow}
-                    disabled={purgeRunning}
-                    className="px-5 py-2.5 bg-ink hover:bg-ink disabled:opacity-50 text-paper text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2"
-                  >
-                    {purgeRunning && <svg className="animate-spin h-3.5 w-3.5 rounded-full" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>}
-                    {purgeRunning ? 'Purging…' : 'Run Purge Now'}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Purge log */}
-          {purgeLog.length > 0 && (
-            <div className="bg-paper border border-rule overflow-hidden">
-              <div className="px-8 py-6 border-b border-rule bg-page">
-                <h2 className="text-sm font-black text-ink uppercase tracking-widest">Purge History</h2>
-                <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1">Last {purgeLog.length} purge run{purgeLog.length !== 1 ? 's' : ''} · Stored in org_settings</p>
-              </div>
-              <div className="divide-y divide-rule">
-                {purgeLog.slice(0, 10).map((run, i) => {
-                  const total = Object.values(run.results || {}).reduce((s: number, r: any) => s + (r.purged ?? 0), 0);
-                  return (
-                    <div key={i} className="px-8 py-4 flex items-center gap-6">
-                      <div className={`w-2 h-2  shrink-0 ${run.status === 'clean' ? 'bg-accent' : 'bg-highlight'}`} />
-                      <div className="flex-1">
-                        <p className="text-[11px] font-black text-ink">{new Date(run.runAt).toLocaleString()}</p>
-                        {run.errors?.length > 0 && (
-                          <p className="text-[9px] font-bold text-ink mt-0.5">{run.errors.join(' · ')}</p>
-                        )}
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-[11px] font-black text-ink">{total} records purged</p>
-                        <div className="flex gap-2 justify-end mt-0.5">
-                          {Object.entries(run.results || {}).map(([cat, r]: [string, any]) => r.purged > 0 && (
-                            <span key={cat} className="text-[9px] font-bold text-muted">{cat}: {r.purged}</span>
-                          ))}
-                        </div>
-                      </div>
-                      <span className={`shrink-0 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest  ${run.status === 'clean' ? 'bg-page text-accent border border-accent' : 'bg-page text-ink border border-highlight'}`}>
-                        {run.status}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            </Card>
           )}
         </div>
       )}
 
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-8 duration-300">
-          <div className={`px-8 py-4   flex items-center gap-4 ${toast.type === 'success' ? 'bg-shadow border border-shadow' : 'bg-ink border border-ink'}`}>
-            <div className={`w-2 h-2  ${toast.type === 'success' ? 'bg-accent' : 'bg-ink'}`} />
-            <span className="text-[10px] font-black text-paper uppercase tracking-widest">{toast.msg}</span>
-          </div>
-        </div>
-      )}
-    </div>
+      <Modal
+        open={purgeConfirmOpen}
+        onClose={() => setPurgeConfirmOpen(false)}
+        title="Run a purge now?"
+        caption="This cannot be undone."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setPurgeConfirmOpen(false)}>Cancel</Button>
+            <Button variant="danger" onClick={confirmRunPurge}>Permanently delete records</Button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink">
+          Every record that has passed its retention period will be permanently and irrecoverably deleted.
+        </p>
+      </Modal>
+    </>
   );
 }

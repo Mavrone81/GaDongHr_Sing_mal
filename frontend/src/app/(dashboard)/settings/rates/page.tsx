@@ -1,7 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { apiFetch } from '@/lib/api';
+import { Button, Card, CardHeader, EmptyState, Icon, Tabs, useToast } from '@/components/ui';
+import { SectionHeader } from '../_components/SectionHeader';
+import { Notice } from '../_components/Notice';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,9 +46,9 @@ interface FwlRate {
 function pct(v: number) { return `${(v * 100).toFixed(2).replace(/\.00$/, '')}%`; }
 
 const STATUS_LABELS: Record<string, string> = {
-  SC_PR: 'SC / SPR (3rd Year+)',
-  PR_YEAR1: 'SPR Year 1',
-  PR_YEAR2: 'SPR Year 2',
+  SC_PR: 'SC / SPR (3rd year onwards)',
+  PR_YEAR1: 'SPR year 1',
+  PR_YEAR2: 'SPR year 2',
   FOREIGNER: 'Foreigner',
 };
 
@@ -62,50 +65,74 @@ const SECTOR_LABELS: Record<string, string> = {
 const TIER_LABELS: Record<string, string> = {
   TIER1: 'Tier 1',
   TIER2: 'Tier 2',
-  BASIC_SKILLED: 'Basic Skilled',
-  HIGHER_SKILLED: 'Higher Skilled',
+  BASIC_SKILLED: 'Basic skilled',
+  HIGHER_SKILLED: 'Higher skilled',
 };
+
+const TH = 'h-10 px-4 text-left text-xs font-bold text-muted whitespace-nowrap';
+const TD = 'px-4 py-3 text-[13.5px]';
+
+const ageBracket = (r: CpfRate) => `${r.ageMin === 0 ? '≤' : `${r.ageMin}–`}${r.ageMax ? r.ageMax : '+'} yrs`;
 
 // ─── Inline editable cell ─────────────────────────────────────────────────────
 
-function EditableCell({ value, onSave, suffix = '' }: { value: string | number; onSave: (v: string) => Promise<void>; suffix?: string }) {
+function EditableCell({ value, onSave, suffix = '', label }: { value: string | number; onSave: (v: string) => Promise<void>; suffix?: string; label?: string }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(value));
   const [saving, setSaving] = useState(false);
 
+  // Leaving edit mode unmounts the input; put focus back on this cell's value
+  // button so a keyboard user keeps their place in the table (Enter, Esc,
+  // Save and Cancel all end here).
+  const valueRef = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef(false);
+  const stopEditing = () => { returnFocus.current = true; setEditing(false); };
+  useEffect(() => {
+    if (!editing && returnFocus.current) { returnFocus.current = false; valueRef.current?.focus(); }
+  }, [editing]);
+
   const commit = async () => {
-    if (draft === String(value)) { setEditing(false); return; }
+    if (draft === String(value)) { stopEditing(); return; }
     setSaving(true);
-    try { await onSave(draft); setEditing(false); } finally { setSaving(false); }
+    try { await onSave(draft); stopEditing(); } finally { setSaving(false); }
   };
 
   if (editing) {
     return (
-      <span className="inline-flex items-center gap-1">
+      <span className="inline-flex items-center gap-1.5">
         <input
           autoFocus
           type="text"
+          inputMode="decimal"
+          aria-label={label ? `New value for ${label}` : 'New value'}
           value={draft}
           onChange={e => setDraft(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
-          className="w-20 border border-accent px-2 py-0.5 text-xs font-bold text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') stopEditing(); }}
+          className="h-8 w-24 rounded-control border border-accent bg-paper px-2 text-[13px] font-semibold text-ink tabular-nums"
         />
-        <button onClick={commit} disabled={saving} className="text-[9px] font-black text-accent uppercase tracking-widest hover:text-accent">
-          {saving ? '…' : 'Save'}
+        <Button size="sm" onClick={commit} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+        <button
+          type="button"
+          onClick={stopEditing}
+          aria-label="Cancel edit"
+          className="flex h-8 w-8 items-center justify-center rounded-control text-muted hover:bg-pill hover:text-ink"
+        >
+          <Icon name="x" size={16} />
         </button>
-        <button onClick={() => setEditing(false)} className="label-form hover:text-ink">✕</button>
       </span>
     );
   }
 
   return (
     <button
+      ref={valueRef}
+      type="button"
       onClick={() => { setDraft(String(value)); setEditing(true); }}
-      className="group inline-flex items-center gap-1 text-xs font-bold text-ink hover:text-accent transition-colors"
+      className="inline-flex items-center border-b border-dashed border-rule font-semibold text-ink tabular-nums transition-colors hover:border-accent hover:text-accent"
       title="Click to edit"
+      aria-label={label ? `Edit ${label}: ${value}${suffix}` : undefined}
     >
       {value}{suffix}
-      <span className="opacity-0 group-hover:opacity-100 text-[8px] text-accent transition-opacity">✎</span>
     </button>
   );
 }
@@ -119,7 +146,7 @@ export default function RatesPage() {
   const [fwlRates, setFwlRates] = useState<FwlRate[]>([]);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const { toast } = useToast();
   const [cpfSort, setCpfSort] = useState<{ col: 'age' | 'emp' | 'ert' | 'tot' | 'ow'; dir: 'asc' | 'desc' }>({ col: 'age', dir: 'asc' });
   const [fwlSort, setFwlSort] = useState<{ col: 'sector' | 'tier' | 'daily'; dir: 'asc' | 'desc' }>({ col: 'sector', dir: 'asc' });
 
@@ -149,16 +176,23 @@ export default function RatesPage() {
   function toggleFwlSort(col: typeof fwlSort.col) {
     setFwlSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
   }
-  function CpfSortIcon({ col }: { col: typeof cpfSort.col }) {
-    return <span className="text-[8px] ml-1">{cpfSort.col === col ? (cpfSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
-  }
-  function FwlSortIcon({ col }: { col: typeof fwlSort.col }) {
-    return <span className="text-[8px] ml-1">{fwlSort.col === col ? (fwlSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  function SortHeader({ on, dir, label, onClick }: { on: boolean; dir: 'asc' | 'desc'; label: string; onClick: () => void }) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={`Sort by ${label.toLowerCase()}${on ? (dir === 'asc' ? ', ascending' : ', descending') : ''}`}
+        className={`inline-flex items-center gap-1 hover:text-ink ${on ? 'text-ink' : ''}`}
+      >
+        {label}
+        {on && <Icon name="chevronDown" size={13} strokeWidth={2.25} className={dir === 'asc' ? 'rotate-180' : ''} />}
+      </button>
+    );
   }
 
   const showToast = (msg: string, ok = true) => {
-    setToast({ msg, ok });
-    setTimeout(() => setToast(null), 3500);
+    // Same call shape as before; the shared toast (root layout) does the display and timing.
+    toast(msg, ok ? 'ok' : 'danger');
   };
 
   const load = useCallback(async () => {
@@ -220,229 +254,207 @@ export default function RatesPage() {
   };
 
   const isEmpty = !loading && cpfRates.length === 0 && !sdlConfig && fwlRates.length === 0;
+  const pct2 = (v: number) => (v * 100).toFixed(2).replace(/\.00$/, '');
 
   return (
-    <div className="flex flex-col gap-6 p-8 bg-paper border border-rule ">
+    <>
+      <SectionHeader
+        title="Statutory tables"
+        description="Singapore 2026 CPF, SDL and foreign worker levy rates. Super Admin only."
+        actions={
+          <Button variant="secondary" icon={seeding ? undefined : 'download'} onClick={seedDefaults} disabled={seeding || loading}>
+            {seeding && <span className="h-4 w-4 border-2 border-accent/30 border-t-accent animate-spin rounded-full" />}
+            Load Singapore 2026 defaults
+          </Button>
+        }
+      />
 
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed top-6 right-6 z-50 px-4 py-3   text-xs font-black uppercase tracking-widest transition-all ${toast.ok ? 'bg-accent text-paper' : 'bg-ink text-paper'}`}>
-          {toast.msg}
-        </div>
-      )}
+      <Notice tone="warn">
+        <span className="tabular-nums">CPF ordinary wage ceiling SGD 7,400 · additional wage ceiling SGD 102,000 · SDL 0.25% · effective January 2026.</span>{' '}
+        <strong className="font-semibold">Check the SPR year 1 and 2 graduated rates against CPF Board Table B before running payroll.</strong>
+      </Notice>
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-8 bg-accent " />
-          <div>
-            <h1 className="text-2xl font-black text-ink tracking-tighter">Statutory Tables</h1>
-            <p className="eyebrow-tight mt-0.5">SuperAdmin Only · Singapore 2026 Rates</p>
-          </div>
-        </div>
-        <button
-          onClick={seedDefaults}
-          disabled={seeding || loading}
-          className="flex items-center gap-2 px-4 py-2 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50 transition-colors "
-        >
-          {seeding ? (
-            <span className="w-3 h-3 border-2 border-paper/40 border-t-paper animate-spin rounded-full" />
-          ) : (
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
-          )}
-          Load Singapore 2026 Defaults
-        </button>
-      </div>
-
-      {/* Info banner */}
-      <div className="bg-page px-5 py-3 border border-rule text-xs font-bold text-muted">
-        CPF OW ceiling SGD 7,400 · AW ceiling SGD 102,000 · SDL 0.25% · Effective Jan 2026.&nbsp;
-        <span className="text-ink">Verify PR Year 1/2 graduated rates against CPF Board Table B before payroll execution.</span>
-      </div>
-
-      {/* Empty state */}
       {isEmpty && (
-        <div className="flex flex-col items-center gap-3 py-12 text-center">
-          <div className="w-12 h-12 bg-page flex items-center justify-center text-2xl">◎</div>
-          <p className="text-sm font-black text-ink">Statutory tables are empty</p>
-          <p className="text-xs text-muted">Click &quot;Load Singapore 2026 Defaults&quot; to populate CPF rates, SDL config and FWL levy rates.</p>
-        </div>
+        <Card padding="p-0">
+          <EmptyState
+            icon="grid"
+            title="Statutory tables are empty"
+            description="Load the Singapore 2026 defaults to fill in CPF rates, SDL and foreign worker levy rates."
+            action={<Button icon="download" onClick={seedDefaults} disabled={seeding}>Load Singapore 2026 defaults</Button>}
+          />
+        </Card>
       )}
 
-      {/* Tabs */}
-      {!isEmpty && (
+      {!isEmpty && !loading && (
         <>
-          <div className="flex gap-1 bg-page p-1 w-fit">
-            {(['cpf', 'sdl', 'fwl'] as const).map(t => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`px-4 py-2  text-[10px] font-black uppercase tracking-widest transition-all ${tab === t ? 'bg-paper text-accent ' : 'text-muted hover:text-ink'}`}
-              >
-                {t === 'cpf' ? 'CPF Contributions' : t === 'sdl' ? 'SDL Config' : 'Foreign Worker Levy'}
-              </button>
-            ))}
-          </div>
+          <Tabs
+            items={[
+              { id: 'cpf', label: 'CPF contributions' },
+              { id: 'sdl', label: 'Skills development levy' },
+              { id: 'fwl', label: 'Foreign worker levy' },
+            ]}
+            active={tab}
+            onChange={setTab}
+          />
 
-          {/* CPF Tab */}
+          {/* CPF */}
           {tab === 'cpf' && (
-            <div className="flex flex-col gap-6">
-              {STATUS_ORDER.filter(s => cpfRates.some(r => r.citizenStatus === s)).map(status => (
-                <div key={status} className="border border-rule overflow-hidden">
-                  <div className="bg-page px-5 py-3 flex items-center justify-between">
-                    <span className="text-[10px] font-black text-ink uppercase tracking-widest">{STATUS_LABELS[status]}</span>
-                    <span className="label-form">OW Ceiling: SGD {cpfRates.find(r => r.citizenStatus === status)?.owCeiling?.toLocaleString()}</span>
-                  </div>
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-rule">
-                        {([
-                          { col: 'age', label: 'Age Bracket' },
-                          { col: 'emp', label: 'Employee %' },
-                          { col: 'ert', label: 'Employer %' },
-                          { col: 'tot', label: 'Total %' },
-                          { col: 'ow',  label: 'OW Ceiling (SGD)' },
-                        ] as const).map(h => (
-                          <th key={h.col} className="text-left px-5 py-2 label-form">
-                            <button onClick={() => toggleCpfSort(h.col)} className="flex items-center hover:text-ink transition-colors">
-                              {h.label}<CpfSortIcon col={h.col} />
-                            </button>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cpfRates
-                        .filter(r => r.citizenStatus === status)
-                        .sort(cmpCpf)
-                        .map(r => (
-                          <tr key={r.id} className="border-b border-rule hover:bg-page transition-colors">
-                            <td className="px-5 py-3 font-bold text-ink">
-                              {r.ageMin === 0 ? '≤' : `${r.ageMin}–`}{r.ageMax ? r.ageMax : '+'} yrs
-                            </td>
-                            <td className="px-5 py-3">
-                              <EditableCell
-                                value={(r.employeeRate * 100).toFixed(2).replace(/\.00$/, '')}
-                                suffix="%"
-                                onSave={v => saveCpf(r.id, 'employeeRate', v)}
-                              />
-                            </td>
-                            <td className="px-5 py-3">
-                              <EditableCell
-                                value={(r.employerRate * 100).toFixed(2).replace(/\.00$/, '')}
-                                suffix="%"
-                                onSave={v => saveCpf(r.id, 'employerRate', v)}
-                              />
-                            </td>
-                            <td className="px-5 py-3 font-bold text-accent">
-                              {((r.employeeRate + r.employerRate) * 100).toFixed(2).replace(/\.00$/, '')}%
-                            </td>
-                            <td className="px-5 py-3">
-                              <EditableCell
-                                value={r.owCeiling}
-                                onSave={v => saveCpf(r.id, 'owCeiling', v)}
-                              />
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              ))}
-              <p className="text-[9px] font-bold text-muted uppercase tracking-widest">Click any value to edit inline · Enter to save · Esc to cancel</p>
-            </div>
-          )}
-
-          {/* SDL Tab */}
-          {tab === 'sdl' && sdlConfig && (
-            <div className="max-w-lg">
-              <div className="border border-rule overflow-hidden">
-                <div className="bg-page px-5 py-3">
-                  <span className="text-[10px] font-black text-ink uppercase tracking-widest">Skills Development Levy (SDL)</span>
-                </div>
-                <div className="divide-y divide-rule">
-                  {[
-                    { label: 'Levy Rate', field: 'rate' as const, value: (sdlConfig.rate * 100).toFixed(4).replace(/0+$/, ''), suffix: '%', hint: 'Enter as percentage, e.g. 0.25' },
-                    { label: 'Minimum Payable', field: 'minAmount' as const, value: sdlConfig.minAmount, suffix: ' SGD', hint: 'Per month for wages < salary cap' },
-                    { label: 'Maximum Payable', field: 'maxAmount' as const, value: sdlConfig.maxAmount, suffix: ' SGD', hint: 'Per month cap' },
-                    { label: 'Salary Cap', field: 'salaryCap' as const, value: sdlConfig.salaryCap, suffix: ' SGD', hint: 'Max wage subject to SDL' },
-                  ].map(({ label, field, value, suffix, hint }) => (
-                    <div key={field} className="flex items-center justify-between px-5 py-4">
-                      <div>
-                        <p className="text-xs font-black text-ink">{label}</p>
-                        <p className="text-[9px] text-muted mt-0.5">{hint}</p>
-                      </div>
-                      <div className="flex items-center gap-1 text-sm font-black text-ink">
-                        <EditableCell
-                          value={value}
-                          suffix={suffix}
-                          onSave={v => saveSdl(field, v)}
-                        />
-                      </div>
+            <div className="flex flex-col gap-4">
+              {STATUS_ORDER.filter(s => cpfRates.some(r => r.citizenStatus === s)).map(status => {
+                const rows = cpfRates.filter(r => r.citizenStatus === status).sort(cmpCpf);
+                const ow = cpfRates.find(r => r.citizenStatus === status)?.owCeiling;
+                return (
+                  <Card key={status} padding="p-0" className="overflow-hidden">
+                    <div className="px-5 pt-4">
+                      <CardHeader
+                        title={STATUS_LABELS[status]}
+                        action={<span className="font-medium text-muted tabular-nums">OW ceiling SGD {ow?.toLocaleString()}</span>}
+                      />
                     </div>
-                  ))}
-                  <div className="flex items-center justify-between px-5 py-4">
-                    <p className="text-xs font-black text-muted">Effective Date</p>
-                    <p className="text-xs font-bold text-ink">{new Date(sdlConfig.effectiveDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
-                  </div>
-                </div>
-              </div>
+
+                    {/* Desktop */}
+                    <table className="hidden w-full md:table">
+                      <thead className="border-y border-rule bg-pill">
+                        <tr>
+                          {([
+                            { col: 'age', label: 'Age bracket' },
+                            { col: 'emp', label: 'Employee %' },
+                            { col: 'ert', label: 'Employer %' },
+                            { col: 'tot', label: 'Total %' },
+                            { col: 'ow',  label: 'OW ceiling (SGD)' },
+                          ] as const).map(h => (
+                            <th key={h.col} className={TH}>
+                              <SortHeader on={cpfSort.col === h.col} dir={cpfSort.dir} label={h.label} onClick={() => toggleCpfSort(h.col)} />
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map(r => (
+                          <tr key={r.id} className="border-b border-rule last:border-0 hover:bg-page">
+                            <td className={`${TD} font-semibold text-ink tabular-nums`}>{ageBracket(r)}</td>
+                            <td className={TD}><EditableCell label="employee rate" value={pct2(r.employeeRate)} suffix="%" onSave={v => saveCpf(r.id, 'employeeRate', v)} /></td>
+                            <td className={TD}><EditableCell label="employer rate" value={pct2(r.employerRate)} suffix="%" onSave={v => saveCpf(r.id, 'employerRate', v)} /></td>
+                            <td className={`${TD} font-bold text-accent tabular-nums`}>{pct2(r.employeeRate + r.employerRate)}%</td>
+                            <td className={TD}><EditableCell label="OW ceiling" value={r.owCeiling} onSave={v => saveCpf(r.id, 'owCeiling', v)} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+
+                    {/* Mobile */}
+                    <ul className="flex flex-col md:hidden">
+                      {rows.map(r => (
+                        <li key={r.id} className="border-t border-rule px-5 py-3.5">
+                          <div className="mb-2 flex items-center justify-between">
+                            <span className="text-sm font-semibold text-ink tabular-nums">{ageBracket(r)}</span>
+                            <span className="text-sm font-bold text-accent tabular-nums">{pct2(r.employeeRate + r.employerRate)}% total</span>
+                          </div>
+                          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px]">
+                            <div className="flex flex-col gap-0.5"><dt className="text-muted">Employee</dt><dd><EditableCell label="employee rate" value={pct2(r.employeeRate)} suffix="%" onSave={v => saveCpf(r.id, 'employeeRate', v)} /></dd></div>
+                            <div className="flex flex-col gap-0.5"><dt className="text-muted">Employer</dt><dd><EditableCell label="employer rate" value={pct2(r.employerRate)} suffix="%" onSave={v => saveCpf(r.id, 'employerRate', v)} /></dd></div>
+                            <div className="flex flex-col gap-0.5"><dt className="text-muted">OW ceiling (SGD)</dt><dd><EditableCell label="OW ceiling" value={r.owCeiling} onSave={v => saveCpf(r.id, 'owCeiling', v)} /></dd></div>
+                          </dl>
+                        </li>
+                      ))}
+                    </ul>
+                  </Card>
+                );
+              })}
+              {cpfRates.length === 0 && (
+                <Card padding="p-0"><EmptyState icon="grid" title="No CPF rates" description="Load the Singapore 2026 defaults to add them." /></Card>
+              )}
+              <p className="text-[13px] text-muted">Select any underlined value to edit it. Enter saves, Esc cancels.</p>
             </div>
           )}
 
-          {/* FWL Tab */}
-          {tab === 'fwl' && (
-            <div className="flex flex-col gap-6">
-              {(['S_PASS', 'WP'] as const).filter(pt => fwlRates.some(r => r.passType === pt)).map(passType => (
-                <div key={passType} className="border border-rule overflow-hidden">
-                  <div className="bg-page px-5 py-3">
-                    <span className="text-[10px] font-black text-ink uppercase tracking-widest">
-                      {passType === 'S_PASS' ? 'S-Pass Holders' : 'Work Permit Holders'}
-                    </span>
+          {/* SDL */}
+          {tab === 'sdl' && (sdlConfig ? (
+            <Card className="max-w-2xl" padding="px-[22px] pt-5 pb-2">
+              <CardHeader title="Skills development levy" caption="Charged per employee per month." />
+              {[
+                { label: 'Levy rate', field: 'rate' as const, value: (sdlConfig.rate * 100).toFixed(4).replace(/0+$/, ''), suffix: '%', hint: 'Enter as a percentage, e.g. 0.25' },
+                { label: 'Minimum payable', field: 'minAmount' as const, value: sdlConfig.minAmount, suffix: ' SGD', hint: 'Per month for wages below the salary cap' },
+                { label: 'Maximum payable', field: 'maxAmount' as const, value: sdlConfig.maxAmount, suffix: ' SGD', hint: 'Monthly cap' },
+                { label: 'Salary cap', field: 'salaryCap' as const, value: sdlConfig.salaryCap, suffix: ' SGD', hint: 'Highest wage subject to SDL' },
+              ].map(({ label, field, value, suffix, hint }) => (
+                <div key={field} className="flex flex-col gap-2 border-t border-rule py-3.5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-[3px]">
+                    <span className="text-sm font-semibold text-ink">{label}</span>
+                    <span className="text-[13px] text-muted">{hint}</span>
                   </div>
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-rule">
-                        {([
-                          { col: 'sector', label: 'Sector' },
-                          { col: 'tier',   label: 'Tier' },
-                          { col: 'daily',  label: 'Daily Rate (SGD)' },
-                          { col: 'daily',  label: '≈ Monthly (×26)' },
-                        ] as const).map((h, i) => (
-                          <th key={i} className="text-left px-5 py-2 label-form">
-                            <button onClick={() => toggleFwlSort(h.col)} className="flex items-center hover:text-ink transition-colors">
-                              {h.label}<FwlSortIcon col={h.col} />
-                            </button>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {fwlRates
-                        .filter(r => r.passType === passType)
-                        .sort(cmpFwl)
-                        .map(r => (
-                          <tr key={r.id} className="border-b border-rule hover:bg-page transition-colors">
-                            <td className="px-5 py-3 font-bold text-ink">{SECTOR_LABELS[r.sector] ?? r.sector}</td>
-                            <td className="px-5 py-3 text-ink">{TIER_LABELS[r.tier] ?? r.tier}</td>
-                            <td className="px-5 py-3">
-                              <EditableCell
-                                value={r.dailyRate.toFixed(2)}
-                                onSave={v => saveFwl(r.id, v)}
-                              />
-                            </td>
-                            <td className="px-5 py-3 text-muted">{(r.dailyRate * 26).toFixed(2)}</td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
+                  <div className="text-sm">
+                    <EditableCell label={label.toLowerCase()} value={value} suffix={suffix} onSave={v => saveSdl(field, v)} />
+                  </div>
                 </div>
               ))}
-              <p className="text-[9px] font-bold text-muted uppercase tracking-widest">
-                Daily rate = MOM monthly levy ÷ 26 workdays · Verify current levies at mom.gov.sg
-              </p>
+              <div className="flex items-center justify-between border-t border-rule py-3.5">
+                <span className="text-sm font-semibold text-ink">Effective date</span>
+                <span className="text-sm text-ink tabular-nums">{new Date(sdlConfig.effectiveDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+              </div>
+            </Card>
+          ) : (
+            <Card padding="p-0"><EmptyState icon="grid" title="No SDL configuration" description="Load the Singapore 2026 defaults to add it." /></Card>
+          ))}
+
+          {/* FWL */}
+          {tab === 'fwl' && (
+            <div className="flex flex-col gap-4">
+              {(['S_PASS', 'WP'] as const).filter(pt => fwlRates.some(r => r.passType === pt)).map(passType => {
+                const rows = fwlRates.filter(r => r.passType === passType).sort(cmpFwl);
+                return (
+                  <Card key={passType} padding="p-0" className="overflow-hidden">
+                    <div className="px-5 pt-4">
+                      <CardHeader title={passType === 'S_PASS' ? 'S Pass holders' : 'Work Permit holders'} />
+                    </div>
+
+                    {/* Desktop */}
+                    <table className="hidden w-full md:table">
+                      <thead className="border-y border-rule bg-pill">
+                        <tr>
+                          {([
+                            { col: 'sector', label: 'Sector' },
+                            { col: 'tier',   label: 'Tier' },
+                            { col: 'daily',  label: 'Daily rate (SGD)' },
+                            { col: 'daily',  label: 'About monthly (×26)' },
+                          ] as const).map((h, i) => (
+                            <th key={i} className={TH}>
+                              <SortHeader on={fwlSort.col === h.col} dir={fwlSort.dir} label={h.label} onClick={() => toggleFwlSort(h.col)} />
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map(r => (
+                          <tr key={r.id} className="border-b border-rule last:border-0 hover:bg-page">
+                            <td className={`${TD} font-semibold text-ink`}>{SECTOR_LABELS[r.sector] ?? r.sector}</td>
+                            <td className={`${TD} text-ink`}>{TIER_LABELS[r.tier] ?? r.tier}</td>
+                            <td className={TD}><EditableCell label="daily rate" value={r.dailyRate.toFixed(2)} onSave={v => saveFwl(r.id, v)} /></td>
+                            <td className={`${TD} text-muted tabular-nums`}>{(r.dailyRate * 26).toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+
+                    {/* Mobile */}
+                    <ul className="flex flex-col md:hidden">
+                      {rows.map(r => (
+                        <li key={r.id} className="flex items-center justify-between gap-3 border-t border-rule px-5 py-3.5">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-semibold text-ink">{SECTOR_LABELS[r.sector] ?? r.sector}</span>
+                            <span className="text-[13px] text-muted">{TIER_LABELS[r.tier] ?? r.tier} · about <span className="tabular-nums">{(r.dailyRate * 26).toFixed(2)}</span>/month</span>
+                          </div>
+                          <div className="text-sm"><EditableCell label="daily rate" value={r.dailyRate.toFixed(2)} onSave={v => saveFwl(r.id, v)} /></div>
+                        </li>
+                      ))}
+                    </ul>
+                  </Card>
+                );
+              })}
+              {fwlRates.length === 0 && (
+                <Card padding="p-0"><EmptyState icon="grid" title="No levy rates" description="Load the Singapore 2026 defaults to add them." /></Card>
+              )}
+              <p className="text-[13px] text-muted">Daily rate = MOM monthly levy ÷ 26 working days. Verify current levies at mom.gov.sg.</p>
             </div>
           )}
         </>
@@ -450,10 +462,10 @@ export default function RatesPage() {
 
       {/* Loading skeleton */}
       {loading && (
-        <div className="flex flex-col gap-3">
-          {[1, 2, 3].map(i => <div key={i} className="h-12 bg-page animate-pulse" />)}
+        <div className="flex flex-col gap-3" aria-busy="true" aria-label="Loading statutory tables">
+          {[1, 2, 3].map(i => <div key={i} className="h-12 rounded-control bg-pill animate-pulse" />)}
         </div>
       )}
-    </div>
+    </>
   );
 }

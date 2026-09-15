@@ -1,7 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
+import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Modal, Select, Tabs, useToast } from '@/components/ui';
+import { SectionHeader } from '../_components/SectionHeader';
+import { Notice } from '../_components/Notice';
 
 type Tab = 'email' | 'keys' | 'webhooks';
 
@@ -25,17 +28,17 @@ interface Webhook {
 }
 
 const WEBHOOK_EVENTS = [
-  { id: 'employee.created',    label: 'Employee Created',    group: 'Employees' },
-  { id: 'employee.updated',    label: 'Employee Updated',    group: 'Employees' },
-  { id: 'employee.terminated', label: 'Employee Terminated', group: 'Employees' },
-  { id: 'payroll.finalized',   label: 'Payroll Finalized',   group: 'Payroll' },
-  { id: 'payroll.paid',        label: 'Payroll Paid',        group: 'Payroll' },
-  { id: 'leave.approved',      label: 'Leave Approved',      group: 'Leave' },
-  { id: 'leave.rejected',      label: 'Leave Rejected',      group: 'Leave' },
-  { id: 'claim.approved',      label: 'Claim Approved',      group: 'Claims' },
-  { id: 'claim.rejected',      label: 'Claim Rejected',      group: 'Claims' },
-  { id: 'user.created',        label: 'User Created',        group: 'Users' },
-  { id: 'user.deactivated',    label: 'User Deactivated',    group: 'Users' },
+  { id: 'employee.created',    label: 'Employee created',    group: 'Employees' },
+  { id: 'employee.updated',    label: 'Employee updated',    group: 'Employees' },
+  { id: 'employee.terminated', label: 'Employee terminated', group: 'Employees' },
+  { id: 'payroll.finalized',   label: 'Payroll finalized',   group: 'Payroll' },
+  { id: 'payroll.paid',        label: 'Payroll paid',        group: 'Payroll' },
+  { id: 'leave.approved',      label: 'Leave approved',      group: 'Leave' },
+  { id: 'leave.rejected',      label: 'Leave rejected',      group: 'Leave' },
+  { id: 'claim.approved',      label: 'Claim approved',      group: 'Claims' },
+  { id: 'claim.rejected',      label: 'Claim rejected',      group: 'Claims' },
+  { id: 'user.created',        label: 'User created',        group: 'Users' },
+  { id: 'user.deactivated',    label: 'User deactivated',    group: 'Users' },
 ];
 
 const KEY_PERMISSIONS = [
@@ -47,32 +50,35 @@ function genId() { return Math.random().toString(36).slice(2) + Date.now().toStr
 function genKey() { return 'vhk_live_' + Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join(''); }
 function genSecret() { return 'whsec_' + Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join(''); }
 
-function Toast({ msg, type, onClose }: { msg: string; type: 'ok' | 'err'; onClose: () => void }) {
-  useEffect(() => { const t = setTimeout(onClose, 3500); return () => clearTimeout(t); }, [onClose]);
-  return (
-    <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3   text-sm font-bold
-      ${type === 'ok' ? 'bg-page border border-accent text-accent' : 'bg-page border border-ink text-ink'}`}>
-      <span>{type === 'ok' ? '✓' : '✕'}</span>
-      {msg}
-      <button onClick={onClose} className="ml-2 opacity-50 hover:opacity-100">✕</button>
-    </div>
-  );
+/**
+ * The tabs report through `setToast({ msg, type })` as they always have; this
+ * routes those calls to the shared toast (root layout) so the call sites stay
+ * exactly as they were.
+ */
+function useTabToast() {
+  const { toast } = useToast();
+  return useCallback((t: { msg: string; type: 'ok' | 'err' } | null) => {
+    if (t) toast(t.msg, t.type === 'ok' ? 'ok' : 'danger');
+  }, [toast]);
 }
 
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <button
+    <Button
+      size="sm"
+      variant="secondary"
+      aria-live="polite"
       onClick={async () => { await navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-      className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest  transition-all
-        ${copied ? 'bg-page text-accent' : 'bg-page text-muted hover:bg-rule'}`}
     >
       {copied ? 'Copied' : 'Copy'}
-    </button>
+    </Button>
   );
 }
 
-// ── Email Tab ─────────────────────────────────────────────────────────────────
+const spinner = <span className="h-4 w-4 border-2 border-on-accent/30 border-t-on-accent animate-spin rounded-full" />;
+
+// ── Email tab ─────────────────────────────────────────────────────────────────
 function EmailTab() {
   const [smtp, setSmtp] = useState({ host: '', port: '587', user: '', pass: '', from: '', hasPassword: false });
   const [showPass, setShowPass] = useState(false);
@@ -80,7 +86,7 @@ function EmailTab() {
   const [testEmail, setTestEmail] = useState('');
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  const setToast = useTabToast();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -112,117 +118,92 @@ function EmailTab() {
     finally { setTesting(false); }
   }
 
-  if (loading) return <div className="p-12 text-center text-muted text-sm font-bold">Loading…</div>;
+  if (loading) return <Card><p className="py-8 text-center text-sm text-muted">Loading email settings…</p></Card>;
 
   return (
-    <div className="flex flex-col gap-6">
-      {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    <div className="flex flex-col gap-4">
+      <Card>
+        <CardHeader
+          title="SMTP server"
+          caption="Every system email goes through this server. Changes apply immediately, without a restart."
+          action={<Button onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</Button>}
+        />
 
-      {/* SMTP Server Config */}
-      <div className="bg-paper border border-rule p-6 flex flex-col gap-5">
-        <div className="flex justify-between items-start">
-          <div>
-            <h3 className="text-base font-black text-ink tracking-tighter">SMTP Server Configuration</h3>
-            <p className="text-xs text-muted mt-1">All system emails are sent through this mail server. Changes apply immediately without a restart.</p>
-          </div>
-          <button onClick={handleSave} disabled={saving}
-            className="px-5 py-2.5 bg-accent hover:bg-accent disabled:opacity-50 text-paper text-sm font-black transition-all flex-shrink-0">
-            {saving ? 'Saving…' : 'Save Changes'}
-          </button>
-        </div>
+        <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="SMTP host" className="sm:col-span-2">
+            <Input value={smtp.host} onChange={e => setSmtp(p => ({ ...p, host: e.target.value }))} placeholder="smtp.titan.email" />
+          </Field>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="col-span-2 flex flex-col gap-1.5">
-            <label className="text-[9px] font-black text-muted uppercase tracking-widest">SMTP Host</label>
-            <input value={smtp.host} onChange={e => setSmtp(p => ({ ...p, host: e.target.value }))}
-              placeholder="smtp.titan.email"
-              className="border border-rule px-4 py-2.5 text-sm font-medium text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent" />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[9px] font-black text-muted uppercase tracking-widest">Port</label>
-            <select value={smtp.port} onChange={e => setSmtp(p => ({ ...p, port: e.target.value }))}
-              className="border border-rule px-4 py-2.5 text-sm font-medium text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent">
+          <Field label="Port">
+            <Select value={smtp.port} onChange={e => setSmtp(p => ({ ...p, port: e.target.value }))}>
               <option value="587">587 (STARTTLS — recommended)</option>
               <option value="465">465 (SSL)</option>
-              <option value="25">25 (Plain — not recommended)</option>
-            </select>
-          </div>
+              <option value="25">25 (plain — not recommended)</option>
+            </Select>
+          </Field>
+
+          <Field label="From address">
+            <Input value={smtp.from} onChange={e => setSmtp(p => ({ ...p, from: e.target.value }))} placeholder="no-reply@gadonghr.com" />
+          </Field>
+
+          <Field label="Username">
+            <Input value={smtp.user} onChange={e => setSmtp(p => ({ ...p, user: e.target.value }))} placeholder="enquires@gadonghr.com" />
+          </Field>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-[9px] font-black text-muted uppercase tracking-widest">From Address</label>
-            <input value={smtp.from} onChange={e => setSmtp(p => ({ ...p, from: e.target.value }))}
-              placeholder="no-reply@gadonghr.com"
-              className="border border-rule px-4 py-2.5 text-sm font-medium text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent" />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[9px] font-black text-muted uppercase tracking-widest">Username</label>
-            <input value={smtp.user} onChange={e => setSmtp(p => ({ ...p, user: e.target.value }))}
-              placeholder="enquires@gadonghr.com"
-              className="border border-rule px-4 py-2.5 text-sm font-medium text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent" />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[9px] font-black text-muted uppercase tracking-widest">Password</label>
+            <span className="text-[12.5px] font-semibold text-muted">Password</span>
             <div className="flex gap-2">
               {passEditing ? (
-                <input
+                <Input
                   type={showPass ? 'text' : 'password'}
+                  aria-label="New SMTP password"
                   value={smtp.pass}
                   onChange={e => setSmtp(p => ({ ...p, pass: e.target.value }))}
-                  placeholder="Enter new password"
-                  className="flex-1 border border-accent px-4 py-2.5 text-sm font-medium text-ink focus:outline-none focus:ring-2 focus:ring-accent"
+                  placeholder="Enter a new password"
+                  className="flex-1"
                   autoFocus
                 />
               ) : (
-                <div className="flex-1 border border-rule px-4 py-2.5 text-sm text-muted bg-page flex items-center">
-                  {smtp.hasPassword ? '••••••••••••' : <span className="text-muted">Not set</span>}
+                <div className="flex h-[42px] flex-1 items-center rounded-control border border-rule bg-page px-3 text-sm text-muted">
+                  {smtp.hasPassword ? '••••••••••••' : 'Not set'}
                 </div>
               )}
-              <button onClick={() => { setPassEditing(e => !e); setShowPass(false); }}
-                className="px-3 py-2.5 border border-rule text-[10px] font-black text-muted hover:bg-page uppercase tracking-widest transition-all">
+              <Button variant="secondary" className="h-[42px]" onClick={() => { setPassEditing(e => !e); setShowPass(false); }}>
                 {passEditing ? 'Cancel' : 'Change'}
-              </button>
+              </Button>
               {passEditing && (
-                <button onClick={() => setShowPass(s => !s)}
-                  className="px-3 py-2.5 border border-rule text-[10px] font-black text-muted hover:bg-page uppercase tracking-widest transition-all">
+                <Button variant="ghost" className="h-[42px]" onClick={() => setShowPass(s => !s)}>
                   {showPass ? 'Hide' : 'Show'}
-                </button>
+                </Button>
               )}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 bg-page border border-rule px-4 py-3 text-[10px] font-bold text-muted">
-          <span className="w-1.5 h-1.5 bg-highlight" />
-          Changes apply immediately to the running server. To persist across container restarts, update the <code className="font-mono bg-paper border border-rule px-1.5 py-0.5 text-ink">.env</code> file as well.
-        </div>
-      </div>
+        <Notice tone="warn" className="mt-4">
+          Changes apply immediately to the running server. To keep them across container restarts, update the <code className="rounded border border-rule bg-paper px-1.5 py-0.5 font-mono text-ink">.env</code> file as well.
+        </Notice>
+      </Card>
 
-      {/* Send Test Email */}
-      <div className="bg-paper border border-rule p-6 flex flex-col gap-4">
-        <div>
-          <h3 className="text-base font-black text-ink tracking-tighter">Send Test Email</h3>
-          <p className="text-xs text-muted mt-1">Verify the current SMTP configuration by sending a live test message. The email will arrive from <span className="font-bold text-ink">{smtp.from || 'the configured From address'}</span>.</p>
+      <Card>
+        <CardHeader
+          title="Send a test email"
+          caption={<>Checks the current settings with a live message from <span className="font-semibold text-ink">{smtp.from || 'the configured from address'}</span>.</>}
+        />
+        <div className="flex flex-col gap-2.5 sm:flex-row">
+          <Input type="email" aria-label="Send the test to" value={testEmail} onChange={e => setTestEmail(e.target.value)} placeholder="your@email.com" className="flex-1" />
+          <Button onClick={handleTest} disabled={testing || !testEmail} className="h-[42px]">
+            {testing && spinner}
+            {testing ? 'Sending…' : 'Send test email'}
+          </Button>
         </div>
-        <div className="flex gap-3">
-          <input type="email" value={testEmail} onChange={e => setTestEmail(e.target.value)}
-            placeholder="your@email.com"
-            className="flex-1 px-4 py-2.5 border border-rule text-sm font-medium text-ink placeholder:text-muted focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent"
-          />
-          <button onClick={handleTest} disabled={testing || !testEmail}
-            className="px-6 py-2.5 bg-shadow hover:bg-shadow disabled:opacity-40 text-paper text-sm font-black transition-all flex items-center gap-2">
-            {testing && <span className="w-3.5 h-3.5 border-2 border-paper/30 border-t-paper animate-spin rounded-full" />}
-            {testing ? 'Sending…' : 'Send Test Email'}
-          </button>
-        </div>
-      </div>
+        {!testing && !testEmail && <p className="mt-2 text-xs text-muted">Enter an address to send the test to.</p>}
+      </Card>
     </div>
   );
 }
 
-// ── API Keys Tab ──────────────────────────────────────────────────────────────
+// ── API keys tab ──────────────────────────────────────────────────────────────
 function ApiKeysTab() {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -232,7 +213,9 @@ function ApiKeysTab() {
   const [newExpiry, setNewExpiry] = useState('');
   const [justCreated, setJustCreated] = useState<string | null>(null);
   const [revealId, setRevealId] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  const setToast = useTabToast();
+  // Stable identity: Modal re-runs its focus effect whenever onClose changes.
+  const closeModal = useCallback(() => setShowModal(false), []);
 
   useEffect(() => {
     apiFetch('/auth/org-settings/general')
@@ -274,125 +257,113 @@ function ApiKeysTab() {
   const masked = (k: string) => k.slice(0, 12) + '•'.repeat(20) + k.slice(-4);
 
   return (
-    <div className="flex flex-col gap-6">
-      {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
-
+    <div className="flex flex-col gap-4">
       {justCreated && (
-        <div className="bg-page border border-highlight p-4 flex flex-col gap-2">
-          <p className="text-xs font-black uppercase tracking-widest text-ink">Copy Your API Key — Shown Once</p>
-          <div className="flex items-center gap-3 bg-paper border border-highlight px-4 py-3">
-            <code className="flex-1 text-xs font-mono text-ink break-all">{justCreated}</code>
+        <Card className="border-warn">
+          <CardHeader title="Copy your API key now" caption="This is the only time the full key is shown after creation." />
+          <div className="flex flex-col gap-2.5 rounded-control border border-rule bg-page px-3.5 py-3 sm:flex-row sm:items-center">
+            <code className="flex-1 break-all font-mono text-[13px] text-ink">{justCreated}</code>
             <CopyButton value={justCreated} />
           </div>
-          <button onClick={() => setJustCreated(null)} className="self-end text-xs text-ink font-bold hover:underline">I&apos;ve copied it — dismiss</button>
-        </div>
+          <div className="mt-3 flex justify-end">
+            <Button variant="ghost" size="sm" onClick={() => setJustCreated(null)}>I&apos;ve copied it — dismiss</Button>
+          </div>
+        </Card>
       )}
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-base font-black text-ink tracking-tighter">API Keys</h3>
-          <p className="text-xs text-muted mt-0.5">Long-lived tokens for server-to-server integrations. Keys are prefixed <code className="bg-page px-1 font-mono text-[11px]">vhk_live_</code>.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-0.5">
+          <h3 className="text-[15.5px] font-bold text-ink">API keys</h3>
+          <p className="text-[13px] text-muted">Long-lived tokens for server-to-server integrations. Keys start with <code className="rounded bg-pill px-1 font-mono text-xs">vhk_live_</code>.</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="px-4 py-2 bg-accent hover:bg-accent text-paper text-xs font-black transition-all">
-          + Generate Key
-        </button>
+        <Button icon="plus" onClick={() => setShowModal(true)}>Generate key</Button>
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-muted text-sm">Loading…</div>
+        <Card><p className="py-8 text-center text-sm text-muted">Loading keys…</p></Card>
       ) : keys.length === 0 ? (
-        <div className="bg-page border border-rule p-12 text-center">
-          <p className="text-3xl mb-3">🔑</p>
-          <p className="text-sm font-black text-ink">No API keys yet</p>
-          <p className="text-xs text-muted mt-1">Generate a key to enable external integrations.</p>
-        </div>
+        <Card padding="p-0">
+          <EmptyState icon="lock" title="No API keys yet" description="Generate a key to let an external system read or write HR data." />
+        </Card>
       ) : (
         <div className="flex flex-col gap-3">
           {keys.map(k => (
-            <div key={k.id} className={`bg-paper border border-rule  p-4 flex items-start gap-4 ${!k.active ? 'opacity-60' : ''}`}>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-black text-ink">{k.name}</span>
-                  <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest  ${k.active ? 'bg-page text-accent' : 'bg-page text-ink'}`}>
-                    {k.active ? 'Active' : 'Revoked'}
-                  </span>
+            <Card key={k.id} padding="p-4" className={!k.active ? 'opacity-70' : ''}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-bold text-ink">{k.name}</span>
+                    <Badge tone={k.active ? 'ok' : 'danger'}>{k.active ? 'Active' : 'Revoked'}</Badge>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <code className="break-all font-mono text-[13px] text-muted">{revealId === k.id ? k.key : masked(k.key)}</code>
+                    <Button size="sm" variant="ghost" onClick={() => setRevealId(revealId === k.id ? null : k.id)}>
+                      {revealId === k.id ? 'Hide' : 'Reveal'}
+                    </Button>
+                    {revealId === k.id && <CopyButton value={k.key} />}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {k.permissions.map(p => (
+                      <Badge key={p} className="font-mono">{p}</Badge>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted tabular-nums">
+                    Created {new Date(k.createdAt).toLocaleDateString()}
+                    {k.expiresAt ? ` · expires ${new Date(k.expiresAt).toLocaleDateString()}` : ' · never expires'}
+                  </p>
                 </div>
-                <div className="flex items-center gap-2 mb-2">
-                  <code className="text-xs font-mono text-muted">{revealId === k.id ? k.key : masked(k.key)}</code>
-                  <button onClick={() => setRevealId(revealId === k.id ? null : k.id)} className="text-[10px] font-black uppercase tracking-widest text-accent hover:text-accent">
-                    {revealId === k.id ? 'Hide' : 'Reveal'}
-                  </button>
-                  {revealId === k.id && <CopyButton value={k.key} />}
+                <div className="flex shrink-0 gap-2">
+                  {k.active && <Button size="sm" variant="secondary" onClick={() => handleRevoke(k.id)}>Revoke</Button>}
+                  <Button size="sm" variant="danger" onClick={() => handleDelete(k.id)}>Delete</Button>
                 </div>
-                <div className="flex flex-wrap gap-1 mb-2">
-                  {k.permissions.map(p => (
-                    <span key={p} className="px-2 py-0.5 bg-page text-ink text-[10px] font-black font-mono">{p}</span>
-                  ))}
-                </div>
-                <p className="text-[10px] text-muted">
-                  Created {new Date(k.createdAt).toLocaleDateString()}
-                  {k.expiresAt ? ` · Expires ${new Date(k.expiresAt).toLocaleDateString()}` : ' · Never expires'}
-                </p>
               </div>
-              <div className="flex gap-2 shrink-0">
-                {k.active && (
-                  <button onClick={() => handleRevoke(k.id)} className="px-3 py-1.5 bg-page hover:bg-page text-ink text-xs font-black ">Revoke</button>
-                )}
-                <button onClick={() => handleDelete(k.id)} className="px-3 py-1.5 bg-page hover:bg-page text-ink text-xs font-black ">Delete</button>
-              </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}
 
-      {showModal && (
-        <div className="fixed inset-0 bg-shadow/40 backdrop- z-50 flex items-center justify-center p-4">
-          <div className="bg-paper w-full max-w-lg p-8 flex flex-col gap-6">
-            <div>
-              <h3 className="text-xl font-black text-ink tracking-tighter">New API Key</h3>
-              <p className="text-xs text-muted mt-1">The full key is only shown once at creation. Store it somewhere safe immediately.</p>
+      <Modal
+        open={showModal}
+        onClose={closeModal}
+        title="New API key"
+        caption="The full key is shown once, right after it is created. Store it somewhere safe straight away."
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeModal}>Cancel</Button>
+            <Button onClick={handleCreate} disabled={!newName.trim()}>Generate key</Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <Field label="Key name" required help={!newName.trim() ? 'A name is required, so you can tell keys apart later.' : undefined}>
+            <Input type="text" value={newName} onChange={e => setNewName(e.target.value)} placeholder="e.g. ERP integration, CI pipeline" />
+          </Field>
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-1.5 text-[12.5px] font-semibold text-muted">Permissions</legend>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {KEY_PERMISSIONS.map(p => (
+                <label key={p} className="flex cursor-pointer items-center gap-2.5 rounded-control border border-rule px-3 py-2 text-[13px] text-ink hover:bg-page">
+                  <input
+                    type="checkbox"
+                    checked={newPerms.includes(p)}
+                    onChange={e => setNewPerms(e.target.checked ? [...newPerms, p] : newPerms.filter(x => x !== p))}
+                    className="h-4 w-4 accent-accent"
+                  />
+                  <code className="font-mono text-[13px]">{p}</code>
+                </label>
+              ))}
             </div>
-            <div className="flex flex-col gap-4">
-              <div>
-                <label className="text-xs font-black uppercase tracking-widest text-muted mb-1.5 block">Key Name</label>
-                <input type="text" value={newName} onChange={e => setNewName(e.target.value)}
-                  placeholder="e.g. ERP Integration, CI Pipeline"
-                  className="w-full px-4 py-2.5 border border-rule text-sm font-medium focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent" />
-              </div>
-              <div>
-                <label className="text-xs font-black uppercase tracking-widest text-muted mb-2 block">Permissions</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {KEY_PERMISSIONS.map(p => (
-                    <label key={p} className="flex items-center gap-2 text-xs font-medium text-ink cursor-pointer">
-                      <input type="checkbox" checked={newPerms.includes(p)}
-                        onChange={e => setNewPerms(e.target.checked ? [...newPerms, p] : newPerms.filter(x => x !== p))}
-                        className=" text-accent" />
-                      <code className="font-mono text-[11px]">{p}</code>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-black uppercase tracking-widest text-muted mb-1.5 block">Expiry Date (optional)</label>
-                <input type="date" value={newExpiry} onChange={e => setNewExpiry(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-rule text-sm font-medium focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent" />
-              </div>
-            </div>
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setShowModal(false)} className="px-5 py-2.5 bg-page hover:bg-rule text-ink text-sm font-black ">Cancel</button>
-              <button onClick={handleCreate} disabled={!newName.trim()}
-                className="px-5 py-2.5 bg-accent hover:bg-accent disabled:opacity-40 text-paper text-sm font-black ">
-                Generate Key
-              </button>
-            </div>
-          </div>
+          </fieldset>
+          <Field label="Expiry date" help="Optional. Leave blank for a key that never expires.">
+            <Input type="date" value={newExpiry} onChange={e => setNewExpiry(e.target.value)} />
+          </Field>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }
 
-// ── Webhooks Tab ──────────────────────────────────────────────────────────────
+// ── Webhooks tab ──────────────────────────────────────────────────────────────
 function WebhooksTab() {
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [loading, setLoading] = useState(true);
@@ -400,7 +371,9 @@ function WebhooksTab() {
   const [newUrl, setNewUrl] = useState('');
   const [newEvents, setNewEvents] = useState<string[]>([]);
   const [testing, setTesting] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  const setToast = useTabToast();
+  // Stable identity: Modal re-runs its focus effect whenever onClose changes.
+  const closeModal = useCallback(() => setShowModal(false), []);
 
   useEffect(() => {
     apiFetch('/auth/org-settings/general')
@@ -453,163 +426,138 @@ function WebhooksTab() {
   }
 
   const groups = WEBHOOK_EVENTS.reduce((acc, e) => { (acc[e.group] = acc[e.group] || []).push(e); return acc; }, {} as Record<string, typeof WEBHOOK_EVENTS>);
+  const missingUrl = !newUrl.trim();
+  const missingEvents = newEvents.length === 0;
 
   return (
-    <div className="flex flex-col gap-6">
-      {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-base font-black text-ink tracking-tighter">Webhook Endpoints</h3>
-          <p className="text-xs text-muted mt-0.5">Receive real-time HR events via HTTP POST. All deliveries are HMAC-SHA256 signed.</p>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-0.5">
+          <h3 className="text-[15.5px] font-bold text-ink">Webhook endpoints</h3>
+          <p className="text-[13px] text-muted">Receive HR events as they happen, by HTTP POST. Every delivery is HMAC-SHA256 signed.</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="px-4 py-2 bg-accent hover:bg-accent text-paper text-xs font-black transition-all">
-          + Add Endpoint
-        </button>
+        <Button icon="plus" onClick={() => setShowModal(true)}>Add endpoint</Button>
       </div>
 
-      <div className="bg-page border border-accent p-4 flex items-start gap-3">
-        <span className="text-lg shrink-0">📬</span>
-        <div>
-          <p className="text-xs font-black text-accent">Signature Verification</p>
-          <p className="text-xs text-accent mt-0.5">Each delivery includes <code className="bg-page px-1 font-mono">X-GaDongHR-Signature</code>. Verify with <code className="bg-page px-1 font-mono">HMAC-SHA256(secret, rawBody)</code>.</p>
-        </div>
-      </div>
+      <Notice>
+        <span className="font-semibold">Verifying signatures.</span> Each delivery carries{' '}
+        <code className="rounded bg-pill px-1 font-mono">X-GaDongHR-Signature</code>. Check it with{' '}
+        <code className="rounded bg-pill px-1 font-mono">HMAC-SHA256(secret, rawBody)</code>.
+      </Notice>
 
       {loading ? (
-        <div className="text-center py-12 text-muted text-sm">Loading…</div>
+        <Card><p className="py-8 text-center text-sm text-muted">Loading endpoints…</p></Card>
       ) : webhooks.length === 0 ? (
-        <div className="bg-page border border-rule p-12 text-center">
-          <p className="text-3xl mb-3">📡</p>
-          <p className="text-sm font-black text-ink">No webhook endpoints</p>
-          <p className="text-xs text-muted mt-1">Add an endpoint to receive real-time HR events.</p>
-        </div>
+        <Card padding="p-0">
+          <EmptyState icon="upload" title="No webhook endpoints" description="Add an endpoint to receive HR events as they happen." />
+        </Card>
       ) : (
         <div className="flex flex-col gap-3">
           {webhooks.map(wh => (
-            <div key={wh.id} className={`bg-paper border border-rule  p-5 flex flex-col gap-3 ${!wh.active ? 'opacity-60' : ''}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <code className="text-sm font-mono font-bold text-ink truncate">{wh.url}</code>
-                    <span className={`shrink-0 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest  ${wh.active ? 'bg-page text-accent' : 'bg-page text-muted'}`}>
-                      {wh.active ? 'Active' : 'Paused'}
-                    </span>
+            <Card key={wh.id} padding="p-4" className={!wh.active ? 'opacity-70' : ''}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <code className="min-w-0 truncate font-mono text-sm font-semibold text-ink">{wh.url}</code>
+                    <Badge tone={wh.active ? 'ok' : 'neutral'}>{wh.active ? 'Active' : 'Paused'}</Badge>
                   </div>
-                  <p className="text-[10px] text-muted mb-2">Added {new Date(wh.createdAt).toLocaleDateString()} · {wh.events.length} event{wh.events.length !== 1 ? 's' : ''}</p>
-                  <div className="flex flex-wrap gap-1">
+                  <p className="text-xs text-muted tabular-nums">Added {new Date(wh.createdAt).toLocaleDateString()} · {wh.events.length} event{wh.events.length !== 1 ? 's' : ''}</p>
+                  <div className="flex flex-wrap gap-1.5">
                     {wh.events.map(e => (
-                      <span key={e} className="px-2 py-0.5 bg-page text-accent text-[10px] font-black ">{e}</span>
+                      <Badge key={e} tone="accent" className="font-mono">{e}</Badge>
                     ))}
                   </div>
                 </div>
-                <div className="flex gap-2 shrink-0">
-                  <button onClick={() => handleTest(wh)} disabled={testing === wh.id || !wh.active}
-                    className="px-3 py-1.5 bg-page hover:bg-page disabled:opacity-40 text-accent text-xs font-black ">
-                    {testing === wh.id ? '…' : 'Test'}
-                  </button>
-                  <button onClick={() => handleToggle(wh.id)} className="px-3 py-1.5 bg-page hover:bg-page text-ink text-xs font-black ">
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => handleTest(wh)} disabled={testing === wh.id || !wh.active}>
+                    {testing === wh.id ? 'Sending…' : 'Test'}
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => handleToggle(wh.id)}>
                     {wh.active ? 'Pause' : 'Resume'}
-                  </button>
-                  <button onClick={() => handleDelete(wh.id)} className="px-3 py-1.5 bg-page hover:bg-page text-ink text-xs font-black ">Delete</button>
+                  </Button>
+                  <Button size="sm" variant="danger" onClick={() => handleDelete(wh.id)}>Delete</Button>
                 </div>
               </div>
-              <div className="bg-page p-3 flex items-center gap-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted shrink-0">Signing Secret</p>
-                <code className="flex-1 text-xs font-mono text-muted truncate">{wh.secret.slice(0, 12)}{'•'.repeat(20)}</code>
+              {!wh.active && <p className="mt-2 text-xs text-muted">Paused endpoints can't be tested. Resume it first.</p>}
+              <div className="mt-3 flex items-center gap-3 rounded-control bg-page px-3.5 py-2.5">
+                <span className="shrink-0 text-[12.5px] font-semibold text-muted">Signing secret</span>
+                <code className="min-w-0 flex-1 truncate font-mono text-[13px] text-muted">{wh.secret.slice(0, 12)}{'•'.repeat(20)}</code>
                 <CopyButton value={wh.secret} />
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}
 
-      {showModal && (
-        <div className="fixed inset-0 bg-shadow/40 backdrop- z-50 flex items-center justify-center p-4">
-          <div className="bg-paper w-full max-w-lg p-8 flex flex-col gap-6 max-h-[90vh] overflow-y-auto">
-            <div>
-              <h3 className="text-xl font-black text-ink tracking-tighter">Add Webhook Endpoint</h3>
-              <p className="text-xs text-muted mt-1">A signing secret will be auto-generated. Subscribe to the events you need.</p>
-            </div>
-            <div className="flex flex-col gap-4">
-              <div>
-                <label className="text-xs font-black uppercase tracking-widest text-muted mb-1.5 block">Endpoint URL</label>
-                <input type="url" value={newUrl} onChange={e => setNewUrl(e.target.value)}
-                  placeholder="https://your-server.com/webhooks/gadonghr"
-                  className="w-full px-4 py-2.5 border border-rule text-sm font-medium focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent" />
-              </div>
-              <div>
-                <label className="text-xs font-black uppercase tracking-widest text-muted mb-2 block">
-                  Events ({newEvents.length} selected)
-                </label>
-                <div className="flex flex-col gap-3">
-                  {Object.entries(groups).map(([group, evs]) => (
-                    <div key={group}>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-muted mb-1.5">{group}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {evs.map(ev => (
-                          <label key={ev.id}
-                            className={`flex items-center gap-1.5 px-3 py-1.5  border cursor-pointer transition-all text-xs font-bold
-                              ${newEvents.includes(ev.id) ? 'bg-page border-accent text-accent' : 'bg-page border-rule text-ink hover:border-rule'}`}>
-                            <input type="checkbox" className="sr-only" checked={newEvents.includes(ev.id)}
-                              onChange={e => setNewEvents(e.target.checked ? [...newEvents, ev.id] : newEvents.filter(x => x !== ev.id))} />
-                            {ev.label}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+      <Modal
+        open={showModal}
+        onClose={closeModal}
+        title="Add a webhook endpoint"
+        caption="A signing secret is generated for you. Subscribe only to the events you need."
+        size="lg"
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeModal}>Cancel</Button>
+            <Button onClick={handleAdd} disabled={missingUrl || missingEvents}>Add endpoint</Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <Field label="Endpoint URL" required help={missingUrl ? 'Required. Must be a full https:// address.' : undefined}>
+            <Input type="url" value={newUrl} onChange={e => setNewUrl(e.target.value)} placeholder="https://your-server.com/webhooks/gadonghr" />
+          </Field>
+          <fieldset className="flex flex-col gap-3">
+            <legend className="mb-1 text-[12.5px] font-semibold text-muted">
+              Events · <span className="tabular-nums">{newEvents.length}</span> selected{missingEvents ? ' (choose at least one)' : ''}
+            </legend>
+            {Object.entries(groups).map(([group, evs]) => (
+              <div key={group} className="flex flex-col gap-1.5">
+                <p className="text-[13px] font-semibold text-ink">{group}</p>
+                <div className="flex flex-wrap gap-2">
+                  {evs.map(ev => {
+                    const on = newEvents.includes(ev.id);
+                    return (
+                      <label key={ev.id}
+                        className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-semibold transition-colors focus-within:ring-2 focus-within:ring-accent
+                          ${on ? 'border-accent bg-tint text-accent' : 'border-rule bg-paper text-ink hover:bg-page'}`}>
+                        <input type="checkbox" className="sr-only" checked={on}
+                          onChange={e => setNewEvents(e.target.checked ? [...newEvents, ev.id] : newEvents.filter(x => x !== ev.id))} />
+                        {ev.label}
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
-            </div>
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setShowModal(false)} className="px-5 py-2.5 bg-page hover:bg-rule text-ink text-sm font-black ">Cancel</button>
-              <button onClick={handleAdd} disabled={!newUrl.trim() || newEvents.length === 0}
-                className="px-5 py-2.5 bg-accent hover:bg-accent disabled:opacity-40 text-paper text-sm font-black ">
-                Add Endpoint
-              </button>
-            </div>
-          </div>
+            ))}
+          </fieldset>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'email',    label: 'Email Configuration', icon: '✉' },
-  { id: 'keys',     label: 'API Keys',             icon: '🔑' },
-  { id: 'webhooks', label: 'Webhooks',             icon: '📡' },
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'email',    label: 'Email' },
+  { id: 'keys',     label: 'API keys' },
+  { id: 'webhooks', label: 'Webhooks' },
 ];
 
 export default function ApiPage() {
   const [tab, setTab] = useState<Tab>('email');
 
   return (
-    <div className="flex flex-col gap-6 p-8 bg-paper border border-rule ">
-      <div className="flex items-center gap-3">
-        <div className="w-2 h-8 bg-accent " />
-        <div>
-          <h1 className="text-2xl font-black text-ink tracking-tighter">API & Webhooks</h1>
-          <p className="eyebrow-tight mt-1">SuperAdmin Only · Integration & Connectivity</p>
-        </div>
-      </div>
+    <>
+      <SectionHeader
+        title="API and integrations"
+        description="Outgoing email, API keys and webhooks. Super Admin only."
+      />
 
-      <div className="flex gap-2 bg-page p-1.5 w-fit">
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2 px-4 py-2  text-xs font-black transition-all
-              ${tab === t.id ? 'bg-paper text-ink ' : 'text-muted hover:text-ink'}`}>
-            <span>{t.icon}</span>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs items={TABS} active={tab} onChange={setTab} />
 
       {tab === 'email'    && <EmailTab />}
       {tab === 'keys'     && <ApiKeysTab />}
       {tab === 'webhooks' && <WebhooksTab />}
-    </div>
+    </>
   );
 }

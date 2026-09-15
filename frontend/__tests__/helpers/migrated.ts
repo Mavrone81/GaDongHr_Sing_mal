@@ -34,4 +34,6 @@ export const MIGRATED: string[] = [
   'app/(dashboard)/loans/',
   'app/(dashboard)/payroll/',
   'app/(dashboard)/benefits/',
+  // redesign/settings
+  'app/(dashboard)/settings/',
 ];

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
+import { Badge, Button, Card, CardHeader, Icon } from '@/components/ui';
+import { SectionHeader } from '../_components/SectionHeader';
 
 interface Sub {
   status: string; plan: string; subStatus: string;
@@ -32,6 +34,22 @@ const FALLBACK_PLANS = [
   },
 ];
 
+/** Subscription status → pill colour. Trials are brass (the plan colour), not green. */
+const SUB_STATUS_TONE: Record<string, 'ok' | 'brass' | 'warn' | 'danger' | 'neutral'> = {
+  ACTIVE: 'ok',
+  TRIALING: 'brass',
+  PAST_DUE: 'warn',
+  SUSPENDED: 'danger',
+  CANCELED: 'neutral',
+  EXPIRED: 'neutral',
+};
+
+/** "PAST_DUE" → "Past due". */
+const sentence = (s: string) => {
+  const t = s.replace(/_/g, ' ').toLowerCase();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
+
 export default function BillingPage() {
   const [sub, setSub] = useState<Sub | null>(null);
   const [plans, setPlans] = useState<typeof FALLBACK_PLANS>(FALLBACK_PLANS);
@@ -54,63 +72,80 @@ export default function BillingPage() {
   }
 
   return (
-    <div className="max-w-3xl">
-      <h1 className="text-2xl font-black text-ink">Billing & Plan</h1>
+    <>
+      <SectionHeader title="Billing" description="Your plan, trial and renewal." />
 
       {sub && (
-        <div className="mt-4 border border-rule bg-paper p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs font-bold uppercase tracking-wider text-muted">Current plan</div>
-              <div className="text-lg font-black capitalize text-ink">{sub.plan}</div>
-            </div>
-            <span className={` px-2.5 py-1 text-xs font-bold ${sub.status === 'ACTIVE' ? 'bg-page text-accent' : sub.status === 'TRIALING' ? 'bg-page text-accent' : 'bg-page text-ink'}`}>{sub.status}</span>
-          </div>
+        <Card>
+          <CardHeader
+            title="Current plan"
+            action={<Badge tone={SUB_STATUS_TONE[sub.status] ?? 'neutral'}>{sentence(sub.status)}</Badge>}
+          />
+          <div className="text-[22px] font-extrabold capitalize tracking-[-0.01em] text-ink">{sub.plan}</div>
           {sub.status === 'TRIALING' && (
-            <p className="mt-3 text-sm text-ink">
+            <p className="mt-2 text-sm text-ink">
               {sub.trialDaysLeft != null && sub.trialDaysLeft > 0
-                ? `${sub.trialDaysLeft} days left in your free trial (ends ${sub.trialEndsAt ? new Date(sub.trialEndsAt).toLocaleDateString() : '—'}).`
+                ? <><span className="tabular-nums">{sub.trialDaysLeft}</span> days left in your free trial (ends <span className="tabular-nums">{sub.trialEndsAt ? new Date(sub.trialEndsAt).toLocaleDateString() : '—'}</span>).</>
                 : 'Your trial has ended.'}
             </p>
           )}
-          {sub.currentPeriodEnd && <p className="mt-2 text-sm text-ink">Renews {new Date(sub.currentPeriodEnd).toLocaleDateString()}.</p>}
+          {sub.currentPeriodEnd && <p className="mt-1 text-sm text-muted">Renews <span className="tabular-nums">{new Date(sub.currentPeriodEnd).toLocaleDateString()}</span>.</p>}
+        </Card>
+      )}
+
+      {msg && (
+        <div role="status" className="flex items-start gap-3 rounded-control border border-rule bg-paper px-4 py-3 text-sm text-ink">
+          <Icon name="alert" size={18} className="mt-0.5 text-warn" />
+          <span>{msg}</span>
         </div>
       )}
 
-      {msg && <div className="mt-4 bg-page border border-highlight px-4 py-2.5 text-sm text-ink">{msg}</div>}
-
-      <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {plans.map((p) => (
-          <div key={p.id} className={`relative flex flex-col  border bg-paper p-5 ${p.popular ? 'border-accent ring-1 ring-accent' : 'border-rule'}`}>
-            {p.popular && <span className="absolute -top-2.5 left-5 bg-accent px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-paper">Most popular</span>}
-            <div className="text-lg font-black text-ink">{p.name}</div>
-            <div className="mt-1"><span className="text-2xl font-black text-ink">{p.price}</span> <span className="text-sm text-muted">{p.unit}</span></div>
-            <p className="mt-1 text-xs text-muted">{p.tagline}</p>
-            <ul className="mt-3 flex-1 space-y-1 text-sm text-ink">
-              {p.features.map((f) => <li key={f}>✓ {f}</li>)}
+          <Card key={p.id} className={`relative ${p.popular ? 'ring-2 ring-accent' : ''}`}>
+            {p.popular && <Badge tone="accent" className="absolute -top-3 left-5">Most popular</Badge>}
+            <div className="text-[15.5px] font-bold text-ink">{p.name}</div>
+            <div className="mt-1.5">
+              <span className="text-[26px] font-extrabold tracking-[-0.02em] text-ink tabular-nums">{p.price}</span>{' '}
+              <span className="text-sm text-muted">{p.unit}</span>
+            </div>
+            <p className="mt-1 text-[13px] text-muted">{p.tagline}</p>
+            <ul className="mt-4 flex flex-1 flex-col gap-2 text-sm text-ink">
+              {p.features.map((f) => (
+                <li key={f} className="flex items-start gap-2">
+                  <Icon name="check" size={16} strokeWidth={2} className="mt-0.5 text-accent" />
+                  <span>{f}</span>
+                </li>
+              ))}
             </ul>
             {p.contact ? (
-              <button
+              <Button
+                variant="secondary"
+                className="mt-5 w-full"
                 onClick={() => {
                   setMsg('Opening our sales assistant in a new tab — chat about Enterprise (or ask for a human).');
                   window.open('https://gadonghr.com/?chat=sales', '_blank', 'noopener');
                 }}
-                className="mt-4 border border-rule py-2.5 font-bold text-ink hover:bg-page"
               >
                 {p.cta}
-              </button>
+              </Button>
             ) : (
-              <button onClick={() => upgrade(p.id)} disabled={!!busy} className={`mt-4  py-2.5 font-bold text-paper disabled:opacity-60 ${p.popular ? 'bg-accent hover:bg-accent' : 'bg-shadow hover:bg-shadow'}`}>
+              <Button
+                variant={p.popular ? 'primary' : 'secondary'}
+                className="mt-5 w-full"
+                onClick={() => upgrade(p.id)}
+                disabled={!!busy}
+              >
                 {busy === p.id ? 'Starting…' : p.cta}
-              </button>
+              </Button>
             )}
-          </div>
+          </Card>
         ))}
       </div>
 
       {sub && !sub.billingConfigured && (
-        <p className="mt-4 text-xs text-muted">Note: online payment isn’t configured on this workspace yet — choosing a plan will show setup instructions instead of a checkout page.</p>
+        <p className="text-[13px] text-muted">Online payment isn’t configured on this workspace yet — choosing a plan will show setup instructions instead of a checkout page.</p>
       )}
-    </div>
+    </>
   );
 }
