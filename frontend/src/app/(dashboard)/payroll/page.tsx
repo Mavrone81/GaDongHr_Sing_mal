@@ -123,7 +123,14 @@ function AdminPayrollDashboard() {
     downloadCpfFile,
     downloadGiro,
     openGiroModal,
-    consolidateRun,
+    consolidateTarget,
+    consolidateRuns,
+    consolidateTotal,
+    consolidateLoading,
+    consolidateBusy,
+    openConsolidate,
+    cancelConsolidate,
+    confirmConsolidate,
     actuallyCreateRun,
     voidAndReplace,
     handleExecute,
@@ -174,21 +181,22 @@ function AdminPayrollDashboard() {
       ), width: '150px', render: (run) => <Chip label={fmtRunStatus(run.status)} cls={RUN_STATUS_TONE[run.status] ?? 'bg-pill text-muted'} />,
     },
     {
-      key: 'actions', label: '', width: 'minmax(320px, 1.6fr)', align: 'right', render: (run) => {
+      key: 'actions', label: '', width: 'minmax(360px, 1.8fr)', align: 'right', render: (run) => {
         if (run.status === 'PENDING_APPROVAL' || run.status === 'APPROVED' || run.status === 'DRAFT') {
           return <Button variant="secondary" size="sm" onClick={() => setReviewRunData(run)}>Review</Button>;
         }
         if (run.status === 'REJECTED') {
           return <span className="text-[13px] text-muted">Locked for archive</span>;
         }
-        // FINALISED (Disbursed)
+        // FINALISED (Disbursed). Label-only buttons on one line — icons crowded
+        // the five actions into two rows at 1440.
         const canMerge = runs.filter(r => r.period === run.period && r.id !== run.id && r.status === 'FINALISED').length > 0;
         return (
-          <div className="flex flex-wrap items-center justify-end gap-1.5">
-            <Button variant="ghost" size="sm" icon="wallet" onClick={() => openGiroModal(run)}>GIRO</Button>
-            <Button variant="ghost" size="sm" icon="download" onClick={() => downloadCpfFile(run.id, run.period)}>CPF file</Button>
-            <Button variant="ghost" size="sm" icon="receipt" onClick={() => { setPayslipRunId(run.id); setPayslipRows([]); }}>Payslips</Button>
-            {canMerge && <Button variant="ghost" size="sm" onClick={() => consolidateRun(run)}>Merge</Button>}
+          <div className="flex items-center justify-end gap-1.5">
+            <Button variant="ghost" size="sm" onClick={() => openGiroModal(run)}>GIRO</Button>
+            <Button variant="ghost" size="sm" onClick={() => downloadCpfFile(run.id, run.period)}>CPF file</Button>
+            <Button variant="ghost" size="sm" onClick={() => { setPayslipRunId(run.id); setPayslipRows([]); }}>Payslips</Button>
+            {canMerge && <Button variant="ghost" size="sm" onClick={() => openConsolidate(run)}>Merge</Button>}
             <Button variant="danger" size="sm" onClick={() => { setConfirmCancelRun(false); setReviewRunData(run); }}>Void</Button>
           </div>
         );
@@ -304,7 +312,7 @@ function AdminPayrollDashboard() {
                       <Button variant="ghost" size="sm" icon="download" onClick={() => downloadCpfFile(run.id, run.period)}>CPF file</Button>
                       <Button variant="ghost" size="sm" icon="receipt" onClick={() => { setPayslipRunId(run.id); setPayslipRows([]); }}>Payslips</Button>
                       {runs.filter(r => r.period === run.period && r.id !== run.id && r.status === 'FINALISED').length > 0 && (
-                        <Button variant="ghost" size="sm" onClick={() => consolidateRun(run)}>Merge</Button>
+                        <Button variant="ghost" size="sm" onClick={() => openConsolidate(run)}>Merge</Button>
                       )}
                       <Button variant="danger" size="sm" onClick={() => { setConfirmCancelRun(false); setReviewRunData(run); }}>Void</Button>
                     </>
@@ -392,7 +400,7 @@ function AdminPayrollDashboard() {
                         <span className="text-2xl font-extrabold text-ink tabular-nums">{periodCfg.recommendedWorkingDays}</span>
                         <span className="text-[13px] text-muted">days</span>
                       </p>
-                      {periodCfg.publicHolidays.length > 0 && (
+                      {(periodCfg.publicHolidays?.length ?? 0) > 0 && (
                         <p className="text-[12.5px] text-muted mt-1">
                           {periodCfg.publicHolidays.length} public holiday{periodCfg.publicHolidays.length !== 1 ? 's' : ''} deducted
                           {' ('}{periodCfg.publicHolidays.map(h => h.name).join(', ')}{')'}
@@ -945,6 +953,42 @@ function AdminPayrollDashboard() {
               </div>
             </div>
           )}
+        </Modal>
+      )}
+
+      {/* ── Consolidate (Merge) confirmation ─────────────────────────────── */}
+      {consolidateTarget && (
+        <Modal
+          open
+          onClose={cancelConsolidate}
+          title="Consolidate payroll runs"
+          caption={fmtPeriod(consolidateTarget.period)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={cancelConsolidate}>Cancel</Button>
+              <Button disabled={consolidateBusy} onClick={confirmConsolidate}>
+                {consolidateBusy ? 'Consolidating…' : 'Consolidate runs'}
+              </Button>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-muted">
+              These {consolidateRuns.length} runs for <span className="font-semibold text-ink">{fmtPeriod(consolidateTarget.period)}</span> will be merged into one payslip per employee. This cannot be undone.
+            </p>
+            <div className="border border-rule rounded-card overflow-hidden">
+              {consolidateRuns.map(r => (
+                <div key={r.id} className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-rule last:border-0 text-sm">
+                  <span className="font-semibold text-ink">{r.runType}</span>
+                  <Chip label={fmtRunStatus(r.status)} cls={RUN_STATUS_TONE[r.status] ?? 'bg-pill text-muted'} />
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-between rounded-control bg-page px-4 py-3">
+              <span className="text-[13px] text-muted">Combined net across these runs</span>
+              <span className="text-sm font-semibold text-ink tabular-nums">{consolidateLoading ? 'Calculating…' : sgd(consolidateTotal ?? 0)}</span>
+            </div>
+          </div>
         </Modal>
       )}
 
