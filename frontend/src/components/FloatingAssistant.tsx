@@ -8,7 +8,7 @@ type Msg = { role: 'user' | 'assistant'; content: string };
 const GREETING: Msg = {
   role: 'assistant',
   content:
-    "Hi! I'm Vork, your HR assistant. Ask me about your leave balance, claims, payslips, appraisals, training — or I can help you apply for leave or submit a claim. I can only show information you're allowed to see.",
+    "Hi! I'm ToTo, your HR assistant. Ask me about your leave balance, claims, payslips, appraisals, training — or I can help you apply for leave or submit a claim. I can only show information you're allowed to see.",
 };
 
 export default function FloatingAssistant() {
@@ -70,9 +70,9 @@ export default function FloatingAssistant() {
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Open HR assistant"
-          className="fixed bottom-20 lg:bottom-5 right-4 lg:right-5 z-50 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-accent text-on-accent shadow-card transition hover:opacity-95"
+          className="fixed bottom-20 lg:bottom-5 right-4 lg:right-5 z-50 flex h-[56px] w-[56px] items-center justify-center rounded-full bg-tint border-2 border-accent shadow-card transition hover:scale-105"
         >
-          <ChatIcon className="h-6 w-6" />
+          <TurtleAvatar size={40} />
         </button>
       )}
 
@@ -86,11 +86,11 @@ export default function FloatingAssistant() {
           {/* Header */}
           <div className="flex items-center justify-between border-b border-rule px-4 h-14">
             <div className="flex items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-tint text-accent">
-                <ChatIcon className="h-4 w-4" />
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-tint">
+                <TurtleAvatar size={30} />
               </span>
               <div className="leading-tight">
-                <p className="text-sm font-bold text-ink">Vork</p>
+                <p className="text-sm font-bold text-ink">ToTo</p>
                 <p className="text-xs text-muted">HR assistant</p>
               </div>
             </div>
@@ -163,10 +163,33 @@ function Dot({ delay = '0ms' }: { delay?: string }) {
   return <span className="h-1.5 w-1.5 rounded-full animate-bounce bg-muted" style={{ animationDelay: delay }} />;
 }
 
-function ChatIcon({ className }: { className?: string }) {
+/**
+ * ToTo — a small, friendly turtle in the brand greens with a brass-edged
+ * shell (the same carapace idea as the logo, drawn soft). Pure SVG, so it
+ * scales and follows the tokens.
+ */
+function TurtleAvatar({ size = 32 }: { size?: number }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
+      {/* back flippers */}
+      <ellipse cx="17" cy="47" rx="7" ry="4" fill="#3FA07C" transform="rotate(-25 17 47)" />
+      <ellipse cx="47" cy="47" rx="7" ry="4" fill="#3FA07C" transform="rotate(25 47 47)" />
+      {/* shell */}
+      <path d="M14 40 C14 24 22 16 32 16 C42 16 50 24 50 40 Z" fill="var(--accent)" />
+      <path d="M12 40 H52 C52 44 48 46 44 46 H20 C16 46 12 44 12 40 Z" fill="#C08A3E" />
+      {/* scutes */}
+      <path d="M32 21 L38 25 L36 32 L28 32 L26 25 Z" fill="none" stroke="#C08A3E" strokeWidth="1.6" strokeLinejoin="round" />
+      <path d="M26 25 L20 30 M38 25 L44 30 M28 32 L24 39 M36 32 L40 39 M28 32 L36 32" fill="none" stroke="#C08A3E" strokeWidth="1.6" strokeLinecap="round" />
+      {/* head */}
+      <circle cx="32" cy="45" r="9" fill="#3FA07C" />
+      <circle cx="28.5" cy="43.5" r="1.7" fill="#1A1A18" />
+      <circle cx="35.5" cy="43.5" r="1.7" fill="#1A1A18" />
+      <circle cx="29" cy="43" r="0.6" fill="#FFFFFF" />
+      <circle cx="36" cy="43" r="0.6" fill="#FFFFFF" />
+      <path d="M29 48 Q32 50.5 35 48" fill="none" stroke="#1A1A18" strokeWidth="1.4" strokeLinecap="round" />
+      {/* cheeks */}
+      <circle cx="25.5" cy="47" r="1.6" fill="#E5735F" opacity="0.6" />
+      <circle cx="38.5" cy="47" r="1.6" fill="#E5735F" opacity="0.6" />
     </svg>
   );
 }
