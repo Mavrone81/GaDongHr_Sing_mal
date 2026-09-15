@@ -14,10 +14,12 @@
  * GaDong's separate Thai product.
  */
 export function Seal({ cite }: { cite: string }) {
+  // 2026-09 redesign: 12px, the citation's own case (no forced caps), so the
+  // one element that carries legal weight is also readable.
   return (
     <span
-      className="inline-flex items-center gap-1 border border-seal text-seal rounded-[2px]
-                 px-1 py-[0.05rem] font-mono text-[0.5625rem] tracking-[0.04em] uppercase align-middle"
+      className="inline-flex items-center gap-1 border border-seal text-seal rounded
+                 px-1.5 py-px font-mono text-xs leading-[1.4] align-middle whitespace-nowrap"
     >
       <span aria-hidden="true">§</span>
       {cite}
