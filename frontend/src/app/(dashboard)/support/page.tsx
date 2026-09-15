@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { TONES } from '@/lib/statusTone';
 import { apiFetch } from '@/lib/api';
+import { PageHeader, Card, CardHeader, Badge, Button, Field, Input, Select, Textarea, EmptyState, Icon } from '@/components/ui';
 
 type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
 type TicketCategory = 'GENERAL' | 'PAYROLL' | 'LEAVE' | 'CLAIMS' | 'IT_ACCESS' | 'OTHER';
@@ -27,25 +27,32 @@ interface Ticket {
   messages: TicketMessage[];
 }
 
-const STATUS_COLORS: Record<TicketStatus, string> = {
-  OPEN:        TONES.warning,   // nobody has picked it up yet
-  IN_PROGRESS: TONES.active,
-  RESOLVED:    TONES.approved,  // fixed, but the reporter has not confirmed
-  CLOSED:      TONES.done,
+/** Four states, four appearances; the label is always printed beside it. */
+const STATUS_TONE: Record<TicketStatus, 'warn' | 'accent' | 'ok' | 'neutral'> = {
+  OPEN:        'warn',     // nobody has picked it up yet
+  IN_PROGRESS: 'accent',
+  RESOLVED:    'ok',       // fixed, but the reporter has not confirmed
+  CLOSED:      'neutral',
+};
+
+const STATUS_LABEL: Record<TicketStatus, string> = {
+  OPEN: 'Open', IN_PROGRESS: 'In progress', RESOLVED: 'Resolved', CLOSED: 'Closed',
 };
 
 const CATEGORY_LABELS: Record<TicketCategory, string> = {
-  GENERAL: 'General', PAYROLL: 'Payroll Issue', LEAVE: 'Leave Problem',
-  CLAIMS: 'Claims Issue', IT_ACCESS: 'IT / System Access', OTHER: 'Other',
+  GENERAL: 'General', PAYROLL: 'Payroll issue', LEAVE: 'Leave problem',
+  CLAIMS: 'Claims issue', IT_ACCESS: 'IT / system access', OTHER: 'Other',
 };
 
 const FAQS = [
-  { q: 'How do I apply for leave?', a: 'Navigate to My Leave → Apply Leave. Select leave type, dates, and submit for approval.' },
-  { q: 'How do I view my payslip?', a: 'Go to My Payslips and select the relevant pay period to download your PDF payslip.' },
-  { q: 'How do I submit an expense claim?', a: 'Go to My Claims → New Claim. Fill in the amount, category, and upload your receipt.' },
-  { q: 'How do I update my personal details?', a: 'Contact HR Admin to update personal information such as bank account or emergency contact.' },
-  { q: 'Who approves my leave?', a: 'L1 approval is your Line Manager. L2 approval is HR. Both must approve for long-duration leaves.' },
+  { q: 'How do I apply for leave?', a: 'Go to My leave → Apply leave. Pick the leave type and dates, then submit it for approval.' },
+  { q: 'How do I view my payslip?', a: 'Go to My payslips and choose the pay period to download that month’s PDF.' },
+  { q: 'How do I submit an expense claim?', a: 'Go to My claims → New claim. Enter the amount and category, and attach your receipt.' },
+  { q: 'How do I update my personal details?', a: 'Ask your HR admin to change details such as your bank account or emergency contact.' },
+  { q: 'Who approves my leave?', a: 'Your line manager gives the first approval and HR the second. Longer leave needs both.' },
 ];
+
+const REQUIRED_MSG = 'Subject and details are required';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Thread view — show a ticket's message thread + reply input
@@ -68,61 +75,71 @@ function TicketThread({ ticket, onBack, onUpdated }: { ticket: Ticket; onBack: (
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Back + header */}
-      <div className="flex items-center gap-4">
-        <button onClick={onBack} className="eyebrow-tight hover:text-accent transition-colors">← Back</button>
-        <div className="flex-1">
-          <h2 className="text-lg font-black text-ink truncate">{ticket.subject}</h2>
-          <div className="flex items-center gap-3 mt-1">
-            <span className={`px-2 py-0.5  text-[9px] font-black uppercase tracking-widest ${STATUS_COLORS[ticket.status]}`}>{ticket.status.replace('_', ' ')}</span>
-            <span className="label-form">{CATEGORY_LABELS[ticket.category]}</span>
-            <span className="label-form">{new Date(ticket.createdAt).toLocaleDateString()}</span>
-          </div>
-        </div>
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-3">
+        <button
+          type="button"
+          onClick={onBack}
+          className="self-start inline-flex items-center gap-1.5 h-8 -ml-1 px-1 rounded-control text-[13px] font-semibold text-muted hover:text-accent"
+        >
+          <Icon name="chevronRight" size={16} className="rotate-180" /> All tickets
+        </button>
+        <PageHeader
+          title={ticket.subject}
+          subtitle={
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <Badge tone={STATUS_TONE[ticket.status]}>{STATUS_LABEL[ticket.status]}</Badge>
+              <span>{CATEGORY_LABELS[ticket.category]}</span>
+              <span className="tabular-nums">Raised {new Date(ticket.createdAt).toLocaleDateString()}</span>
+            </span>
+          }
+        />
       </div>
 
-      {/* Messages */}
-      <div className="flex flex-col gap-4">
+      <ol className="flex flex-col gap-3" aria-label="Messages">
         {ticket.messages.map(msg => {
           const isHR = ['SUPER_ADMIN', 'HR_ADMIN'].includes(msg.authorRole);
           return (
-            <div key={msg.id} className={`flex ${isHR ? 'justify-start' : 'justify-end'}`}>
-              <div className={`max-w-[75%]  px-6 py-4 ${isHR ? 'bg-page border border-rule' : 'bg-accent text-paper'}`}>
-                <p className={`text-[9px] font-black uppercase tracking-widest mb-2 ${isHR ? 'text-muted' : 'text-paper'}`}>
-                  {msg.authorName} · {new Date(msg.createdAt).toLocaleString()}
+            <li key={msg.id} className={`flex ${isHR ? 'justify-start' : 'justify-end'}`}>
+              <div className={`max-w-[85%] sm:max-w-[75%] px-4 py-3 rounded-card border ${isHR ? 'bg-paper border-rule text-ink' : 'bg-tint border-tint text-ink'}`}>
+                <p className="text-xs text-muted mb-1.5">
+                  <span className="font-semibold text-ink">{msg.authorName}</span>
+                  {' · '}
+                  <span className="tabular-nums">{new Date(msg.createdAt).toLocaleString()}</span>
                 </p>
-                <p className={`text-sm font-bold leading-relaxed whitespace-pre-wrap ${isHR ? 'text-ink' : 'text-paper'}`}>{msg.body}</p>
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.body}</p>
               </div>
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ol>
 
-      {/* Reply */}
       {ticket.status !== 'CLOSED' && (
-        <div className="bg-paper border border-rule p-6 flex flex-col gap-4">
-          <label className="label-form">Add Reply</label>
-          <textarea
-            value={reply}
-            onChange={e => setReply(e.target.value)}
-            rows={3}
-            placeholder="Type your message…"
-            className="w-full border border-rule px-4 py-3 text-sm font-bold text-ink placeholder:text-muted outline-none focus:border-accent resize-none"
-          />
-          {error && <p className="text-xs font-black text-ink">{error}</p>}
-          <button
-            onClick={sendReply}
-            disabled={sending || !reply.trim()}
-            className="self-end px-8 py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50 transition-all"
-          >
-            {sending ? 'Sending…' : 'Send Reply'}
-          </button>
-        </div>
+        <Card>
+          <Field label="Add a reply" error={error || undefined}>
+            <Textarea
+              value={reply}
+              onChange={e => setReply(e.target.value)}
+              rows={3}
+              placeholder="Type your message…"
+            />
+          </Field>
+          <div className="flex justify-end mt-3">
+            <Button
+              onClick={sendReply}
+              disabled={sending || !reply.trim()}
+              reason={!sending && !reply.trim() ? 'Write a message first' : undefined}
+              icon="mail"
+            >
+              {sending ? 'Sending…' : 'Send reply'}
+            </Button>
+          </div>
+        </Card>
       )}
       {ticket.status === 'CLOSED' && (
-        <div className="bg-page p-5 text-center eyebrow-tight border border-rule">
-          This ticket is closed. Raise a new ticket if you need further assistance.
+        <div className="flex items-start gap-3 px-4 py-3 rounded-control bg-pill text-sm text-muted">
+          <Icon name="lock" size={18} className="mt-px" />
+          This ticket is closed. Raise a new ticket if you need more help.
         </div>
       )}
     </div>
@@ -157,7 +174,7 @@ export default function SupportPage() {
   useEffect(() => { loadTickets(); }, [loadTickets]);
 
   async function submitTicket() {
-    if (!subject.trim() || !body.trim()) { setFormError('Subject and details are required'); return; }
+    if (!subject.trim() || !body.trim()) { setFormError(REQUIRED_MSG); return; }
     setSubmitting(true); setFormError('');
     try {
       await apiFetch('/support/tickets', { method: 'POST', body: JSON.stringify({ subject, category, body }) });
@@ -171,7 +188,7 @@ export default function SupportPage() {
   // ── Thread view ─────────────────────────────────────────────────────────────
   if (activeTicket) {
     return (
-      <div className="max-w-[800px] mx-auto pb-20 animate-in fade-in duration-500">
+      <div className="max-w-[800px] mx-auto w-full pb-10">
         <TicketThread
           ticket={activeTicket}
           onBack={() => { setActiveTicket(null); loadTickets(); }}
@@ -183,109 +200,104 @@ export default function SupportPage() {
 
   // ── List view ───────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-8 max-w-[1000px] mx-auto pb-20 animate-in fade-in duration-700">
+    <div className="flex flex-col gap-5 max-w-[1040px] mx-auto w-full pb-10">
+      <PageHeader
+        title="Help and support"
+        subtitle="Raise a ticket with HR, or check on one you have already raised."
+        actions={
+          <Button variant={showForm ? 'secondary' : 'primary'} icon={showForm ? 'x' : 'plus'} onClick={() => setShowForm(v => !v)}>
+            {showForm ? 'Cancel' : 'New ticket'}
+          </Button>
+        }
+      />
 
-      {/* Header */}
-      <div className="bg-paper p-10 border border-rule relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-accent " />
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-2 h-2 bg-accent " />
-          <span className="text-[10px] font-black text-accent uppercase tracking-[0.4em]">Employee Support</span>
-        </div>
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <h1 className="text-4xl font-black text-ink tracking-tighter">Help <span className="text-accent">&amp; Support</span></h1>
-            <p className="text-sm font-bold text-muted mt-2 uppercase tracking-widest">Raise a ticket or browse your ticket history.</p>
-          </div>
-          <button
-            onClick={() => setShowForm(v => !v)}
-            className="px-7 py-3.5 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all shrink-0"
-          >
-            {showForm ? 'Cancel' : '+ New Ticket'}
-          </button>
-        </div>
-      </div>
-
-      {/* New ticket form */}
       {showForm && (
-        <div className="bg-paper border border-rule overflow-hidden animate-in slide-in-from-top-4 duration-300">
-          <div className="p-7 border-b border-rule flex items-center gap-4">
-            <div className="w-2 h-6 bg-accent " />
-            <h3 className="text-sm font-black text-ink uppercase tracking-widest">Raise a Ticket</h3>
-          </div>
-          <div className="p-7 flex flex-col gap-5">
-            <div className="flex flex-col gap-2">
-              <label className="label-form">Category</label>
-              <select value={category} onChange={e => setCategory(e.target.value as TicketCategory)} className="bg-page border border-rule px-5 py-3.5 text-xs font-black text-ink outline-none focus:border-accent appearance-none cursor-pointer">
+        <Card>
+          <CardHeader title="Raise a ticket" />
+          <div className="flex flex-col gap-4 max-w-[640px]">
+            <Field label="Category">
+              <Select value={category} onChange={e => setCategory(e.target.value as TicketCategory)}>
                 {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
+              </Select>
+            </Field>
+            <Field label="Subject" required error={formError === REQUIRED_MSG && !subject.trim() ? 'Add a short subject' : undefined}>
+              <Input value={subject} onChange={e => setSubject(e.target.value)} placeholder="A short summary of the issue" invalid={formError === REQUIRED_MSG && !subject.trim()} />
+            </Field>
+            <Field label="Details" required error={formError === REQUIRED_MSG && !body.trim() ? 'Describe the issue' : undefined}>
+              <Textarea value={body} onChange={e => setBody(e.target.value)} rows={5} placeholder="What happened, and what did you expect?" invalid={formError === REQUIRED_MSG && !body.trim()} />
+            </Field>
+            {formError && formError !== REQUIRED_MSG && (
+              <p role="alert" className="text-[13px] text-danger">{formError}</p>
+            )}
+            <div className="flex justify-end">
+              <Button onClick={submitTicket} disabled={submitting}>
+                {submitting ? 'Submitting…' : 'Submit ticket'}
+              </Button>
             </div>
-            <div className="flex flex-col gap-2">
-              <label className="label-form">Subject</label>
-              <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Brief description of your issue…" className="bg-page border border-rule px-5 py-3.5 text-xs font-black text-ink placeholder:text-muted outline-none focus:border-accent transition-all" />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="label-form">Details</label>
-              <textarea value={body} onChange={e => setBody(e.target.value)} rows={5} placeholder="Describe the issue in detail…" className="bg-page border border-rule px-5 py-3.5 text-xs font-black text-ink placeholder:text-muted outline-none focus:border-accent transition-all resize-none" />
-            </div>
-            {formError && <p className="text-xs font-black text-ink">{formError}</p>}
-            <button onClick={submitTicket} disabled={submitting} className="w-full py-4 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95 disabled:opacity-60">
-              {submitting ? 'Submitting…' : 'Submit Ticket'}
-            </button>
           </div>
-        </div>
+        </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-start">
         {/* Ticket history */}
-        <div className="bg-paper border border-rule overflow-hidden">
-          <div className="p-7 border-b border-rule flex items-center gap-4">
-            <div className="w-2 h-6 bg-accent " />
-            <h3 className="text-sm font-black text-ink uppercase tracking-widest">My Tickets</h3>
-            <span className="ml-auto label-form">{tickets.length} total</span>
+        <Card padding="p-0" className="lg:col-span-3 overflow-hidden">
+          <div className="px-5 pt-5">
+            <CardHeader title="My tickets" caption={`${tickets.length} total`} />
           </div>
           {loading ? (
-            <div className="p-10 text-center text-[10px] font-black text-muted uppercase tracking-widest animate-pulse">Loading…</div>
-          ) : tickets.length === 0 ? (
-            <div className="p-10 text-center text-[10px] font-black text-muted uppercase tracking-widest">No tickets yet. Raise one above.</div>
-          ) : (
-            <div className="divide-y divide-rule">
-              {tickets.map(t => (
-                <button key={t.id} onClick={() => setActiveTicket(t)} className="w-full text-left px-7 py-5 hover:bg-page transition-colors">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-black text-ink truncate">{t.subject}</p>
-                      <p className="label-form mt-1">{CATEGORY_LABELS[t.category]} · {new Date(t.updatedAt).toLocaleDateString()}</p>
-                    </div>
-                    <span className={`shrink-0 px-2.5 py-1  text-[9px] font-black uppercase tracking-widest ${STATUS_COLORS[t.status]}`}>{t.status.replace('_', ' ')}</span>
-                  </div>
-                  <p className="text-xs font-bold text-muted mt-2 line-clamp-1">{t.messages[0]?.body}</p>
-                </button>
-              ))}
+            <div className="flex items-center justify-center py-14">
+              <div className="w-7 h-7 border-2 border-rule border-t-accent animate-spin rounded-full" role="status" aria-label="Loading tickets" />
             </div>
+          ) : tickets.length === 0 ? (
+            <EmptyState
+              icon="mail"
+              title="No tickets yet"
+              description="When something is not working, raise a ticket and HR will reply here."
+              action={!showForm ? <Button variant="secondary" icon="plus" onClick={() => setShowForm(true)}>New ticket</Button> : undefined}
+            />
+          ) : (
+            <ul>
+              {tickets.map(t => (
+                <li key={t.id} className="border-t border-rule">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTicket(t)}
+                    className="w-full text-left px-5 py-4 hover:bg-page transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-ink truncate">{t.subject}</p>
+                        <p className="text-[13px] text-muted mt-0.5">
+                          {CATEGORY_LABELS[t.category]} · <span className="tabular-nums">Updated {new Date(t.updatedAt).toLocaleDateString()}</span>
+                        </p>
+                      </div>
+                      <Badge tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Badge>
+                    </div>
+                    {t.messages[0]?.body && <p className="text-[13px] text-muted mt-2 line-clamp-1">{t.messages[0].body}</p>}
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
-        </div>
+        </Card>
 
         {/* FAQ */}
-        <div className="bg-paper border border-rule overflow-hidden">
-          <div className="p-7 border-b border-rule flex items-center gap-4">
-            <div className="w-2 h-6 bg-accent " />
-            <h3 className="text-sm font-black text-ink uppercase tracking-widest">Quick Answers</h3>
+        <Card padding="p-0" className="lg:col-span-2 overflow-hidden">
+          <div className="px-5 pt-5">
+            <CardHeader title="Quick answers" />
           </div>
-          <div className="divide-y divide-rule">
+          <div>
             {FAQS.map(f => (
-              <details key={f.q} className="group">
-                <summary className="flex items-center justify-between px-7 py-5 cursor-pointer list-none hover:bg-page transition-all">
-                  <span className="text-[11px] font-black text-ink uppercase tracking-tight group-open:text-accent transition-colors">{f.q}</span>
-                  <span className="text-muted group-open:rotate-90 transition-transform duration-300 text-lg">›</span>
+              <details key={f.q} className="group border-t border-rule">
+                <summary className="flex items-center justify-between gap-3 px-5 py-3.5 cursor-pointer list-none hover:bg-page transition-colors">
+                  <span className="text-sm font-semibold text-ink group-open:text-accent">{f.q}</span>
+                  <Icon name="chevronDown" size={16} className="text-muted transition-transform group-open:rotate-180" />
                 </summary>
-                <div className="px-7 pb-5">
-                  <p className="text-[10px] font-bold text-muted leading-relaxed">{f.a}</p>
-                </div>
+                <p className="px-5 pb-4 text-[13px] text-muted leading-relaxed">{f.a}</p>
               </details>
             ))}
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );
