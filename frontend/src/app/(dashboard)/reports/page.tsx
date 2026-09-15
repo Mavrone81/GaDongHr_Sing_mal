@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { apiFetch, apiFetchRaw } from '@/lib/api';
 import {
   PageHeader, Card, CardHeader, Badge, Button, Stat, Tabs, Modal, Field, Input, Select, Stepper,
@@ -597,12 +598,20 @@ function BarRow({ label, value, pct, color }: { label: string; value: string; pc
 
 /**
  * Not the kit Modal on purpose: this dialog has a Print / PDF action, and the
- * old overlay carried print: rules that turn it into a normal page when
- * printed (no dim backdrop, no 92vh cap, no scroll clipping). The kit Modal
- * has no print mode, so printing from it would clip the dashboard to one
- * screen. Visually it matches the kit Modal; it is role="dialog", aria-modal,
- * and Escape closes it.
+ * kit Modal has no print mode. Visually it matches the kit Modal; it is
+ * role="dialog", aria-modal, and Escape closes it.
+ *
+ * Printing needs two things the old overlay did not have, and it never printed
+ * the dashboard (verified: the PDF was the Reports page behind it, then a blank
+ * page). The dialog is portalled to <body> so it can be the ONLY thing printed,
+ * and PRINT_CSS hides every other child of <body> and lifts the app's full-
+ * height / overflow-hidden shell so the dashboard flows across pages.
  */
+const PRINT_CSS = `@media print {
+  html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
+  body > *:not([data-print-root]) { display: none !important; }
+}`;
+
 function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; onToast: (m: string, t: 'ok'|'err') => void }) {
   const [data, setData]         = useState<WFDashData | null>(null);
   const [otData, setOtData]     = useState<OTData | null>(null);
@@ -650,7 +659,7 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  if (loading || !data) {
+  if (loading) {
     return (
       <div className="fixed inset-0 z-[80] flex items-center justify-center bg-ink/40">
         <div className="flex flex-col items-center gap-3 px-10 py-8 bg-paper border border-rule rounded-card shadow-card">
@@ -661,7 +670,31 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
     );
   }
 
-  const { kpis, trend, byDepartment, byEmploymentType, byCitizenship } = data;
+  // A failed or empty /reports/workforce-dashboard used to leave this spinning
+  // forever (fetch failed → data null) or crash the whole /reports route on
+  // `trend.map` (payload {}). Either way, say so and offer a retry instead.
+  if (!data || !data.kpis || !Array.isArray(data.trend)) {
+    return (
+      <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-ink/40 sm:p-4" onMouseDown={onClose}>
+        <div role="alertdialog" aria-modal="true" aria-labelledby="wf-dash-error" onMouseDown={e => e.stopPropagation()}
+          className="w-full sm:max-w-md bg-paper border border-rule rounded-t-card sm:rounded-card shadow-card p-6 flex flex-col items-center text-center gap-3">
+          <span className="flex items-center justify-center w-11 h-11 rounded-full bg-danger-bg text-danger" aria-hidden="true"><Icon name="alert" size={22} /></span>
+          <h2 id="wf-dash-error" className="text-[17px] font-bold text-ink">The workforce dashboard could not be loaded</h2>
+          <p className="text-[13px] text-muted">The report service returned no data. Try again, or run one of the other reports.</p>
+          <div className="flex gap-2.5 mt-2">
+            <Button variant="secondary" onClick={onClose}>Close</Button>
+            <Button onClick={() => loadAll()}>Try again</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const kpis = data.kpis;
+  const trend = data.trend;
+  const byDepartment = data.byDepartment ?? {};
+  const byEmploymentType = data.byEmploymentType ?? {};
+  const byCitizenship = data.byCitizenship ?? {};
 
   // ── SVG bar chart helpers ──────────────────────────────────────────────────
   const chartW = 560; const chartH = 160; const barPad = 4;
@@ -692,11 +725,11 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
   const TERMS = 'color-mix(in srgb, var(--ink) 55%, var(--paper))';
 
   // ── OT helpers ─────────────────────────────────────────────────────────────
-  const otEntries = otData ? Object.entries(otData.totals).sort((a, b) => b[1] - a[1]).slice(0, 6) : [];
+  const otEntries = otData ? Object.entries(otData.totals ?? {}).sort((a, b) => b[1] - a[1]).slice(0, 6) : [];
   const maxOt     = Math.max(...otEntries.map(e => e[1]), 1);
   // Current month OT = last index in each dept array
   const otCurrentMonth = otData
-    ? Object.fromEntries(Object.entries(otData.byDepartment).map(([d, arr]) => [d, arr[arr.length - 1] ?? 0]))
+    ? Object.fromEntries(Object.entries(otData.byDepartment ?? {}).map(([d, arr]) => [d, arr[arr.length - 1] ?? 0]))
     : {};
 
   // ── Training helpers ───────────────────────────────────────────────────────
@@ -714,14 +747,15 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
 
   const refreshLabel = secAgo < 60 ? 'just now' : secAgo < 3600 ? `${Math.floor(secAgo / 60)}m ago` : `${Math.floor(secAgo / 3600)}h ago`;
 
-  return (
-    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-ink/40 sm:p-4 print:p-0 print:bg-transparent print:inset-auto print:relative" onMouseDown={onClose}>
+  return createPortal(
+    <div data-print-root className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-ink/40 sm:p-4 print:p-0 print:bg-transparent print:inset-auto print:static print:block" onMouseDown={onClose}>
+      <style>{PRINT_CSS}</style>
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="wf-dash-title"
         onMouseDown={e => e.stopPropagation()}
-        className="w-full sm:max-w-5xl max-h-[92vh] flex flex-col bg-paper border border-rule rounded-t-card sm:rounded-card shadow-card overflow-hidden print:max-h-none print:border-0 print:shadow-none print:rounded-none"
+        className="w-full sm:max-w-5xl max-h-[92vh] flex flex-col bg-paper border border-rule rounded-t-card sm:rounded-card shadow-card overflow-hidden print:max-w-none print:max-h-none print:overflow-visible print:border-0 print:shadow-none print:rounded-none"
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between px-5 pt-5 pb-4 border-b border-rule">
           <div className="min-w-0">
@@ -745,7 +779,7 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
             {kpiCards.map(k => <Stat key={k.label} label={k.label} value={k.value} note={k.sub} />)}
           </div>
 
-          <Card>
+          <Card className="break-inside-avoid">
             <CardHeader title="Hires and leavers, last 12 months" />
             <svg viewBox={`0 0 ${chartW} ${chartH + 30}`} width="100%" className="overflow-visible" role="img" aria-label="Monthly hires and leavers over the last 12 months">
               {[0, 0.25, 0.5, 0.75, 1].map(f => (
@@ -771,7 +805,7 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
           </Card>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card>
+            <Card className="break-inside-avoid">
               <CardHeader title="By department" />
               <div className="flex flex-col gap-3">
                 {deptEntries.map(([dept, count]) => (
@@ -779,7 +813,7 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
                 ))}
               </div>
             </Card>
-            <Card>
+            <Card className="break-inside-avoid">
               <CardHeader title="Employment type" />
               <div className="flex flex-col gap-3">
                 {etEntries.map(([type, count]) => {
@@ -789,7 +823,7 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
                 })}
               </div>
             </Card>
-            <Card>
+            <Card className="break-inside-avoid">
               <CardHeader title="Citizenship and pass" />
               <div className="flex flex-col gap-3">
                 {csEntries.map(([key, count]) => {
@@ -801,7 +835,7 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card>
+            <Card className="break-inside-avoid">
               <CardHeader title="Overtime hours by department" caption={otData ? 'This month, out of the 6-month total' : undefined} />
               {!otData ? (
                 <p className="text-[13px] text-muted py-4">No overtime data available.</p>
@@ -831,7 +865,7 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
               )}
             </Card>
 
-            <Card>
+            <Card className="break-inside-avoid">
               <CardHeader title="Training completion" />
               {!trainData ? (
                 <p className="text-[13px] text-muted py-4">No training data available.</p>
@@ -839,7 +873,7 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
                 <div className="flex flex-col gap-4">
                   <div className="flex items-center gap-6">
                     <div>
-                      <p className="text-[36px] font-extrabold leading-none text-ink tabular-nums">{trainData.completionRate}%</p>
+                      <p className="text-[36px] font-extrabold leading-none text-ink tabular-nums">{trainData.completionRate != null ? `${trainData.completionRate}%` : '—'}</p>
                       <p className="text-[13px] text-muted mt-1">completed</p>
                     </div>
                     <dl className="flex flex-col gap-1.5 flex-1 text-[13px]">
@@ -872,7 +906,8 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

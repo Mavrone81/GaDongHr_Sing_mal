@@ -18,6 +18,13 @@ const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct
  */
 const HEAT = ['bg-accent/[0.04]', 'bg-accent/10', 'bg-accent/20', 'bg-accent/30', 'bg-accent/40', 'bg-accent/50', 'bg-accent/60', 'bg-accent/75', 'bg-accent/90', 'bg-accent'];
 
+/**
+ * "SGD 1,234", or an em dash when the value is missing. Each analytics endpoint
+ * is fetched separately and can come back as {} (the API down, a tenant with no
+ * data yet); calling .toLocaleString on undefined used to take the page down.
+ */
+const sgd = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? `SGD ${v.toLocaleString()}` : '—');
+
 function Bar({ pct, className = 'bg-accent' }: { pct: number; className?: string }) {
   return (
     <div className="flex-1 h-2 rounded-full bg-pill overflow-hidden" aria-hidden="true">
@@ -113,8 +120,8 @@ export default function AnalyticsPage() {
         />
         <Stat
           label="Attrition, 12 months"
-          value={attrition ? `${attrition.attritionRatePct}%` : '—'}
-          note={attrition ? (
+          value={attrition?.attritionRatePct != null ? `${attrition.attritionRatePct}%` : '—'}
+          note={attrition?.leaversCount != null ? (
             <span className="inline-flex flex-wrap items-center gap-1.5">
               {attrition.leaversCount} leavers
               {highAttrition && <Badge tone="warn">Above 15%</Badge>}
@@ -123,13 +130,13 @@ export default function AnalyticsPage() {
         />
         <Stat
           label="Cost per hire"
-          value={costPerHire ? `SGD ${costPerHire.costPerHire.toLocaleString()}` : '—'}
-          note={costPerHire ? `${costPerHire.hires} hires in ${year}` : undefined}
+          value={costPerHire ? sgd(costPerHire.costPerHire) : '—'}
+          note={costPerHire?.hires != null ? `${costPerHire.hires} hires in ${year}` : undefined}
         />
         <Stat
           label="Payroll to revenue"
           value={payrollRatio?.payrollToRevenueRatioPct !== undefined ? `${payrollRatio.payrollToRevenueRatioPct}%` : '—'}
-          note={payrollRatio?.revenue ? `Revenue SGD ${payrollRatio.revenue.toLocaleString()}` : 'Revenue not set'}
+          note={payrollRatio?.revenue ? `Revenue ${sgd(payrollRatio.revenue)}` : 'Revenue not set'}
         />
       </div>
 
@@ -192,7 +199,7 @@ export default function AnalyticsPage() {
           <CardHeader title="Leave taken by month" caption={`${leaveHeat.year} · ${leaveHeat.totalDays} days in total`} />
           <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
             {(leaveHeat.monthlyDaysTaken || []).map((days: number, i: number) => {
-              const max = Math.max(1, ...leaveHeat.monthlyDaysTaken);
+              const max = Math.max(1, ...(leaveHeat.monthlyDaysTaken || []));
               const intensity = Math.round((days / max) * 9);
               return (
                 <div key={i} className="text-center">
@@ -239,7 +246,7 @@ export default function AnalyticsPage() {
                     <div className="w-full bg-accent rounded-t-control" style={{ height: `${h}%` }} title={`SGD ${p.totalCost}`} />
                   </div>
                   <p className="text-xs text-muted mt-1.5 tabular-nums">{p.period.slice(5)}</p>
-                  <p className="text-xs font-semibold text-ink tabular-nums truncate">SGD {(p.totalCost || 0).toLocaleString()}</p>
+                  <p className="text-xs font-semibold text-ink tabular-nums truncate">{sgd(p.totalCost || 0)}</p>
                 </div>
               );
             })}
@@ -253,9 +260,9 @@ export default function AnalyticsPage() {
           <CardHeader title="Training return" caption={trainingRoi.year} />
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Mini label="Programmes"        value={trainingRoi.trainings} />
-            <Mini label="Total cost"        value={`SGD ${trainingRoi.totalCost.toLocaleString()}`} />
-            <Mini label="Cost per hour"     value={`SGD ${trainingRoi.costPerHour.toLocaleString()}`} />
-            <Mini label="Cost per completion" value={`SGD ${trainingRoi.costPerCompletion.toLocaleString()}`} />
+            <Mini label="Total cost"        value={sgd(trainingRoi.totalCost)} />
+            <Mini label="Cost per hour"     value={sgd(trainingRoi.costPerHour)} />
+            <Mini label="Cost per completion" value={sgd(trainingRoi.costPerCompletion)} />
           </dl>
         </Card>
       )}
@@ -264,7 +271,7 @@ export default function AnalyticsPage() {
       {pdpa && (
         <Card>
           <CardHeader title="PDPA retention" caption="Former employees’ records nearing the 7-year retention limit" />
-          {pdpa.approachingDeletion === 0 ? (
+          {!pdpa.approachingDeletion ? (
             <p className="flex items-center gap-2 text-sm text-muted">
               <Icon name="check" size={16} className="text-ok" />
               No records are close to the 7-year deletion threshold.
