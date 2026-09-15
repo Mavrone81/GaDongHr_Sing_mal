@@ -1,9 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { TONES } from '@/lib/statusTone';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import {
+  PageHeader, Stat, DataTable, Card, CardHeader, Button, Badge, EmptyState, Field, Input, Select, Textarea, Modal, Tabs,
+  SearchInput, Icon, useToast,
+  type Column, type BadgeTone, type IconName,
+} from '@/components/ui';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ProgramStatus   = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
@@ -40,35 +44,42 @@ interface Stats {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const CATEGORY_LABELS: Record<ProgramCategory, string> = {
-  COMPLIANCE: 'Compliance', TECHNICAL: 'Technical', SOFT_SKILLS: 'Soft Skills',
+  COMPLIANCE: 'Compliance', TECHNICAL: 'Technical', SOFT_SKILLS: 'Soft skills',
   LEADERSHIP: 'Leadership', ONBOARDING: 'Onboarding', SAFETY: 'Safety',
 };
 
-const CATEGORY_COLORS: Record<ProgramCategory, string> = {
-  COMPLIANCE: 'bg-page text-ink border-ink',
-  TECHNICAL:  'bg-page text-accent border-accent',
-  SOFT_SKILLS:'bg-page text-ink border-ink',
-  LEADERSHIP: 'bg-page text-accent border-accent',
-  ONBOARDING: 'bg-page text-ink border-highlight',
-  SAFETY:     'bg-page text-accent border-accent',
+// State maps are written one entry per line: the vocabulary guard reads a map
+// up to the first `};` at the start of a line, so a one-line map would be read
+// together with whatever follows it.
+const PROGRAM_STATUS_TONE: Record<ProgramStatus, BadgeTone> = {
+  DRAFT: 'brass',
+  PUBLISHED: 'ok',
+  ARCHIVED: 'neutral',
+};
+const PROGRAM_STATUS_LABEL: Record<ProgramStatus, string> = {
+  DRAFT: 'Draft',
+  PUBLISHED: 'Published',
+  ARCHIVED: 'Archived',
 };
 
-const STATUS_COLORS: Record<ProgramStatus, string> = {
-  DRAFT: TONES.neutral,
-  PUBLISHED: TONES.done,
-  ARCHIVED: TONES.inert,
+/** Enrolment states: not started, under way, done, dropped — four distinct appearances. */
+const ENR_TONE: Record<EnrollmentStatus, BadgeTone> = {
+  ENROLLED:    'neutral',
+  IN_PROGRESS: 'accent',
+  COMPLETED:   'ok',
+  DROPPED:     'warn',
+};
+const ENR_LABEL: Record<EnrollmentStatus, string> = {
+  ENROLLED: 'Not started',
+  IN_PROGRESS: 'In progress',
+  COMPLETED: 'Completed',
+  DROPPED: 'Dropped',
 };
 
-const ENR_COLORS: Record<EnrollmentStatus, string> = {
-  ENROLLED:    'bg-page text-ink',
-  IN_PROGRESS: 'bg-page text-ink',
-  COMPLETED:   'bg-page text-accent',
-  DROPPED:     'bg-page text-ink',
+const MATERIAL_ICONS: Record<MaterialType, IconName> = {
+  VIDEO: 'camera', DOCUMENT: 'file', QUIZ: 'list', LINK: 'arrowRight',
 };
-
-const MATERIAL_ICONS: Record<MaterialType, string> = {
-  VIDEO: '▶', DOCUMENT: '📄', QUIZ: '✏️', LINK: '🔗',
-};
+const MATERIAL_LABEL: Record<MaterialType, string> = { VIDEO: 'Video', DOCUMENT: 'Document', QUIZ: 'Quiz', LINK: 'Link' };
 
 function fmtDuration(mins?: number) {
   if (!mins) return null;
@@ -81,10 +92,43 @@ function fmtDate(d?: string) {
   return new Date(d).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function ProgressBar({ pct, color = 'bg-highlight' }: { pct: number; color?: string }) {
+function ProgressBar({ pct, color = 'bg-accent', label }: { pct: number; color?: string; label?: string }) {
   return (
-    <div className="w-full h-2 bg-page overflow-hidden">
-      <div className={`h-full ${color}  transition-all`} style={{ width: `${pct}%` }} />
+    <div className="w-full h-1.5 rounded-full bg-pill overflow-hidden" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
+      <div className={`h-full ${color}`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+function Skeleton({ h = 'h-32' }: { h?: string }) {
+  return <div className={`${h} rounded-card bg-pill animate-pulse`} aria-busy="true" />;
+}
+
+function FilterChips<T extends string>({ items, active, onChange, label }: { items: { id: T; label: string }[]; active: T; onChange: (id: T) => void; label: string }) {
+  return (
+    <div className="flex flex-wrap gap-2" role="group" aria-label={label}>
+      {items.map(it => {
+        const on = it.id === active;
+        return (
+          <button key={it.id || 'all'} type="button" onClick={() => onChange(it.id)} aria-pressed={on}
+            className={`h-[34px] px-3 rounded-control border text-[13px] font-semibold transition-colors ${on ? 'border-accent bg-tint text-accent' : 'border-rule bg-paper text-ink hover:bg-pill'}`}>
+            {it.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ErrorPanel({ title, message, onRetry }: { title: string; message: string; onRetry?: () => void }) {
+  return (
+    <div role="alert" className="flex items-start gap-2.5 p-3.5 rounded-control border border-rule bg-danger-bg text-danger">
+      <Icon name="alert" size={18} className="mt-0.5" />
+      <div className="flex flex-col gap-1 flex-1">
+        <span className="text-sm font-semibold">{title}</span>
+        <span className="text-[13px] text-ink">{message}</span>
+      </div>
+      {onRetry && <Button size="sm" variant="secondary" onClick={onRetry}>Retry</Button>}
     </div>
   );
 }
@@ -101,108 +145,79 @@ function ProgramCard({ prog, onEnroll, onStartCourse }: { prog: TrainingProgram;
   }
 
   return (
-    <div className="bg-paper border border-rule p-6 flex flex-col gap-4 hover: transition-all">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex flex-col gap-1.5">
-          <h3 className="text-sm font-black text-ink leading-tight">{prog.title}</h3>
-          {prog.description && <p className="text-[10px] text-muted leading-relaxed line-clamp-2">{prog.description}</p>}
+    <Card className="gap-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-1 min-w-0">
+          <h3 className="text-[15.5px] font-bold text-ink leading-snug">{prog.title}</h3>
+          {prog.description && <p className="text-[13px] text-muted leading-relaxed line-clamp-2">{prog.description}</p>}
         </div>
-        {prog.isMandatory && (
-          <span className="shrink-0 text-[8px] font-black px-2 py-0.5 bg-page text-ink border border-ink uppercase tracking-widest">Required</span>
-        )}
+        {prog.isMandatory && <Badge tone="danger" className="shrink-0">Required</Badge>}
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <span className={`text-[9px] font-black px-2 py-0.5  border ${CATEGORY_COLORS[prog.category]}`}>
-          {CATEGORY_LABELS[prog.category]}
-        </span>
-        {prog.durationMins && (
-          <span className="text-[9px] font-black px-2 py-0.5 bg-page text-muted border border-rule">
-            {fmtDuration(prog.durationMins)}
-          </span>
-        )}
-        {prog.passingScore && (
-          <span className="text-[9px] font-black px-2 py-0.5 bg-page text-muted border border-rule">
-            Pass: {prog.passingScore}%
-          </span>
-        )}
-      </div>
-
-      <div className="text-[9px] text-muted uppercase tracking-widest font-black">
-        {prog._count?.materials ?? 0} materials · {prog._count?.enrollments ?? 0} enrolled
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted">
+        <span>{CATEGORY_LABELS[prog.category]}</span>
+        {prog.durationMins && <span className="tabular-nums">· {fmtDuration(prog.durationMins)}</span>}
+        {prog.passingScore && <span className="tabular-nums">· pass mark {prog.passingScore}%</span>}
+        <span className="tabular-nums">· {prog._count?.materials ?? 0} lessons · {prog._count?.enrollments ?? 0} enrolled</span>
       </div>
 
       {enrolled ? (
-        <div className="flex flex-col gap-2 mt-auto">
+        <div className="flex flex-col gap-2.5 mt-auto">
           <div className="flex justify-between items-center">
-            <span className={`text-[9px] font-black px-2 py-0.5  ${ENR_COLORS[enrolled.status]}`}>{enrolled.status.replace('_', ' ')}</span>
-            <span className="text-[9px] font-black text-muted">{enrolled.progress}%</span>
+            <Badge tone={ENR_TONE[enrolled.status]}>{ENR_LABEL[enrolled.status]}</Badge>
+            <span className="text-xs text-muted tabular-nums">{enrolled.progress}%</span>
           </div>
-          <ProgressBar pct={enrolled.progress} color={enrolled.status === 'COMPLETED' ? 'bg-accent' : 'bg-highlight'} />
-          <button
-            onClick={onStartCourse}
-            className="mt-1 w-full py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all active:scale-95"
-          >
-            {enrolled.status === 'COMPLETED' ? '✓ Review Course' : enrolled.status === 'IN_PROGRESS' ? '▶ Continue' : '▶ Start Course'}
-          </button>
+          <ProgressBar pct={enrolled.progress} color={enrolled.status === 'COMPLETED' ? 'bg-ok' : 'bg-accent'} label={`${prog.title} progress`} />
+          <Button variant={enrolled.status === 'COMPLETED' ? 'secondary' : 'primary'} onClick={onStartCourse} className="w-full"
+            icon={enrolled.status === 'COMPLETED' ? 'check' : 'arrowRight'}>
+            {enrolled.status === 'COMPLETED' ? 'Review course' : enrolled.status === 'IN_PROGRESS' ? 'Continue' : 'Start course'}
+          </Button>
         </div>
       ) : (
-        <button
-          onClick={handleEnroll}
-          disabled={enrolling}
-          className="mt-auto w-full py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all active:scale-95 disabled:opacity-50"
-        >
-          {enrolling ? 'Enrolling…' : 'Enroll Now'}
-        </button>
+        <Button onClick={handleEnroll} disabled={enrolling} className="w-full mt-auto">
+          {enrolling ? 'Enrolling…' : 'Enrol'}
+        </Button>
       )}
-    </div>
+    </Card>
   );
 }
 
 // ── Admin: Stats Tab ──────────────────────────────────────────────────────────
 function StatsTab({ stats }: { stats: Stats | null }) {
-  if (!stats) return <p className="text-sm text-muted p-8">Loading stats…</p>;
+  if (!stats) return <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">{[1, 2, 3, 4].map(i => <Skeleton key={i} h="h-[118px]" />)}</div>;
 
   const kpis = [
-    { label: 'Total Programs', value: stats.totalPrograms, color: 'text-ink' },
-    { label: 'Published', value: stats.published, color: 'text-accent' },
-    { label: 'Mandatory', value: stats.mandatory, color: 'text-ink' },
-    { label: 'Total Enrollments', value: stats.totalEnrollments, color: 'text-ink' },
-    { label: 'Completed', value: stats.completed, color: 'text-accent' },
-    { label: 'In Progress', value: stats.inProgress, color: 'text-accent' },
-    { label: 'Completion Rate', value: `${stats.completionRate}%`, color: stats.completionRate >= 70 ? 'text-accent' : 'text-ink' },
+    { label: 'Total programmes', value: stats.totalPrograms },
+    { label: 'Published', value: stats.published },
+    { label: 'Mandatory', value: stats.mandatory },
+    { label: 'Total enrolments', value: stats.totalEnrollments },
+    { label: 'Completed', value: stats.completed },
+    { label: 'In progress', value: stats.inProgress },
+    { label: 'Completion rate', value: `${stats.completionRate}%`, note: stats.completionRate >= 70 ? 'On target (70%+)' : 'Below the 70% mark' },
   ];
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map(k => (
-          <div key={k.label} className="bg-paper border border-rule p-6 ">
-            <p className="label-form mb-3">{k.label}</p>
-            <p className={`text-3xl font-black tracking-tighter ${k.color}`}>{k.value}</p>
-          </div>
-        ))}
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {kpis.map(k => <Stat key={k.label} label={k.label} value={k.value} note={k.note} />)}
       </div>
 
-      <div className="bg-paper border border-rule p-6 ">
-        <p className="eyebrow-tight mb-5">Programs by Category</p>
-        <div className="flex flex-col gap-4">
-          {stats.byCategory.map(b => (
-            <div key={b.category} className="flex items-center gap-4">
-              <span className={`text-[9px] font-black px-2 py-0.5  border w-28 text-center ${CATEGORY_COLORS[b.category as ProgramCategory]}`}>
-                {CATEGORY_LABELS[b.category as ProgramCategory]}
-              </span>
-              <div className="flex-1 h-3 bg-page overflow-hidden">
-                <div
-                  className="h-full bg-highlight "
-                  style={{ width: `${Math.min(100, (b._count.id / stats.totalPrograms) * 100)}%` }}
-                />
+      <Card>
+        <CardHeader title="Programmes by category" />
+        {stats.byCategory.length === 0 ? <p className="text-sm text-muted">No programmes yet.</p> : (
+          <div className="flex flex-col gap-3">
+            {stats.byCategory.map(b => (
+              <div key={b.category} className="grid grid-cols-[120px_minmax(0,1fr)_40px] items-center gap-3">
+                <span className="text-[13px] text-ink">{CATEGORY_LABELS[b.category as ProgramCategory]}</span>
+                <div className="h-2 rounded-full bg-pill overflow-hidden">
+                  <div className="h-full bg-accent" style={{ width: `${Math.min(100, (b._count.id / stats.totalPrograms) * 100)}%` }} />
+                </div>
+                <span className="text-[13px] text-muted text-right tabular-nums">{b._count.id}</span>
               </div>
-              <span className="text-[10px] font-black text-muted w-8 text-right">{b._count.id}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+            ))}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
@@ -314,179 +329,130 @@ function MaterialsModal({ program, onClose }: { program: TrainingProgram; onClos
     } catch (e: any) { setFormError(e.message || 'Failed to remove lesson'); }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-      <div className="bg-paper w-full max-w-2xl max-h-[90vh] overflow-y-auto ">
-        <div className="p-8 border-b border-rule flex justify-between items-start">
-          <div>
-            <h2 className="text-lg font-black text-ink">Lessons</h2>
-            <p className="text-[10px] text-muted uppercase tracking-widest mt-1 font-black">{program.title}</p>
-          </div>
-          <button onClick={onClose} className="text-muted hover:text-ink text-xl font-black">✕</button>
-        </div>
+  const noTitle = !form.title.trim();
 
-        <div className="p-8 flex flex-col gap-6">
-          {/* Existing lessons list */}
-          {loading ? <p className="text-sm text-muted">Loading…</p> : (
-            <div className="flex flex-col gap-3">
-              {materials.length === 0 && <p className="text-[10px] text-muted uppercase tracking-widest font-black">No lessons yet. Add the first one below.</p>}
-              {materials.map((m, i) => (
-                <div key={m.id} className="flex items-center gap-4 p-4 bg-page border border-rule">
-                  <span className="text-base">{MATERIAL_ICONS[m.type]}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-black text-ink">{m.title}</p>
-                    <p className="text-[9px] font-black text-muted uppercase">{m.type}{m.durationMins ? ` · ${fmtDuration(m.durationMins)}` : ''}</p>
-                    {m.url && <a href={m.url} target="_blank" rel="noopener noreferrer" className="text-[9px] text-accent hover:underline truncate block">{m.url}</a>}
+  return (
+    <Modal
+      open
+      size="lg"
+      onClose={onClose}
+      title="Lessons"
+      caption={program.title}
+      footer={<>
+        <Button variant="secondary" onClick={onClose}>Done</Button>
+        <Button icon="plus" onClick={addMaterial} disabled={saving || noTitle} reason={noTitle && !saving ? 'Give the lesson a title' : undefined}>{saving ? 'Saving…' : 'Add lesson'}</Button>
+      </>}
+    >
+      <div className="flex flex-col gap-6">
+        {/* Existing lessons */}
+        {loading ? <Skeleton h="h-20" /> : materials.length === 0 ? (
+          <p className="p-4 rounded-control bg-page text-sm text-muted text-center">No lessons yet. Add the first one below.</p>
+        ) : (
+          <ol className="flex flex-col divide-y divide-rule border border-rule rounded-card">
+            {materials.map((m, i) => (
+              <li key={m.id} className="flex items-center gap-3 px-4 py-3">
+                <span className="flex items-center justify-center w-9 h-9 rounded-control bg-pill text-muted shrink-0"><Icon name={MATERIAL_ICONS[m.type]} size={17} /></span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-ink truncate"><span className="text-muted tabular-nums">{i + 1}.</span> {m.title}</p>
+                  <p className="text-xs text-muted">
+                    {MATERIAL_LABEL[m.type]}{m.durationMins ? ` · ${fmtDuration(m.durationMins)}` : ''}
                     {m.type === 'QUIZ' && m.content && (() => {
-                      try { const qs = JSON.parse(m.content); return <p className="text-[9px] text-muted font-black">{Array.isArray(qs) ? qs.length : 0} question{qs.length !== 1 ? 's' : ''}</p>; } catch { return null; }
+                      try { const qs = JSON.parse(m.content); return ` · ${Array.isArray(qs) ? qs.length : 0} question${qs.length !== 1 ? 's' : ''}`; } catch { return null; }
                     })()}
-                    {m.type !== 'QUIZ' && m.content && <p className="text-[9px] text-muted truncate">{m.content.slice(0, 60)}{m.content.length > 60 ? '…' : ''}</p>}
-                  </div>
-                  <span className="text-[9px] font-black text-muted shrink-0">#{i + 1}</span>
-                  <button onClick={() => deleteMaterial(m.id)} className="text-ink hover:text-ink text-[10px] font-black shrink-0">Remove</button>
+                  </p>
+                  {m.url && <a href={m.url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline truncate block">{m.url}</a>}
+                  {m.type !== 'QUIZ' && m.content && <p className="text-xs text-muted truncate">{m.content.slice(0, 60)}{m.content.length > 60 ? '…' : ''}</p>}
                 </div>
+                <Button size="sm" variant="danger" onClick={() => deleteMaterial(m.id)}>Remove</Button>
+              </li>
+            ))}
+          </ol>
+        )}
+
+        {/* Add lesson */}
+        <div className="flex flex-col gap-4 pt-5 border-t border-rule">
+          <h3 className="text-[15.5px] font-bold text-ink">Add a lesson</h3>
+
+          <Field label="Lesson title" required>
+            <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+          </Field>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Type">
+              <Select value={form.type} onChange={e => changeType(e.target.value as MaterialType)}>
+                <option value="DOCUMENT">Document</option>
+                <option value="VIDEO">Video</option>
+                <option value="QUIZ">Quiz</option>
+                <option value="LINK">Link</option>
+              </Select>
+            </Field>
+            <Field label="Duration (minutes)">
+              <Input type="number" min={1} value={form.durationMins} onChange={e => setForm(f => ({ ...f, durationMins: e.target.value }))} />
+            </Field>
+          </div>
+
+          {/* URL — VIDEO / LINK / DOCUMENT */}
+          {(form.type === 'VIDEO' || form.type === 'LINK' || form.type === 'DOCUMENT') && (
+            <Field label={form.type === 'VIDEO' ? 'YouTube or Vimeo URL' : form.type === 'LINK' ? 'External URL' : 'Document URL'} help={form.type === 'DOCUMENT' ? 'Optional' : undefined}>
+              <Input value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))} />
+            </Field>
+          )}
+
+          {/* Text content — DOCUMENT / VIDEO / LINK */}
+          {form.type !== 'QUIZ' && (
+            <Field label={form.type === 'DOCUMENT' ? 'Reading material' : 'Description or notes'} help={form.type === 'DOCUMENT' ? undefined : 'Optional'}>
+              <Textarea rows={4} value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} />
+            </Field>
+          )}
+
+          {/* ── Quiz builder ── */}
+          {form.type === 'QUIZ' && (
+            <div className="flex flex-col gap-4">
+              {quizQuestions.map((q, qi) => (
+                <fieldset key={q.id} className="flex flex-col gap-3 p-4 rounded-card border border-rule bg-page">
+                  <div className="flex items-center justify-between gap-3">
+                    <legend className="text-sm font-bold text-ink">Question {qi + 1}</legend>
+                    {quizQuestions.length > 1 && <Button size="sm" variant="ghost" onClick={() => removeQuestion(qi)}>Remove question</Button>}
+                  </div>
+
+                  <Field label="Question">
+                    <Input value={q.text} onChange={e => setQuestion(qi, e.target.value)} />
+                  </Field>
+
+                  <div className="flex flex-col gap-2">
+                    <span className="text-[12.5px] font-semibold text-muted">Answers. Select the correct one.</span>
+                    {q.options.map((opt, oi) => (
+                      <div key={oi} className="flex items-center gap-2.5">
+                        <input type="radio" name={`correct_${q.id}`} checked={q.correct === oi} onChange={() => setCorrect(qi, oi)}
+                          aria-label={`Option ${oi + 1} is the correct answer`} className="w-4 h-4 accent-accent shrink-0" />
+                        <Input value={opt} onChange={e => setOption(qi, oi, e.target.value)} placeholder={`Option ${oi + 1}`} aria-label={`Option ${oi + 1}`} className="flex-1" />
+                        {q.options.length > 2 && (
+                          <button type="button" onClick={() => removeOption(qi, oi)} aria-label={`Remove option ${oi + 1}`}
+                            className="flex items-center justify-center w-9 h-9 rounded-control text-muted hover:text-danger hover:bg-pill shrink-0">
+                            <Icon name="x" size={16} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {q.correct < q.options.length && (
+                      <span className="text-xs text-ok">Correct answer: option {q.correct + 1}{q.options[q.correct] ? ` — “${q.options[q.correct]}”` : ''}</span>
+                    )}
+                  </div>
+
+                  {q.options.length < 6 && (
+                    <Button size="sm" variant="ghost" icon="plus" onClick={() => addOption(qi)} className="self-start">Add option</Button>
+                  )}
+                </fieldset>
               ))}
+
+              <Button variant="secondary" icon="plus" onClick={addQuestion} className="self-start">Add another question</Button>
             </div>
           )}
 
-          {/* Add lesson form */}
-          <div className="border-t border-rule pt-6 flex flex-col gap-4">
-            <p className="text-[10px] font-black text-ink uppercase tracking-widest">+ Add Lesson</p>
-
-            <input
-              className="w-full border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight"
-              placeholder="Lesson title *"
-              value={form.title}
-              onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-            />
-
-            <div className="grid grid-cols-2 gap-3">
-              <select
-                className="border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight"
-                value={form.type}
-                onChange={e => changeType(e.target.value as MaterialType)}
-              >
-                <option value="DOCUMENT">📄 Document</option>
-                <option value="VIDEO">▶ Video</option>
-                <option value="QUIZ">✏️ Quiz</option>
-                <option value="LINK">🔗 Link</option>
-              </select>
-              <input
-                className="border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight"
-                placeholder="Duration (mins)"
-                type="number" min={1}
-                value={form.durationMins}
-                onChange={e => setForm(f => ({ ...f, durationMins: e.target.value }))}
-              />
-            </div>
-
-            {/* URL — VIDEO / LINK / DOCUMENT */}
-            {(form.type === 'VIDEO' || form.type === 'LINK' || form.type === 'DOCUMENT') && (
-              <input
-                className="w-full border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight"
-                placeholder={form.type === 'VIDEO' ? 'YouTube or Vimeo URL' : form.type === 'LINK' ? 'External URL' : 'Document URL (optional)'}
-                value={form.url}
-                onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
-              />
-            )}
-
-            {/* Text content — DOCUMENT / VIDEO / LINK */}
-            {form.type !== 'QUIZ' && (
-              <textarea
-                className="w-full border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight resize-none"
-                placeholder={form.type === 'DOCUMENT' ? 'Reading material / lesson content…' : 'Description or notes (optional)…'}
-                rows={4}
-                value={form.content}
-                onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
-              />
-            )}
-
-            {/* ── Quiz Builder ── */}
-            {form.type === 'QUIZ' && (
-              <div className="flex flex-col gap-5">
-                {quizQuestions.map((q, qi) => (
-                  <div key={q.id} className="bg-page border border-rule p-5 flex flex-col gap-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-[10px] font-black text-ink uppercase tracking-widest">Question {qi + 1}</span>
-                      {quizQuestions.length > 1 && (
-                        <button onClick={() => removeQuestion(qi)} className="text-[9px] font-black text-ink hover:text-ink uppercase tracking-widest">Remove</button>
-                      )}
-                    </div>
-
-                    <input
-                      className="w-full border border-rule px-4 py-3 text-sm text-ink focus:outline-none focus:border-highlight bg-paper"
-                      placeholder={`Type question ${qi + 1} here…`}
-                      value={q.text}
-                      onChange={e => setQuestion(qi, e.target.value)}
-                    />
-
-                    <div className="flex flex-col gap-2">
-                      <p className="label-form">Answer options — click the circle to mark the correct answer</p>
-                      {q.options.map((opt, oi) => (
-                        <div key={oi} className="flex items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={() => setCorrect(qi, oi)}
-                            className={`w-6 h-6  border-2 flex items-center justify-center shrink-0 transition-all ${q.correct === oi ? 'border-accent bg-accent' : 'border-rule hover:border-highlight'}`}
-                            title="Mark as correct answer"
-                          >
-                            {q.correct === oi && <span className="text-paper text-xs font-black">✓</span>}
-                          </button>
-                          <input
-                            className="flex-1 border border-rule px-4 py-2.5 text-sm text-ink focus:outline-none focus:border-highlight bg-paper"
-                            placeholder={`Option ${oi + 1}`}
-                            value={opt}
-                            onChange={e => setOption(qi, oi, e.target.value)}
-                          />
-                          {q.options.length > 2 && (
-                            <button onClick={() => removeOption(qi, oi)} className="text-muted hover:text-ink font-black text-sm shrink-0 transition-colors">✕</button>
-                          )}
-                        </div>
-                      ))}
-                      {q.correct < q.options.length && (
-                        <p className="text-[9px] font-black text-accent uppercase tracking-widest">
-                          Correct answer: Option {q.correct + 1}{q.options[q.correct] ? ` — "${q.options[q.correct]}"` : ''}
-                        </p>
-                      )}
-                    </div>
-
-                    {q.options.length < 6 && (
-                      <button
-                        type="button"
-                        onClick={() => addOption(qi)}
-                        className="self-start label-form hover:text-ink transition-colors"
-                      >
-                        + Add option
-                      </button>
-                    )}
-                  </div>
-                ))}
-
-                <button
-                  type="button"
-                  onClick={addQuestion}
-                  className="self-start px-5 py-2.5 border-2 border-dashed border-highlight text-ink text-[10px] font-black uppercase tracking-widest hover:bg-page transition-all"
-                >
-                  + Add Another Question
-                </button>
-              </div>
-            )}
-
-            {formError && (
-              <div className="bg-page border border-ink p-3 text-[10px] font-black text-ink">{formError}</div>
-            )}
-
-            <button
-              onClick={addMaterial}
-              disabled={saving || !form.title.trim()}
-              className="w-full py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all disabled:opacity-50 active:scale-95"
-            >
-              {saving ? 'Saving…' : '+ Add Lesson'}
-            </button>
-          </div>
+          {formError && <p role="alert" className="text-sm text-danger">{formError}</p>}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -530,100 +496,75 @@ function EnrollModal({ program, onClose, onDone }: { program: TrainingProgram; o
     return !q || e.fullName.toLowerCase().includes(q) || e.employeeCode.toLowerCase().includes(q) || (e.department ?? '').toLowerCase().includes(q);
   });
   const allFilteredSelected = filtered.length > 0 && filtered.every(e => selectedIds.has(e.id));
+  const failed = !!result && result.startsWith('Error:');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-      <div className="bg-paper w-full max-w-lg flex flex-col max-h-[85vh]">
-        <div className="p-8 border-b border-rule flex justify-between items-start shrink-0">
-          <div>
-            <h2 className="text-lg font-black text-ink">Enroll Employees</h2>
-            <p className="text-[10px] text-muted uppercase tracking-widest mt-1 font-black">{program.title}</p>
+    <Modal
+      open
+      onClose={onClose}
+      title="Enrol employees"
+      caption={program.title}
+      footer={result ? <Button onClick={onClose}>Close</Button> : <>
+        <Button variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button onClick={submit} disabled={saving || selectedIds.size === 0} reason={selectedIds.size === 0 && !saving ? 'Select at least one person' : undefined}>
+          {saving ? 'Enrolling…' : selectedIds.size > 0 ? `Enrol ${selectedIds.size}` : 'Enrol'}
+        </Button>
+      </>}
+    >
+      {result ? (
+        <div role="status" className={`flex items-center gap-2.5 p-4 rounded-control ${failed ? 'bg-danger-bg text-danger' : 'bg-ok-bg text-ok'}`}>
+          <Icon name={failed ? 'alert' : 'check'} size={18} strokeWidth={2} />
+          <span className="text-sm font-semibold">{result}</span>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <SearchInput value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, code or department…" aria-label="Search employees" />
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => {
+                if (allFilteredSelected) {
+                  setSelectedIds(prev => { const n = new Set(prev); filtered.forEach(e => n.delete(e.id)); return n; });
+                } else {
+                  setSelectedIds(prev => { const n = new Set(prev); filtered.forEach(e => n.add(e.id)); return n; });
+                }
+              }}
+              className="text-[13px] font-semibold text-accent hover:underline"
+            >
+              {allFilteredSelected ? 'Deselect all' : 'Select all'}
+            </button>
+            <span className="text-[13px] text-muted tabular-nums">{selectedIds.size} selected</span>
           </div>
-          <button onClick={onClose} className="text-muted hover:text-ink text-xl font-black">✕</button>
+          <div className="max-h-[40vh] overflow-y-auto border border-rule rounded-control divide-y divide-rule">
+            {empLoading ? (
+              <div className="p-6 flex flex-col gap-2">{[1, 2, 3].map(i => <div key={i} className="h-10 bg-pill rounded-control animate-pulse" />)}</div>
+            ) : filtered.length === 0 ? (
+              <p className="p-6 text-center text-sm text-muted">{search ? 'No one matches that search.' : 'No active employees found.'}</p>
+            ) : filtered.map(emp => {
+              const checked = selectedIds.has(emp.id);
+              return (
+                <label key={emp.id} className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer ${checked ? 'bg-tint' : 'hover:bg-page'}`}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => setSelectedIds(prev => { const n = new Set(prev); checked ? n.delete(emp.id) : n.add(emp.id); return n; })}
+                    className="w-4 h-4 accent-accent shrink-0"
+                  />
+                  <span className="flex flex-col flex-1 min-w-0">
+                    <span className="text-sm font-semibold text-ink truncate">{emp.fullName}</span>
+                    <span className="text-xs text-muted truncate tabular-nums">{emp.employeeCode}{emp.department ? ` · ${emp.department}` : ''}</span>
+                  </span>
+                  {emp.designation && <span className="hidden sm:block text-xs text-muted truncate max-w-[140px]">{emp.designation}</span>}
+                </label>
+              );
+            })}
+          </div>
+          <Field label="Due date" help="Optional. Overdue enrolments are flagged to the employee.">
+            <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+          </Field>
         </div>
-        <div className="p-6 flex flex-col gap-4 min-h-0 flex-1">
-          {result ? (
-            <div className="p-4 bg-page text-accent text-xs font-black border border-accent">{result}</div>
-          ) : (
-            <>
-              {/* Search */}
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search by name, code, or department…"
-                className="w-full border border-rule px-4 py-3 text-sm font-bold outline-none focus:border-highlight shrink-0"
-              />
-
-              {/* Select all / count */}
-              <div className="flex items-center justify-between px-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (allFilteredSelected) {
-                      setSelectedIds(prev => { const n = new Set(prev); filtered.forEach(e => n.delete(e.id)); return n; });
-                    } else {
-                      setSelectedIds(prev => { const n = new Set(prev); filtered.forEach(e => n.add(e.id)); return n; });
-                    }
-                  }}
-                  className="text-[10px] font-black text-ink uppercase tracking-widest hover:underline"
-                >
-                  {allFilteredSelected ? 'Deselect All' : 'Select All'}
-                </button>
-                <span className="eyebrow-tight">{selectedIds.size} selected</span>
-              </div>
-
-              {/* Employee list */}
-              <div className="flex-1 overflow-y-auto border border-rule divide-y divide-rule min-h-0">
-                {empLoading ? (
-                  <div className="p-8 text-center text-[10px] font-black text-muted uppercase tracking-widest animate-pulse">Loading employees…</div>
-                ) : filtered.length === 0 ? (
-                  <div className="p-8 text-center text-[10px] font-black text-muted uppercase tracking-widest">No employees found</div>
-                ) : filtered.map(emp => {
-                  const checked = selectedIds.has(emp.id);
-                  return (
-                    <label key={emp.id} className={`flex items-center gap-4 px-5 py-3 cursor-pointer transition-colors ${checked ? 'bg-page' : 'hover:bg-page'}`}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => setSelectedIds(prev => { const n = new Set(prev); checked ? n.delete(emp.id) : n.add(emp.id); return n; })}
-                        className="w-4 h-4 accent-highlight"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-black text-ink truncate">{emp.fullName}</p>
-                        <p className="label-form">{emp.employeeCode}{emp.department ? ` · ${emp.department}` : ''}</p>
-                      </div>
-                      {emp.designation && <span className="text-[9px] font-bold text-muted truncate max-w-28">{emp.designation}</span>}
-                    </label>
-                  );
-                })}
-              </div>
-
-              {/* Due date */}
-              <div className="shrink-0">
-                <label className="eyebrow-tight block mb-2">Due Date (optional)</label>
-                <input
-                  type="date"
-                  className="w-full border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight"
-                  value={dueDate}
-                  onChange={e => setDueDate(e.target.value)}
-                />
-              </div>
-
-              <button
-                onClick={submit}
-                disabled={saving || selectedIds.size === 0}
-                className="w-full py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all disabled:opacity-50 shrink-0"
-              >
-                {saving ? 'Enrolling…' : `Enroll${selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}`}
-              </button>
-            </>
-          )}
-          <button onClick={onClose} className="w-full py-3 border border-rule text-muted text-[10px] font-black uppercase tracking-widest hover:bg-page shrink-0">
-            {result ? 'Close' : 'Cancel'}
-          </button>
-        </div>
-      </div>
-    </div>
+      )}
+    </Modal>
   );
 }
 
@@ -701,182 +642,121 @@ function AdminProgramsTab({ onRefreshStats }: { onRefreshStats: () => void }) {
   function toggleProgSort(col: typeof progSort.col) {
     setProgSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
   }
-  function ProgSortIcon({ col }: { col: typeof progSort.col }) {
-    return <span className="text-[8px] ml-1">{progSort.col === col ? (progSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
-  }
+  const head = (col: typeof progSort.col, label: string, alignEnd = false) => (
+    <button type="button" onClick={() => toggleProgSort(col)} aria-sort={progSort.col === col ? (progSort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+      className={`inline-flex items-center gap-1 hover:text-ink ${alignEnd ? 'justify-end w-full' : ''}`}>
+      {label}{progSort.col === col && <Icon name="chevronDown" size={13} strokeWidth={2.25} className={progSort.dir === 'asc' ? 'rotate-180' : ''} />}
+    </button>
+  );
+
+  const actions = (p: TrainingProgram) => (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      <Button size="sm" variant="ghost" onClick={() => setMaterialsFor(p)}>Lessons</Button>
+      {p.status === 'DRAFT' && <Button size="sm" variant="ghost" onClick={() => updateStatus(p.id, 'PUBLISHED')}>Publish</Button>}
+      {p.status === 'PUBLISHED' && (
+        <>
+          <Button size="sm" variant="ghost" onClick={() => setEnrollFor(p)}>Enrol</Button>
+          <Button size="sm" variant="ghost" onClick={() => updateStatus(p.id, 'DRAFT')}>Unpublish</Button>
+        </>
+      )}
+      {p.status !== 'ARCHIVED' && <Button size="sm" variant="danger" onClick={() => archiveProgram(p.id)}>Archive</Button>}
+    </span>
+  );
+
+  const columns: Column<TrainingProgram>[] = [
+    {
+      key: 'title', label: head('title', 'Programme'), width: 'minmax(0, 1.6fr)',
+      render: p => (
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-semibold text-ink truncate">{p.title}</span>
+          {p.isMandatory && <Badge tone="danger">Required</Badge>}
+          {p.durationMins && <span className="text-xs text-muted tabular-nums shrink-0">{fmtDuration(p.durationMins)}</span>}
+        </div>
+      ),
+    },
+    { key: 'category', label: head('category', 'Category'), width: '120px', render: p => CATEGORY_LABELS[p.category] },
+    { key: 'status', label: head('status', 'Status'), width: '110px', render: p => <Badge tone={PROGRAM_STATUS_TONE[p.status]}>{PROGRAM_STATUS_LABEL[p.status]}</Badge> },
+    {
+      key: 'materials', label: head('materials', 'Lessons'), width: '100px',
+      render: p => <button type="button" onClick={() => setMaterialsFor(p)} className="text-[13px] font-semibold text-accent hover:underline tabular-nums">{p._count?.materials ?? 0} lessons</button>,
+    },
+    { key: 'enrolled', label: head('enrolled', 'Enrolled', true), width: '90px', align: 'right', numeric: true, render: p => p._count?.enrollments ?? 0 },
+    { key: 'act', label: '', width: '300px', align: 'right', render: actions },
+  ];
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       {materialsFor && <MaterialsModal program={materialsFor} onClose={() => { setMaterialsFor(null); load(); }} />}
       {enrollFor && <EnrollModal program={enrollFor} onClose={() => setEnrollFor(null)} onDone={load} />}
 
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex gap-2">
-          {(['', 'DRAFT', 'PUBLISHED', 'ARCHIVED'] as const).map(s => (
-            <button
-              key={s}
-              onClick={() => setFilter(s)}
-              className={`px-4 py-2  text-[9px] font-black uppercase tracking-widest transition-all ${filter === s ? 'bg-highlight text-paper' : 'bg-paper text-muted border border-rule hover:border-highlight'}`}
-            >
-              {s || 'All'}
-            </button>
-          ))}
-        </div>
-        <button
-          onClick={() => setShowCreate(v => !v)}
-          className="px-6 py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all active:scale-95"
-        >
-          {showCreate ? '✕ Cancel' : '+ New Program'}
-        </button>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <FilterChips<ProgramStatus | ''>
+          label="Status"
+          items={[{ id: '', label: 'All' }, { id: 'DRAFT', label: 'Draft' }, { id: 'PUBLISHED', label: 'Published' }, { id: 'ARCHIVED', label: 'Archived' }]}
+          active={filter}
+          onChange={setFilter}
+        />
+        <Button icon="plus" onClick={() => setShowCreate(true)}>New programme</Button>
       </div>
 
-      {showCreate && (
-        <div className="bg-page border border-highlight p-6 flex flex-col gap-4">
-          <p className="text-[10px] font-black text-ink uppercase tracking-widest">Create Training Program</p>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <input
-              className="border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight col-span-2"
-              placeholder="Program Title *"
-              value={form.title}
-              onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-            />
-            <textarea
-              className="border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight col-span-2 resize-none h-20"
-              placeholder="Description"
-              value={form.description}
-              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-            />
-            <select
-              className="border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight"
-              value={form.category}
-              onChange={e => setForm(f => ({ ...f, category: e.target.value as ProgramCategory }))}
-            >
-              {(Object.keys(CATEGORY_LABELS) as ProgramCategory[]).map(c => (
-                <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
-              ))}
-            </select>
-            <input
-              className="border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight"
-              placeholder="Duration (mins)"
-              type="number"
-              value={form.durationMins}
-              onChange={e => setForm(f => ({ ...f, durationMins: e.target.value }))}
-            />
-            <input
-              className="border border-rule px-4 py-3 text-xs font-black text-ink focus:outline-none focus:border-highlight"
-              placeholder="Passing Score % (optional)"
-              type="number"
-              min={0} max={100}
-              value={form.passingScore}
-              onChange={e => setForm(f => ({ ...f, passingScore: e.target.value }))}
-            />
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.isMandatory}
-                onChange={e => setForm(f => ({ ...f, isMandatory: e.target.checked }))}
-                className="w-4 h-4 accent-highlight"
-              />
-              <span className="text-[10px] font-black text-ink uppercase tracking-widest">Mandatory for all employees</span>
-            </label>
-          </div>
-          <button
-            onClick={createProgram}
-            disabled={saving || !form.title}
-            className="self-start px-8 py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all disabled:opacity-50"
-          >
-            {saving ? 'Creating…' : 'Create Program'}
-          </button>
+      <Modal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        title="New training programme"
+        caption="Starts as a draft. Add lessons, then publish."
+        footer={<>
+          <Button variant="secondary" onClick={() => setShowCreate(false)}>Cancel</Button>
+          <Button onClick={createProgram} disabled={saving || !form.title} reason={!form.title && !saving ? 'Give it a title' : undefined}>{saving ? 'Creating…' : 'Create programme'}</Button>
+        </>}
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Title" required className="sm:col-span-2">
+            <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+          </Field>
+          <Field label="Description" className="sm:col-span-2">
+            <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3} />
+          </Field>
+          <Field label="Category">
+            <Select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value as ProgramCategory }))}>
+              {(Object.keys(CATEGORY_LABELS) as ProgramCategory[]).map(c => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
+            </Select>
+          </Field>
+          <Field label="Duration (minutes)">
+            <Input type="number" value={form.durationMins} onChange={e => setForm(f => ({ ...f, durationMins: e.target.value }))} />
+          </Field>
+          <Field label="Pass mark (%)" help="Optional. Quizzes below this are marked as not passed.">
+            <Input type="number" min={0} max={100} value={form.passingScore} onChange={e => setForm(f => ({ ...f, passingScore: e.target.value }))} />
+          </Field>
+          <label className="flex items-center gap-3 self-center cursor-pointer">
+            <input type="checkbox" checked={form.isMandatory} onChange={e => setForm(f => ({ ...f, isMandatory: e.target.checked }))} className="w-4 h-4 accent-accent" />
+            <span className="text-sm text-ink">Mandatory for all employees</span>
+          </label>
         </div>
-      )}
+      </Modal>
 
-      {error && (
-        <div className="bg-page border border-highlight p-6 flex items-center justify-between gap-4">
-          <p className="text-sm font-black text-ink">{error}</p>
-          <button onClick={load} className="px-5 py-2 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight shrink-0">Retry</button>
-        </div>
-      )}
+      {error && <ErrorPanel title="Something went wrong" message={error} onRetry={load} />}
 
       {loading ? (
-        <p className="text-sm text-muted p-4">Loading programs…</p>
-      ) : filteredPrograms.length === 0 ? (
-        <p className="text-sm text-muted p-4 text-center">No programs found.</p>
+        <div className="flex flex-col gap-2">{[1, 2, 3, 4].map(i => <Skeleton key={i} h="h-[52px]" />)}</div>
       ) : (
-        <div className="bg-paper border border-rule overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead className="label-form border-b border-rule">
-              <tr>
-                {([
-                  { col: 'title',    label: 'Program',   cls: 'px-6 py-5' },
-                  { col: 'category', label: 'Category',  cls: 'px-6 py-5' },
-                  { col: 'status',   label: 'Status',    cls: 'px-6 py-5' },
-                  { col: 'materials',label: 'Materials', cls: 'px-6 py-5' },
-                  { col: 'enrolled', label: 'Enrolled',  cls: 'px-6 py-5' },
-                  { col: null,       label: 'Actions',   cls: 'px-6 py-5 text-right' },
-                ] as const).map(h => (
-                  <th key={h.label} className={h.cls}>
-                    {h.col ? (
-                      <button onClick={() => toggleProgSort(h.col!)} className="flex items-center hover:text-ink transition-colors">
-                        {h.label}<ProgSortIcon col={h.col} />
-                      </button>
-                    ) : h.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-rule">
-              {sortedPrograms.map(p => (
-                <tr key={p.id} className="hover:bg-page transition-all group">
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-black text-ink group-hover:text-ink transition-colors">{p.title}</span>
-                      <div className="flex items-center gap-2">
-                        {p.isMandatory && <span className="text-[8px] font-black px-1.5 py-0.5 bg-page text-ink border border-ink uppercase">Required</span>}
-                        {p.durationMins && <span className="text-[9px] text-muted font-black">{fmtDuration(p.durationMins)}</span>}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`text-[9px] font-black px-2 py-0.5  border ${CATEGORY_COLORS[p.category]}`}>
-                      {CATEGORY_LABELS[p.category]}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`text-[9px] font-black px-2 py-0.5  ${STATUS_COLORS[p.status]}`}>{p.status}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <button
-                      onClick={() => setMaterialsFor(p)}
-                      className="text-[10px] font-black text-accent hover:underline"
-                    >
-                      {p._count?.materials ?? 0} lessons
-                    </button>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-[10px] font-black text-muted">{p._count?.enrollments ?? 0}</span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-2 flex-wrap">
-                      <button onClick={() => setMaterialsFor(p)} className="px-3 py-1.5 bg-page text-accent border border-accent text-[9px] font-black uppercase hover:bg-page transition-all">📚 Lessons</button>
-                      {p.status === 'DRAFT' && (
-                        <button onClick={() => updateStatus(p.id, 'PUBLISHED')} className="px-3 py-1.5 bg-page text-accent border border-accent text-[9px] font-black uppercase hover:bg-page transition-all">Publish</button>
-                      )}
-                      {p.status === 'PUBLISHED' && (
-                        <>
-                          <button onClick={() => setEnrollFor(p)} className="px-3 py-1.5 bg-page text-ink border border-highlight text-[9px] font-black uppercase hover:bg-page transition-all">Enroll</button>
-                          <button onClick={() => updateStatus(p.id, 'DRAFT')} className="px-3 py-1.5 bg-page text-ink border border-rule text-[9px] font-black uppercase hover:bg-page transition-all">Unpublish</button>
-                        </>
-                      )}
-                      {p.status !== 'ARCHIVED' && (
-                        <button onClick={() => archiveProgram(p.id)} className="px-3 py-1.5 bg-page text-ink border border-ink text-[9px] font-black uppercase hover:bg-page transition-all">Archive</button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          aria-label="Training programmes"
+          columns={columns}
+          rows={sortedPrograms}
+          rowKey={p => p.id}
+          empty={<EmptyState icon="book" title={filter ? `No ${PROGRAM_STATUS_LABEL[filter].toLowerCase()} programmes` : 'No programmes yet'} description="Create a programme, add lessons, then publish it so people can enrol." action={<Button icon="plus" onClick={() => setShowCreate(true)}>New programme</Button>} className="py-6" />}
+          mobileCard={p => (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-start justify-between gap-3">
+                <span className="font-semibold text-ink">{p.title}</span>
+                <Badge tone={PROGRAM_STATUS_TONE[p.status]}>{PROGRAM_STATUS_LABEL[p.status]}</Badge>
+              </div>
+              <span className="text-xs text-muted tabular-nums">{CATEGORY_LABELS[p.category]} · {p._count?.materials ?? 0} lessons · {p._count?.enrollments ?? 0} enrolled{p.isMandatory ? ' · required' : ''}</span>
+              <div className="-ml-3">{actions(p)}</div>
+            </div>
+          )}
+          footer={<span className="tabular-nums">{filteredPrograms.length} programme{filteredPrograms.length === 1 ? '' : 's'}</span>}
+        />
       )}
     </div>
   );
@@ -915,90 +795,64 @@ function AdminEnrollmentsTab() {
   function toggleEnrSort(col: typeof enrSort.col) {
     setEnrSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
   }
-  function EnrSortIcon({ col }: { col: typeof enrSort.col }) {
-    return <span className="text-[8px] ml-1">{enrSort.col === col ? (enrSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
-  }
+  const head = (col: typeof enrSort.col, label: string, alignEnd = false) => (
+    <button type="button" onClick={() => toggleEnrSort(col)} aria-sort={enrSort.col === col ? (enrSort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+      className={`inline-flex items-center gap-1 hover:text-ink ${alignEnd ? 'justify-end w-full' : ''}`}>
+      {label}{enrSort.col === col && <Icon name="chevronDown" size={13} strokeWidth={2.25} className={enrSort.dir === 'asc' ? 'rotate-180' : ''} />}
+    </button>
+  );
+  const overdue = (e: TrainingEnrollment) => !!e.dueDate && new Date(e.dueDate) < new Date();
+
+  const columns: Column<TrainingEnrollment>[] = [
+    { key: 'employee', label: head('employee', 'Employee'), width: '120px', numeric: true, render: e => <span className="text-muted">{e.employeeId.slice(0, 8)}…</span> },
+    { key: 'program', label: head('program', 'Programme'), width: 'minmax(0, 1.5fr)', render: e => <span className="font-semibold">{e.program?.title ?? '—'}</span> },
+    { key: 'status', label: head('status', 'Status'), width: '120px', render: e => <Badge tone={ENR_TONE[e.status]}>{ENR_LABEL[e.status]}</Badge> },
+    {
+      key: 'progress', label: head('progress', 'Progress'), width: '150px',
+      render: e => <div className="flex items-center gap-2"><ProgressBar pct={e.progress} color={e.status === 'COMPLETED' ? 'bg-ok' : 'bg-accent'} /><span className="text-xs text-muted tabular-nums w-9 text-right">{e.progress}%</span></div>,
+    },
+    { key: 'score', label: head('score', 'Score', true), width: '70px', align: 'right', numeric: true, render: e => e.score !== null && e.score !== undefined ? `${e.score}%` : '—' },
+    { key: 'enrolled', label: head('enrolled', 'Enrolled'), width: '110px', numeric: true, render: e => fmtDate(e.enrolledAt) },
+    {
+      key: 'due', label: head('due', 'Due'), width: '150px', numeric: true,
+      render: e => <span className="inline-flex items-center gap-1.5">{fmtDate(e.dueDate)}{overdue(e) && e.status !== 'COMPLETED' && <Badge tone="danger">Overdue</Badge>}</span>,
+    },
+  ];
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex gap-2 flex-wrap">
-        {(['', 'ENROLLED', 'IN_PROGRESS', 'COMPLETED', 'DROPPED'] as const).map(s => (
-          <button
-            key={s}
-            onClick={() => setFilter(s)}
-            className={`px-4 py-2  text-[9px] font-black uppercase tracking-widest transition-all ${filter === s ? 'bg-highlight text-paper' : 'bg-paper text-muted border border-rule hover:border-highlight'}`}
-          >
-            {s || 'All'}
-          </button>
-        ))}
-      </div>
+    <div className="flex flex-col gap-4">
+      <FilterChips<EnrollmentStatus | ''>
+        label="Status"
+        items={[{ id: '', label: 'All' }, { id: 'ENROLLED', label: 'Not started' }, { id: 'IN_PROGRESS', label: 'In progress' }, { id: 'COMPLETED', label: 'Completed' }, { id: 'DROPPED', label: 'Dropped' }]}
+        active={filter}
+        onChange={setFilter}
+      />
 
-      {error && (
-        <div className="bg-page border border-highlight p-6 flex items-center justify-between gap-4">
-          <p className="text-sm font-black text-ink">{error}</p>
-        </div>
-      )}
+      {error && <ErrorPanel title="Enrolments did not load" message={error} />}
 
       {loading ? (
-        <p className="text-sm text-muted p-4">Loading enrollments…</p>
-      ) : enrollments.length === 0 ? (
-        <p className="text-sm text-muted p-4 text-center">No enrollments found.</p>
+        <div className="flex flex-col gap-2">{[1, 2, 3, 4].map(i => <Skeleton key={i} h="h-[52px]" />)}</div>
       ) : (
-        <div className="bg-paper border border-rule overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead className="label-form border-b border-rule">
-              <tr>
-                {([
-                  { col: 'employee', label: 'Employee ID', cls: 'px-6 py-5' },
-                  { col: 'program',  label: 'Program',     cls: 'px-6 py-5' },
-                  { col: 'status',   label: 'Status',      cls: 'px-6 py-5' },
-                  { col: 'progress', label: 'Progress',    cls: 'px-6 py-5' },
-                  { col: 'score',    label: 'Score',       cls: 'px-6 py-5' },
-                  { col: 'enrolled', label: 'Enrolled',    cls: 'px-6 py-5' },
-                  { col: 'due',      label: 'Due',         cls: 'px-6 py-5' },
-                ] as const).map(h => (
-                  <th key={h.label} className={h.cls}>
-                    <button onClick={() => toggleEnrSort(h.col)} className="flex items-center hover:text-ink transition-colors">
-                      {h.label}<EnrSortIcon col={h.col} />
-                    </button>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-rule">
-              {sortedEnrollments.map(e => (
-                <tr key={e.id} className="hover:bg-page">
-                  <td className="px-6 py-4">
-                    <span className="text-[10px] font-black text-muted font-mono">{e.employeeId.slice(0, 8)}…</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-xs font-black text-ink">{e.program?.title ?? '—'}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`text-[9px] font-black px-2 py-0.5  ${ENR_COLORS[e.status]}`}>{e.status.replace('_', ' ')}</span>
-                  </td>
-                  <td className="px-6 py-4 w-32">
-                    <div className="flex items-center gap-2">
-                      <ProgressBar pct={e.progress} color={e.status === 'COMPLETED' ? 'bg-accent' : 'bg-highlight'} />
-                      <span className="text-[9px] font-black text-muted shrink-0">{e.progress}%</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-[10px] font-black text-muted">{e.score !== null && e.score !== undefined ? `${e.score}%` : '—'}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-[10px] font-black text-muted">{fmtDate(e.enrolledAt)}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`text-[10px] font-black ${e.dueDate && new Date(e.dueDate) < new Date() ? 'text-ink' : 'text-muted'}`}>
-                      {fmtDate(e.dueDate)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          aria-label="Enrolments"
+          columns={columns}
+          rows={sortedEnrollments}
+          rowKey={e => e.id}
+          empty={<EmptyState icon="users" title="No enrolments" description={filter ? 'Nothing matches this filter.' : 'Enrol people from a published programme.'} className="py-6" />}
+          mobileCard={e => (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-start justify-between gap-3">
+                <span className="font-semibold text-ink">{e.program?.title ?? '—'}</span>
+                <Badge tone={ENR_TONE[e.status]}>{ENR_LABEL[e.status]}</Badge>
+              </div>
+              <ProgressBar pct={e.progress} color={e.status === 'COMPLETED' ? 'bg-ok' : 'bg-accent'} />
+              <span className="text-xs text-muted tabular-nums">
+                {e.employeeId.slice(0, 8)}… · {e.progress}%{e.score != null ? ` · score ${e.score}%` : ''} · due {fmtDate(e.dueDate)}{overdue(e) && e.status !== 'COMPLETED' ? ' (overdue)' : ''}
+              </span>
+            </div>
+          )}
+          footer={enrollments.length > 0 ? <span className="tabular-nums">{enrollments.length} enrolment{enrollments.length === 1 ? '' : 's'}</span> : undefined}
+        />
       )}
     </div>
   );
@@ -1092,340 +946,251 @@ function CoursePlayer({
   const isMaterialDone = (id: string) => completedIds.has(id);
   const isCompleted = enrollment.status === 'COMPLETED';
 
+  const markDone = (label: string) => activeMaterial && !isMaterialDone(activeMaterial.id) && (
+    <Button icon="check" onClick={() => completeMaterial(activeMaterial.id)} disabled={completing} className="self-start">
+      {completing ? 'Saving…' : label}
+    </Button>
+  );
+  const blank = (text: string) => <p className="p-6 rounded-control bg-page text-sm text-muted text-center">{text}</p>;
+
   return (
-    <div className="flex flex-col gap-0 animate-in fade-in duration-300">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black text-muted hover:text-ink uppercase tracking-widest transition-colors">
-          ← Back
-        </button>
-        <div className="h-4 w-px bg-rule" />
-        <div className="flex-1 min-w-0">
-          <h2 className="text-sm font-black text-ink truncate">{enrollment.program?.title}</h2>
-          <div className="flex items-center gap-3 mt-1 flex-wrap">
-            {enrollment.program && (
-              <span className={`text-[8px] font-black px-2 py-0.5  border ${CATEGORY_COLORS[enrollment.program.category]}`}>
-                {CATEGORY_LABELS[enrollment.program.category]}
-              </span>
-            )}
-            {enrollment.program?.isMandatory && (
-              <span className="text-[8px] font-black px-2 py-0.5 bg-page text-ink border border-ink">Required</span>
-            )}
-            {enrollment.dueDate && (
-              <span className={`text-[8px] font-black px-2 py-0.5  border ${isOverdue ? 'bg-page text-ink border-ink' : 'bg-page text-muted border-rule'}`}>
-                {isOverdue ? 'Overdue · ' : 'Due · '}{fmtDate(enrollment.dueDate)}
-              </span>
-            )}
+    <div className="flex flex-col gap-5">
+      <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-accent hover:underline self-start">
+        <Icon name="chevronRight" size={15} strokeWidth={2} className="rotate-180" />Back to my training
+      </button>
+
+      {/* Identity band */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-2 min-w-0">
+          <h2 className="text-2xl font-extrabold tracking-[-0.02em] text-ink">{enrollment.program?.title}</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            {enrollment.program && <Badge>{CATEGORY_LABELS[enrollment.program.category]}</Badge>}
+            {enrollment.program?.isMandatory && <Badge tone="danger">Required</Badge>}
+            {enrollment.dueDate && <Badge tone={isOverdue && !isCompleted ? 'danger' : 'neutral'}>{isOverdue && !isCompleted ? 'Overdue · ' : 'Due '}{fmtDate(enrollment.dueDate)}</Badge>}
           </div>
         </div>
-        <div className="text-right shrink-0">
-          <p className="text-xl font-black text-ink">{progress}%</p>
-          <p className="text-[8px] font-black text-muted uppercase tracking-widest">{doneMats}/{totalMats} done</p>
+        <div className="flex flex-col gap-1.5 sm:w-[220px] shrink-0">
+          <div className="flex items-baseline justify-between">
+            <span className="text-[26px] font-extrabold text-ink tabular-nums leading-none">{progress}%</span>
+            <span className="text-xs text-muted tabular-nums">{doneMats} of {totalMats} done</span>
+          </div>
+          <ProgressBar pct={progress} color={isCompleted ? 'bg-ok' : 'bg-accent'} label="Course progress" />
         </div>
       </div>
 
-      {/* Progress bar */}
-      <div className="mb-6">
-        <ProgressBar pct={progress} color={isCompleted ? 'bg-accent' : 'bg-highlight'} />
-      </div>
-
-      {/* Completion banner */}
       {isCompleted && (
-        <div className="mb-6 bg-page border border-accent p-5 flex items-center gap-4">
-          <div className="w-10 h-10 bg-accent flex items-center justify-center text-paper text-lg font-black shrink-0">✓</div>
-          <div>
-            <p className="text-sm font-black text-accent">Course Completed!</p>
-            <p className="text-[10px] text-accent font-black uppercase tracking-widest mt-0.5">
-              Completed {fmtDate(enrollment.completedAt)}
-              {enrollment.score !== null && enrollment.score !== undefined && ` · Score: ${enrollment.score}%`}
-            </p>
+        <div className="flex items-center gap-3 p-4 rounded-control bg-ok-bg">
+          <span className="flex items-center justify-center w-9 h-9 rounded-full bg-ok text-on-accent shrink-0"><Icon name="check" size={18} strokeWidth={2.5} /></span>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm font-bold text-ok">Course completed</span>
+            <span className="text-[13px] text-ink tabular-nums">
+              {fmtDate(enrollment.completedAt)}
+              {enrollment.score !== null && enrollment.score !== undefined && ` · score ${enrollment.score}%`}
+            </span>
           </div>
         </div>
       )}
 
-      {/* No materials state */}
       {materials.length === 0 && (
-        <div className="bg-page border border-highlight p-8 text-center">
-          <p className="text-3xl mb-3">🏗️</p>
-          <p className="text-sm font-black text-ink">Course materials are being prepared</p>
-          <p className="text-[10px] text-ink font-black uppercase tracking-widest mt-1">Check back soon — content will appear here once ready</p>
-        </div>
+        <Card><EmptyState icon="book" title="Course materials are being prepared" description="Check back soon. Lessons appear here once they are added." /></Card>
       )}
 
-      {/* Main layout: sidebar + content */}
       {materials.length > 0 && (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        {/* Material list */}
-        <div className="bg-paper border border-rule overflow-hidden">
-          <div className="px-5 py-4 border-b border-rule">
-            <p className="label-form">Course Materials</p>
-          </div>
-          <div className="divide-y divide-rule">
-            {materials.length === 0 && (
-              <p className="text-[10px] text-muted p-5 text-center font-black uppercase tracking-widest">No materials yet</p>
-            )}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+        {/* Lesson list */}
+        <Card padding="p-0" className="overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-rule text-[15.5px] font-bold text-ink">Lessons</div>
+          <ol className="flex flex-col divide-y divide-rule">
             {materials.map((m, idx) => {
               const done = isMaterialDone(m.id);
               const isActive = activeMaterial?.id === m.id;
               return (
-                <button
-                  key={m.id}
-                  onClick={() => openMaterial(m)}
-                  className={`w-full flex items-center gap-3 px-5 py-4 text-left transition-all ${isActive ? 'bg-page border-l-2 border-highlight' : 'hover:bg-page'}`}
-                >
-                  <div className={`w-6 h-6  flex items-center justify-center text-[10px] font-black shrink-0 border-2 transition-all ${done ? 'bg-accent border-accent text-paper' : isActive ? 'border-highlight text-ink' : 'border-rule text-muted'}`}>
-                    {done ? '✓' : idx + 1}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-[11px] font-black truncate ${isActive ? 'text-ink' : done ? 'text-muted' : 'text-ink'}`}>{m.title}</p>
-                    <p className="text-[8px] font-black text-muted uppercase tracking-widest mt-0.5">
-                      {m.type}{m.durationMins ? ` · ${fmtDuration(m.durationMins)}` : ''}
-                    </p>
-                  </div>
-                  {done && <span className="text-accent text-xs shrink-0">✓</span>}
-                </button>
+                <li key={m.id}>
+                  <button type="button" onClick={() => openMaterial(m)} aria-current={isActive ? 'step' : undefined}
+                    className={`w-full flex items-center gap-3 px-5 py-3 text-left transition-colors ${isActive ? 'bg-tint' : 'hover:bg-page'}`}>
+                    <span className={`flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold shrink-0 ${done ? 'bg-accent border-accent text-on-accent' : isActive ? 'border-accent text-accent' : 'border-rule text-muted'}`}>
+                      {done ? <Icon name="check" size={13} strokeWidth={3} /> : idx + 1}
+                    </span>
+                    <span className="flex flex-col flex-1 min-w-0">
+                      <span className={`text-sm truncate ${isActive ? 'font-bold text-ink' : done ? 'text-muted' : 'font-medium text-ink'}`}>{m.title}</span>
+                      <span className="text-xs text-muted">{MATERIAL_LABEL[m.type]}{m.durationMins ? ` · ${fmtDuration(m.durationMins)}` : ''}{done ? ' · done' : ''}</span>
+                    </span>
+                  </button>
+                </li>
               );
             })}
-          </div>
-        </div>
+          </ol>
+        </Card>
 
         {/* Content viewer */}
-        <div className="lg:col-span-2 bg-paper border border-rule overflow-hidden flex flex-col">
+        <Card className="lg:col-span-2 gap-5">
           {!activeMaterial ? (
-            <div className="flex-1 flex items-center justify-center p-12 text-center">
-              <div>
-                <p className="text-4xl mb-3">📖</p>
-                <p className="text-sm font-black text-muted uppercase tracking-widest">Select a material to begin</p>
-              </div>
-            </div>
+            <EmptyState icon="book" title="Pick a lesson to begin" />
           ) : (
             <>
-              <div className="px-7 py-5 border-b border-rule flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-[8px] font-black text-muted uppercase tracking-widest">{activeMaterial.type}</p>
-                  <h3 className="text-sm font-black text-ink mt-0.5">{activeMaterial.title}</h3>
+              <div className="flex items-start justify-between gap-4 pb-4 border-b border-rule">
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="inline-flex items-center gap-1.5 text-[13px] text-muted"><Icon name={MATERIAL_ICONS[activeMaterial.type]} size={14} />{MATERIAL_LABEL[activeMaterial.type]}</span>
+                  <h3 className="text-lg font-bold text-ink">{activeMaterial.title}</h3>
                 </div>
-                {isMaterialDone(activeMaterial.id) && (
-                  <span className="text-[9px] font-black px-3 py-1 bg-page text-accent border border-accent shrink-0">Completed ✓</span>
-                )}
+                {isMaterialDone(activeMaterial.id) && <Badge tone="ok">Completed</Badge>}
               </div>
 
-              <div className="flex-1 p-7 flex flex-col gap-6">
+              {/* VIDEO */}
+              {activeMaterial.type === 'VIDEO' && (() => {
+                const embedUrl = getVideoEmbed(activeMaterial.url);
+                return (
+                  <div className="flex flex-col gap-4">
+                    {embedUrl ? (
+                      <div className="relative w-full overflow-hidden rounded-control bg-shadow" style={{ paddingTop: '56.25%' }}>
+                        <iframe
+                          src={embedUrl}
+                          title={activeMaterial.title}
+                          className="absolute inset-0 w-full h-full"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                      </div>
+                    ) : activeMaterial.url ? (
+                      <video src={activeMaterial.url} controls className="w-full rounded-control bg-shadow max-h-80" />
+                    ) : blank('No video link was provided for this lesson.')}
+                    {activeMaterial.content && <p className="text-sm text-ink leading-relaxed">{activeMaterial.content}</p>}
+                    {markDone('Mark as watched')}
+                  </div>
+                );
+              })()}
 
-                {/* VIDEO */}
-                {activeMaterial.type === 'VIDEO' && (() => {
-                  const embedUrl = getVideoEmbed(activeMaterial.url);
+              {/* DOCUMENT */}
+              {activeMaterial.type === 'DOCUMENT' && (
+                <div className="flex flex-col gap-4">
+                  {activeMaterial.url && (
+                    <a href={activeMaterial.url} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 h-10 px-4 rounded-control border border-rule bg-paper text-sm font-semibold text-ink hover:bg-pill self-start">
+                      <Icon name="file" size={16} />Open document
+                    </a>
+                  )}
+                  {activeMaterial.content ? (
+                    <div className="p-5 rounded-control bg-page border border-rule text-sm text-ink leading-relaxed whitespace-pre-wrap max-h-96 overflow-y-auto">
+                      {activeMaterial.content}
+                    </div>
+                  ) : blank('No reading material was added to this lesson.')}
+                  {markDone('I have read this')}
+                </div>
+              )}
+
+              {/* LINK */}
+              {activeMaterial.type === 'LINK' && (
+                <div className="flex flex-col gap-4">
+                  {activeMaterial.content && <p className="text-sm text-ink leading-relaxed">{activeMaterial.content}</p>}
+                  {activeMaterial.url && (
+                    <a
+                      href={activeMaterial.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setLinkVisited(true)}
+                      className="flex items-center justify-between gap-3 p-4 rounded-control border border-rule bg-page hover:border-accent"
+                    >
+                      <span className="flex flex-col min-w-0">
+                        <span className="text-sm font-semibold text-accent">Open the external resource</span>
+                        <span className="text-xs text-muted truncate">{activeMaterial.url}</span>
+                      </span>
+                      <Icon name="arrowRight" size={18} className="text-accent" />
+                    </a>
+                  )}
+                  {(linkVisited || !activeMaterial.url) && markDone('Mark as visited')}
+                  {!isMaterialDone(activeMaterial.id) && activeMaterial.url && !linkVisited && (
+                    <p className="text-[13px] text-muted">Open the resource above, then mark it as visited.</p>
+                  )}
+                </div>
+              )}
+
+              {/* QUIZ */}
+              {activeMaterial.type === 'QUIZ' && (() => {
+                const questions = parseQuiz(activeMaterial.content);
+                const done = isMaterialDone(activeMaterial.id);
+                const existingScore = enrollment.materialProgress.find(p => p.materialId === activeMaterial.id)?.score;
+
+                if (done && !quizResult) {
+                  const passed = existingScore !== null && existingScore !== undefined && existingScore >= passingScore;
                   return (
                     <div className="flex flex-col gap-4">
-                      {embedUrl ? (
-                        <div className="relative w-full overflow-hidden bg-shadow" style={{ paddingTop: '56.25%' }}>
-                          <iframe
-                            src={embedUrl}
-                            className="absolute inset-0 w-full h-full"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                          />
-                        </div>
-                      ) : activeMaterial.url ? (
-                        <div className="flex flex-col gap-3">
-                          <video src={activeMaterial.url} controls className="w-full bg-shadow max-h-80" />
-                        </div>
-                      ) : (
-                        <div className="bg-page p-8 text-center border border-rule">
-                          <p className="text-muted text-sm font-black">No video URL provided</p>
-                        </div>
-                      )}
-                      {activeMaterial.content && <p className="text-sm text-ink leading-relaxed">{activeMaterial.content}</p>}
-                      {!isMaterialDone(activeMaterial.id) && (
-                        <button
-                          onClick={() => completeMaterial(activeMaterial.id)}
-                          disabled={completing}
-                          className="self-start px-6 py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all disabled:opacity-50 active:scale-95"
-                        >
-                          {completing ? 'Saving…' : "Mark as Watched ✓"}
-                        </button>
+                      <div className={`flex flex-col items-center gap-1 p-6 rounded-control ${passed ? 'bg-ok-bg' : 'bg-page'}`}>
+                        <span className="text-3xl font-extrabold text-ink tabular-nums">{existingScore ?? '—'}%</span>
+                        <span className="text-[13px] text-muted">Quiz score</span>
+                        {existingScore !== null && existingScore !== undefined && (
+                          <span className={`text-sm font-semibold ${passed ? 'text-ok' : 'text-danger'}`}>
+                            {passed ? 'Passed' : `Below the pass mark (${passingScore}%)`}
+                          </span>
+                        )}
+                      </div>
+                      {questions.length > 0 && (
+                        <Button variant="secondary" onClick={() => { setQuizAnswers({}); setQuizResult(null); }} className="self-start">Retake quiz</Button>
                       )}
                     </div>
                   );
-                })()}
+                }
 
-                {/* DOCUMENT */}
-                {activeMaterial.type === 'DOCUMENT' && (
-                  <div className="flex flex-col gap-4">
-                    {activeMaterial.url && (
-                      <a href={activeMaterial.url} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-page text-accent border border-accent text-[10px] font-black uppercase tracking-widest hover:bg-page self-start">
-                        📎 Open Document →
-                      </a>
-                    )}
-                    {activeMaterial.content ? (
-                      <div className="bg-page border border-rule p-6 text-sm text-ink leading-relaxed whitespace-pre-wrap font-medium max-h-96 overflow-y-auto">
-                        {activeMaterial.content}
-                      </div>
-                    ) : (
-                      <div className="bg-page p-8 text-center border border-rule">
-                        <p className="text-muted text-sm font-black">No document content provided</p>
-                      </div>
-                    )}
-                    {!isMaterialDone(activeMaterial.id) && (
-                      <button
-                        onClick={() => completeMaterial(activeMaterial.id)}
-                        disabled={completing}
-                        className="self-start px-6 py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all disabled:opacity-50 active:scale-95"
-                      >
-                        {completing ? 'Saving…' : "I've Read This ✓"}
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {/* LINK */}
-                {activeMaterial.type === 'LINK' && (
-                  <div className="flex flex-col gap-4">
-                    {activeMaterial.content && <p className="text-sm text-ink leading-relaxed">{activeMaterial.content}</p>}
-                    {activeMaterial.url && (
-                      <a
-                        href={activeMaterial.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => setLinkVisited(true)}
-                        className="flex items-center justify-between p-5 bg-page border border-accent hover:bg-page transition-all group"
-                      >
-                        <div>
-                          <p className="text-[10px] font-black text-accent uppercase tracking-widest">External Resource</p>
-                          <p className="text-xs text-accent mt-1 truncate max-w-xs">{activeMaterial.url}</p>
-                        </div>
-                        <span className="text-accent font-black group-hover:translate-x-1 transition-transform">→</span>
-                      </a>
-                    )}
-                    {!isMaterialDone(activeMaterial.id) && (linkVisited || !activeMaterial.url) && (
-                      <button
-                        onClick={() => completeMaterial(activeMaterial.id)}
-                        disabled={completing}
-                        className="self-start px-6 py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all disabled:opacity-50 active:scale-95"
-                      >
-                        {completing ? 'Saving…' : "Mark as Visited ✓"}
-                      </button>
-                    )}
-                    {!isMaterialDone(activeMaterial.id) && activeMaterial.url && !linkVisited && (
-                      <p className="label-form">Open the resource above to mark as complete</p>
-                    )}
-                  </div>
-                )}
-
-                {/* QUIZ */}
-                {activeMaterial.type === 'QUIZ' && (() => {
-                  const questions = parseQuiz(activeMaterial.content);
-                  const done = isMaterialDone(activeMaterial.id);
-                  const existingScore = enrollment.materialProgress.find(p => p.materialId === activeMaterial.id)?.score;
-
-                  if (done && !quizResult) {
-                    return (
-                      <div className="flex flex-col gap-4">
-                        <div className="bg-page border border-accent p-6 text-center">
-                          <p className="text-2xl font-black text-accent">{existingScore ?? '—'}%</p>
-                          <p className="text-[10px] font-black text-accent uppercase tracking-widest mt-1">Quiz Score</p>
-                          {existingScore !== null && existingScore !== undefined && (
-                            <p className={`text-[9px] font-black uppercase tracking-widest mt-2 ${existingScore >= passingScore ? 'text-accent' : 'text-ink'}`}>
-                              {existingScore >= passingScore ? 'Passed ✓' : `Below passing score (${passingScore}%)`}
-                            </p>
-                          )}
-                        </div>
-                        {questions.length > 0 && (
-                          <button
-                            onClick={() => { setQuizAnswers({}); setQuizResult(null); }}
-                            className="self-start px-5 py-2 border border-rule text-muted text-[9px] font-black uppercase tracking-widest hover:bg-page"
-                          >
-                            Retake Quiz
-                          </button>
-                        )}
-                      </div>
-                    );
-                  }
-
-                  if (quizResult) {
-                    return (
-                      <div className="flex flex-col gap-4">
-                        <div className={` p-8 text-center border ${quizResult.passed ? 'bg-page border-accent' : 'bg-page border-highlight'}`}>
-                          <p className={`text-4xl font-black ${quizResult.passed ? 'text-accent' : 'text-ink'}`}>{quizResult.score}%</p>
-                          <p className={`text-[10px] font-black uppercase tracking-widest mt-2 ${quizResult.passed ? 'text-accent' : 'text-ink'}`}>
-                            {quizResult.passed ? 'Quiz Passed! Well done.' : `Not quite — passing score is ${passingScore}%`}
-                          </p>
-                        </div>
-                        {!quizResult.passed && (
-                          <button
-                            onClick={() => { setQuizAnswers({}); setQuizResult(null); }}
-                            className="self-start px-5 py-2 bg-highlight text-paper text-[9px] font-black uppercase tracking-widest hover:bg-highlight"
-                          >
-                            Retake Quiz
-                          </button>
-                        )}
-                      </div>
-                    );
-                  }
-
-                  if (questions.length === 0) {
-                    return (
-                      <div className="flex flex-col gap-4">
-                        <div className="bg-page p-8 text-center border border-rule">
-                          <p className="text-muted text-sm font-black">No quiz questions configured yet</p>
-                        </div>
-                        {!done && (
-                          <button
-                            onClick={() => completeMaterial(activeMaterial.id)}
-                            disabled={completing}
-                            className="self-start px-6 py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all disabled:opacity-50"
-                          >
-                            {completing ? 'Saving…' : 'Mark as Complete ✓'}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  }
-
-                  const allAnswered = questions.every(q => quizAnswers[q.id] !== undefined);
+                if (quizResult) {
                   return (
-                    <div className="flex flex-col gap-5">
-                      <p className="eyebrow-tight">{questions.length} Question{questions.length !== 1 ? 's' : ''}</p>
-                      {questions.map((q, qi) => (
-                        <div key={q.id} className="flex flex-col gap-3">
-                          <p className="text-sm font-black text-ink">{qi + 1}. {q.text}</p>
-                          <div className="flex flex-col gap-2">
-                            {q.options.map((opt, oi) => (
-                              <label
-                                key={oi}
-                                className={`flex items-center gap-3 p-4  border cursor-pointer transition-all ${quizAnswers[q.id] === oi ? 'bg-page border-highlight text-ink' : 'bg-paper border-rule hover:border-rule text-ink'}`}
-                              >
-                                <input
-                                  type="radio"
-                                  name={`q_${q.id}`}
-                                  checked={quizAnswers[q.id] === oi}
-                                  onChange={() => setQuizAnswers(a => ({ ...a, [q.id]: oi }))}
-                                  className="accent-highlight"
-                                />
-                                <span className="text-sm font-bold">{opt}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                      <button
-                        onClick={() => completeMaterial(activeMaterial.id, quizAnswers)}
-                        disabled={completing || !allAnswered}
-                        className="self-start px-8 py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all disabled:opacity-50 active:scale-95"
-                      >
-                        {completing ? 'Submitting…' : 'Submit Quiz →'}
-                      </button>
-                      {!allAnswered && <p className="label-form">Answer all questions to submit</p>}
+                    <div className="flex flex-col gap-4">
+                      <div role="status" className={`flex flex-col items-center gap-1.5 p-8 rounded-control ${quizResult.passed ? 'bg-ok-bg' : 'bg-danger-bg'}`}>
+                        <span className="text-4xl font-extrabold text-ink tabular-nums">{quizResult.score}%</span>
+                        <span className={`text-sm font-semibold ${quizResult.passed ? 'text-ok' : 'text-danger'}`}>
+                          {quizResult.passed ? 'Quiz passed. Well done.' : `Not quite. The pass mark is ${passingScore}%.`}
+                        </span>
+                      </div>
+                      {!quizResult.passed && (
+                        <Button onClick={() => { setQuizAnswers({}); setQuizResult(null); }} className="self-start">Retake quiz</Button>
+                      )}
                     </div>
                   );
-                })()}
+                }
 
-              </div>
+                if (questions.length === 0) {
+                  return (
+                    <div className="flex flex-col gap-4">
+                      {blank('No quiz questions have been set up yet.')}
+                      {!done && markDone('Mark as complete')}
+                    </div>
+                  );
+                }
+
+                const allAnswered = questions.every(q => quizAnswers[q.id] !== undefined);
+                return (
+                  <div className="flex flex-col gap-5">
+                    <span className="text-[13px] text-muted tabular-nums">{questions.length} question{questions.length !== 1 ? 's' : ''} · pass mark {passingScore}%</span>
+                    {questions.map((q, qi) => (
+                      <fieldset key={q.id} className="flex flex-col gap-2.5">
+                        <legend className="text-sm font-semibold text-ink mb-1"><span className="tabular-nums">{qi + 1}.</span> {q.text}</legend>
+                        {q.options.map((opt, oi) => {
+                          const on = quizAnswers[q.id] === oi;
+                          return (
+                            <label key={oi} className={`flex items-center gap-3 p-3.5 rounded-control border cursor-pointer transition-colors ${on ? 'border-accent bg-tint' : 'border-rule bg-paper hover:bg-page'}`}>
+                              <input
+                                type="radio"
+                                name={`q_${q.id}`}
+                                checked={on}
+                                onChange={() => setQuizAnswers(a => ({ ...a, [q.id]: oi }))}
+                                className="w-4 h-4 accent-accent shrink-0"
+                              />
+                              <span className="text-sm text-ink">{opt}</span>
+                            </label>
+                          );
+                        })}
+                      </fieldset>
+                    ))}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button onClick={() => completeMaterial(activeMaterial.id, quizAnswers)} disabled={completing || !allAnswered}
+                        reason={!allAnswered && !completing ? 'Answer every question to submit' : undefined}>
+                        {completing ? 'Submitting…' : 'Submit quiz'}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })()}
             </>
           )}
-        </div>
+        </Card>
       </div>
       )}
     </div>
@@ -1454,18 +1219,12 @@ function MyTrainingTab() {
   }
 
   if (loading) return (
-    <div className="flex flex-col gap-4">
-      {[1,2,3].map(i => <div key={i} className="h-32 bg-paper border border-rule animate-pulse" />)}
+    <div className="flex flex-col gap-3">
+      {[1, 2, 3].map(i => <Skeleton key={i} />)}
     </div>
   );
 
-  if (error) return (
-    <div className="bg-page border border-highlight p-8 text-center">
-      <p className="text-sm font-black text-ink uppercase tracking-widest mb-2">Could not load training</p>
-      <p className="text-xs text-ink mb-4">{error}</p>
-      <button onClick={load} className="px-6 py-2 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight">Retry</button>
-    </div>
-  );
+  if (error) return <ErrorPanel title="Could not load your training" message={error} onRetry={load} />;
 
   // Course player view
   if (activeEnrollment) {
@@ -1487,90 +1246,68 @@ function MyTrainingTab() {
 
   if (enrollments.length === 0) {
     return (
-      <div className="text-center py-20 text-muted">
-        <p className="text-5xl mb-4">📚</p>
-        <p className="text-sm font-black uppercase tracking-widest mb-1">No training assigned yet</p>
-        <p className="text-xs text-muted">Browse available courses in the Programs tab to get started.</p>
-      </div>
+      <Card>
+        <EmptyState icon="book" title="No training assigned yet" description="Browse the available programmes to enrol in one." />
+      </Card>
     );
   }
 
   return (
-    <div className="flex flex-col gap-8">
-
-      {/* Stats row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: 'In Progress', value: inProgress.length, color: 'text-ink', bg: 'bg-page border-highlight' },
-          { label: 'Completed', value: completed.length, color: 'text-accent', bg: 'bg-page border-accent' },
-          { label: 'Not Started', value: notStarted.length, color: 'text-ink', bg: 'bg-page border-rule' },
-          { label: 'Overdue', value: overdue.length, color: overdue.length > 0 ? 'text-ink' : 'text-muted', bg: overdue.length > 0 ? 'bg-page border-ink' : 'bg-page border-rule' },
-        ].map(s => (
-          <div key={s.label} className={` border p-5 ${s.bg}`}>
-            <p className={`text-3xl font-black tracking-tighter ${s.color}`}>{s.value}</p>
-            <p className="label-form mt-1">{s.label}</p>
-          </div>
-        ))}
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Stat label="In progress" value={inProgress.length} />
+        <Stat label="Completed" value={completed.length} />
+        <Stat label="Not started" value={notStarted.length} />
+        <Stat label="Overdue" value={overdue.length} note={overdue.length > 0 ? 'Past the due date' : 'Nothing overdue'} />
       </div>
 
-      {/* Mandatory alert */}
       {mandatory.length > 0 && (
-        <div className="bg-page border border-ink p-5 flex items-start gap-4">
-          <div className="w-8 h-8 bg-ink flex items-center justify-center text-paper text-xs font-black shrink-0">!</div>
-          <div>
-            <p className="text-sm font-black text-ink">You have {mandatory.length} mandatory course{mandatory.length !== 1 ? 's' : ''} to complete</p>
-            <p className="text-[10px] text-ink font-black uppercase tracking-widest mt-0.5">
-              {mandatory.map(e => e.program?.title).join(' · ')}
-            </p>
+        <div role="note" className="flex items-start gap-3 p-4 rounded-control border border-rule bg-danger-bg">
+          <Icon name="alert" size={18} className="text-danger mt-0.5" />
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm font-bold text-danger">{mandatory.length} mandatory course{mandatory.length !== 1 ? 's' : ''} to complete</span>
+            <span className="text-[13px] text-ink">{mandatory.map(e => e.program?.title).join(' · ')}</span>
           </div>
         </div>
       )}
 
-      {/* In progress */}
       {inProgress.length > 0 && (
-        <div>
-          <p className="eyebrow-tight mb-4">Continue Learning</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <section className="flex flex-col gap-3">
+          <h2 className="text-[15.5px] font-bold text-ink">Continue learning</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             {inProgress.map(e => <EnrollmentCard key={e.id} e={e} onOpen={() => setActiveEnrollment(e)} />)}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Not started */}
       {notStarted.length > 0 && (
-        <div>
-          <p className="eyebrow-tight mb-4">Start Learning</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <section className="flex flex-col gap-3">
+          <h2 className="text-[15.5px] font-bold text-ink">Start learning</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             {notStarted.map(e => <EnrollmentCard key={e.id} e={e} onOpen={() => setActiveEnrollment(e)} />)}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Completed */}
       {completed.length > 0 && (
-        <div>
-          <p className="eyebrow-tight mb-4">Completed ({completed.length})</p>
-          <div className="flex flex-col gap-3">
+        <section className="flex flex-col gap-3">
+          <h2 className="text-[15.5px] font-bold text-ink">Completed <span className="text-muted font-semibold tabular-nums">{completed.length}</span></h2>
+          <Card padding="p-0" className="divide-y divide-rule overflow-hidden">
             {completed.map(e => (
-              <div key={e.id} className="bg-paper border border-rule p-5 flex items-center gap-4 group">
-                <div className="w-10 h-10 bg-page border border-accent flex items-center justify-center text-accent font-black text-sm shrink-0">✓</div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-black text-ink truncate">{e.program?.title}</p>
-                  <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                    {e.program && <span className={`text-[8px] font-black px-1.5 py-0.5  border ${CATEGORY_COLORS[e.program.category]}`}>{CATEGORY_LABELS[e.program.category]}</span>}
-                    <span className="text-[9px] font-black text-muted">Completed {fmtDate(e.completedAt)}</span>
-                    {e.score !== null && e.score !== undefined && (
-                      <span className="text-[9px] font-black text-accent">Score: {e.score}%</span>
-                    )}
-                  </div>
+              <div key={e.id} className="flex items-center gap-3 px-5 py-3.5">
+                <span className="flex items-center justify-center w-9 h-9 rounded-full bg-ok-bg text-ok shrink-0"><Icon name="check" size={17} strokeWidth={2.5} /></span>
+                <div className="flex flex-col flex-1 min-w-0">
+                  <span className="text-sm font-semibold text-ink truncate">{e.program?.title}</span>
+                  <span className="text-xs text-muted tabular-nums">
+                    {e.program ? `${CATEGORY_LABELS[e.program.category]} · ` : ''}completed {fmtDate(e.completedAt)}
+                    {e.score !== null && e.score !== undefined && ` · score ${e.score}%`}
+                  </span>
                 </div>
-                <button onClick={() => setActiveEnrollment(e)} className="px-4 py-2 border border-rule text-muted text-[9px] font-black uppercase tracking-widest hover:bg-page shrink-0">
-                  Review
-                </button>
+                <Button size="sm" variant="secondary" onClick={() => setActiveEnrollment(e)}>Review</Button>
               </div>
             ))}
-          </div>
-        </div>
+          </Card>
+        </section>
       )}
     </div>
   );
@@ -1583,34 +1320,29 @@ function EnrollmentCard({ e, onOpen }: { e: EnrollmentWithProgress; onOpen: () =
   const isNew = e.status === 'ENROLLED';
 
   return (
-    <div className="bg-paper border border-rule p-6 flex flex-col gap-4 hover:border-highlight hover: transition-all group">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-          <h3 className="text-sm font-black text-ink leading-tight truncate">{e.program?.title}</h3>
-          {e.program?.description && <p className="text-[10px] text-muted leading-relaxed line-clamp-2">{e.program.description}</p>}
-          <div className="flex flex-wrap gap-2 mt-0.5">
-            {e.program && <span className={`text-[8px] font-black px-2 py-0.5  border ${CATEGORY_COLORS[e.program.category]}`}>{CATEGORY_LABELS[e.program.category]}</span>}
-            {e.program?.isMandatory && <span className="text-[8px] font-black px-2 py-0.5 bg-page text-ink border border-ink ">Required</span>}
-            {e.dueDate && <span className={`text-[8px] font-black px-2 py-0.5  border ${isOverdue ? 'bg-page text-ink border-ink' : 'bg-page text-muted border-rule'}`}>Due {fmtDate(e.dueDate)}</span>}
-          </div>
+    <Card className="gap-4">
+      <div className="flex flex-col gap-1.5 min-w-0">
+        <h3 className="text-[15.5px] font-bold text-ink leading-snug">{e.program?.title}</h3>
+        {e.program?.description && <p className="text-[13px] text-muted leading-relaxed line-clamp-2">{e.program.description}</p>}
+        <div className="flex flex-wrap gap-1.5 mt-0.5">
+          {e.program && <Badge>{CATEGORY_LABELS[e.program.category]}</Badge>}
+          {e.program?.isMandatory && <Badge tone="danger">Required</Badge>}
+          {e.dueDate && <Badge tone={isOverdue ? 'danger' : 'neutral'}>{isOverdue ? 'Overdue · ' : 'Due '}{fmtDate(e.dueDate)}</Badge>}
         </div>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <div className="flex justify-between items-center">
-          <span className="label-form">{done}/{total} materials</span>
-          <span className="text-[10px] font-black text-ink">{e.progress}%</span>
+        <div className="flex justify-between items-center text-xs text-muted tabular-nums">
+          <span>{done} of {total} lessons</span>
+          <span className="font-semibold text-ink">{e.progress}%</span>
         </div>
-        <ProgressBar pct={e.progress} color={isOverdue ? 'bg-ink' : 'bg-highlight'} />
+        <ProgressBar pct={e.progress} color={isOverdue ? 'bg-danger' : 'bg-accent'} label={`${e.program?.title ?? 'Course'} progress`} />
       </div>
 
-      <button
-        onClick={onOpen}
-        className="w-full py-3 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight transition-all active:scale-95 "
-      >
-        {isNew ? '▶ Start Course' : e.status === 'COMPLETED' ? '✓ Review Course' : '▶ Continue'}
-      </button>
-    </div>
+      <Button onClick={onOpen} className="w-full mt-auto" icon={e.status === 'COMPLETED' ? 'check' : 'arrowRight'} variant={e.status === 'COMPLETED' ? 'secondary' : 'primary'}>
+        {isNew ? 'Start course' : e.status === 'COMPLETED' ? 'Review course' : 'Continue'}
+      </Button>
+    </Card>
   );
 }
 
@@ -1639,43 +1371,23 @@ function BrowseProgramsTab({ onGoToMyTraining }: { onGoToMyTraining?: () => void
     } catch { /* swallow */ }
   }
 
-  if (error) return (
-    <div className="bg-page border border-highlight p-8 text-center">
-      <p className="text-sm font-black text-ink uppercase tracking-widest mb-2">Could not load programs</p>
-      <p className="text-xs text-ink mb-4">{error}</p>
-      <button onClick={load} className="px-6 py-2 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight">Retry</button>
-    </div>
-  );
+  if (error) return <ErrorPanel title="Could not load programmes" message={error} onRetry={load} />;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex gap-2 flex-wrap">
-        <button
-          onClick={() => setCategory('')}
-          className={`px-4 py-2  text-[9px] font-black uppercase tracking-widest transition-all ${category === '' ? 'bg-highlight text-paper' : 'bg-paper text-muted border border-rule hover:border-highlight'}`}
-        >
-          All
-        </button>
-        {(Object.keys(CATEGORY_LABELS) as ProgramCategory[]).map(c => (
-          <button
-            key={c}
-            onClick={() => setCategory(c)}
-            className={`px-4 py-2  text-[9px] font-black uppercase tracking-widest transition-all ${category === c ? 'bg-highlight text-paper' : 'bg-paper text-muted border border-rule hover:border-highlight'}`}
-          >
-            {CATEGORY_LABELS[c]}
-          </button>
-        ))}
-      </div>
+    <div className="flex flex-col gap-4">
+      <FilterChips<ProgramCategory | ''>
+        label="Category"
+        items={[{ id: '', label: 'All' }, ...(Object.keys(CATEGORY_LABELS) as ProgramCategory[]).map(c => ({ id: c, label: CATEGORY_LABELS[c] }))]}
+        active={category}
+        onChange={setCategory}
+      />
 
       {loading ? (
-        <p className="text-sm text-muted p-4">Loading programs…</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{[1, 2, 3].map(i => <Skeleton key={i} h="h-56" />)}</div>
       ) : programs.length === 0 ? (
-        <div className="text-center py-16 text-muted">
-          <p className="text-3xl mb-3">🎓</p>
-          <p className="text-sm font-black uppercase tracking-widest">No programs available.</p>
-        </div>
+        <Card><EmptyState icon="book" title="No programmes available" description={category ? 'Nothing in this category yet. Try another.' : 'Published programmes will appear here.'} /></Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {programs.map(p => (
             <ProgramCard key={p.id} prog={p} onEnroll={handleEnroll} onStartCourse={onGoToMyTraining} />
           ))}
@@ -1694,11 +1406,17 @@ interface EmployeeCertification {
   status: CertStatus; documentUrl?: string; notes?: string; createdAt: string;
 }
 
-const CERT_STATUS_COLOR: Record<CertStatus, string> = {
-  ACTIVE:         'bg-page text-accent border-accent',
-  EXPIRING_SOON:  'bg-page text-ink border-highlight',
-  EXPIRED:        'bg-page text-ink border-ink',
-  REVOKED:        'bg-page text-muted border-rule',
+const CERT_STATUS_TONE: Record<CertStatus, BadgeTone> = {
+  ACTIVE:         'ok',
+  EXPIRING_SOON:  'warn',
+  EXPIRED:        'danger',
+  REVOKED:        'neutral',
+};
+const CERT_STATUS_LABEL: Record<CertStatus, string> = {
+  ACTIVE: 'Active',
+  EXPIRING_SOON: 'Expiring soon',
+  EXPIRED: 'Expired',
+  REVOKED: 'Revoked',
 };
 
 function CertificationsTab() {
@@ -1708,9 +1426,10 @@ function CertificationsTab() {
   const [form, setForm] = useState({ employeeId: '', certName: '', issuingBody: '', certNumber: '', issuedAt: '', expiresAt: '', notes: '' });
   const [submitting, setSubmitting] = useState(false);
   const [filterStatus, setFilterStatus] = useState('');
-  const [toast, setToast] = useState('');
+  const { toast } = useToast();
 
-  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 3000); }
+  // Same messages as before; failures now read as failures.
+  function showToast(msg: string, tone: 'ok' | 'danger' = 'ok') { toast(msg, tone); }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1736,7 +1455,7 @@ function CertificationsTab() {
       setForm({ employeeId: '', certName: '', issuingBody: '', certNumber: '', issuedAt: '', expiresAt: '', notes: '' });
       showToast('Certification added');
       await load();
-    } catch { showToast('Failed to add certification'); }
+    } catch { showToast('Failed to add certification', 'danger'); }
     finally { setSubmitting(false); }
   }
 
@@ -1745,152 +1464,118 @@ function CertificationsTab() {
       await apiFetch(`/training/certifications/${id}`, { method: 'DELETE' });
       showToast('Certification revoked');
       await load();
-    } catch { showToast('Failed to revoke'); }
+    } catch { showToast('Failed to revoke', 'danger'); }
   }
 
   const expiringSoon = certs.filter(c => c.status === 'EXPIRING_SOON').length;
+  const addMissing = !form.employeeId || !form.certName;
+
+  const columns: Column<EmployeeCertification>[] = [
+    { key: 'emp', label: 'Employee', width: '110px', numeric: true, render: c => <span className="text-muted">{c.employeeId.slice(0, 8)}…</span> },
+    {
+      key: 'cert', label: 'Certificate', width: 'minmax(0, 1.6fr)',
+      render: c => (
+        <div className="flex flex-col min-w-0">
+          <span className="font-semibold text-ink truncate">{c.certName}</span>
+          {c.notes && <span className="text-xs text-muted truncate">{c.notes}</span>}
+        </div>
+      ),
+    },
+    { key: 'body', label: 'Issued by', width: 'minmax(0, 1fr)', render: c => c.issuingBody || <span className="text-muted">—</span> },
+    { key: 'num', label: 'Number', width: '120px', numeric: true, render: c => c.certNumber || <span className="text-muted">—</span> },
+    { key: 'issued', label: 'Issued', width: '110px', numeric: true, render: c => fmtDate(c.issuedAt) },
+    { key: 'exp', label: 'Expires', width: '110px', numeric: true, render: c => fmtDate(c.expiresAt) },
+    { key: 'status', label: 'Status', width: '130px', render: c => <Badge tone={CERT_STATUS_TONE[c.status]}>{CERT_STATUS_LABEL[c.status]}</Badge> },
+    { key: 'act', label: '', width: '90px', align: 'right', render: c => c.status !== 'REVOKED' ? <Button size="sm" variant="danger" onClick={() => handleRevoke(c.id)}>Revoke</Button> : null },
+  ];
 
   return (
-    <div className="space-y-6">
-      {toast && (
-        <div className="fixed top-6 right-6 z-[200] px-6 py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest animate-in slide-in-from-top-4">{toast}</div>
-      )}
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <h2 className="text-[15.5px] font-bold text-ink">Certifications</h2>
+          {expiringSoon > 0 && <Badge tone="warn">{expiringSoon} expiring soon</Badge>}
+        </div>
+        <div className="flex flex-wrap items-end gap-2.5">
+          <Field label="Status" className="w-[180px]">
+            <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+              <option value="">All statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="EXPIRING_SOON">Expiring soon</option>
+              <option value="EXPIRED">Expired</option>
+              <option value="REVOKED">Revoked</option>
+            </Select>
+          </Field>
+          <Button icon="plus" onClick={() => setShowAdd(true)}>Add certification</Button>
+        </div>
+      </div>
 
-      {/* Header */}
-      <div className="flex flex-wrap items-center gap-4 justify-between">
-        <div className="flex items-center gap-3">
-          <h3 className="text-lg font-black text-ink uppercase tracking-widest">Certifications</h3>
-          {expiringSoon > 0 && (
-            <span className="px-3 py-1 bg-page text-ink border border-highlight text-[9px] font-black uppercase tracking-widest ">
-              {expiringSoon} Expiring Soon
-            </span>
+      <Modal
+        open={showAdd}
+        onClose={() => setShowAdd(false)}
+        title="Add certification"
+        footer={<>
+          <Button variant="secondary" onClick={() => setShowAdd(false)}>Cancel</Button>
+          <Button onClick={handleAdd} disabled={submitting || addMissing} reason={addMissing && !submitting ? 'Employee and certificate name are required' : undefined}>{submitting ? 'Adding…' : 'Add'}</Button>
+        </>}
+      >
+        <div className="flex flex-col gap-4">
+          {[
+            { label: 'Employee ID', key: 'employeeId', placeholder: 'Employee UUID', required: true },
+            { label: 'Certificate name', key: 'certName', placeholder: 'e.g. WSH Officer Certificate', required: true },
+            { label: 'Issuing body', key: 'issuingBody', placeholder: 'e.g. MOM Singapore' },
+            { label: 'Certificate number', key: 'certNumber', placeholder: 'Optional' },
+          ].map(f => (
+            <Field key={f.key} label={f.label} required={f.required}>
+              <Input type="text" placeholder={f.placeholder} value={(form as any)[f.key]}
+                onChange={e => setForm(fm => ({ ...fm, [f.key]: e.target.value }))} />
+            </Field>
+          ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Issued on">
+              <Input type="date" value={form.issuedAt} onChange={e => setForm(f => ({ ...f, issuedAt: e.target.value }))} />
+            </Field>
+            <Field label="Expires on">
+              <Input type="date" value={form.expiresAt} onChange={e => setForm(f => ({ ...f, expiresAt: e.target.value }))} />
+            </Field>
+          </div>
+          <Field label="Notes">
+            <Textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+          </Field>
+        </div>
+      </Modal>
+
+      {loading ? (
+        <div className="flex flex-col gap-2">{[1, 2, 3].map(i => <Skeleton key={i} h="h-[52px]" />)}</div>
+      ) : (
+        <DataTable
+          aria-label="Certifications"
+          columns={columns}
+          rows={certs}
+          rowKey={c => c.id}
+          empty={<EmptyState icon="shield" title="No certifications" description={filterStatus ? 'Nothing with this status.' : 'Record licences and certificates so expiries are tracked.'} action={<Button icon="plus" onClick={() => setShowAdd(true)}>Add certification</Button>} className="py-6" />}
+          mobileCard={c => (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-start justify-between gap-3">
+                <span className="font-semibold text-ink">{c.certName}</span>
+                <Badge tone={CERT_STATUS_TONE[c.status]}>{CERT_STATUS_LABEL[c.status]}</Badge>
+              </div>
+              <span className="text-xs text-muted tabular-nums">{c.issuingBody || 'Issuer not recorded'} · expires {fmtDate(c.expiresAt)} · {c.employeeId.slice(0, 8)}…</span>
+              {c.status !== 'REVOKED' && <div><Button size="sm" variant="danger" onClick={() => handleRevoke(c.id)}>Revoke</Button></div>}
+            </div>
           )}
-        </div>
-        <div className="flex items-center gap-3">
-          <select
-            value={filterStatus}
-            onChange={e => setFilterStatus(e.target.value)}
-            className="px-3 py-2 bg-page border border-rule text-[10px] font-black text-ink focus:outline-none"
-          >
-            <option value="">All Statuses</option>
-            <option value="ACTIVE">Active</option>
-            <option value="EXPIRING_SOON">Expiring Soon</option>
-            <option value="EXPIRED">Expired</option>
-            <option value="REVOKED">Revoked</option>
-          </select>
-          <button onClick={() => setShowAdd(true)} className="px-5 py-2 bg-highlight text-paper text-[9px] font-black uppercase tracking-widest hover:bg-highlight transition-all">
-            + Add Certification
-          </button>
-        </div>
-      </div>
-
-      {/* Add Form Modal */}
-      {showAdd && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-shadow backdrop- p-6">
-          <div className="bg-paper w-full max-w-lg overflow-hidden border border-rule">
-            <div className="bg-shadow p-6 flex justify-between items-center">
-              <h4 className="text-base font-black text-paper uppercase tracking-tight">Add Certification</h4>
-              <button onClick={() => setShowAdd(false)} className="w-8 h-8 bg-shadow border border-shadow text-muted hover:text-paper text-lg font-black flex items-center justify-center">×</button>
-            </div>
-            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
-              {[
-                { label: 'Employee ID *', key: 'employeeId', placeholder: 'Employee UUID' },
-                { label: 'Certificate Name *', key: 'certName', placeholder: 'e.g. WSH Officer Certificate' },
-                { label: 'Issuing Body', key: 'issuingBody', placeholder: 'e.g. MOM Singapore' },
-                { label: 'Certificate Number', key: 'certNumber', placeholder: 'Optional' },
-              ].map(f => (
-                <div key={f.key}>
-                  <label className="label-form block mb-1">{f.label}</label>
-                  <input type="text" placeholder={f.placeholder} value={(form as any)[f.key]}
-                    onChange={e => setForm(fm => ({ ...fm, [f.key]: e.target.value }))}
-                    className="w-full px-3 py-2.5 bg-page border border-rule text-xs font-bold text-ink focus:outline-none focus:border-highlight" />
-                </div>
-              ))}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label-form block mb-1">Issued Date</label>
-                  <input type="date" value={form.issuedAt} onChange={e => setForm(f => ({ ...f, issuedAt: e.target.value }))}
-                    className="w-full px-3 py-2.5 bg-page border border-rule text-xs font-bold text-ink focus:outline-none focus:border-highlight" />
-                </div>
-                <div>
-                  <label className="label-form block mb-1">Expiry Date</label>
-                  <input type="date" value={form.expiresAt} onChange={e => setForm(f => ({ ...f, expiresAt: e.target.value }))}
-                    className="w-full px-3 py-2.5 bg-page border border-rule text-xs font-bold text-ink focus:outline-none focus:border-highlight" />
-                </div>
-              </div>
-              <div>
-                <label className="label-form block mb-1">Notes</label>
-                <textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                  className="w-full px-3 py-2.5 bg-page border border-rule text-xs font-bold text-ink focus:outline-none focus:border-highlight resize-none" />
-              </div>
-            </div>
-            <div className="p-5 bg-page border-t border-rule flex justify-end gap-3">
-              <button onClick={() => setShowAdd(false)} className="px-5 py-2.5 bg-paper border border-rule text-[10px] font-black text-muted uppercase tracking-widest hover:bg-page">Cancel</button>
-              <button onClick={handleAdd} disabled={submitting || !form.employeeId || !form.certName}
-                className="px-6 py-2.5 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight disabled:opacity-50">
-                {submitting ? 'Adding...' : 'Add'}
-              </button>
-            </div>
-          </div>
-        </div>
+        />
       )}
-
-      {/* Table */}
-      <div className="bg-paper border border-rule overflow-hidden">
-        {loading ? (
-          <div className="p-12 text-center text-xs font-black text-muted uppercase tracking-widest animate-pulse">Loading…</div>
-        ) : certs.length === 0 ? (
-          <div className="p-12 text-center">
-            <p className="eyebrow-tight">No certifications found</p>
-            <button onClick={() => setShowAdd(true)} className="mt-4 px-5 py-2 bg-highlight text-paper text-[9px] font-black uppercase tracking-widest hover:bg-highlight">Add First</button>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="text-[10px] font-black text-muted uppercase tracking-[0.2em] border-b border-rule">
-                <tr>
-                  {['Employee ID', 'Certificate', 'Issuing Body', 'Cert #', 'Issued', 'Expires', 'Status', ''].map(h => (
-                    <th key={h} className="px-6 py-4">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-rule">
-                {certs.map(c => (
-                  <tr key={c.id} className="hover:bg-page transition-all">
-                    <td className="px-6 py-4 text-[10px] font-bold text-muted font-mono">{c.employeeId.slice(0, 8)}…</td>
-                    <td className="px-6 py-4">
-                      <p className="text-xs font-black text-ink uppercase tracking-tight">{c.certName}</p>
-                      {c.notes && <p className="text-[9px] text-muted mt-0.5">{c.notes}</p>}
-                    </td>
-                    <td className="px-6 py-4 text-[10px] font-bold text-muted">{c.issuingBody || '—'}</td>
-                    <td className="px-6 py-4 text-[10px] font-bold text-muted font-mono">{c.certNumber || '—'}</td>
-                    <td className="px-6 py-4 text-[10px] font-bold text-muted">{fmtDate(c.issuedAt)}</td>
-                    <td className="px-6 py-4 text-[10px] font-bold text-muted">{fmtDate(c.expiresAt)}</td>
-                    <td className="px-6 py-4">
-                      <span className={`text-[9px] font-black px-2.5 py-1  border uppercase tracking-widest ${CERT_STATUS_COLOR[c.status]}`}>
-                        {c.status.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      {c.status !== 'REVOKED' && (
-                        <button onClick={() => handleRevoke(c.id)}
-                          className="px-3 py-1.5 bg-paper border border-rule text-[9px] font-black text-muted uppercase tracking-widest hover:border-ink hover:text-ink transition-all">
-                          Revoke
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
 
 // ── Root page ─────────────────────────────────────────────────────────────────
+const TAB_LABEL: Record<string, string> = {
+  'Programs': 'Programmes', 'Enrollments': 'Enrolments', 'Certifications': 'Certifications',
+  'Stats': 'Stats', 'My Training': 'My training', 'Browse Programs': 'Browse programmes',
+};
+
 export default function TrainingPage() {
   const { user, loading: authLoading } = useAuth();
   const role = user?.role ?? '';
@@ -1925,41 +1610,15 @@ export default function TrainingPage() {
   }, []);
 
   if (authLoading) {
-    return <div className="h-40 bg-paper border border-rule animate-pulse max-w-[1400px] mx-auto" />;
+    return <div className="max-w-[1400px] mx-auto"><Skeleton h="h-40" /></div>;
   }
 
   // ── Employee layout ─────────────────────────────────────────────────────────
   if (isEmployee) {
     return (
-      <div className="flex flex-col gap-10 max-w-[1400px] mx-auto pb-20 animate-in fade-in duration-700">
-        <div className="bg-paper p-10 border border-rule relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-highlight " />
-          <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-2 h-2 bg-highlight " />
-              <span className="text-[10px] font-black text-ink uppercase tracking-[0.4em]">Learning & Development</span>
-            </div>
-            <h1 className="text-4xl font-black text-ink tracking-tighter">
-              Hi, {firstName} <span className="text-ink">— Your Training</span>
-            </h1>
-            <p className="text-sm font-bold text-muted mt-2 uppercase tracking-widest">
-              Track progress on enrolled programs and discover new learning opportunities.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex gap-2 border-b border-rule pb-0">
-          {empTabs.map(t => (
-            <button
-              key={t}
-              onClick={() => setEmpTab(t)}
-              className={`px-6 py-3 text-[10px] font-black uppercase tracking-widest  transition-all ${empTab === t ? 'bg-paper border border-rule border-b-paper text-ink' : 'text-muted hover:text-ink'}`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-
+      <div className="flex flex-col gap-6 max-w-[1400px] mx-auto pb-24 lg:pb-10">
+        <PageHeader title="My training" subtitle={`${firstName}, here are your enrolled courses and the programmes you can join.`} />
+        <Tabs items={empTabs.map(t => ({ id: t, label: TAB_LABEL[t] }))} active={empTab} onChange={setEmpTab} />
         <div>
           {empTab === 'My Training'     && <MyTrainingTab />}
           {empTab === 'Browse Programs' && <BrowseProgramsTab onGoToMyTraining={() => setEmpTab('My Training')} />}
@@ -1970,51 +1629,12 @@ export default function TrainingPage() {
 
   // ── Admin / Manager layout ──────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-10 max-w-[1400px] mx-auto pb-20 animate-in fade-in duration-700">
-      <div className="bg-paper p-10 border border-rule relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-48 h-48 bg-highlight " />
-        <div className="relative z-10 flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-2 h-2 bg-highlight " />
-              <span className="text-[10px] font-black text-ink uppercase tracking-[0.4em]">Learning & Development</span>
-            </div>
-            <h1 className="text-4xl font-black text-ink tracking-tighter">
-              Training <span className="text-ink">Management</span>
-            </h1>
-            <p className="text-sm font-bold text-muted mt-2 uppercase tracking-widest max-w-xl">
-              Create training programs, manage materials, track enrollments and completion rates.
-            </p>
-          </div>
-          {stats && (
-            <div className="flex flex-wrap gap-6">
-              {[
-                { label: 'Published', value: stats.published, color: 'text-accent' },
-                { label: 'Mandatory', value: stats.mandatory, color: 'text-ink' },
-                { label: 'Completion', value: `${stats.completionRate}%`, color: 'text-ink' },
-              ].map(k => (
-                <div key={k.label} className="text-center">
-                  <p className={`text-2xl font-black tracking-tighter ${k.color}`}>{k.value}</p>
-                  <p className="text-[8px] font-black text-muted uppercase tracking-widest">{k.label}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="flex gap-2 border-b border-rule">
-        {adminTabs.map(t => (
-          <button
-            key={t}
-            onClick={() => setAdminTab(t)}
-            className={`px-6 py-3 text-[10px] font-black uppercase tracking-widest  transition-all ${adminTab === t ? 'bg-paper border border-rule border-b-paper text-ink' : 'text-muted hover:text-ink'}`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
+    <div className="flex flex-col gap-6 max-w-[1400px] mx-auto pb-24 lg:pb-10">
+      <PageHeader
+        title="Training"
+        subtitle={stats ? `${stats.published} published · ${stats.mandatory} mandatory · ${stats.completionRate}% completion` : 'Programmes, lessons, enrolments and certifications.'}
+      />
+      <Tabs items={adminTabs.map(t => ({ id: t, label: TAB_LABEL[t] }))} active={adminTab} onChange={setAdminTab} />
       <div>
         {adminTab === 'Programs'        && <AdminProgramsTab onRefreshStats={loadStats} />}
         {adminTab === 'Enrollments'     && <AdminEnrollmentsTab />}
