@@ -115,6 +115,18 @@ describe('Avatar', () => {
   });
 });
 
+describe('Modal backdrop close', () => {
+  it('prevents the mousedown default so focus can return to the opener', () => {
+    const onClose = jest.fn();
+    render(<Modal open onClose={onClose} title="Workforce"><p>Body</p></Modal>);
+    const backdrop = screen.getByRole('dialog').parentElement as HTMLElement;
+    const ev = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    backdrop.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('Nested Modals', () => {
   it('Escape closes only the topmost dialog', () => {
     const closeOuter = jest.fn();
