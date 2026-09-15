@@ -11,7 +11,9 @@ export interface Step { label: string; state: StepState; detail?: string }
  */
 export function Stepper({ steps, onSelect, className = '' }: { steps: Step[]; onSelect?: (index: number) => void; className?: string }) {
   return (
-    <ol className={`flex items-start gap-2 overflow-x-auto ${className}`} aria-label="Progress">
+    // `relative` contains the sr-only labels (absolutely positioned) inside the
+    // scroller; without it they escaped the clip and widened phone pages.
+    <ol className={`relative flex items-start gap-2 overflow-x-auto ${className}`} aria-label="Progress">
       {steps.map((s, i) => {
         const circle = (
           <span className={`flex items-center justify-center w-6 h-6 rounded-full shrink-0 text-xs font-bold border-2 ${
