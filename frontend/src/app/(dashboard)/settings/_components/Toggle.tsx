@@ -12,7 +12,7 @@ export function Toggle({ on, onChange, disabled, label }: { on: boolean; onChang
       aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!on)}
-      className={`relative h-[22px] w-10 shrink-0 rounded-full transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 ${
+      className={`relative h-[22px] w-10 shrink-0 rounded-full transition-colors duration-200 ${
         on ? 'bg-accent' : 'bg-rule'
       } ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
     >

@@ -215,7 +215,7 @@ export default function RoleManagementPage() {
                 aria-pressed={active}
                 onClick={select}
                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); } }}
-                className={`flex cursor-pointer flex-col gap-2.5 rounded-card border p-4 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
+                className={`flex cursor-pointer flex-col gap-2.5 rounded-card border p-4 transition-colors ${
                   active ? 'border-accent bg-tint' : 'border-rule bg-paper hover:border-accent'
                 }`}
               >
@@ -230,7 +230,7 @@ export default function RoleManagementPage() {
                         type="button"
                         onClick={e => { e.stopPropagation(); handleDeleteRole(role); }}
                         aria-label={`Delete role ${sentenceCase(role.name)}`}
-                        className="rounded-control px-2 py-1 text-[13px] font-semibold text-danger hover:bg-pill focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                        className="rounded-control px-2 py-1 text-[13px] font-semibold text-danger hover:bg-pill"
                       >
                         Delete
                       </button>
@@ -326,7 +326,7 @@ export default function RoleManagementPage() {
                                   : [...selectedRole.permissions, p.code];
                                 setSelectedRole({ ...selectedRole, permissions: newPerms });
                               }}
-                              className={`flex items-start justify-between gap-3 rounded-control border p-3.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
+                              className={`flex items-start justify-between gap-3 rounded-control border p-3.5 text-left transition-colors ${
                                 isGranted ? 'border-accent bg-tint' : 'border-rule bg-paper'
                               } ${isEditing ? 'cursor-pointer hover:border-accent' : 'cursor-default'}`}
                             >

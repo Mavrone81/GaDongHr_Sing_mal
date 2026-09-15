@@ -84,7 +84,7 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
                     href={s.href}
                     ref={on ? activeRef : undefined}
                     aria-current={on ? 'page' : undefined}
-                    className={`flex items-center rounded-control px-3 py-[9px] text-sm whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
+                    className={`flex items-center rounded-control px-3 py-[9px] text-sm whitespace-nowrap transition-colors ${
                       on ? 'bg-tint font-bold text-accent' : 'font-medium text-muted hover:bg-pill hover:text-ink'
                     }`}
                   >

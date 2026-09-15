@@ -98,14 +98,14 @@ function EditableCell({ value, onSave, suffix = '', label }: { value: string | n
           value={draft}
           onChange={e => setDraft(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
-          className="h-8 w-24 rounded-control border border-accent bg-paper px-2 text-[13px] font-semibold text-ink tabular-nums outline-none focus:ring-2 focus:ring-accent/20"
+          className="h-8 w-24 rounded-control border border-accent bg-paper px-2 text-[13px] font-semibold text-ink tabular-nums"
         />
         <Button size="sm" onClick={commit} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
         <button
           type="button"
           onClick={() => setEditing(false)}
           aria-label="Cancel edit"
-          className="flex h-8 w-8 items-center justify-center rounded-control text-muted hover:bg-pill hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          className="flex h-8 w-8 items-center justify-center rounded-control text-muted hover:bg-pill hover:text-ink"
         >
           <Icon name="x" size={16} />
         </button>
@@ -117,7 +117,7 @@ function EditableCell({ value, onSave, suffix = '', label }: { value: string | n
     <button
       type="button"
       onClick={() => { setDraft(String(value)); setEditing(true); }}
-      className="inline-flex items-center border-b border-dashed border-rule font-semibold text-ink tabular-nums transition-colors hover:border-accent hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      className="inline-flex items-center border-b border-dashed border-rule font-semibold text-ink tabular-nums transition-colors hover:border-accent hover:text-accent"
       title="Click to edit"
       aria-label={label ? `Edit ${label}: ${value}${suffix}` : undefined}
     >

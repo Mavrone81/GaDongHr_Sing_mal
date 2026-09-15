@@ -322,7 +322,7 @@ export default function SecurityPage() {
                   aria-checked={on}
                   disabled={!canEdit || savingMfaMethod}
                   onClick={() => canEdit && handleSaveMfaMethod(opt.value)}
-                  className={`flex items-start gap-3 rounded-control border p-3.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed ${
+                  className={`flex items-start gap-3 rounded-control border p-3.5 text-left transition-colors disabled:cursor-not-allowed ${
                     on ? 'border-accent bg-tint' : 'border-rule bg-paper hover:bg-page'
                   } ${!canEdit ? 'opacity-60' : ''}`}
                 >

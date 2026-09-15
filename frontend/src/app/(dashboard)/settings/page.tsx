@@ -50,7 +50,7 @@ export default function SettingsPage() {
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="group flex items-center justify-between gap-4 border-t border-rule py-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                    className="group flex items-center justify-between gap-4 border-t border-rule py-3.5"
                   >
                     <span className="text-sm font-semibold text-ink group-hover:text-accent">{link.label}</span>
                     <span className="flex items-center gap-3">
