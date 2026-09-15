@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { apiFetchRaw } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
-import { Badge, Button, Card, CardHeader, EmptyState, Icon } from '@/components/ui';
-import { KeyValue, Notice, PageLoading } from '@/components/employee/RecordParts';
+import { Badge, Button, Card, CardHeader, EmptyState, Field, Icon, Modal, Textarea } from '@/components/ui';
+import { KeyValue, Notice, PageLoading, Spinner } from '@/components/employee/RecordParts';
 
 const HR_ROLES = ['HR_ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'];
 
@@ -68,36 +68,46 @@ export default function MovementDetailPage() {
     setLoadingLetter(false);
   }
 
-  async function approve() {
-    if (!confirm('Approve this movement?')) return;
-    const res = await apiFetchRaw(`/movements/${id}/approve`, { method: 'PUT' });
-    if (res.ok) load();
-    else alert((await res.json()).error || 'Failed');
+  // The four actions below send exactly the requests they always have. What
+  // changed is the gate in front of them: a kit Modal (with a required reason
+  // for rejection) instead of the browser's confirm() / prompt().
+  type Action = 'approve' | 'reject' | 'cancel' | 'apply';
+  const [confirming, setConfirming] = useState<Action | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [acting, setActing] = useState(false);
+  const [actionError, setActionError] = useState('');
+
+  function ask(action: Action) {
+    setActionError('');
+    if (action === 'reject') setRejectReason('');
+    setConfirming(action);
   }
 
-  async function reject() {
-    const reason = window.prompt('Reason for rejection?');
-    if (!reason || !reason.trim()) return;
-    const res = await apiFetchRaw(`/movements/${id}/reject`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rejectionReason: reason.trim() }),
-    });
-    if (res.ok) load();
-    else alert((await res.json()).error || 'Failed');
-  }
-
-  async function cancelMov() {
-    if (!confirm('Cancel this movement?')) return;
-    const res = await apiFetchRaw(`/movements/${id}/cancel`, { method: 'PUT' });
-    if (res.ok) load();
-    else alert((await res.json()).error || 'Failed');
-  }
-
-  async function apply() {
-    if (!confirm('Apply this movement to the employee record now?')) return;
-    const res = await apiFetchRaw(`/movements/${id}/apply`, { method: 'POST' });
-    if (res.ok) load();
-    else alert((await res.json()).error || 'Failed');
+  async function runAction(action: Action) {
+    if (action === 'reject' && !rejectReason.trim()) return;
+    setActing(true);
+    setActionError('');
+    try {
+      let res: Response;
+      if (action === 'approve') {
+        res = await apiFetchRaw(`/movements/${id}/approve`, { method: 'PUT' });
+      } else if (action === 'reject') {
+        res = await apiFetchRaw(`/movements/${id}/reject`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rejectionReason: rejectReason.trim() }),
+        });
+      } else if (action === 'cancel') {
+        res = await apiFetchRaw(`/movements/${id}/cancel`, { method: 'PUT' });
+      } else {
+        res = await apiFetchRaw(`/movements/${id}/apply`, { method: 'POST' });
+      }
+      if (res.ok) { setConfirming(null); load(); }
+      else setActionError((await res.json()).error || 'Failed');
+    } catch {
+      setActionError('Network error — nothing was changed. Please try again.');
+    } finally {
+      setActing(false);
+    }
   }
 
   if (loading) return <PageLoading label="Loading movement…" />;
@@ -162,7 +172,7 @@ export default function MovementDetailPage() {
         {/* Actions — a sticky bar on phones */}
         {(canApprove || canApply || applyLater || canCancel || hasLetter) && (
           <div className="fixed inset-x-0 bottom-16 z-20 flex flex-wrap items-center justify-end gap-2 border-t border-rule bg-paper px-4 py-3 sm:static sm:border-0 sm:bg-transparent sm:p-0">
-            {canCancel && <Button variant="danger" onClick={cancelMov}>Cancel movement</Button>}
+            {canCancel && <Button variant="danger" onClick={() => ask('cancel')}>Cancel movement</Button>}
             {hasLetter && (
               <Button variant="secondary" icon="file" onClick={() => { if (!letter) loadLetter(); }} disabled={!!letter || loadingLetter}>
                 {letter ? 'Letter shown below' : loadingLetter ? 'Loading letter…' : 'View transfer letter'}
@@ -170,11 +180,11 @@ export default function MovementDetailPage() {
             )}
             {canApprove && (
               <>
-                <Button variant="secondary" onClick={reject}>Reject</Button>
-                <Button icon="check" onClick={approve}>Approve</Button>
+                <Button variant="secondary" onClick={() => ask('reject')}>Reject</Button>
+                <Button icon="check" onClick={() => ask('approve')}>Approve</Button>
               </>
             )}
-            {canApply && <Button icon="check" onClick={apply}>Apply now</Button>}
+            {canApply && <Button icon="check" onClick={() => ask('apply')}>Apply now</Button>}
             {applyLater && <Button disabled reason={`Can be applied from ${fmtDate(m.effectiveDate)}`}>Apply now</Button>}
           </div>
         )}
@@ -231,6 +241,60 @@ export default function MovementDetailPage() {
           )}
         </div>
       </div>
+      <Modal
+        open={confirming !== null}
+        onClose={() => { if (!acting) setConfirming(null); }}
+        title={
+          confirming === 'approve' ? 'Approve this movement?'
+          : confirming === 'reject' ? 'Reject this movement?'
+          : confirming === 'cancel' ? 'Cancel this movement?'
+          : 'Apply this movement now?'
+        }
+        caption={`${TYPE_LABELS[m.type] || m.type} for ${m.employeeName}, effective ${fmtDate(m.effectiveDate)}`}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirming(null)} disabled={acting}>
+              {confirming === 'cancel' ? 'Keep it' : 'Go back'}
+            </Button>
+            <Button
+              variant={confirming === 'reject' || confirming === 'cancel' ? 'danger' : 'primary'}
+              icon={!acting && (confirming === 'approve' || confirming === 'apply') ? 'check' : undefined}
+              onClick={() => { if (confirming) runAction(confirming); }}
+              disabled={acting || (confirming === 'reject' && !rejectReason.trim())}
+              reason={confirming === 'reject' && !rejectReason.trim() && !acting ? 'Give a reason to reject' : undefined}
+            >
+              {acting && <Spinner />}
+              {confirming === 'approve' ? 'Approve'
+                : confirming === 'reject' ? 'Reject movement'
+                : confirming === 'cancel' ? 'Cancel movement'
+                : 'Apply now'}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          {confirming === 'approve' && (
+            <p>Once approved it takes effect on {fmtDate(m.effectiveDate)}, and HR then applies it to the employee record.</p>
+          )}
+          {confirming === 'apply' && (
+            <p>The employee record is updated with the new details straight away.</p>
+          )}
+          {confirming === 'cancel' && (
+            <p>The movement will not take effect. This cannot be undone — a new movement would have to be raised.</p>
+          )}
+          {confirming === 'reject' && (
+            <Field label="Reason for rejection" required help="The person who raised it will see this.">
+              <Textarea
+                rows={3}
+                autoFocus
+                value={rejectReason}
+                onChange={e => setRejectReason(e.target.value)}
+              />
+            </Field>
+          )}
+          {actionError && <Notice tone="danger" title="Not done">{actionError}</Notice>}
+        </div>
+      </Modal>
     </div>
   );
 }
