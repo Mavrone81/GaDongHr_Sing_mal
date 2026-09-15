@@ -104,7 +104,7 @@ export default function OnboardPage() {
       })
       .then((user: UserInfo) => {
         setUserInfo(user);
-        setForm(prev => ({ ...prev, fullName: user.name }));
+        setForm(prev => ({ ...prev, fullName: user.name ?? '' }));
         // Decode JWT to extract raw token for client-side key derivation (server verifies signature)
         const payload = decodeJwtPayload(t);
         if (payload?.jti) setRawToken(payload.jti);
