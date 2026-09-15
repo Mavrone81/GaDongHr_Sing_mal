@@ -16,6 +16,19 @@ import { Icon } from './Icon';
  *   returns focus to the opener on close. If a child already holds focus on
  *   open, the dialog leaves it there instead of moving it to the close button.
  */
+/**
+ * Open dialogs in the order they registered. The one that owns the keyboard
+ * is the most recent dialog that does not contain another open dialog
+ * (children register before their parent when both mount together, so
+ * "last pushed" alone would pick the outer one).
+ */
+type Entry = { panel: { current: HTMLDivElement | null } };
+const OPEN_STACK: Entry[] = [];
+function topmost(): Entry | undefined {
+  const leaves = OPEN_STACK.filter((a) => !OPEN_STACK.some((b) => b !== a && b.panel.current && a.panel.current?.contains(b.panel.current)));
+  return leaves[leaves.length - 1];
+}
+
 export function Modal({ open, onClose, title, caption, footer, size = 'md', children }: {
   open: boolean; onClose: () => void; title: ReactNode; caption?: ReactNode; footer?: ReactNode; size?: 'md' | 'lg'; children: ReactNode;
 }) {
@@ -35,7 +48,12 @@ export function Modal({ open, onClose, title, caption, footer, size = 'md', chil
   useEffect(() => {
     if (!open) return;
     if (!panelRef.current?.contains(document.activeElement)) closeRef.current?.focus();
+    const token = { panel: panelRef };
+    OPEN_STACK.push(token);
     const onKey = (e: KeyboardEvent) => {
+      // Only the topmost open dialog reacts, so Esc over a nested dialog
+      // closes that one, not every dialog on the page.
+      if (topmost() !== token) return;
       if (e.key === 'Escape') { onCloseRef.current(); return; }
       // Focus trap: Tab and Shift+Tab cycle within the dialog.
       if (e.key !== 'Tab' || !panelRef.current) return;
@@ -54,6 +72,8 @@ export function Modal({ open, onClose, title, caption, footer, size = 'md', chil
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
+      const i = OPEN_STACK.lastIndexOf(token);
+      if (i >= 0) OPEN_STACK.splice(i, 1);
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prevOverflow;
       returnTo.current?.focus?.();
