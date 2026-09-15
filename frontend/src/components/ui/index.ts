@@ -16,7 +16,8 @@
  *     Forms = <Field>. Processes = <Stepper>. Inboxes = <SplitPane>.
  *   - A row-click DataTable carries no action column (a button inside a button is
  *     invalid HTML); put actions on the detail screen or a row menu.
- *     Confirmations = <Modal>. Feedback = useToast().
+ *     Confirmations = <Modal>. Feedback = useToast(). The list half of an
+ *     inbox = <InboxList> (a DataTable is too wide for the SplitPane column).
  *
  * The older `components/official/*` set stays for screens not yet migrated;
  * new work imports from here.
@@ -42,3 +43,4 @@ export { Stepper } from './Stepper';
 export type { StepState, Step } from './Stepper';
 export { Avatar } from './Avatar';
 export { SplitPane } from './SplitPane';
+export { InboxList } from './InboxList';

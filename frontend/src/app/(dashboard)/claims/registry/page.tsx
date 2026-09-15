@@ -1,14 +1,21 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
+import { PageHeader, Stat, Badge, Button, Card, CardHeader, EmptyState, useToast, SplitPane, InboxList, Avatar } from '@/components/ui';
 
 const ALLOWED_ROLES = ['SUPER_ADMIN', 'HR_ADMIN', 'HR_MANAGER', 'FINANCE_ADMIN', 'PAYROLL_OFFICER'];
 
 function fmtSGD(n: number) {
   return n.toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtDate(d: string) {
+  if (!d) return '—';
+  const dt = new Date(d + 'T00:00:00');
+  return isNaN(dt.getTime()) ? d : dt.toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 interface PendingClaim {
@@ -44,10 +51,20 @@ export default function ClaimsRegistryPage() {
   return <AdminClaimsView />;
 }
 
+/**
+ * Approvals inbox (spec screen type 6): the queue on the left, the selected
+ * claim on the right at ≥1280px, stacked below that. Approve / reject act on
+ * the row directly so a reviewer never has to open a claim to clear it.
+ *
+ * The old version also showed "Avg. processing 48h" and "Policy compliance
+ * 98.2%". Those were string literals — never computed from anything — and a
+ * finance screen must not print numbers it did not measure. They are gone.
+ */
 function AdminClaimsView() {
   const [claims, setClaims] = useState<PendingClaim[]>([]);
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const { toast } = useToast();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -74,10 +91,7 @@ function AdminClaimsView() {
     load();
   }, []);
 
-  const showToast = (msg: string, type: 'success' | 'error') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3500);
-  };
+  const showToast = (msg: string, type: 'success' | 'error') => toast(msg, type === 'success' ? 'ok' : 'danger');
 
   const handleApprove = async (id: string) => {
     try {
@@ -96,110 +110,92 @@ function AdminClaimsView() {
   };
 
   const totalPending = claims.reduce((s, c) => s + c.totalAmount, 0);
+  const totalGst = claims.reduce((s, c) => s + c.gstAmount, 0);
+  const selected = claims.find(c => c.id === selectedId) ?? null;
 
-  return (
-    <div className="flex flex-col gap-6 max-w-[1600px] mx-auto pb-12 animate-in fade-in duration-700">
-
-      <div className="bg-paper p-8 border border-rule flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-black text-ink tracking-tighter">Claims <span className="text-accent">Audit</span></h1>
-          <p className="text-[10px] font-black text-muted mt-1 uppercase tracking-widest">Reimbursement oversight · Policy compliance</p>
-        </div>
-        <button className="px-6 py-2.5 text-[10px] font-black uppercase tracking-widest text-accent bg-page border border-accent hover:bg-page transition-all">
-          Download Audit Log
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div className="bg-paper p-7 border border-rule ">
-          <p className="eyebrow-tight mb-3">Pending Outflow</p>
-          {loading
-            ? <div className="h-10 w-32 bg-page animate-pulse" />
-            : <p className="text-4xl font-black text-ink tracking-tighter">SGD {fmtSGD(totalPending)}</p>
-          }
-          <div className="mt-4 flex items-center gap-2">
-            <span className="w-2 h-2 bg-highlight animate-pulse" />
-            {loading
-              ? <div className="h-3 w-40 bg-page animate-pulse" />
-              : <p className="text-[9px] font-black text-ink uppercase tracking-widest">{claims.length} pending authorization</p>
-            }
-          </div>
-        </div>
-        <div className="bg-shadow p-7 border border-shadow ">
-          <p className="text-[10px] font-black text-accent uppercase tracking-widest mb-3">Avg. Processing</p>
-          <p className="text-4xl font-black text-paper tracking-tighter">48h</p>
-          <p className="text-[9px] font-black text-muted mt-4 uppercase tracking-widest italic">Target: 24h</p>
-        </div>
-        <div className="bg-page p-7 border border-accent">
-          <p className="text-[10px] font-black text-accent uppercase tracking-widest mb-3">Policy Compliance</p>
-          <p className="text-4xl font-black text-accent tracking-tighter">98.2%</p>
-          <p className="text-[9px] font-black text-accent mt-4 uppercase tracking-widest italic">2 anomalies in Travel</p>
-        </div>
-      </div>
-
-      <div className="bg-paper border border-rule overflow-hidden">
-        <div className="px-8 py-6 border-b border-rule bg-page flex items-center justify-between">
-          <h3 className="text-sm font-black text-ink uppercase tracking-widest">
-            Authorization Queue {!loading && `(${claims.length})`}
-          </h3>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-accent animate-ping" />
-            <span className="text-[9px] font-black text-muted uppercase">Live</span>
-          </div>
-        </div>
-        <div className="divide-y divide-rule">
-          {loading ? (
-            [1, 2, 3].map(i => <div key={i} className="h-20 mx-8 my-3 bg-page animate-pulse" />)
-          ) : claims.length === 0 ? (
-            <div className="py-16 text-center">
-              <p className="text-sm font-black text-muted uppercase tracking-widest">No pending claims</p>
+  const list = loading ? (
+    <Card className="items-center py-14"><div className="w-8 h-8 border-4 border-accent border-t-accent animate-spin rounded-full" /></Card>
+  ) : (
+    <InboxList
+      aria-label="Claims waiting for approval"
+      items={claims}
+      itemKey={(c) => c.id}
+      selectedKey={selectedId}
+      onSelect={(c) => setSelectedId(c.id === selectedId ? null : c.id)}
+      footer={claims.length > 0 ? <><span>{claims.length} of {claims.length}</span><span>Newest first</span></> : undefined}
+      empty={<EmptyState icon="receipt" title="No claims to approve" description="Submitted claims from employees will appear here for a decision." />}
+      render={(c) => (
+        <div className="flex items-start gap-3 min-w-0">
+          <Avatar name={c.employeeName} tone="soft" size={36} className="mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-sm font-semibold text-ink truncate">{c.employeeName}</span>
+              <span className="text-sm font-semibold text-ink tabular-nums shrink-0">S${fmtSGD(c.totalAmount)}</span>
             </div>
-          ) : claims.map(c => (
-            <div key={c.id} className="flex items-center gap-5 px-8 py-5 hover:bg-page transition-all">
-              <div className="w-10 h-10 bg-shadow flex items-center justify-center text-[11px] font-black text-paper shrink-0">
-                {c.employeeName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-black text-ink uppercase tracking-tight">{c.employeeName}</p>
-                <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-0.5">{c.dept} · {c.claimDate}</p>
-                {c.title && <p className="text-[9px] font-bold text-muted mt-0.5 truncate">&quot;{c.title}&quot;</p>}
-              </div>
-              <div className="text-center shrink-0">
-                <span className="text-[9px] font-black uppercase px-2.5 py-1 bg-page text-accent border border-accent tracking-widest">
-                  {c.categoryName}
-                </span>
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-sm font-black text-ink">SGD {fmtSGD(c.totalAmount)}</p>
-                {c.gstAmount > 0 && <p className="text-[9px] font-bold text-muted">GST {fmtSGD(c.gstAmount)}</p>}
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <button
-                  onClick={() => handleReject(c.id)}
-                  className="text-[9px] font-black text-ink bg-page border border-ink uppercase tracking-widest px-4 py-1.5 hover:bg-page transition-all"
-                >
-                  Reject
-                </button>
-                <button
-                  onClick={() => handleApprove(c.id)}
-                  className="text-[9px] font-black text-paper bg-accent uppercase tracking-widest px-4 py-1.5 hover:bg-accent transition-all"
-                >
-                  Approve
-                </button>
-              </div>
+            <div className="flex items-center justify-between gap-3 mt-0.5">
+              <span className="text-xs text-muted truncate">{c.dept} · {c.categoryName}{c.title ? ` · ${c.title}` : ''}</span>
+              <span className="text-xs text-muted tabular-nums shrink-0">{fmtDate(c.claimDate)}</span>
             </div>
-          ))}
-        </div>
-      </div>
-
-      {toast && (
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-8 duration-300">
-          <div className={`px-8 py-4   flex items-center gap-4 ${toast.type === 'success' ? 'bg-shadow border border-shadow' : 'bg-ink border border-ink'}`}>
-            <div className={`w-2 h-2  ${toast.type === 'success' ? 'bg-accent' : 'bg-ink'}`} />
-            <span className="text-[10px] font-black text-paper uppercase tracking-widest">{toast.msg}</span>
+            {/* Decide from the row: a reviewer never has to open a claim to clear it. */}
+            <div className="flex gap-1.5 mt-2.5" onClick={(e) => e.stopPropagation()}>
+              <Button size="sm" variant="secondary" onClick={() => handleReject(c.id)}>Reject</Button>
+              <Button size="sm" variant="primary" onClick={() => handleApprove(c.id)}>Approve</Button>
+            </div>
           </div>
         </div>
       )}
+    />
+  );
+
+  return (
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Claims approvals"
+        subtitle={loading ? 'Loading the queue…' : claims.length === 0 ? 'Nothing waiting for a decision' : `${claims.length} claim${claims.length === 1 ? '' : 's'} waiting · S$${fmtSGD(totalPending)} in total`}
+      />
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Stat label="Waiting for approval" value={loading ? '—' : claims.length} note="Submitted, not yet decided" />
+        <Stat label="Amount pending" value={loading ? '—' : `S$${fmtSGD(totalPending)}`} note={loading ? undefined : `incl. S$${fmtSGD(totalGst)} GST`} />
+        <Stat label="Oldest in queue" value={loading || claims.length === 0 ? '—' : fmtDate([...claims].sort((a, b) => a.claimDate.localeCompare(b.claimDate))[0].claimDate)} note="By expense date" />
+      </div>
+
+      {/* Inbox (spec screen type 6): queue left, selected claim right at ≥1280px;
+          below that the list shows until a row is picked, then the detail with a back link. */}
+      <SplitPane
+        hasDetail={!!selected}
+        onBack={() => setSelectedId(null)}
+        backLabel="Back to the queue"
+        list={list}
+        detail={selected ? (
+          <Card>
+            <div className="flex items-start gap-3.5 mb-4">
+              <Avatar name={selected.employeeName} tone="soft" size={44} />
+              <CardHeader className="mb-0 min-w-0" title={selected.employeeName} caption={`${selected.dept} · ${selected.categoryName}`} />
+            </div>
+            <dl className="flex flex-col divide-y divide-rule text-sm border-y border-rule">
+              <Row k="Amount" v={<span className="font-semibold tabular-nums">S${fmtSGD(selected.totalAmount)}</span>} />
+              {selected.gstAmount > 0 && <Row k="GST included" v={<span className="tabular-nums">S${fmtSGD(selected.gstAmount)}</span>} />}
+              <Row k="Expense date" v={<span className="tabular-nums">{fmtDate(selected.claimDate)}</span>} />
+              <Row k="Description" v={selected.title || <span className="text-faint">None given</span>} />
+              <Row k="Status" v={<Badge tone="warn">Awaiting decision</Badge>} />
+            </dl>
+            <div className="flex gap-2.5 mt-5">
+              <Button variant="secondary" className="flex-1" onClick={() => handleReject(selected.id)}>Reject</Button>
+              <Button variant="primary" className="flex-1" onClick={() => handleApprove(selected.id)}>Approve</Button>
+            </div>
+          </Card>
+        ) : null}
+      />
+    </div>
+  );
+}
+
+function Row({ k, v }: { k: string; v: ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-2.5">
+      <dt className="text-muted shrink-0">{k}</dt>
+      <dd className="text-right text-ink min-w-0">{v}</dd>
     </div>
   );
 }

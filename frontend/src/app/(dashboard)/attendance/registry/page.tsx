@@ -7,6 +7,7 @@ import { apiFetch } from '@/lib/api';
 import { Seal } from '@/components/official';
 import { addDays, toISODate as isoDate, todayISO, formatCivil } from '@/lib/timezone';
 import { getMondayOf } from '@/lib/attendanceUtils';
+import { PageHeader, Stat, Card, CardHeader, Tabs, DataTable, Badge, Button, Field, Input, Select, Textarea, SearchInput, EmptyState, Modal, Avatar, Icon, type Column } from '@/components/ui';
 
 const ALLOWED_ROLES = ['SUPER_ADMIN', 'HR_ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'LINE_MANAGER'];
 
@@ -38,7 +39,6 @@ function fmtTime(iso: string | null) {
   if (!iso) return '—';
   return new Date(iso).toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', hour12: true });
 }
-function getInitials(name: string) { return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(); }
 function getRowStatus(r: AttRecord): string {
   if (!r.clockIn) return 'Absent';
   const clockIn = new Date(r.clockIn);
@@ -105,6 +105,51 @@ function LiveClock() {
   useEffect(() => { const id = setInterval(() => setT(new Date()), 1000); return () => clearInterval(id); }, []);
   return <>{t.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</>;
 }
+
+// ── Small presentational helpers shared by the tabs ───────────────────────────
+
+/** A shift's user-chosen colour, shown as a dot beside its name. */
+function ColorDot({ color, className = '' }: { color: string; className?: string }) {
+  return <span className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${className}`} style={{ backgroundColor: color }} aria-hidden="true" />;
+}
+
+/** Swatch picker for the shift-colour field. */
+function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Colour">
+      {SHIFT_COLORS.map(c => (
+        <button
+          key={c}
+          type="button"
+          role="radio"
+          aria-checked={value === c}
+          aria-label={c}
+          onClick={() => onChange(c)}
+          className={`w-7 h-7 rounded-full transition-transform focus-visible:outline-offset-[5px] ${value === c ? 'ring-2 ring-offset-2 ring-ink scale-110' : 'hover:scale-105'}`}
+          style={{ backgroundColor: c }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Small error notice inside a form. */
+function FormError({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-control bg-danger-bg text-sm text-danger">
+      <Icon name="alert" size={16} className="mt-0.5 shrink-0" />{children}
+    </div>
+  );
+}
+
+/** Explanatory callout for the effective-date fields. */
+function DateNote({ children }: { children: React.ReactNode }) {
+  return <p className="text-xs text-muted leading-relaxed">{children}</p>;
+}
+
+const Spinner = ({ className = '' }: { className?: string }) => (
+  <div className={`flex items-center justify-center py-12 ${className}`}><div className="w-8 h-8 border-4 border-accent border-t-accent animate-spin rounded-full" /></div>
+);
 
 export default function AttendanceRegistryPage() {
   const { user, loading } = useAuth();
@@ -193,8 +238,15 @@ function AdminAttendanceView({ userRole }: { userRole: string }) {
   function toggleRosterSort(col: typeof rosterSort.col) {
     setRosterSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
   }
-  function RosterSortIcon({ col }: { col: typeof rosterSort.col }) {
-    return <span className="text-[8px] ml-1">{rosterSort.col === col ? (rosterSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
+  /** A sortable column header: the label plus a chevron that shows direction. */
+  function SortHead({ col, children }: { col: typeof rosterSort.col; children: React.ReactNode }) {
+    const on = rosterSort.col === col;
+    return (
+      <button type="button" onClick={() => toggleRosterSort(col)} className={`inline-flex items-center gap-1 hover:text-ink ${on ? 'text-ink' : ''}`} aria-sort={on ? (rosterSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+        {children}
+        <Icon name="chevronDown" size={13} className={`transition-transform ${on ? (rosterSort.dir === 'asc' ? 'rotate-180' : '') : 'opacity-40'}`} />
+      </button>
+    );
   }
   const clockedIn  = roster.filter(r => r.clockIn && !r.clockOut).length;
   const late       = roster.filter(r => r.status === 'Late').length;
@@ -248,143 +300,146 @@ function AdminAttendanceView({ userRole }: { userRole: string }) {
 
   const isSchedulerOnly = userRole === 'LINE_MANAGER';
 
-  return (
-    <div className="flex flex-col gap-8 max-w-[1600px] mx-auto pb-12 animate-in fade-in duration-700">
-      {/* Header */}
-      <div className="bg-paper p-8 border border-rule flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-2 h-2 bg-accent animate-pulse" />
-            <span className="text-[10px] font-black text-accent uppercase tracking-[0.4em]">Live Monitoring</span>
-          </div>
-          <h1 className="text-3xl font-black text-ink tracking-tighter">Attendance <span className="text-accent">Registry</span></h1>
-          <p className="text-sm font-bold text-muted mt-1 uppercase tracking-widest"><LiveClock /> · {employees.length} personnel</p>
-        </div>
-        <div className="flex flex-wrap gap-3 items-center">
-          {tab === 'attendance' && <>
-            <input type="date" value={selectedDate} max={todayISO()}
-              onChange={e => setSelectedDate(e.target.value)}
-              className="bg-page border border-rule px-4 py-2.5 text-xs font-bold text-ink outline-none focus:border-accent transition-all" />
-            <button onClick={() => loadRoster(selectedDate, employees)} className="px-5 py-2.5 bg-paper border border-rule text-[10px] font-black uppercase tracking-widest text-muted hover:bg-page transition-all">Refresh</button>
-          </>}
-          {tab === 'locations' && <button onClick={openAddLoc} className="px-6 py-2.5 bg-accent hover:bg-accent text-paper text-[10px] font-black uppercase tracking-widest transition-all">+ Add Location</button>}
-        </div>
-      </div>
+  /**
+   * Status → tone. Every state keeps its own tone AND its word: on time is the
+   * quiet ok, late is a warning, a completed day is neutral, and absent is the
+   * only red on the screen.
+   */
+  const statusTone = (s: string): 'ok' | 'warn' | 'neutral' | 'danger' =>
+    s === 'On Time' ? 'ok' : s === 'Late' ? 'warn' : s === 'Clocked Out' ? 'neutral' : 'danger';
+  const statusLabel = (s: string) => s === 'On Time' ? 'On time' : s === 'Clocked Out' ? 'Clocked out' : s;
 
-      {/* Tabs */}
-      <div className="flex gap-2 flex-wrap">
-        {([
-          { key: 'scheduler',  label: 'Daily Roster',        hide: false },
-          { key: 'shifts',     label: 'Shift Management',    hide: false },
-          { key: 'attendance', label: 'Attendance Records',  hide: isSchedulerOnly },
-          { key: 'locations',  label: 'Work Locations',      hide: isSchedulerOnly },
-        ] as const).filter(t => !t.hide).map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={`px-6 py-2.5  text-[10px] font-black uppercase tracking-widest transition-all ${tab === t.key ? 'bg-accent text-paper' : 'bg-paper border border-rule text-muted hover:bg-page'}`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+  const rosterColumns: Column<RosterRow>[] = [
+    {
+      key: 'name', label: <SortHead col="name">Employee</SortHead>, width: 'minmax(0, 1.6fr)',
+      render: (row) => (
+        <span className="flex items-center gap-3 min-w-0">
+          <Avatar name={row.name} tone="soft" />
+          <span className="flex flex-col min-w-0">
+            <span className="font-semibold truncate">{row.name}</span>
+            <span className="text-xs text-muted truncate">{row.designation || '—'}</span>
+          </span>
+        </span>
+      ),
+    },
+    { key: 'dept', label: <SortHead col="dept">Department</SortHead>, width: 'minmax(0, 1fr)', render: (row) => <span className="text-muted">{row.dept || '—'}</span> },
+    { key: 'clockIn', label: <SortHead col="clockIn">Clock in</SortHead>, width: '104px', numeric: true, render: (row) => <span className="font-semibold">{fmtTime(row.clockIn)}</span> },
+    { key: 'clockOut', label: <SortHead col="clockOut">Clock out</SortHead>, width: '104px', numeric: true, render: (row) => <span className="text-muted">{fmtTime(row.clockOut)}</span> },
+    {
+      /* Sealed once in the header, not on every row: the rate governs the
+         whole column, and a seal per row would make the citation ordinary
+         wallpaper. */
+      key: 'hours',
+      label: <span className="flex flex-col items-start gap-1"><SortHead col="hours">Hours</SortHead><Seal cite="EA s.38 · OT at 1.5x" /></span>,
+      width: '132px', numeric: true,
+      render: (row) => (
+        <span>
+          <span className="font-semibold">{row.hoursWorked != null ? `${row.hoursWorked.toFixed(1)}h` : '—'}</span>
+          {row.otHours > 0 && <span className="ml-1.5 text-xs font-semibold text-warn">+{row.otHours.toFixed(1)} OT</span>}
+        </span>
+      ),
+    },
+    {
+      key: 'location', label: 'Location', width: 'minmax(0, 1fr)',
+      render: (row) => (
+        <>
+          {row.withinGeofence === true && <Badge tone="ok">{row.locationName || 'In zone'}</Badge>}
+          {row.withinGeofence === false && <Badge tone="danger">Out of zone</Badge>}
+          {row.withinGeofence == null && row.clockIn && <span className="text-xs text-muted">No GPS</span>}
+          {!row.clockIn && <span className="text-faint">—</span>}
+        </>
+      ),
+    },
+    { key: 'status', label: <SortHead col="status">Status</SortHead>, width: '120px', render: (row) => <Badge tone={statusTone(row.status)}>{statusLabel(row.status)}</Badge> },
+    {
+      key: 'actions', label: '', width: '110px', align: 'right',
+      render: (row) => <Button size="sm" variant="secondary" onClick={() => openAssign(row.employeeId, row.name)}>Locations</Button>,
+    },
+  ];
+
+  const tabItems = ([
+    { id: 'scheduler',  label: 'Daily roster',       hide: false },
+    { id: 'shifts',     label: 'Shift management',   hide: false },
+    { id: 'attendance', label: 'Attendance records', hide: isSchedulerOnly },
+    { id: 'locations',  label: 'Work locations',     hide: isSchedulerOnly },
+  ] as const).filter(t => !t.hide).map(({ id, label }) => ({ id, label }));
+
+  return (
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Attendance registry"
+        subtitle={<span className="tabular-nums"><LiveClock /> · {employees.length} active employee{employees.length === 1 ? '' : 's'}</span>}
+        actions={
+          <>
+            {tab === 'attendance' && <>
+              <Input type="date" value={selectedDate} max={todayISO()} onChange={e => setSelectedDate(e.target.value)} aria-label="Date" className="w-44 h-10" />
+              <Button variant="secondary" icon="refresh" onClick={() => loadRoster(selectedDate, employees)} disabled={rosterLoading}>Refresh</Button>
+            </>}
+            {tab === 'locations' && <Button variant="primary" icon="plus" onClick={openAddLoc}>Add location</Button>}
+          </>
+        }
+      />
+
+      <Tabs items={tabItems} active={tab} onChange={setTab} />
 
       {tab === 'attendance' && <>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-5">
-          {[
-            { label: 'Clocked In',  count: clockedIn,  color: 'text-accent', dot: 'bg-accent' },
-            { label: 'Clocked Out', count: clockedOut, color: 'text-accent',    dot: 'bg-accent'    },
-            { label: 'Late',        count: late,        color: 'text-ink',   dot: 'bg-highlight'   },
-            { label: 'Absent',      count: absent,      color: 'text-ink',     dot: 'bg-ink'     },
-            { label: 'Out of Zone', count: outOfBound,  color: 'text-ink',    dot: 'bg-ink'    },
-          ].map(s => (
-            <div key={s.label} className="bg-paper p-7 border border-rule">
-              <div className="flex items-center gap-2 mb-4"><div className={`w-2 h-2  ${s.dot}`} /><p className="eyebrow-tight">{s.label}</p></div>
-              <p className={`text-4xl font-black tracking-tighter ${s.color}`}>{rosterLoading ? '—' : s.count}</p>
-            </div>
-          ))}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <Stat label="Clocked in" value={rosterLoading ? '—' : clockedIn} note="Still on the clock" />
+          <Stat label="Clocked out" value={rosterLoading ? '—' : clockedOut} note="Day complete" />
+          <Stat label="Late" value={rosterLoading ? '—' : late} note="Clocked in after 9:15 AM" />
+          <Stat label="Absent" value={rosterLoading ? '—' : absent} note="No clock-in recorded" />
+          <Stat label="Out of zone" value={rosterLoading ? '—' : outOfBound} note="Outside the geofence" />
         </div>
-        <div className="bg-paper border border-rule overflow-hidden">
-          <div className="px-8 py-6 border-b border-rule bg-page flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-2 h-8 bg-accent" />
-              <h3 className="text-sm font-black text-ink uppercase tracking-widest">Attendance Records</h3>
-              <span className="label-form">{filtered.length} records</span>
-            </div>
-            <input type="text" placeholder="Filter by name or department…" value={search} onChange={e => setSearch(e.target.value)}
-              className="w-full sm:w-64 bg-page border border-rule px-4 py-2.5 text-xs font-bold text-ink placeholder:text-muted outline-none focus:border-accent transition-all" />
+
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="text-sm text-muted tabular-nums">{filtered.length} of {roster.length} employee{roster.length === 1 ? '' : 's'}</p>
+            <SearchInput placeholder="Filter by name or department" value={search} onChange={e => setSearch(e.target.value)} className="w-full sm:w-72" />
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead className="text-[10px] text-muted font-black uppercase tracking-[0.2em] border-b border-rule bg-page">
-                <tr>
-                  {([
-                    { col: 'name',    label: 'Employee'   },
-                    { col: 'dept',    label: 'Department' },
-                    { col: 'clockIn', label: 'Clock In'   },
-                    { col: 'clockOut',label: 'Clock Out'  },
-                    { col: 'hours',   label: 'Hours'      },
-                    { col: null,      label: 'Location'   },
-                    { col: 'status',  label: 'Status'     },
-                    { col: null,      label: 'Actions'    },
-                  ] as const).map(h => (
-                    <th key={h.label} className="px-8 py-5">
-                      {h.col ? (
-                        <button onClick={() => toggleRosterSort(h.col!)} className="flex items-center hover:text-ink transition-colors">
-                          {h.label}<RosterSortIcon col={h.col} />
-                        </button>
-                      ) : h.label}
-                      {/* Sealed once in the header, not on every row: the rate
-                          governs the whole column, and a seal per row would make
-                          the citation ordinary wallpaper. */}
-                      {h.col === 'hours' && (
-                        <span className="block mt-1 normal-case tracking-normal">
-                          <Seal cite="EA s.38 · OT at 1.5x" />
-                        </span>
-                      )}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-rule">
-                {rosterLoading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <tr key={i} className="animate-pulse"><td colSpan={8} className="px-8 py-5"><div className="h-8 bg-page w-full" /></td></tr>
-                  ))
-                ) : filtered.length === 0 ? (
-                  <tr><td colSpan={8} className="px-8 py-16 text-center"><p className="text-sm font-black text-muted uppercase tracking-widest">No records found</p></td></tr>
-                ) : sortedRoster.map(row => (
-                  <tr key={row.employeeId} className="hover:bg-page transition-all">
-                    <td className="px-8 py-5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-shadow flex items-center justify-center text-[10px] font-black text-accent shrink-0">{getInitials(row.name)}</div>
-                        <div>
-                          <p className="text-sm font-black text-ink uppercase tracking-tight">{row.name}</p>
-                          <p className="text-[9px] font-bold text-muted uppercase mt-0.5">{row.designation || '—'}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-8 py-5 text-[11px] font-bold text-muted uppercase tracking-widest">{row.dept || '—'}</td>
-                    <td className="px-8 py-5 text-xs font-black text-ink tabular-nums">{fmtTime(row.clockIn)}</td>
-                    <td className="px-8 py-5 text-xs font-black text-muted tabular-nums">{fmtTime(row.clockOut)}</td>
-                    <td className="px-8 py-5 text-xs font-black text-ink tabular-nums">
-                      {row.hoursWorked != null ? `${row.hoursWorked.toFixed(1)}h` : '—'}
-                      {row.otHours > 0 && <span className="ml-1.5 text-[9px] font-black text-ink uppercase">+{row.otHours.toFixed(1)}OT</span>}
-                    </td>
-                    <td className="px-8 py-5">
-                      {row.withinGeofence === true && <span className="inline-flex items-center gap-1.5 text-[9px] font-black uppercase px-2.5 py-1 bg-page text-accent border border-accent tracking-widest">{row.locationName || 'In Zone'}</span>}
-                      {row.withinGeofence === false && <span className="inline-flex items-center gap-1.5 text-[9px] font-black uppercase px-2.5 py-1 bg-page text-ink border border-ink tracking-widest">Out of Zone</span>}
-                      {row.withinGeofence == null && row.clockIn && <span className="text-[9px] text-muted font-bold uppercase tracking-widest">No GPS</span>}
-                      {!row.clockIn && <span className="text-[9px] text-paper font-bold">—</span>}
-                    </td>
-                    <td className="px-8 py-5">
-                      <span className={`text-[9px] font-black uppercase px-3 py-1  border tracking-widest ${row.status === 'On Time' ? 'bg-page text-accent border-accent' : row.status === 'Clocked Out' ? 'bg-page text-accent border-accent' : row.status === 'Late' ? 'bg-page text-ink border-highlight' : 'bg-page text-ink border-ink'}`}>{row.status}</span>
-                    </td>
-                    <td className="px-8 py-5">
-                      <button onClick={() => openAssign(row.employeeId, row.name)} className="text-[9px] font-black uppercase text-accent hover:text-accent tracking-widest transition-all">Locations</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {rosterLoading ? (
+            <Card padding="p-0"><Spinner /></Card>
+          ) : (
+            <DataTable
+              aria-label="Attendance records"
+              columns={rosterColumns}
+              rows={sortedRoster}
+              rowKey={(r) => r.employeeId}
+              rowHeight={60}
+              mobileCard={(row) => (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-3">
+                    <Avatar name={row.name} tone="soft" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-ink truncate">{row.name}</p>
+                      <p className="text-xs text-muted truncate">{row.dept || '—'}{row.designation ? ` · ${row.designation}` : ''}</p>
+                    </div>
+                    <Badge tone={statusTone(row.status)}>{statusLabel(row.status)}</Badge>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-sm tabular-nums">
+                    <div><p className="text-xs text-muted">Clock in</p><p className="font-semibold text-ink">{fmtTime(row.clockIn)}</p></div>
+                    <div><p className="text-xs text-muted">Clock out</p><p className="text-ink">{fmtTime(row.clockOut)}</p></div>
+                    <div><p className="text-xs text-muted">Hours</p><p className="font-semibold text-ink">{row.hoursWorked != null ? `${row.hoursWorked.toFixed(1)}h` : '—'}{row.otHours > 0 && <span className="ml-1 text-xs text-warn">+{row.otHours.toFixed(1)} OT</span>}</p></div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span>
+                      {row.withinGeofence === true && <Badge tone="ok">{row.locationName || 'In zone'}</Badge>}
+                      {row.withinGeofence === false && <Badge tone="danger">Out of zone</Badge>}
+                      {row.withinGeofence == null && row.clockIn && <span className="text-xs text-muted">No GPS</span>}
+                    </span>
+                    <Button size="sm" variant="secondary" onClick={() => openAssign(row.employeeId, row.name)}>Locations</Button>
+                  </div>
+                </div>
+              )}
+              footer={sortedRoster.length > 0 ? <><span>{sortedRoster.length} record{sortedRoster.length === 1 ? '' : 's'}</span><span>{formatCivil(new Date(selectedDate + 'T00:00:00'), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span></> : undefined}
+              empty={
+                <EmptyState
+                  icon="clock"
+                  title={search ? 'No one matches that search' : 'No records for this day'}
+                  description={search ? 'Try a different name or department.' : 'Attendance appears here as employees clock in.'}
+                />
+              }
+            />
+          )}
         </div>
       </>}
 
@@ -397,145 +452,130 @@ function AdminAttendanceView({ userRole }: { userRole: string }) {
       )}
 
       {tab === 'locations' && (
-        <div className="bg-paper border border-rule overflow-hidden">
-          <div className="px-8 py-6 border-b border-rule bg-page">
-            <div className="flex items-center gap-4">
-              <div className="w-2 h-8 bg-accent" />
-              <h3 className="text-sm font-black text-ink uppercase tracking-widest">Work Locations</h3>
-              <span className="label-form">{locations.length} locations</span>
-            </div>
-            <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-2 ml-6">Geofence zones — employees must clock in within the configured radius</p>
+        <Card padding="p-0" className="overflow-hidden">
+          <div className="px-5 pt-5 sm:px-6">
+            <CardHeader title="Work locations" caption="Geofence zones — employees must clock in within the configured radius" action={<span className="text-muted font-normal tabular-nums">{locations.length} location{locations.length === 1 ? '' : 's'}</span>} />
           </div>
-          {locLoading ? <div className="p-12 text-center"><div className="w-8 h-8 border-4 border-t-accent border-accent animate-spin mx-auto rounded-full" /></div>
-          : locations.length === 0 ? <div className="p-16 text-center"><p className="text-sm font-black text-muted uppercase tracking-widest mb-2">No work locations configured</p></div>
-          : (
-            <div className="divide-y divide-rule">
+          {locLoading ? <Spinner />
+          : locations.length === 0 ? (
+            <EmptyState
+              icon="building"
+              title="No work locations yet"
+              description="Add an office or site and a radius; clock-ins outside it are flagged as out of zone."
+              action={<Button variant="primary" icon="plus" onClick={openAddLoc}>Add location</Button>}
+            />
+          ) : (
+            <div className="flex flex-col divide-y divide-rule border-t border-rule">
               {locations.map(loc => (
-                <div key={loc.id} className="flex items-center gap-5 px-8 py-6 hover:bg-page transition-all">
-                  <div className={`w-3 h-3  shrink-0 ${loc.isActive ? 'bg-accent' : 'bg-rule'}`} />
+                <div key={loc.id} className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 px-5 sm:px-6 py-4 hover:bg-page transition-colors">
+                  <span className={`hidden sm:block w-2.5 h-2.5 rounded-full shrink-0 ${loc.isActive ? 'bg-ok' : 'bg-faint'}`} aria-hidden="true" />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <p className="text-sm font-black text-ink uppercase tracking-tight">{loc.name}</p>
-                      <span className="text-[9px] font-black px-2 py-0.5 bg-page text-accent border border-accent tracking-widest uppercase">{loc.radiusMetres}m radius</span>
-                      <span className="text-[9px] font-bold text-muted uppercase tracking-widest">{loc._count?.employeeLocations ?? 0} assigned</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-semibold text-ink">{loc.name}</p>
+                      <Badge tone="accent" className="tabular-nums">{loc.radiusMetres} m radius</Badge>
+                      <span className="text-xs text-muted tabular-nums">{loc._count?.employeeLocations ?? 0} assigned</span>
+                      {!loc.isActive && <Badge tone="neutral">Inactive</Badge>}
                     </div>
-                    <p className="text-[10px] font-bold text-muted mt-1">{loc.address || `Postal: ${loc.postalCode}`}</p>
-                    <p className="text-[9px] text-muted font-mono mt-0.5">{loc.latitude.toFixed(6)}, {loc.longitude.toFixed(6)}</p>
+                    <p className="text-[13px] text-muted mt-1 truncate">{loc.address || `Postal code ${loc.postalCode}`}</p>
+                    <p className="text-xs text-faint font-mono mt-0.5 tabular-nums">{loc.latitude.toFixed(6)}, {loc.longitude.toFixed(6)}</p>
                   </div>
                   <div className="flex gap-2 shrink-0">
-                    <button onClick={() => openEditLoc(loc)} className="px-4 py-2 text-[9px] font-black uppercase tracking-widest border border-rule text-muted hover:border-accent hover:text-accent transition-all">Edit</button>
-                    <button onClick={() => deleteLocation(loc.id)} className="px-4 py-2 text-[9px] font-black uppercase tracking-widest border border-ink text-ink hover:bg-page transition-all">Delete</button>
+                    <Button size="sm" variant="secondary" onClick={() => openEditLoc(loc)}>Edit</Button>
+                    <Button size="sm" variant="danger" onClick={() => deleteLocation(loc.id)}>Delete</Button>
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </Card>
       )}
 
       {locModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-          <div className="w-full max-w-md bg-paper overflow-hidden">
-            <div className="flex items-center justify-between px-8 py-6 border-b border-rule">
-              <h2 className="text-lg font-black text-ink tracking-tighter">{locModal === 'add' ? 'Add Work Location' : 'Edit Work Location'}</h2>
-              <button onClick={() => setLocModal(null)} className="w-9 h-9 flex items-center justify-center text-muted hover:bg-page transition-all text-lg">✕</button>
+        <Modal open
+          title={locModal === 'add' ? 'Add work location' : 'Edit work location'}
+          caption="Employees assigned here must clock in within the radius."
+          onClose={() => setLocModal(null)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setLocModal(null)}>Cancel</Button>
+              <Button variant="primary" onClick={saveLocation} disabled={locSaving}>{locSaving ? 'Saving…' : 'Save location'}</Button>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            <Field label="Location name" required>
+              <Input value={locForm.name} onChange={e => setLocForm(x => ({ ...x, name: e.target.value }))} placeholder="e.g. Main office" />
+            </Field>
+            <Field label="Singapore postal code" required help="Detect fills in the address and coordinates from OneMap.">
+              <div className="flex gap-2">
+                <Input value={locForm.postalCode} onChange={e => setLocForm(f => ({ ...f, postalCode: e.target.value }))} placeholder="e.g. 238859" className="flex-1" />
+                <Button variant="secondary" icon="search" onClick={handlePostalLookup} disabled={locPostalSearching || !locForm.postalCode} className="h-[42px]">
+                  {locPostalSearching ? 'Looking up…' : 'Detect'}
+                </Button>
+              </div>
+            </Field>
+            <Field label="Address">
+              <Input value={locForm.address} onChange={e => setLocForm(x => ({ ...x, address: e.target.value }))} placeholder="Filled in from the postal code" />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Latitude" required>
+                <Input value={locForm.latitude} onChange={e => setLocForm(x => ({ ...x, latitude: e.target.value }))} placeholder="1.3521" className="font-mono" />
+              </Field>
+              <Field label="Longitude" required>
+                <Input value={locForm.longitude} onChange={e => setLocForm(x => ({ ...x, longitude: e.target.value }))} placeholder="103.8198" className="font-mono" />
+              </Field>
             </div>
-            <div className="flex flex-col gap-4 p-8">
-              {[{ key: 'name', label: 'Location Name', placeholder: 'e.g. Main Office' }, { key: 'address', label: 'Address', placeholder: 'Auto-filled from postal code' }].map(f => (
-                <div key={f.key} className="flex flex-col gap-2">
-                  <label className="text-[10px] font-black text-muted uppercase tracking-widest">{f.label}</label>
-                  <input value={locForm[f.key as keyof typeof locForm]} onChange={e => setLocForm(x => ({ ...x, [f.key]: e.target.value }))} placeholder={f.placeholder}
-                    className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-                </div>
-              ))}
-              <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-muted uppercase tracking-widest">Singapore Postal Code</label>
-                <div className="flex gap-2">
-                  <input value={locForm.postalCode} onChange={e => setLocForm(f => ({ ...f, postalCode: e.target.value }))} placeholder="e.g. 238859"
-                    className="flex-1 px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-                  <button onClick={handlePostalLookup} disabled={locPostalSearching || !locForm.postalCode}
-                    className="px-4 py-3 bg-accent hover:bg-accent disabled:opacity-50 text-paper text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap">
-                    {locPostalSearching ? '…' : 'Detect'}
-                  </button>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                {[{ key: 'latitude', placeholder: '1.3521' }, { key: 'longitude', placeholder: '103.8198' }].map(f => (
-                  <div key={f.key} className="flex flex-col gap-2">
-                    <label className="text-[10px] font-black text-muted uppercase tracking-widest">{f.key}</label>
-                    <input value={locForm[f.key as keyof typeof locForm]} onChange={e => setLocForm(x => ({ ...x, [f.key]: e.target.value }))} placeholder={f.placeholder}
-                      className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all font-mono" />
-                  </div>
-                ))}
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-muted uppercase tracking-widest">Geofence Radius (metres)</label>
-                <input type="number" min="50" max="5000" value={locForm.radiusMetres} onChange={e => setLocForm(f => ({ ...f, radiusMetres: e.target.value }))}
-                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-              </div>
-              {locError && <p className="text-xs font-bold text-ink bg-page border border-ink px-4 py-3">{locError}</p>}
-              <div className="flex gap-3 pt-1">
-                <button onClick={() => setLocModal(null)} className="flex-1 py-3 border border-rule text-[10px] font-black uppercase tracking-widest text-muted hover:bg-page transition-all">Cancel</button>
-                <button onClick={saveLocation} disabled={locSaving} className="flex-1 py-3 bg-accent hover:bg-accent disabled:opacity-50 text-paper text-[10px] font-black uppercase tracking-widest transition-all">
-                  {locSaving ? 'Saving…' : 'Save Location'}
-                </button>
-              </div>
-            </div>
+            <Field label="Geofence radius (metres)" help="Between 50 and 5,000 metres.">
+              <Input type="number" min="50" max="5000" value={locForm.radiusMetres} onChange={e => setLocForm(f => ({ ...f, radiusMetres: e.target.value }))} />
+            </Field>
+            {locError && <FormError>{locError}</FormError>}
           </div>
-        </div>
+        </Modal>
       )}
 
       {assignModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-          <div className="w-full max-w-lg bg-paper overflow-hidden">
-            <div className="flex items-center justify-between px-8 py-6 border-b border-rule">
-              <div>
-                <h2 className="text-lg font-black text-ink tracking-tighter">Work Locations</h2>
-                <p className="eyebrow-tight mt-0.5">{assignModal.empName}</p>
-              </div>
-              <button onClick={() => setAssignModal(null)} className="w-9 h-9 flex items-center justify-center text-muted hover:bg-page transition-all text-lg">✕</button>
-            </div>
-            <div className="flex flex-col gap-4 p-8">
-              {empAssignments.length > 0 ? (
-                <div className="flex flex-col gap-2">
-                  <p className="text-[10px] font-black text-muted uppercase tracking-widest">Assigned Locations</p>
-                  {empAssignments.map(a => (
-                    <div key={a.id} className="flex items-center justify-between bg-page px-4 py-3 border border-rule">
-                      <div>
-                        <span className="text-xs font-black text-ink">{a.workLocation.name}</span>
-                        {a.isPrimary && <span className="ml-2 text-[9px] font-black uppercase px-2 py-0.5 bg-page text-accent border border-accent tracking-widest">Primary</span>}
-                        <p className="text-[9px] font-bold text-muted mt-0.5 uppercase">{a.workLocation.radiusMetres}m radius · {a.workLocation.postalCode}</p>
+        <Modal open title="Work locations" caption={assignModal.empName} onClose={() => setAssignModal(null)}>
+          <div className="flex flex-col gap-5">
+            {empAssignments.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                <p className="text-[12.5px] font-semibold text-muted">Assigned locations</p>
+                {empAssignments.map(a => (
+                  <div key={a.id} className="flex items-center justify-between gap-3 px-3.5 py-3 rounded-control border border-rule bg-page">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-ink">{a.workLocation.name}</span>
+                        {a.isPrimary && <Badge tone="accent">Primary</Badge>}
                       </div>
-                      <button onClick={() => removeAssignment(a.id, assignModal.empId)} className="text-[9px] font-black uppercase text-ink hover:text-ink tracking-widest transition-all">Remove</button>
+                      <p className="text-xs text-muted mt-0.5 tabular-nums">{a.workLocation.radiusMetres} m radius · {a.workLocation.postalCode}</p>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="px-4 py-3 bg-page border border-highlight">
-                  <p className="text-[10px] font-bold text-ink uppercase tracking-widest">No locations assigned — this employee can clock in from anywhere</p>
-                </div>
-              )}
-              <div className="flex flex-col gap-3 pt-2 border-t border-rule">
-                <p className="text-[10px] font-black text-muted uppercase tracking-widest">Add Location</p>
-                <select value={assignLocId} onChange={e => setAssignLocId(e.target.value)}
-                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all">
-                  <option value="">— Select a work location —</option>
-                  {locations.filter(l => l.isActive && !empAssignments.find(a => a.workLocationId === l.id)).map(l => (
-                    <option key={l.id} value={l.id}>{l.name} ({l.radiusMetres}m)</option>
-                  ))}
-                </select>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" checked={assignPrimary} onChange={e => setAssignPrimary(e.target.checked)} className="w-4 h-4 accent-accent" />
-                  <span className="text-[10px] font-black text-muted uppercase tracking-widest">Set as primary location</span>
-                </label>
-                <button onClick={saveAssignment} disabled={assignSaving || !assignLocId}
-                  className="w-full py-3 bg-accent hover:bg-accent disabled:opacity-50 text-paper text-[10px] font-black uppercase tracking-widest transition-all">
-                  {assignSaving ? 'Assigning…' : 'Assign Location'}
-                </button>
+                    <Button size="sm" variant="danger" onClick={() => removeAssignment(a.id, assignModal.empId)}>Remove</Button>
+                  </div>
+                ))}
               </div>
+            ) : (
+              <div className="px-3.5 py-3 rounded-control bg-warn-bg text-sm text-warn">
+                No locations assigned — this employee can clock in from anywhere.
+              </div>
+            )}
+            <div className="flex flex-col gap-3 pt-4 border-t border-rule">
+              <Field label="Add a location">
+                <Select value={assignLocId} onChange={e => setAssignLocId(e.target.value)}>
+                  <option value="">Select a work location</option>
+                  {locations.filter(l => l.isActive && !empAssignments.find(a => a.workLocationId === l.id)).map(l => (
+                    <option key={l.id} value={l.id}>{l.name} ({l.radiusMetres} m)</option>
+                  ))}
+                </Select>
+              </Field>
+              <label className="flex items-center gap-2.5 cursor-pointer text-sm text-ink">
+                <input type="checkbox" checked={assignPrimary} onChange={e => setAssignPrimary(e.target.checked)} className="w-4 h-4 accent-accent" />
+                Set as primary location
+              </label>
+              <Button variant="primary" onClick={saveAssignment} disabled={assignSaving || !assignLocId} className="w-full">
+                {assignSaving ? 'Assigning…' : 'Assign location'}
+              </Button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
@@ -559,7 +599,7 @@ function getViewDays(start: Date, mode: ViewMode): Date[] {
 }
 
 const VIEW_LABELS: Record<ViewMode, string> = {
-  weekly: 'Weekly', workweek: 'Work Week', biweekly: 'Bi-weekly', monthly: 'Monthly',
+  weekly: 'Week', workweek: 'Work week', biweekly: 'Two weeks', monthly: 'Month',
 };
 
 const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: EmployeeInfo[] }) {
@@ -781,134 +821,139 @@ const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: 
   };
 
   const allSelected = filteredEmps.length > 0 && filteredEmps.every(e => selectedEmps.has(e.id));
+  const isCompact = viewMode === 'monthly';
+  const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* Scheduler header */}
-      <div className="bg-paper border border-rule p-6 flex flex-wrap items-center gap-4">
-        {/* View mode selector */}
-        <div className="flex items-center gap-1 bg-page p-1">
-          {(['weekly','workweek','biweekly','monthly'] as ViewMode[]).map(m => (
-            <button key={m} onClick={() => switchMode(m)}
-              className={`px-3 py-1.5  text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === m ? 'bg-paper text-accent border border-rule' : 'text-muted hover:text-ink'}`}>
-              {VIEW_LABELS[m]}
-            </button>
-          ))}
-        </div>
-
-        {/* Period nav */}
-        <div className="flex items-center gap-2">
-          <button onClick={() => navigate(-1)} className="w-9 h-9 flex items-center justify-center border border-rule text-muted hover:bg-page font-black text-sm transition-all">‹</button>
-          <span className="text-sm font-black text-ink tracking-tight min-w-[200px] text-center">{periodLabel}</span>
-          <button onClick={() => navigate(1)} className="w-9 h-9 flex items-center justify-center border border-rule text-muted hover:bg-page font-black text-sm transition-all">›</button>
-          <button onClick={goToToday} className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest border border-accent text-accent bg-page hover:bg-page transition-all">Today</button>
-        </div>
-
-        <div className="flex items-center gap-2 ml-auto flex-wrap">
-          {/* Bulk bar — visible only when employees are selected */}
-          {selectedEmps.size > 0 && (
-            <div className="flex items-center gap-2 bg-page border border-accent px-4 py-2">
-              <span className="text-[9px] font-black text-accent uppercase tracking-widest">{selectedEmps.size} selected</span>
-              <select value={bulkShift} onChange={e => setBulkShift(e.target.value)}
-                className="text-[9px] font-black text-ink bg-paper border border-rule px-2 py-1 uppercase tracking-widest">
-                <option value="">— Clear shift —</option>
-                {shifts.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-              {/* Weekday toggles — Mon=0 … Sun=6; applies to all matching dates in view */}
-              <div className="flex gap-1">
-                {['M','T','W','T','F','S','S'].map((lbl, i) => (
-                  <button key={i} onClick={() => setBulkDays(prev => { const s = new Set(prev); s.has(i) ? s.delete(i) : s.add(i); return s; })}
-                    className={`w-7 h-7  text-[8px] font-black transition-all ${bulkDays.has(i) ? 'bg-accent text-paper' : 'bg-paper border border-rule text-muted'}`}>
-                    {lbl}
-                  </button>
-                ))}
-              </div>
-              <button onClick={bulkAssign} disabled={bulkSaving || !bulkDays.size}
-                className="px-3 py-1.5 bg-accent text-paper text-[9px] font-black uppercase tracking-widest disabled:opacity-50 hover:bg-accent transition-all">
-                {bulkSaving ? '…' : 'Apply'}
+    <div className="flex flex-col gap-4">
+      {/* Scheduler toolbar */}
+      <Card padding="px-4 py-3 sm:px-5" className="gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* View mode selector */}
+          <div className="flex p-1 rounded-full bg-pill" role="radiogroup" aria-label="View">
+            {(['weekly','workweek','biweekly','monthly'] as ViewMode[]).map(m => (
+              <button key={m} type="button" role="radio" aria-checked={viewMode === m} onClick={() => switchMode(m)}
+                className={`h-8 px-3 rounded-full text-[13px] font-semibold whitespace-nowrap transition-colors ${viewMode === m ? 'bg-paper text-ink shadow-card' : 'text-muted hover:text-ink'}`}>
+                {VIEW_LABELS[m]}
               </button>
-            </div>
-          )}
-          {viewMode === 'weekly' && (
-            <button onClick={() => setCopyModal(true)} className="px-4 py-2 text-[9px] font-black uppercase tracking-widest border border-rule text-muted bg-paper hover:bg-page transition-all">Copy Week</button>
-          )}
-          <button onClick={() => { setShowShiftPanel(p => !p); }} className="px-4 py-2 text-[9px] font-black uppercase tracking-widest border border-accent text-accent bg-page hover:bg-page transition-all">Shift Templates</button>
-        </div>
-      </div>
+            ))}
+          </div>
 
-      <div className="flex gap-5 items-start">
+          {/* Period nav */}
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" aria-label="Previous period" onClick={() => navigate(-1)}><Icon name="chevronRight" size={15} className="rotate-180" /></Button>
+            <span className="text-sm font-semibold text-ink tabular-nums min-w-[150px] sm:min-w-[200px] text-center">{periodLabel}</span>
+            <Button variant="secondary" size="sm" aria-label="Next period" onClick={() => navigate(1)}><Icon name="chevronRight" size={15} /></Button>
+            <Button variant="secondary" size="sm" onClick={goToToday}>Today</Button>
+          </div>
+
+          <div className="flex items-center gap-2 ml-auto flex-wrap">
+            {viewMode === 'weekly' && (
+              <Button variant="secondary" size="sm" onClick={() => setCopyModal(true)}>Copy week</Button>
+            )}
+            <Button variant={showShiftPanel ? 'ghost' : 'secondary'} size="sm" icon="clock" onClick={() => { setShowShiftPanel(p => !p); }}>Shift templates</Button>
+          </div>
+        </div>
+
+        {/* Bulk bar — visible only when employees are selected */}
+        {selectedEmps.size > 0 && (
+          <div className="flex flex-wrap items-center gap-3 px-3.5 py-2.5 rounded-control bg-tint">
+            <Badge tone="accent" className="tabular-nums">{selectedEmps.size} selected</Badge>
+            <Select value={bulkShift} onChange={e => setBulkShift(e.target.value)} className="!h-8 w-48 text-[13px]" aria-label="Shift to apply">
+              <option value="">Clear shift</option>
+              {shifts.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </Select>
+            {/* Weekday toggles — Mon=0 … Sun=6; applies to all matching dates in view */}
+            <div className="flex gap-1" role="group" aria-label="Days of the week">
+              {['M','T','W','T','F','S','S'].map((lbl, i) => (
+                <button key={i} type="button" aria-pressed={bulkDays.has(i)} aria-label={['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'][i]}
+                  onClick={() => setBulkDays(prev => { const s = new Set(prev); s.has(i) ? s.delete(i) : s.add(i); return s; })}
+                  className={`w-8 h-8 rounded-full text-xs font-bold transition-colors ${bulkDays.has(i) ? 'bg-accent text-on-accent' : 'bg-paper border border-rule text-muted hover:text-ink'}`}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+            <Button variant="primary" size="sm" onClick={bulkAssign} disabled={bulkSaving || !bulkDays.size}>
+              {bulkSaving ? 'Applying…' : 'Apply'}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedEmps(new Set())}>Clear selection</Button>
+          </div>
+        )}
+      </Card>
+
+      <div className="flex flex-col xl:flex-row gap-4 items-start">
         {/* Main grid */}
-        <div className="flex-1 min-w-0 bg-paper border border-rule overflow-hidden">
+        <Card padding="p-0" className="flex-1 min-w-0 w-full overflow-hidden">
           {/* Filter bar */}
-          <div className="px-6 py-4 border-b border-rule bg-page flex items-center gap-4">
-            <input value={empSearch} onChange={e => setEmpSearch(e.target.value)} placeholder="Search employees…"
-              className="bg-paper border border-rule px-3 py-2 text-xs font-bold text-ink outline-none focus:border-accent w-48 transition-all" />
-            <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)}
-              className="bg-paper border border-rule px-3 py-2 text-[10px] font-black text-ink uppercase tracking-widest outline-none focus:border-accent transition-all">
-              <option value="">All Departments</option>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 sm:px-5 border-b border-rule">
+            <SearchInput value={empSearch} onChange={e => setEmpSearch(e.target.value)} placeholder="Search employees" className="w-full sm:w-56" />
+            <Select value={deptFilter} onChange={e => setDeptFilter(e.target.value)} className="!h-10 w-full sm:w-52" aria-label="Department">
+              <option value="">All departments</option>
               {depts.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
-            <span className="label-form ml-auto">{filteredEmps.length} employees</span>
+            </Select>
+            <span className="text-[13px] text-muted sm:ml-auto tabular-nums">{filteredEmps.length} employee{filteredEmps.length === 1 ? '' : 's'}</span>
           </div>
 
           {loading ? (
-            <div className="p-16 text-center"><div className="w-8 h-8 border-4 border-t-accent border-accent animate-spin mx-auto rounded-full" /></div>
+            <Spinner />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full border-collapse" style={{ minWidth: viewMode === 'monthly' ? `${44 * viewDays.length + 240}px` : viewMode === 'biweekly' ? `${80 * 14 + 240}px` : '900px' }}>
                 <thead>
-                  <tr className="border-b border-rule bg-page">
-                    <th className="w-10 px-4 py-4">
-                      <input type="checkbox" checked={allSelected} onChange={e => setSelectedEmps(e.target.checked ? new Set(filteredEmps.map(x => x.id)) : new Set())} className="w-3.5 h-3.5 accent-accent" />
+                  <tr className="bg-pill border-b border-rule">
+                    <th className="w-10 px-3 py-3">
+                      <input type="checkbox" checked={allSelected} aria-label="Select all" onChange={e => setSelectedEmps(e.target.checked ? new Set(filteredEmps.map(x => x.id)) : new Set())} className="w-4 h-4 accent-accent" />
                     </th>
-                    <th className="px-4 py-4 text-left label-form min-w-[180px]">Employee</th>
+                    <th className="px-3 py-3 text-left text-xs font-bold text-muted min-w-[200px]">Employee</th>
                     {viewDays.map((d, i) => {
                       const todayStr = todayISO();
                       const isToday = isoDate(d) === todayStr;
                       const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                      const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
                       const colW = viewMode === 'monthly' ? 'min-w-[44px]' : viewMode === 'biweekly' ? 'min-w-[80px]' : 'min-w-[110px]';
                       return (
-                        <th key={i} className={`px-1 py-4 text-center text-[9px] font-black uppercase tracking-widest ${colW} ${isToday ? 'text-accent font-black' : 'text-muted'} ${isWeekend ? 'bg-page' : ''}`}>
+                        <th key={i} className={`px-1 py-2.5 text-center text-xs font-bold ${colW} ${isToday ? 'text-accent' : 'text-muted'} ${isWeekend ? 'bg-page' : ''}`}>
                           {viewMode !== 'monthly' && <div>{DAY_NAMES[d.getDay()]}</div>}
-                          <div className={`${viewMode === 'monthly' ? 'text-[9px]' : 'text-sm'} font-black mt-0.5 ${isToday ? 'text-accent' : isWeekend ? 'text-muted' : 'text-ink'}`}>{d.getDate()}</div>
-                          {viewMode === 'monthly' && <div className="text-[7px] font-bold text-muted">{DAY_NAMES[d.getDay()][0]}</div>}
-                          {viewMode !== 'monthly' && <div className="text-[8px] font-bold text-muted mt-0.5">{d.toLocaleDateString('en-SG', { month: 'short' })}</div>}
+                          <div className={`${viewMode === 'monthly' ? 'text-xs' : 'text-[15px]'} font-bold tabular-nums ${viewMode === 'monthly' ? '' : 'mt-0.5'} ${isToday ? 'text-accent' : isWeekend ? 'text-muted' : 'text-ink'}`}>{d.getDate()}</div>
+                          {viewMode === 'monthly' && <div className="text-xs font-semibold text-faint">{DAY_NAMES[d.getDay()][0]}</div>}
+                          {viewMode !== 'monthly' && <div className="text-xs font-semibold text-faint">{d.toLocaleDateString('en-SG', { month: 'short' })}</div>}
                         </th>
                       );
                     })}
-                    <th className="px-4 py-4 text-center label-form">
-                      {viewMode === 'monthly' ? 'Hrs/Mo' : viewMode === 'biweekly' ? 'Hrs/2Wk' : 'Hrs/Wk'}
+                    <th className="px-3 py-3 text-right text-xs font-bold text-muted whitespace-nowrap">
+                      {viewMode === 'monthly' ? 'Hours / month' : viewMode === 'biweekly' ? 'Hours / 2 weeks' : 'Hours / week'}
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-rule">
                   {filteredEmps.length === 0 ? (
-                    <tr><td colSpan={viewDays.length + 3} className="px-8 py-16 text-center text-sm font-black text-muted uppercase tracking-widest">No employees found</td></tr>
+                    <tr><td colSpan={viewDays.length + 3}>
+                      <EmptyState icon="users" title="No employees match" description={empSearch || deptFilter ? 'Try a different name or department.' : 'Active employees appear here once they are added.'} />
+                    </td></tr>
                   ) : filteredEmps.map(emp => {
                     const hrs = periodHours(emp.id);
-                    const isCompact = viewMode === 'monthly';
                     return (
-                      <tr key={emp.id} className={`hover:bg-page transition-all ${selectedEmps.has(emp.id) ? 'bg-page' : ''}`}>
-                        <td className="px-4 py-3 text-center">
-                          <input type="checkbox" checked={selectedEmps.has(emp.id)} onChange={e => setSelectedEmps(prev => { const s = new Set(prev); e.target.checked ? s.add(emp.id) : s.delete(emp.id); return s; })} className="w-3.5 h-3.5 accent-accent" />
+                      <tr key={emp.id} className={`transition-colors ${selectedEmps.has(emp.id) ? 'bg-tint/40' : 'hover:bg-page'}`}>
+                        <td className="px-3 py-2 text-center">
+                          <input type="checkbox" checked={selectedEmps.has(emp.id)} aria-label={`Select ${emp.fullName}`} onChange={e => setSelectedEmps(prev => { const s = new Set(prev); e.target.checked ? s.add(emp.id) : s.delete(emp.id); return s; })} className="w-4 h-4 accent-accent" />
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2">
                           <div className="flex items-center gap-2.5 group/emprow">
-                            <div className="w-7 h-7 bg-shadow flex items-center justify-center text-[9px] font-black text-accent shrink-0">{getInitials(emp.fullName)}</div>
+                            <Avatar name={emp.fullName} tone="soft" />
                             <div className="flex-1 min-w-0">
-                              <p className="text-[11px] font-black text-ink tracking-tight">{emp.fullName}</p>
-                              <p className="text-[8px] font-bold text-muted uppercase tracking-widest">{emp.department}</p>
+                              <p className="text-sm font-semibold text-ink truncate">{emp.fullName}</p>
+                              <p className="text-xs text-muted truncate">{emp.department}</p>
                             </div>
                             <button
+                              type="button"
                               onClick={() => setResetConfirm({ empId: emp.id, empName: emp.fullName })}
                               disabled={resettingEmpId === emp.id}
                               title="Reset schedule for this period"
-                              className="opacity-0 group-hover/emprow:opacity-100 transition-opacity w-6 h-6 flex items-center justify-center border border-ink text-ink hover:bg-page hover:text-ink shrink-0 disabled:opacity-30"
+                              aria-label={`Reset ${emp.fullName}'s schedule for this period`}
+                              className="opacity-0 group-hover/emprow:opacity-100 focus-visible:opacity-100 transition-opacity w-7 h-7 flex items-center justify-center rounded-control border border-rule text-muted hover:text-danger hover:border-danger shrink-0 disabled:opacity-30"
                             >
                               {resettingEmpId === emp.id
-                                ? <div className="w-3 h-3 border-2 border-t-ink border-ink animate-spin rounded-full" />
-                                : <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+                                ? <div className="w-3 h-3 border-2 border-t-muted border-rule animate-spin rounded-full" />
+                                : <Icon name="refresh" size={13} strokeWidth={2.25} />
                               }
                             </button>
                           </div>
@@ -922,40 +967,44 @@ const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: 
                           const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                           const isToday = dateStr === todayISO();
                           return (
-                            <td key={i} className={`${isCompact ? 'px-0.5 py-1' : 'px-2 py-2'} text-center ${isWeekend ? 'bg-page' : ''}`}>
+                            <td key={i} className={`${isCompact ? 'px-0.5 py-1' : 'px-1.5 py-1.5'} text-center ${isWeekend ? 'bg-page' : ''}`}>
                               <button
+                                type="button"
                                 onClick={e => {
                                   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                                   setCellPopover({ empId: emp.id, date: dateStr, x: rect.left, y: rect.bottom + 4 });
                                 }}
                                 disabled={isSaving}
                                 title={shift ? `${shift.name} · ${shift.startTime}–${shift.endTime}` : dateStr}
-                                className={`w-full  border transition-all group relative ${isCompact ? 'min-h-[32px]' : 'min-h-[52px]'} ${isToday && !shift ? 'border-accent bg-page' : ''}`}
-                                style={shift ? { backgroundColor: shift.color + '22', borderColor: shift.color + '55' } : { backgroundColor: 'transparent', borderColor: isToday ? undefined : 'var(--rule)' }}
+                                aria-label={shift ? `${DAY_NAMES[d.getDay()]} ${d.getDate()}: ${shift.name}` : `${DAY_NAMES[d.getDay()]} ${d.getDate()}: no shift`}
+                                className={`w-full rounded-control border transition-colors group relative ${isCompact ? 'min-h-[32px]' : 'min-h-[52px]'} ${isToday && !shift ? 'border-accent bg-tint/40' : ''}`}
+                                style={shift ? { backgroundColor: shift.color + '1F', borderColor: shift.color + '66' } : { backgroundColor: 'transparent', borderColor: isToday ? undefined : 'var(--rule)' }}
                               >
                                 {isSaving ? (
-                                  <div className="flex items-center justify-center h-full"><div className="w-3 h-3 border-2 border-t-rule border-rule animate-spin rounded-full" /></div>
+                                  <div className="flex items-center justify-center h-full"><div className="w-3 h-3 border-2 border-t-muted border-rule animate-spin rounded-full" /></div>
                                 ) : shift ? (
                                   isCompact ? (
                                     <div className="flex items-center justify-center h-full py-1">
-                                      <div className="w-2 h-2" style={{ backgroundColor: shift.color }} />
+                                      <ColorDot color={shift.color} />
                                     </div>
                                   ) : (
                                     <div className="px-1.5 py-1">
-                                      <div className="w-1.5 h-1.5 mx-auto mb-1" style={{ backgroundColor: shift.color }} />
-                                      <p className="text-[9px] font-black tracking-tight truncate" style={{ color: shift.color }}>{shift.name}</p>
-                                      <p className="text-[8px] font-bold text-muted">{shift.startTime}–{shift.endTime}</p>
+                                      <div className="flex items-center justify-center gap-1.5 min-w-0">
+                                        <ColorDot color={shift.color} />
+                                        <p className="text-xs font-semibold text-ink truncate">{shift.name}</p>
+                                      </div>
+                                      <p className="text-xs text-muted tabular-nums mt-0.5">{shift.startTime}–{shift.endTime}</p>
                                     </div>
                                   )
                                 ) : (
-                                  <span className={`text-paper group-hover:text-muted transition-colors ${isCompact ? 'text-sm' : 'text-lg'}`}>+</span>
+                                  <span className="flex items-center justify-center text-faint group-hover:text-accent transition-colors"><Icon name="plus" size={isCompact ? 12 : 15} /></span>
                                 )}
                               </button>
                             </td>
                           );
                         })}
-                        <td className="px-4 py-3 text-center">
-                          <span className={`text-[10px] font-black tabular-nums ${hrs >= 160 ? 'text-ink' : hrs >= 80 ? 'text-ink' : hrs >= 40 ? 'text-ink' : hrs > 0 ? 'text-ink' : 'text-muted'}`}>
+                        <td className="px-3 py-2 text-right">
+                          <span className={`text-sm font-semibold tabular-nums ${hrs > 0 ? 'text-ink' : 'text-faint'}`}>
                             {hrs > 0 ? `${hrs.toFixed(0)}h` : '—'}
                           </span>
                         </td>
@@ -966,78 +1015,77 @@ const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: 
               </table>
             </div>
           )}
-        </div>
+        </Card>
 
         {/* Shift Templates Panel */}
         {showShiftPanel && (
-          <div className="w-72 shrink-0 bg-paper border border-rule overflow-hidden">
-            <div className="px-6 py-5 border-b border-rule flex items-center justify-between">
-              <h3 className="text-[10px] font-black text-ink uppercase tracking-widest">Shift Templates</h3>
-              <button onClick={() => { setEditShift(null); setShiftForm({ name: '', startTime: '09:00', endTime: '18:00', breakMinutes: '60', color: SHIFT_COLORS[0] }); setShiftModal('add'); }}
-                className="px-3 py-1.5 bg-accent text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent transition-all">
-                + New
-              </button>
+          <Card padding="p-0" className="w-full xl:w-72 shrink-0 overflow-hidden">
+            <div className="px-5 pt-5">
+              <CardHeader
+                title="Shift templates"
+                action={<button type="button" onClick={() => { setEditShift(null); setShiftForm({ name: '', startTime: '09:00', endTime: '18:00', breakMinutes: '60', color: SHIFT_COLORS[0] }); setShiftModal('add'); }} className="inline-flex items-center gap-1 hover:underline"><Icon name="plus" size={14} />New</button>}
+              />
             </div>
             {shifts.length === 0 ? (
-              <div className="p-8 text-center"><p className="text-[10px] font-bold text-muted uppercase tracking-widest">No shift templates yet</p></div>
+              <EmptyState icon="clock" title="No shift templates yet" description="Create one to start assigning shifts on the roster." className="py-8" />
             ) : (
-              <div className="divide-y divide-rule">
+              <div className="flex flex-col divide-y divide-rule border-t border-rule">
                 {shifts.map(s => (
-                  <div key={s.id} className="px-5 py-4 flex items-start gap-3 hover:bg-page transition-all">
-                    <div className="w-3 h-3 mt-1 shrink-0" style={{ backgroundColor: s.color }} />
+                  <div key={s.id} className="px-5 py-3.5 flex items-start gap-3 hover:bg-page transition-colors">
+                    <ColorDot color={s.color} className="mt-1.5" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-black text-ink tracking-tight">{s.name}</p>
-                      <p className="text-[9px] font-bold text-muted mt-0.5">{s.startTime} – {s.endTime}</p>
-                      <p className="text-[8px] font-bold text-muted uppercase tracking-widest">{s.hoursPerDay.toFixed(1)}h · {s.breakMinutes}min break</p>
+                      <p className="text-sm font-semibold text-ink truncate">{s.name}</p>
+                      <p className="text-xs text-muted tabular-nums mt-0.5">{s.startTime} – {s.endTime} · {s.hoursPerDay.toFixed(1)}h · {s.breakMinutes} min break</p>
+                      {s._type === 'working' && s.projectName && <p className="text-xs text-faint truncate">{s.projectName}</p>}
                     </div>
                     <div className="flex gap-1 shrink-0">
-                      <button onClick={() => openShiftEdit(s)} className="w-7 h-7 flex items-center justify-center border border-rule text-[10px] text-muted hover:border-accent hover:text-accent transition-all">✎</button>
-                      <button onClick={() => deleteShift(s.id)} className="w-7 h-7 flex items-center justify-center border border-ink text-[10px] text-ink hover:bg-page transition-all">✕</button>
+                      <Button size="sm" variant="secondary" onClick={() => openShiftEdit(s)}>Edit</Button>
+                      <button type="button" onClick={() => deleteShift(s.id)} aria-label={`Deactivate ${s.name}`} className="flex items-center justify-center w-8 h-8 rounded-control text-muted hover:text-danger hover:bg-pill"><Icon name="x" size={15} /></button>
                     </div>
                   </div>
                 ))}
               </div>
             )}
-          </div>
+          </Card>
         )}
       </div>
 
       {/* Cell Popover */}
       {cellPopover && (
-        <div ref={popoverRef} className="fixed z-50 bg-paper border border-rule p-3 w-56" style={{ top: Math.min(cellPopover.y, window.innerHeight - 260), left: Math.min(cellPopover.x, window.innerWidth - 240) }}>
-          <p className="label-form mb-2">Assign Shift</p>
-          <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
+        <div ref={popoverRef} role="menu" className="fixed z-50 w-60 p-2 bg-paper border border-rule rounded-card shadow-card" style={{ top: Math.min(cellPopover.y, window.innerHeight - 280), left: Math.min(cellPopover.x, window.innerWidth - 256) }}>
+          <p className="px-2.5 pt-1.5 pb-2 text-[12.5px] font-semibold text-muted">Assign a shift · {formatCivil(new Date(cellPopover.date + 'T00:00:00'), { day: 'numeric', month: 'short' })}</p>
+          <div className="flex flex-col gap-0.5 max-h-64 overflow-y-auto">
             {shifts.filter(s => s._type === 'template').length > 0 && (
-              <p className="text-[8px] font-black text-muted uppercase tracking-widest px-3 pt-1">Templates</p>
+              <p className="text-xs font-semibold text-faint px-2.5 pt-1 pb-0.5">Templates</p>
             )}
             {shifts.filter(s => s._type === 'template').map(s => (
-              <button key={s.id} onClick={() => assignShift(cellPopover.empId, cellPopover.date, s)}
-                className="flex items-center gap-2.5 px-3 py-2 hover:bg-page transition-all text-left w-full">
-                <div className="w-2.5 h-2.5 shrink-0" style={{ backgroundColor: s.color }} />
-                <div>
-                  <p className="text-[10px] font-black text-ink">{s.name}</p>
-                  <p className="text-[8px] text-muted font-bold">{s.startTime} – {s.endTime}</p>
-                </div>
+              <button key={s.id} type="button" role="menuitem" onClick={() => assignShift(cellPopover.empId, cellPopover.date, s)}
+                className="flex items-center gap-2.5 px-2.5 py-2 rounded-control hover:bg-page transition-colors text-left w-full">
+                <ColorDot color={s.color} />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-ink truncate">{s.name}</span>
+                  <span className="block text-xs text-muted tabular-nums">{s.startTime} – {s.endTime}</span>
+                </span>
               </button>
             ))}
             {shifts.filter(s => s._type === 'working').length > 0 && (
-              <p className="text-[8px] font-black text-muted uppercase tracking-widest px-3 pt-2">Working Shifts</p>
+              <p className="text-xs font-semibold text-faint px-2.5 pt-2 pb-0.5">Working shifts</p>
             )}
             {shifts.filter(s => s._type === 'working').map(s => (
-              <button key={s.id} onClick={() => assignShift(cellPopover.empId, cellPopover.date, s)}
-                className="flex items-center gap-2.5 px-3 py-2 hover:bg-page transition-all text-left w-full">
-                <div className="w-2.5 h-2.5 shrink-0" style={{ backgroundColor: s.color }} />
-                <div>
-                  <p className="text-[10px] font-black text-ink">{s.name}</p>
-                  <p className="text-[8px] text-muted font-bold">{s.startTime} – {s.endTime} · {s.projectName}</p>
-                </div>
+              <button key={s.id} type="button" role="menuitem" onClick={() => assignShift(cellPopover.empId, cellPopover.date, s)}
+                className="flex items-center gap-2.5 px-2.5 py-2 rounded-control hover:bg-page transition-colors text-left w-full">
+                <ColorDot color={s.color} />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-ink truncate">{s.name}</span>
+                  <span className="block text-xs text-muted tabular-nums truncate">{s.startTime} – {s.endTime} · {s.projectName}</span>
+                </span>
               </button>
             ))}
-            {shifts.length === 0 && <p className="text-[10px] text-muted px-3 py-2 font-bold">No shifts yet.</p>}
+            {shifts.length === 0 && <p className="text-sm text-muted px-2.5 py-2">No shifts yet.</p>}
             <div className="border-t border-rule mt-1 pt-1">
-              <button onClick={() => clearShift(cellPopover.empId, cellPopover.date)}
-                className="w-full px-3 py-2 hover:bg-page text-left text-[10px] font-black text-ink uppercase tracking-widest transition-all">
-                Clear Shift
+              <button type="button" role="menuitem" onClick={() => clearShift(cellPopover.empId, cellPopover.date)}
+                className="flex items-center gap-2 w-full px-2.5 py-2 rounded-control hover:bg-page text-left text-sm font-semibold text-danger transition-colors">
+                <Icon name="x" size={14} />Clear shift
               </button>
             </div>
           </div>
@@ -1046,107 +1094,77 @@ const ShiftScheduler = memo(function ShiftScheduler({ employees }: { employees: 
 
       {/* Copy Week Modal */}
       {copyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-          <div className="w-full max-w-sm bg-paper p-8">
-            <h3 className="text-base font-black text-ink tracking-tighter mb-1">Copy Roster Week</h3>
-            <p className="text-[10px] font-bold text-muted uppercase tracking-widest mb-6">Copy all shifts from {periodLabel} to another week</p>
-            <div className="flex flex-col gap-2 mb-6">
-              <label className="text-[9px] font-black text-muted uppercase tracking-widest">Target Week (select any day)</label>
-              <input type="date" value={copyToWeek} onChange={e => setCopyToWeek(isoDate(getMondayOf(new Date(e.target.value))))}
-                className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-              {copyToWeek && <p className="text-[9px] font-bold text-muted">Will copy to week of {copyToWeek}</p>}
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setCopyModal(false)} className="flex-1 py-3 border border-rule text-[10px] font-black uppercase tracking-widest text-muted hover:bg-page">Cancel</button>
-              <button onClick={copyWeek} disabled={copySaving || !copyToWeek}
-                className="flex-1 py-3 bg-accent hover:bg-accent disabled:opacity-50 text-paper text-[10px] font-black uppercase tracking-widest transition-all">
-                {copySaving ? 'Copying…' : 'Copy'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <Modal open
+          title="Copy roster week"
+          caption={`Copies every shift from ${periodLabel} to another week.`}
+          onClose={() => setCopyModal(false)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setCopyModal(false)}>Cancel</Button>
+              <Button variant="primary" onClick={copyWeek} disabled={copySaving || !copyToWeek}>{copySaving ? 'Copying…' : 'Copy week'}</Button>
+            </>
+          }
+        >
+          <Field label="Target week" help={copyToWeek ? `Will copy to the week of ${copyToWeek}.` : 'Pick any day in the target week; it snaps to that Monday.'}>
+            <Input type="date" value={copyToWeek} onChange={e => setCopyToWeek(isoDate(getMondayOf(new Date(e.target.value))))} />
+          </Field>
+        </Modal>
       )}
 
       {/* Reset Schedule Confirmation Modal */}
       {resetConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-          <div className="w-full max-w-sm bg-paper p-8">
-            <div className="w-12 h-12 bg-page border border-ink flex items-center justify-center mb-5">
-              <svg className="w-5 h-5 text-ink" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
-            </div>
-            <h3 className="text-base font-black text-ink tracking-tighter mb-1">Reset Schedule</h3>
-            <p className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">{resetConfirm.empName}</p>
-            <p className="text-xs font-bold text-muted mb-6">
-              This will clear all {viewDays.length} shift assignments for <span className="text-ink">{periodLabel}</span>. The employee will show as unscheduled for this period.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setResetConfirm(null)}
-                className="flex-1 py-3 border border-rule text-[10px] font-black uppercase tracking-widest text-muted hover:bg-page transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => resetEmployeeSchedule(resetConfirm.empId)}
-                disabled={resettingEmpId === resetConfirm.empId}
-                className="flex-1 py-3 bg-ink hover:bg-ink disabled:opacity-50 text-paper text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-              >
-                {resettingEmpId === resetConfirm.empId && <span className="w-3.5 h-3.5 border-2 border-paper/30 border-t-paper animate-spin rounded-full" />}
-                Reset
-              </button>
-            </div>
-          </div>
-        </div>
+        <Modal open
+          title="Reset schedule"
+          caption={resetConfirm.empName}
+          onClose={() => setResetConfirm(null)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setResetConfirm(null)}>Cancel</Button>
+              <Button variant="danger" icon="refresh" onClick={() => resetEmployeeSchedule(resetConfirm.empId)} disabled={resettingEmpId === resetConfirm.empId}>
+                {resettingEmpId === resetConfirm.empId ? 'Resetting…' : 'Reset schedule'}
+              </Button>
+            </>
+          }
+        >
+          <p className="text-sm text-muted leading-relaxed">
+            This clears all {viewDays.length} shift assignments for <span className="font-semibold text-ink">{periodLabel}</span>. The employee will show as unscheduled for this period.
+          </p>
+        </Modal>
       )}
 
       {/* Shift Template Modal */}
       {shiftModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-          <div className="w-full max-w-sm bg-paper p-8">
-            <h3 className="text-base font-black text-ink tracking-tighter mb-5">{shiftModal === 'add' ? 'New Shift Template' : 'Edit Shift'}</h3>
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Shift Name *</label>
-                <input value={shiftForm.name} onChange={e => setShiftForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Morning, Afternoon, Night"
-                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">Start Time</label>
-                  <input type="time" value={shiftForm.startTime} onChange={e => setShiftForm(f => ({ ...f, startTime: e.target.value }))}
-                    className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">End Time</label>
-                  <input type="time" value={shiftForm.endTime} onChange={e => setShiftForm(f => ({ ...f, endTime: e.target.value }))}
-                    className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-                </div>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Break Duration (minutes)</label>
-                <input type="number" min="0" max="120" value={shiftForm.breakMinutes} onChange={e => setShiftForm(f => ({ ...f, breakMinutes: e.target.value }))}
-                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Colour</label>
-                <div className="flex flex-wrap gap-2">
-                  {SHIFT_COLORS.map(c => (
-                    <button key={c} onClick={() => setShiftForm(f => ({ ...f, color: c }))}
-                      className={`w-7 h-7  transition-all ${shiftForm.color === c ? 'ring-2 ring-offset-1 ring-rule scale-110' : 'hover:scale-105'}`}
-                      style={{ backgroundColor: c }} />
-                  ))}
-                </div>
-              </div>
+        <Modal open
+          title={shiftModal === 'add' ? 'New shift template' : 'Edit shift'}
+          onClose={() => setShiftModal(null)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setShiftModal(null)}>Cancel</Button>
+              <Button variant="primary" onClick={saveShift} disabled={shiftSaving || !shiftForm.name}>{shiftSaving ? 'Saving…' : 'Save shift'}</Button>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            <Field label="Shift name" required>
+              <Input value={shiftForm.name} onChange={e => setShiftForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Morning, Afternoon, Night" />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Start time">
+                <Input type="time" value={shiftForm.startTime} onChange={e => setShiftForm(f => ({ ...f, startTime: e.target.value }))} />
+              </Field>
+              <Field label="End time">
+                <Input type="time" value={shiftForm.endTime} onChange={e => setShiftForm(f => ({ ...f, endTime: e.target.value }))} />
+              </Field>
             </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setShiftModal(null)} className="flex-1 py-3 border border-rule text-[10px] font-black uppercase tracking-widest text-muted hover:bg-page">Cancel</button>
-              <button onClick={saveShift} disabled={shiftSaving || !shiftForm.name}
-                className="flex-1 py-3 bg-accent hover:bg-accent disabled:opacity-50 text-paper text-[10px] font-black uppercase tracking-widest transition-all">
-                {shiftSaving ? 'Saving…' : 'Save Shift'}
-              </button>
+            <Field label="Break (minutes)">
+              <Input type="number" min="0" max="120" value={shiftForm.breakMinutes} onChange={e => setShiftForm(f => ({ ...f, breakMinutes: e.target.value }))} />
+            </Field>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[12.5px] font-semibold text-muted">Colour</span>
+              <ColorPicker value={shiftForm.color} onChange={c => setShiftForm(f => ({ ...f, color: c }))} />
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
@@ -1178,6 +1196,29 @@ const defaultWShift: WShiftForm = {
 
 type PatternForm = { name: string; patternType: string; workDays: string; offDays: string; startTime: string; endTime: string; breakMinutes: string; color: string; scheduleStartDate: string; };
 const defaultPattern: PatternForm = { name: '', patternType: 'CUSTOM', workDays: '5', offDays: '2', startTime: '09:00', endTime: '18:00', breakMinutes: '60', color: SHIFT_COLORS[0], scheduleStartDate: todayISO() };
+
+/** Row of the project list / project detail with the "section" heading and its action. */
+function SectionHead({ title, caption, action }: { title: string; caption?: string; action?: React.ReactNode }) {
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+      <div className="min-w-0">
+        <h2 className="text-[17px] font-bold text-ink">{title}</h2>
+        {caption && <p className="text-[13px] text-muted mt-0.5">{caption}</p>}
+      </div>
+      {action && <div className="flex items-center gap-2 shrink-0">{action}</div>}
+    </div>
+  );
+}
+
+/** Pill-shaped toggle used for weekday pickers and duration presets. */
+function Chip({ on, onClick, children, ariaLabel }: { on: boolean; onClick: () => void; children: React.ReactNode; ariaLabel?: string }) {
+  return (
+    <button type="button" aria-pressed={on} aria-label={ariaLabel} onClick={onClick}
+      className={`h-8 px-3 rounded-full text-[13px] font-semibold transition-colors ${on ? 'bg-accent text-on-accent' : 'bg-pill text-muted hover:text-ink'}`}>
+      {children}
+    </button>
+  );
+}
 
 function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
   const [projects, setProjects] = useState<ShiftProject[]>([]);
@@ -1392,140 +1433,133 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
   const assignedEmpIds = new Set(existingAssignments.map(a => a.employeeId));
   const availableEmps = employees.filter(e => !assignedEmpIds.has(e.id) && (!assignSearch || e.fullName.toLowerCase().includes(assignSearch.toLowerCase())));
 
+  /** The project create/edit form — rendered from both the list and the detail view. */
+  const projectModal = projModal && (
+    <Modal open
+      title={projModal === 'add' ? 'New project' : 'Edit project'}
+      caption="A project groups the working shifts, rotation patterns and members of one operation."
+      onClose={() => setProjModal(null)}
+      footer={
+        <>
+          <Button variant="secondary" onClick={() => setProjModal(null)}>Cancel</Button>
+          <Button variant="primary" onClick={saveProject} disabled={projSaving || !projForm.name}>{projSaving ? 'Saving…' : 'Save project'}</Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <Field label="Project name" required>
+          <Input value={projForm.name} onChange={e => setProjForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Night operations" />
+        </Field>
+        <Field label="Description">
+          <Textarea value={projForm.description} onChange={e => setProjForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Optional" />
+        </Field>
+      </div>
+    </Modal>
+  );
+
   if (!selProject) {
     return (
-      <div className="flex flex-col gap-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-black text-ink tracking-tighter">Shift Management</h2>
-            <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1">Organise working shifts and rotation patterns by project</p>
-          </div>
-          <button onClick={openAddProject} className="px-6 py-2.5 bg-accent hover:bg-accent text-paper text-[10px] font-black uppercase tracking-widest transition-all">+ New Project</button>
-        </div>
+      <div className="flex flex-col gap-4">
+        <SectionHead
+          title="Shift management"
+          caption="Organise working shifts and rotation patterns by project"
+          action={<Button variant="primary" icon="plus" onClick={openAddProject}>New project</Button>}
+        />
         {projLoading ? (
-          <div className="p-16 text-center"><div className="w-8 h-8 border-4 border-t-accent border-accent animate-spin mx-auto rounded-full" /></div>
+          <Card padding="p-0"><Spinner /></Card>
         ) : projects.length === 0 ? (
-          <div className="bg-paper border border-dashed border-rule p-16 text-center">
-            <p className="text-sm font-black text-muted uppercase tracking-widest mb-2">No projects yet</p>
-            <p className="text-[10px] font-bold text-muted uppercase tracking-widest">Create a project to start defining shifts and rotation patterns</p>
-          </div>
+          <Card padding="p-0">
+            <EmptyState
+              icon="briefcase"
+              title="No projects yet"
+              description="Create a project to start defining shifts and rotation patterns."
+              action={<Button variant="primary" icon="plus" onClick={openAddProject}>New project</Button>}
+            />
+          </Card>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {projects.map(p => (
-              <button key={p.id} onClick={() => { setSelProject(p); setSubTab('working'); }}
-                className="text-left bg-paper border border-rule p-7 hover:border-accent hover: transition-all group">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-10 h-10 bg-accent flex items-center justify-center text-paper font-black text-sm">{p.name[0].toUpperCase()}</div>
-                  <span className={`text-[9px] font-black uppercase px-2 py-1  tracking-widest ${p.isActive ? 'bg-page text-accent' : 'bg-page text-muted'}`}>{p.isActive ? 'Active' : 'Archived'}</span>
+              <button key={p.id} type="button" onClick={() => { setSelProject(p); setSubTab('working'); }}
+                className="text-left flex flex-col bg-paper border border-rule rounded-card shadow-card p-5 hover:border-accent transition-colors group">
+                <div className="flex items-start justify-between mb-3">
+                  <span className="flex items-center justify-center w-10 h-10 rounded-control bg-tint text-accent font-bold text-[15px]">{p.name[0].toUpperCase()}</span>
+                  <Badge tone={p.isActive ? 'ok' : 'neutral'}>{p.isActive ? 'Active' : 'Archived'}</Badge>
                 </div>
-                <p className="text-base font-black text-ink tracking-tight group-hover:text-accent transition-colors">{p.name}</p>
-                {p.description && <p className="text-[10px] font-bold text-muted mt-1 line-clamp-2">{p.description}</p>}
-                <div className="flex gap-4 mt-5">
-                  <div><p className="text-xl font-black text-ink">{p._count?.workingShifts ?? 0}</p><p className="label-form">Working Shifts</p></div>
-                  <div><p className="text-xl font-black text-ink">{p._count?.shiftPatterns ?? 0}</p><p className="label-form">Patterns</p></div>
-                  <div><p className="text-xl font-black text-ink">{p._count?.members ?? 0}</p><p className="label-form">Members</p></div>
+                <p className="text-[15.5px] font-bold text-ink group-hover:text-accent transition-colors">{p.name}</p>
+                {p.description && <p className="text-[13px] text-muted mt-1 line-clamp-2">{p.description}</p>}
+                <div className="flex gap-5 mt-4 pt-4 border-t border-rule">
+                  <div><p className="text-[22px] font-extrabold tracking-[-0.02em] leading-none text-ink tabular-nums">{p._count?.workingShifts ?? 0}</p><p className="text-xs text-muted mt-1">Working shifts</p></div>
+                  <div><p className="text-[22px] font-extrabold tracking-[-0.02em] leading-none text-ink tabular-nums">{p._count?.shiftPatterns ?? 0}</p><p className="text-xs text-muted mt-1">Patterns</p></div>
+                  <div><p className="text-[22px] font-extrabold tracking-[-0.02em] leading-none text-ink tabular-nums">{p._count?.members ?? 0}</p><p className="text-xs text-muted mt-1">Members</p></div>
                 </div>
               </button>
             ))}
           </div>
         )}
-        {projModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-            <div className="w-full max-w-sm bg-paper p-8">
-              <h3 className="text-base font-black text-ink tracking-tighter mb-5">{projModal === 'add' ? 'New Project' : 'Edit Project'}</h3>
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">Project Name *</label>
-                  <input value={projForm.name} onChange={e => setProjForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Night Operations"
-                    className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">Description</label>
-                  <textarea value={projForm.description} onChange={e => setProjForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Optional description"
-                    className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all resize-none" />
-                </div>
-              </div>
-              <div className="flex gap-3 mt-6">
-                <button onClick={() => setProjModal(null)} className="flex-1 py-3 border border-rule text-[10px] font-black uppercase tracking-widest text-muted hover:bg-page">Cancel</button>
-                <button onClick={saveProject} disabled={projSaving || !projForm.name}
-                  className="flex-1 py-3 bg-accent hover:bg-accent disabled:opacity-50 text-paper text-[10px] font-black uppercase tracking-widest transition-all">
-                  {projSaving ? 'Saving…' : 'Save'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {projectModal}
       </div>
     );
   }
 
   // Project detail view
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
       {/* Breadcrumb header */}
-      <div className="bg-paper border border-rule px-8 py-6 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button onClick={() => setSelProject(null)} className="eyebrow-tight hover:text-accent transition-colors">← Projects</button>
-          <span className="text-paper">/</span>
-          <h2 className="text-base font-black text-ink tracking-tight">{selProject.name}</h2>
+      <Card padding="px-5 py-4" className="flex-row items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
+          <Button variant="ghost" size="sm" onClick={() => setSelProject(null)}><Icon name="chevronRight" size={15} className="rotate-180" />Projects</Button>
+          <span className="text-faint">/</span>
+          <h2 className="text-[15.5px] font-bold text-ink truncate">{selProject.name}</h2>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => openEditProject(selProject)} className="px-4 py-2 text-[9px] font-black uppercase tracking-widest border border-rule text-muted hover:border-accent hover:text-accent transition-all">Edit</button>
-          <button onClick={() => deleteProject(selProject.id)} className="px-4 py-2 text-[9px] font-black uppercase tracking-widest border border-ink text-ink hover:bg-page transition-all">Archive</button>
+          <Button size="sm" variant="secondary" onClick={() => openEditProject(selProject)}>Edit</Button>
+          <Button size="sm" variant="danger" onClick={() => deleteProject(selProject.id)}>Archive</Button>
         </div>
-      </div>
+      </Card>
 
       {/* Sub-tabs */}
-      <div className="flex gap-2">
-        {(['working','patterns','members'] as const).map(k => (
-          <button key={k} onClick={() => setSubTab(k)}
-            className={`px-6 py-2.5  text-[10px] font-black uppercase tracking-widest transition-all ${subTab === k ? 'bg-accent text-paper' : 'bg-paper border border-rule text-muted hover:bg-page'}`}>
-            {k === 'working' ? 'Working Shifts' : k === 'patterns' ? 'Shift Patterns' : 'Members'}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        items={[{ id: 'working', label: 'Working shifts' }, { id: 'patterns', label: 'Shift patterns' }, { id: 'members', label: 'Members' }]}
+        active={subTab}
+        onChange={setSubTab}
+      />
 
       {/* Working Shifts */}
       {subTab === 'working' && (
-        <div className="flex flex-col gap-4">
-          <div className="flex justify-between items-center">
-            <p className="eyebrow-tight">Define specific working days and hours for this project</p>
-            <button onClick={openAddWs} className="px-5 py-2 bg-accent hover:bg-accent text-paper text-[9px] font-black uppercase tracking-widest transition-all">+ New Working Shift</button>
-          </div>
-          {wsLoading ? <div className="p-12 text-center"><div className="w-7 h-7 border-4 border-t-accent border-accent animate-spin mx-auto rounded-full" /></div>
+        <div className="flex flex-col gap-3">
+          <SectionHead title="Working shifts" caption="Specific working days and hours for this project" action={<Button variant="primary" size="sm" icon="plus" onClick={openAddWs}>New working shift</Button>} />
+          {wsLoading ? <Card padding="p-0"><Spinner /></Card>
           : workingShifts.length === 0 ? (
-            <div className="bg-paper border border-dashed border-rule p-12 text-center">
-              <p className="text-sm font-black text-muted uppercase tracking-widest">No working shifts yet</p>
-            </div>
+            <Card padding="p-0"><EmptyState icon="clock" title="No working shifts yet" description="Define the days and hours, then assign employees to it." action={<Button variant="primary" size="sm" icon="plus" onClick={openAddWs}>New working shift</Button>} /></Card>
           ) : (
             <div className="flex flex-col gap-3">
               {workingShifts.map(ws => {
                 const hrs = calcHours(ws.startTime, ws.endTime, ws.breakMinutes);
                 const assigned = ws.assignments?.length ?? 0;
                 return (
-                  <div key={ws.id} className="bg-paper border border-rule px-8 py-6">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-3 h-3 shrink-0" style={{ backgroundColor: ws.color }} />
-                        <div>
-                          <p className="text-sm font-black text-ink tracking-tight">{ws.name}</p>
-                          <p className="text-[10px] font-bold text-muted mt-0.5 uppercase tracking-widest">{workDayLabel(ws)}</p>
-                          <p className="text-[10px] font-bold text-muted mt-1">{ws.startTime} – {ws.endTime} · <span className="font-black text-ink">{hrs.toFixed(1)}h/day</span> · {ws.breakMinutes}min break · {ws.isRecurring ? 'Recurring' : 'One-time'}</p>
+                  <Card key={ws.id} padding="px-5 py-4">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <ColorDot color={ws.color} className="mt-1.5" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-ink">{ws.name}</p>
+                          <p className="text-[13px] text-muted mt-0.5">{workDayLabel(ws)}</p>
+                          <p className="text-[13px] text-muted mt-0.5 tabular-nums">{ws.startTime} – {ws.endTime} · <span className="font-semibold text-ink">{hrs.toFixed(1)}h/day</span> · {ws.breakMinutes} min break · {ws.isRecurring ? 'Recurring' : 'One-time'}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                        <span className="label-form">{assigned} assigned</span>
-                        <button onClick={() => openAssign('working', ws.id, ws.name)} className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest bg-page text-accent border border-accent hover:bg-page transition-all">Assign Employees</button>
-                        <button onClick={() => openEditWs(ws)} className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest border border-rule text-muted hover:border-accent hover:text-accent transition-all">Edit</button>
-                        <button onClick={() => deleteWs(ws.id)} className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest border border-ink text-ink hover:bg-page transition-all">Delete</button>
+                      <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                        <span className="text-xs text-muted tabular-nums mr-1">{assigned} assigned</span>
+                        <Button size="sm" variant="secondary" icon="users" onClick={() => openAssign('working', ws.id, ws.name)}>Assign</Button>
+                        <Button size="sm" variant="secondary" onClick={() => openEditWs(ws)}>Edit</Button>
+                        <Button size="sm" variant="danger" onClick={() => deleteWs(ws.id)}>Delete</Button>
                       </div>
                     </div>
-                    <div className="flex gap-1.5 mt-4 flex-wrap">
+                    <div className="flex gap-1.5 mt-3 flex-wrap">
                       {DAY_KEYS.map((k, i) => (
-                        <span key={k} className={`text-[9px] font-black px-2.5 py-1  tracking-widest uppercase ${ws[k] ? 'bg-accent text-paper' : 'bg-page text-muted'}`}>{DAY_LABELS[i]}</span>
+                        <Badge key={k} tone={ws[k] ? 'accent' : 'neutral'}>{DAY_LABELS[i]}</Badge>
                       ))}
                     </div>
-                  </div>
+                  </Card>
                 );
               })}
             </div>
@@ -1535,40 +1569,35 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
 
       {/* Shift Patterns */}
       {subTab === 'patterns' && (
-        <div className="flex flex-col gap-4">
-          <div className="flex justify-between items-center">
-            <p className="eyebrow-tight">Cyclical rotation patterns — define work days and off days</p>
-            <button onClick={openAddPat} className="px-5 py-2 bg-accent hover:bg-accent text-paper text-[9px] font-black uppercase tracking-widest transition-all">+ New Pattern</button>
-          </div>
-          {patLoading ? <div className="p-12 text-center"><div className="w-7 h-7 border-4 border-t-accent border-accent animate-spin mx-auto rounded-full" /></div>
+        <div className="flex flex-col gap-3">
+          <SectionHead title="Shift patterns" caption="Cyclical rotations — a run of work days followed by a run of off days" action={<Button variant="primary" size="sm" icon="plus" onClick={openAddPat}>New pattern</Button>} />
+          {patLoading ? <Card padding="p-0"><Spinner /></Card>
           : patterns.length === 0 ? (
-            <div className="bg-paper border border-dashed border-rule p-12 text-center">
-              <p className="text-sm font-black text-muted uppercase tracking-widest">No patterns yet</p>
-            </div>
+            <Card padding="p-0"><EmptyState icon="refresh" title="No patterns yet" description="Set up a rotation such as 4 on / 2 off and assign employees to it." action={<Button variant="primary" size="sm" icon="plus" onClick={openAddPat}>New pattern</Button>} /></Card>
           ) : (
             <div className="flex flex-col gap-3">
               {patterns.map(pat => {
                 const cycle = pat.workDays + pat.offDays;
                 const assigned = pat.assignments?.length ?? 0;
                 return (
-                  <div key={pat.id} className="bg-paper border border-rule px-8 py-6 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-3 h-3 shrink-0" style={{ backgroundColor: pat.color }} />
-                      <div>
-                        <p className="text-sm font-black text-ink tracking-tight">{pat.name}</p>
-                        <p className="text-[10px] font-bold text-muted mt-0.5 uppercase tracking-widest">
-                          {pat.patternType === 'CUSTOM' ? 'Custom' : pat.patternType + ' Shift'} · {pat.workDays} on / {pat.offDays} off → {cycle}-day cycle
+                  <Card key={pat.id} padding="px-5 py-4" className="sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <ColorDot color={pat.color} className="mt-1.5" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-ink">{pat.name}</p>
+                        <p className="text-[13px] text-muted mt-0.5 tabular-nums">
+                          {pat.patternType === 'CUSTOM' ? 'Custom' : `${pat.patternType} shift`} · {pat.workDays} on / {pat.offDays} off · {cycle}-day cycle
                         </p>
-                        <p className="text-[10px] font-bold text-muted mt-1">{pat.startTime} – {pat.endTime} · <span className="font-black text-ink">{pat.hoursPerShift.toFixed(1)}h/shift</span> · {pat.breakMinutes}min break</p>
+                        <p className="text-[13px] text-muted mt-0.5 tabular-nums">{pat.startTime} – {pat.endTime} · <span className="font-semibold text-ink">{pat.hoursPerShift.toFixed(1)}h/shift</span> · {pat.breakMinutes} min break</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                      <span className="label-form">{assigned} assigned</span>
-                      <button onClick={() => openAssign('pattern', pat.id, pat.name)} className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest bg-page text-accent border border-accent hover:bg-page transition-all">Assign Employees</button>
-                      <button onClick={() => openEditPat(pat)} className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest border border-rule text-muted hover:border-accent hover:text-accent transition-all">Edit</button>
-                      <button onClick={() => deletePat(pat.id)} className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest border border-ink text-ink hover:bg-page transition-all">Delete</button>
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                      <span className="text-xs text-muted tabular-nums mr-1">{assigned} assigned</span>
+                      <Button size="sm" variant="secondary" icon="users" onClick={() => openAssign('pattern', pat.id, pat.name)}>Assign</Button>
+                      <Button size="sm" variant="secondary" onClick={() => openEditPat(pat)}>Edit</Button>
+                      <Button size="sm" variant="danger" onClick={() => deletePat(pat.id)}>Delete</Button>
                     </div>
-                  </div>
+                  </Card>
                 );
               })}
             </div>
@@ -1578,400 +1607,306 @@ function ShiftManagement({ employees }: { employees: EmployeeInfo[] }) {
 
       {/* Members Tab */}
       {subTab === 'members' && (
-        <div className="flex flex-col gap-4">
-          <div className="flex justify-between items-center">
-            <p className="eyebrow-tight">Employees assigned to this project</p>
-            <button onClick={() => { setMemberForm({ employeeId: '', shiftId: '', shiftType: '', startDate: todayISO(), autoPopulate: true }); setMemberModal(true); }}
-              className="px-5 py-2 bg-accent hover:bg-accent text-paper text-[9px] font-black uppercase tracking-widest transition-all">+ Add Member</button>
-          </div>
-          {membersLoading ? <div className="p-12 text-center"><div className="w-7 h-7 border-4 border-t-accent border-accent animate-spin mx-auto rounded-full" /></div>
+        <div className="flex flex-col gap-3">
+          <SectionHead title="Members" caption="Employees assigned to this project" action={
+            <Button variant="primary" size="sm" icon="plus" onClick={() => { setMemberForm({ employeeId: '', shiftId: '', shiftType: '', startDate: todayISO(), autoPopulate: true }); setMemberModal(true); }}>Add member</Button>
+          } />
+          {membersLoading ? <Card padding="p-0"><Spinner /></Card>
           : members.length === 0 ? (
-            <div className="bg-paper border border-dashed border-rule p-12 text-center">
-              <p className="text-sm font-black text-muted uppercase tracking-widest">No members yet</p>
-              <p className="text-[10px] font-bold text-muted mt-1">Add employees and auto-populate their roster</p>
-            </div>
+            <Card padding="p-0"><EmptyState icon="users" title="No members yet" description="Add employees and, for working shifts, auto-fill their roster." /></Card>
           ) : (
-            <div className="flex flex-col gap-3">
-              {members.map(m => {
-                const emp = employees.find(e => e.id === m.employeeId);
-                const shift = m.workingShift;
-                const pat = m.shiftPattern;
-                return (
-                  <div key={m.id} className="bg-paper border border-rule px-8 py-5 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 bg-shadow flex items-center justify-center text-[9px] font-black text-accent shrink-0">{getInitials(emp?.fullName ?? '?')}</div>
-                      <div>
-                        <p className="text-sm font-black text-ink tracking-tight">{emp?.fullName ?? m.employeeId}</p>
-                        <p className="text-[9px] font-bold text-muted uppercase tracking-widest">{emp?.department} · {emp?.designation}</p>
-                        {shift && (
-                          <div className="flex items-center gap-1.5 mt-1">
-                            <div className="w-2 h-2 shrink-0" style={{ backgroundColor: shift.color }} />
-                            <p className="text-[9px] font-bold text-muted">{shift.name} · {shift.startTime}–{shift.endTime}</p>
-                          </div>
-                        )}
-                        {pat && !shift && (
-                          <div className="flex items-center gap-1.5 mt-1">
-                            <div className="w-2 h-2 shrink-0" style={{ backgroundColor: pat.color }} />
-                            <p className="text-[9px] font-bold text-muted">{pat.name} · Pattern</p>
-                          </div>
-                        )}
-                        {!shift && !pat && <p className="text-[9px] font-bold text-muted mt-0.5">No shift assigned</p>}
+            <Card padding="p-0" className="overflow-hidden">
+              <div className="flex flex-col divide-y divide-rule">
+                {members.map(m => {
+                  const emp = employees.find(e => e.id === m.employeeId);
+                  const shift = m.workingShift;
+                  const pat = m.shiftPattern;
+                  return (
+                    <div key={m.id} className="flex items-center justify-between gap-3 px-5 py-3.5 hover:bg-page transition-colors">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Avatar name={emp?.fullName ?? '?'} tone="soft" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-ink truncate">{emp?.fullName ?? m.employeeId}</p>
+                          <p className="text-xs text-muted truncate">{emp?.department}{emp?.designation ? ` · ${emp.designation}` : ''}</p>
+                          {shift && (
+                            <p className="flex items-center gap-1.5 mt-0.5 text-xs text-muted tabular-nums"><ColorDot color={shift.color} className="!w-2 !h-2" />{shift.name} · {shift.startTime}–{shift.endTime}</p>
+                          )}
+                          {pat && !shift && (
+                            <p className="flex items-center gap-1.5 mt-0.5 text-xs text-muted"><ColorDot color={pat.color} className="!w-2 !h-2" />{pat.name} · pattern</p>
+                          )}
+                          {!shift && !pat && <p className="text-xs text-faint mt-0.5">No shift assigned</p>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="hidden sm:inline text-xs text-muted tabular-nums">Since {new Date(m.startDate).toLocaleDateString('en-SG', { day: 'numeric', month: 'short' })}</span>
+                        <Button size="sm" variant="danger" onClick={() => removeMember(m.id)}>Remove</Button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[8px] font-bold text-muted uppercase">Since {new Date(m.startDate).toLocaleDateString('en-SG', { day: 'numeric', month: 'short' })}</span>
-                      <button onClick={() => removeMember(m.id)} className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest border border-ink text-ink hover:bg-page transition-all">Remove</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            </Card>
           )}
         </div>
       )}
 
       {/* Add Member Modal */}
       {memberModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-          <div className="w-full max-w-sm bg-paper p-8">
-            <h3 className="text-base font-black text-ink tracking-tighter mb-5">Add Member</h3>
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Employee *</label>
-                <select value={memberForm.employeeId} onChange={e => setMemberForm(f => ({ ...f, employeeId: e.target.value }))}
-                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all">
-                  <option value="">— Select employee —</option>
-                  {employees.filter(e => !members.find(m => m.employeeId === e.id)).map(e => (
-                    <option key={e.id} value={e.id}>{e.fullName} ({e.department})</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Assign Shift</label>
-                <select
-                  value={memberForm.shiftType ? `${memberForm.shiftType}:${memberForm.shiftId}` : ''}
-                  onChange={e => {
-                    const val = e.target.value;
-                    if (!val) { setMemberForm(f => ({ ...f, shiftId: '', shiftType: '' })); return; }
-                    const [type, id] = val.split(':');
-                    setMemberForm(f => ({ ...f, shiftId: id, shiftType: type as 'working' | 'pattern' }));
-                  }}
-                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all">
-                  <option value="">— None —</option>
-                  {workingShifts.length > 0 && (
-                    <optgroup label="Working Shifts">
-                      {workingShifts.map(ws => <option key={ws.id} value={`working:${ws.id}`}>{ws.name} ({ws.startTime}–{ws.endTime})</option>)}
-                    </optgroup>
-                  )}
-                  {patterns.length > 0 && (
-                    <optgroup label="Shift Patterns">
-                      {patterns.map(p => <option key={p.id} value={`pattern:${p.id}`}>{p.name} ({p.workDays} on / {p.offDays} off)</option>)}
-                    </optgroup>
-                  )}
-                </select>
-              </div>
-              <div className="bg-page border border-accent px-4 py-3 flex flex-col gap-2">
-                <label className="text-[9px] font-black text-accent uppercase tracking-widest">Effective Start Date *</label>
-                <input type="date" value={memberForm.startDate} onChange={e => setMemberForm(f => ({ ...f, startDate: e.target.value }))}
-                  className="w-full px-4 py-2.5 bg-paper border border-accent text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-                <p className="text-[9px] font-bold text-accent">
-                  Roster entries before this date are preserved. If re-assigning, the previous shift closes the day before.
-                </p>
-              </div>
-              {memberForm.shiftType === 'working' && (
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" checked={memberForm.autoPopulate} onChange={e => setMemberForm(f => ({ ...f, autoPopulate: e.target.checked }))} className="w-4 h-4 accent-accent" />
-                  <span className="text-[10px] font-black text-muted uppercase tracking-widest">Auto-fill roster for next 4 weeks from start date</span>
-                </label>
-              )}
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setMemberModal(false)} className="flex-1 py-3 border border-rule text-[10px] font-black uppercase tracking-widest text-muted hover:bg-page">Cancel</button>
-              <button onClick={addMember} disabled={memberSaving || !memberForm.employeeId}
-                className="flex-1 py-3 bg-accent hover:bg-accent disabled:opacity-50 text-paper text-[10px] font-black uppercase tracking-widest transition-all">
-                {memberSaving ? 'Adding…' : 'Add'}
-              </button>
-            </div>
+        <Modal open
+          title="Add member"
+          caption={selProject.name}
+          onClose={() => setMemberModal(false)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setMemberModal(false)}>Cancel</Button>
+              <Button variant="primary" onClick={addMember} disabled={memberSaving || !memberForm.employeeId}>{memberSaving ? 'Adding…' : 'Add member'}</Button>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            <Field label="Employee" required>
+              <Select value={memberForm.employeeId} onChange={e => setMemberForm(f => ({ ...f, employeeId: e.target.value }))}>
+                <option value="">Select an employee</option>
+                {employees.filter(e => !members.find(m => m.employeeId === e.id)).map(e => (
+                  <option key={e.id} value={e.id}>{e.fullName} ({e.department})</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Shift">
+              <Select
+                value={memberForm.shiftType ? `${memberForm.shiftType}:${memberForm.shiftId}` : ''}
+                onChange={e => {
+                  const val = e.target.value;
+                  if (!val) { setMemberForm(f => ({ ...f, shiftId: '', shiftType: '' })); return; }
+                  const [type, id] = val.split(':');
+                  setMemberForm(f => ({ ...f, shiftId: id, shiftType: type as 'working' | 'pattern' }));
+                }}
+              >
+                <option value="">None</option>
+                {workingShifts.length > 0 && (
+                  <optgroup label="Working shifts">
+                    {workingShifts.map(ws => <option key={ws.id} value={`working:${ws.id}`}>{ws.name} ({ws.startTime}–{ws.endTime})</option>)}
+                  </optgroup>
+                )}
+                {patterns.length > 0 && (
+                  <optgroup label="Shift patterns">
+                    {patterns.map(p => <option key={p.id} value={`pattern:${p.id}`}>{p.name} ({p.workDays} on / {p.offDays} off)</option>)}
+                  </optgroup>
+                )}
+              </Select>
+            </Field>
+            <Field label="Effective start date" required>
+              <Input type="date" value={memberForm.startDate} onChange={e => setMemberForm(f => ({ ...f, startDate: e.target.value }))} />
+            </Field>
+            <DateNote>Roster entries before this date are kept. If the employee is being re-assigned, the previous shift closes the day before.</DateNote>
+            {memberForm.shiftType === 'working' && (
+              <label className="flex items-center gap-2.5 cursor-pointer text-sm text-ink">
+                <input type="checkbox" checked={memberForm.autoPopulate} onChange={e => setMemberForm(f => ({ ...f, autoPopulate: e.target.checked }))} className="w-4 h-4 accent-accent" />
+                Auto-fill the roster for the next 4 weeks from the start date
+              </label>
+            )}
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Working Shift Modal */}
       {wsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-          <div className="w-full max-w-md bg-paper overflow-y-auto max-h-[90vh]">
-            <div className="flex items-center justify-between px-8 py-6 border-b border-rule">
-              <h3 className="text-base font-black text-ink tracking-tighter">{wsModal === 'add' ? 'New Working Shift' : 'Edit Working Shift'}</h3>
-              <button onClick={() => setWsModal(null)} className="w-8 h-8 flex items-center justify-center text-muted hover:bg-page transition-all">✕</button>
-            </div>
-            <div className="p-8 flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Shift Name *</label>
-                <input value={wsForm.name} onChange={e => setWsForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Morning Shift"
-                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Working Days</label>
-                <div className="flex gap-1.5 flex-wrap">
-                  {DAY_KEYS.map((k, i) => (
-                    <button key={k} type="button" onClick={() => setWsForm(f => ({ ...f, [k]: !f[k] }))}
-                      className={`px-3 py-2  text-[9px] font-black uppercase tracking-widest transition-all ${wsForm[k] ? 'bg-accent text-paper' : 'bg-page text-muted hover:bg-rule'}`}>
-                      {DAY_LABELS[i]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">Start Time</label>
-                  <input type="time" value={wsForm.startTime} onChange={e => setWsForm(f => ({ ...f, startTime: e.target.value }))}
-                    className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">End Time</label>
-                  <input type="time" value={wsForm.endTime} onChange={e => setWsForm(f => ({ ...f, endTime: e.target.value }))}
-                    className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-                </div>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Break Duration (minutes)</label>
-                <input type="number" min="0" max="120" value={wsForm.breakMinutes} onChange={e => setWsForm(f => ({ ...f, breakMinutes: e.target.value }))}
-                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-              </div>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" checked={wsForm.isRecurring} onChange={e => setWsForm(f => ({ ...f, isRecurring: e.target.checked }))} className="w-4 h-4 accent-accent" />
-                <span className="text-[10px] font-black text-muted uppercase tracking-widest">Recurring weekly schedule</span>
-              </label>
-              <div className="flex flex-col gap-2">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Colour</label>
-                <div className="flex flex-wrap gap-2">{SHIFT_COLORS.map(c => (
-                  <button key={c} type="button" onClick={() => setWsForm(f => ({ ...f, color: c }))}
-                    className={`w-7 h-7  transition-all ${wsForm.color === c ? 'ring-2 ring-offset-1 ring-rule scale-110' : 'hover:scale-105'}`}
-                    style={{ backgroundColor: c }} />
-                ))}</div>
-              </div>
-              {wsForm.startTime && wsForm.endTime && (
-                <div className="bg-page px-4 py-3 border border-rule">
-                  <p className="text-[10px] font-black text-muted uppercase tracking-widest">Preview</p>
-                  <p className="text-xs font-bold text-ink mt-1">{workDayLabel(wsForm as unknown as WorkingShift)} · {wsForm.startTime}–{wsForm.endTime} · {calcHours(wsForm.startTime, wsForm.endTime, Number(wsForm.breakMinutes)).toFixed(1)}h/day</p>
-                </div>
-              )}
-              {wsModal === 'add' && (
-                <div className="flex flex-col gap-1.5 pt-1 border-t border-rule">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">Schedule Start Date *</label>
-                  <input type="date" value={wsForm.scheduleStartDate} onChange={e => setWsForm(f => ({ ...f, scheduleStartDate: e.target.value }))}
-                    className="w-full px-4 py-3 bg-page border border-accent text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-                  <p className="text-[9px] font-bold text-accent uppercase tracking-widest">The schedule becomes effective from this date</p>
-                </div>
-              )}
-              <div className="flex gap-3 pt-1">
-                <button onClick={() => setWsModal(null)} className="flex-1 py-3 border border-rule text-[10px] font-black uppercase tracking-widest text-muted hover:bg-page">Cancel</button>
-                <button onClick={saveWs} disabled={wsSaving || !wsForm.name || (wsModal === 'add' && !wsForm.scheduleStartDate)}
-                  className="flex-1 py-3 bg-accent hover:bg-accent disabled:opacity-50 text-paper text-[10px] font-black uppercase tracking-widest transition-all">
-                  {wsSaving ? 'Saving…' : 'Save'}
-                </button>
+        <Modal open
+          title={wsModal === 'add' ? 'New working shift' : 'Edit working shift'}
+          caption={selProject.name}
+          onClose={() => setWsModal(null)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setWsModal(null)}>Cancel</Button>
+              <Button variant="primary" onClick={saveWs} disabled={wsSaving || !wsForm.name || (wsModal === 'add' && !wsForm.scheduleStartDate)}>{wsSaving ? 'Saving…' : 'Save shift'}</Button>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            <Field label="Shift name" required>
+              <Input value={wsForm.name} onChange={e => setWsForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Morning shift" />
+            </Field>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[12.5px] font-semibold text-muted">Working days</span>
+              <div className="flex gap-1.5 flex-wrap">
+                {DAY_KEYS.map((k, i) => (
+                  <Chip key={k} on={wsForm[k]} onClick={() => setWsForm(f => ({ ...f, [k]: !f[k] }))}>{DAY_LABELS[i]}</Chip>
+                ))}
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Start time">
+                <Input type="time" value={wsForm.startTime} onChange={e => setWsForm(f => ({ ...f, startTime: e.target.value }))} />
+              </Field>
+              <Field label="End time">
+                <Input type="time" value={wsForm.endTime} onChange={e => setWsForm(f => ({ ...f, endTime: e.target.value }))} />
+              </Field>
+            </div>
+            <Field label="Break (minutes)">
+              <Input type="number" min="0" max="120" value={wsForm.breakMinutes} onChange={e => setWsForm(f => ({ ...f, breakMinutes: e.target.value }))} />
+            </Field>
+            <label className="flex items-center gap-2.5 cursor-pointer text-sm text-ink">
+              <input type="checkbox" checked={wsForm.isRecurring} onChange={e => setWsForm(f => ({ ...f, isRecurring: e.target.checked }))} className="w-4 h-4 accent-accent" />
+              Recurring weekly schedule
+            </label>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[12.5px] font-semibold text-muted">Colour</span>
+              <ColorPicker value={wsForm.color} onChange={c => setWsForm(f => ({ ...f, color: c }))} />
+            </div>
+            {wsForm.startTime && wsForm.endTime && (
+              <div className="px-3.5 py-3 rounded-control bg-pill">
+                <p className="text-xs font-semibold text-muted">Preview</p>
+                <p className="text-sm text-ink mt-0.5 tabular-nums">{workDayLabel(wsForm as unknown as WorkingShift)} · {wsForm.startTime}–{wsForm.endTime} · {calcHours(wsForm.startTime, wsForm.endTime, Number(wsForm.breakMinutes)).toFixed(1)}h/day</p>
+              </div>
+            )}
+            {wsModal === 'add' && (
+              <div className="flex flex-col gap-3 pt-4 border-t border-rule">
+                <Field label="Schedule start date" required help="The schedule becomes effective from this date.">
+                  <Input type="date" value={wsForm.scheduleStartDate} onChange={e => setWsForm(f => ({ ...f, scheduleStartDate: e.target.value }))} />
+                </Field>
+              </div>
+            )}
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Shift Pattern Modal */}
       {patModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-          <div className="w-full max-w-md bg-paper overflow-y-auto max-h-[90vh]">
-            <div className="flex items-center justify-between px-8 py-6 border-b border-rule">
-              <h3 className="text-base font-black text-ink tracking-tighter">{patModal === 'add' ? 'New Shift Pattern' : 'Edit Shift Pattern'}</h3>
-              <button onClick={() => setPatModal(null)} className="w-8 h-8 flex items-center justify-center text-muted hover:bg-page transition-all">✕</button>
-            </div>
-            <div className="p-8 flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Pattern Name *</label>
-                <input value={patForm.name} onChange={e => setPatForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Continental 12H"
-                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Shift Duration</label>
-                <div className="flex gap-2 flex-wrap">
-                  {(['12H','8H','6H','CUSTOM'] as const).map(pt => (
-                    <button key={pt} type="button"
-                      onClick={() => {
-                        const preset = PATTERN_PRESETS[pt];
-                        setPatForm(f => ({ ...f, patternType: pt, ...(pt !== 'CUSTOM' ? preset : {}) }));
-                      }}
-                      className={`px-4 py-2  text-[9px] font-black uppercase tracking-widest transition-all ${patForm.patternType === pt ? 'bg-accent text-paper' : 'bg-page text-muted hover:bg-rule'}`}>
-                      {pt === 'CUSTOM' ? 'Custom' : pt + ' Shift'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">Work Days</label>
-                  <input type="number" min="1" max="30" value={patForm.workDays} onChange={e => setPatForm(f => ({ ...f, workDays: e.target.value }))}
-                    className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">Off Days</label>
-                  <input type="number" min="1" max="30" value={patForm.offDays} onChange={e => setPatForm(f => ({ ...f, offDays: e.target.value }))}
-                    className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">Start Time</label>
-                  <input type="time" value={patForm.startTime} onChange={e => setPatForm(f => ({ ...f, startTime: e.target.value }))}
-                    className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">End Time</label>
-                  <input type="time" value={patForm.endTime} onChange={e => setPatForm(f => ({ ...f, endTime: e.target.value }))}
-                    className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-                </div>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Break Duration (minutes)</label>
-                <input type="number" min="0" max="120" value={patForm.breakMinutes} onChange={e => setPatForm(f => ({ ...f, breakMinutes: e.target.value }))}
-                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Colour</label>
-                <div className="flex flex-wrap gap-2">{SHIFT_COLORS.map(c => (
-                  <button key={c} type="button" onClick={() => setPatForm(f => ({ ...f, color: c }))}
-                    className={`w-7 h-7  transition-all ${patForm.color === c ? 'ring-2 ring-offset-1 ring-rule scale-110' : 'hover:scale-105'}`}
-                    style={{ backgroundColor: c }} />
-                ))}</div>
-              </div>
-              {patForm.workDays && patForm.offDays && patForm.startTime && patForm.endTime && (
-                <div className="bg-page px-4 py-3 border border-rule">
-                  <p className="text-[10px] font-black text-muted uppercase tracking-widest">Preview</p>
-                  <p className="text-xs font-bold text-ink mt-1">
-                    {patForm.workDays} on / {patForm.offDays} off → {Number(patForm.workDays) + Number(patForm.offDays)}-day cycle · {calcHours(patForm.startTime, patForm.endTime, Number(patForm.breakMinutes)).toFixed(1)}h/shift
-                  </p>
-                </div>
-              )}
-              {patModal === 'add' && (
-                <div className="flex flex-col gap-1.5 pt-1 border-t border-rule">
-                  <label className="text-[9px] font-black text-muted uppercase tracking-widest">Schedule Start Date *</label>
-                  <input type="date" value={patForm.scheduleStartDate} onChange={e => setPatForm(f => ({ ...f, scheduleStartDate: e.target.value }))}
-                    className="w-full px-4 py-3 bg-page border border-accent text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-                  <p className="text-[9px] font-bold text-accent uppercase tracking-widest">The schedule becomes effective from this date</p>
-                </div>
-              )}
-              <div className="flex gap-3 pt-1">
-                <button onClick={() => setPatModal(null)} className="flex-1 py-3 border border-rule text-[10px] font-black uppercase tracking-widest text-muted hover:bg-page">Cancel</button>
-                <button onClick={savePat} disabled={patSaving || !patForm.name || (patModal === 'add' && !patForm.scheduleStartDate)}
-                  className="flex-1 py-3 bg-accent hover:bg-accent disabled:opacity-50 text-paper text-[10px] font-black uppercase tracking-widest transition-all">
-                  {patSaving ? 'Saving…' : 'Save'}
-                </button>
+        <Modal open
+          title={patModal === 'add' ? 'New shift pattern' : 'Edit shift pattern'}
+          caption={selProject.name}
+          onClose={() => setPatModal(null)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setPatModal(null)}>Cancel</Button>
+              <Button variant="primary" onClick={savePat} disabled={patSaving || !patForm.name || (patModal === 'add' && !patForm.scheduleStartDate)}>{patSaving ? 'Saving…' : 'Save pattern'}</Button>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            <Field label="Pattern name" required>
+              <Input value={patForm.name} onChange={e => setPatForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Continental 12-hour" />
+            </Field>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[12.5px] font-semibold text-muted">Shift duration</span>
+              <div className="flex gap-1.5 flex-wrap">
+                {(['12H','8H','6H','CUSTOM'] as const).map(pt => (
+                  <Chip key={pt} on={patForm.patternType === pt} onClick={() => {
+                    const preset = PATTERN_PRESETS[pt];
+                    setPatForm(f => ({ ...f, patternType: pt, ...(pt !== 'CUSTOM' ? preset : {}) }));
+                  }}>
+                    {pt === 'CUSTOM' ? 'Custom' : `${pt.replace('H', '')}-hour shift`}
+                  </Chip>
+                ))}
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Work days">
+                <Input type="number" min="1" max="30" value={patForm.workDays} onChange={e => setPatForm(f => ({ ...f, workDays: e.target.value }))} />
+              </Field>
+              <Field label="Off days">
+                <Input type="number" min="1" max="30" value={patForm.offDays} onChange={e => setPatForm(f => ({ ...f, offDays: e.target.value }))} />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Start time">
+                <Input type="time" value={patForm.startTime} onChange={e => setPatForm(f => ({ ...f, startTime: e.target.value }))} />
+              </Field>
+              <Field label="End time">
+                <Input type="time" value={patForm.endTime} onChange={e => setPatForm(f => ({ ...f, endTime: e.target.value }))} />
+              </Field>
+            </div>
+            <Field label="Break (minutes)">
+              <Input type="number" min="0" max="120" value={patForm.breakMinutes} onChange={e => setPatForm(f => ({ ...f, breakMinutes: e.target.value }))} />
+            </Field>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[12.5px] font-semibold text-muted">Colour</span>
+              <ColorPicker value={patForm.color} onChange={c => setPatForm(f => ({ ...f, color: c }))} />
+            </div>
+            {patForm.workDays && patForm.offDays && patForm.startTime && patForm.endTime && (
+              <div className="px-3.5 py-3 rounded-control bg-pill">
+                <p className="text-xs font-semibold text-muted">Preview</p>
+                <p className="text-sm text-ink mt-0.5 tabular-nums">
+                  {patForm.workDays} on / {patForm.offDays} off · {Number(patForm.workDays) + Number(patForm.offDays)}-day cycle · {calcHours(patForm.startTime, patForm.endTime, Number(patForm.breakMinutes)).toFixed(1)}h/shift
+                </p>
+              </div>
+            )}
+            {patModal === 'add' && (
+              <div className="flex flex-col gap-3 pt-4 border-t border-rule">
+                <Field label="Schedule start date" required help="The schedule becomes effective from this date.">
+                  <Input type="date" value={patForm.scheduleStartDate} onChange={e => setPatForm(f => ({ ...f, scheduleStartDate: e.target.value }))} />
+                </Field>
+              </div>
+            )}
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Employee Assignment Modal */}
       {assignTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-          <div className="w-full max-w-lg bg-paper overflow-hidden flex flex-col max-h-[85vh]">
-            <div className="flex items-center justify-between px-8 py-6 border-b border-rule shrink-0">
-              <div>
-                <h3 className="text-base font-black text-ink tracking-tighter">Assign Employees</h3>
-                <p className="eyebrow-tight mt-0.5">{assignTarget.name}</p>
-              </div>
-              <button onClick={() => setAssignTarget(null)} className="w-8 h-8 flex items-center justify-center text-muted hover:bg-page transition-all">✕</button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-4">
-              {/* Start Date — top of form so it's set before selecting employees */}
-              <div className="bg-page border border-accent px-5 py-4 flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-black text-accent uppercase tracking-widest">Effective Start Date *</span>
-                </div>
-                <input type="date" value={assignDate} onChange={e => setAssignDate(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-paper border border-accent text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-                <p className="text-[9px] font-bold text-accent">
-                  Roster from this date onwards will be set to this shift.
-                  All entries <span className="font-black">before</span> this date are kept as-is. Previous shift assignments will be automatically closed on the day before.
-                </p>
-              </div>
+        <Modal open
+          title="Assign employees"
+          caption={assignTarget.name}
+          onClose={() => setAssignTarget(null)}
+          footer={
+            <Button variant="primary" onClick={saveAssignments} disabled={assignSaving || !assignSelected.size || !assignDate} className="w-full sm:w-auto">
+              {assignSaving ? 'Assigning…' : `Assign ${assignSelected.size > 0 ? assignSelected.size + ' ' : ''}employee${assignSelected.size !== 1 ? 's' : ''} from ${assignDate || '—'}`}
+            </Button>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            {/* Start Date — top of form so it's set before selecting employees */}
+            <Field label="Effective start date" required>
+              <Input type="date" value={assignDate} onChange={e => setAssignDate(e.target.value)} />
+            </Field>
+            <DateNote>
+              The roster from this date onwards is set to this shift. Entries <span className="font-semibold text-ink">before</span> it are kept as-is, and any previous assignment closes the day before.
+            </DateNote>
 
-              {existingAssignments.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <p className="text-[9px] font-black text-muted uppercase tracking-widest">Currently Assigned ({existingAssignments.length})</p>
-                  {existingAssignments.map(a => {
-                    const emp = employees.find(e => e.id === a.employeeId);
-                    return (
-                      <div key={a.id} className="flex items-center justify-between bg-page px-4 py-2.5 border border-rule">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-6 h-6 bg-shadow flex items-center justify-center text-[8px] font-black text-accent">{getInitials(emp?.fullName || '?')}</div>
-                          <div>
-                            <p className="text-[11px] font-black text-ink">{emp?.fullName ?? a.employeeId}</p>
-                            <p className="text-[9px] font-bold text-muted uppercase">{emp?.department} · Since {new Date(a.startDate).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
-                          </div>
+            {existingAssignments.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <p className="text-[12.5px] font-semibold text-muted tabular-nums">Currently assigned ({existingAssignments.length})</p>
+                {existingAssignments.map(a => {
+                  const emp = employees.find(e => e.id === a.employeeId);
+                  return (
+                    <div key={a.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-control border border-rule bg-page">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Avatar name={emp?.fullName || '?'} size={24} tone="soft" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-ink truncate">{emp?.fullName ?? a.employeeId}</p>
+                          <p className="text-xs text-muted truncate tabular-nums">{emp?.department} · since {new Date(a.startDate).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                         </div>
-                        <button onClick={() => removeAssignment(a.id)} className="text-[9px] font-black uppercase text-ink hover:text-ink tracking-widest transition-all">Remove</button>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-              <div className="flex flex-col gap-3 pt-2 border-t border-rule">
-                <p className="text-[9px] font-black text-muted uppercase tracking-widest">Select Employees to Assign</p>
-                <input value={assignSearch} onChange={e => setAssignSearch(e.target.value)} placeholder="Search by name…"
-                  className="w-full px-4 py-2.5 bg-page border border-rule text-xs font-bold text-ink outline-none focus:border-accent transition-all" />
-                <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
-                  {availableEmps.length === 0 ? (
-                    <p className="text-[10px] font-bold text-muted text-center py-4 uppercase tracking-widest">All employees already assigned</p>
-                  ) : availableEmps.map(e => (
-                    <label key={e.id} className="flex items-center gap-3 px-3 py-2 hover:bg-page cursor-pointer transition-all">
-                      <input type="checkbox" checked={assignSelected.has(e.id)} onChange={ev => setAssignSelected(prev => { const s = new Set(prev); ev.target.checked ? s.add(e.id) : s.delete(e.id); return s; })} className="w-4 h-4 accent-accent" />
-                      <div className="w-6 h-6 bg-shadow flex items-center justify-center text-[8px] font-black text-accent shrink-0">{getInitials(e.fullName)}</div>
-                      <div>
-                        <p className="text-[11px] font-black text-ink">{e.fullName}</p>
-                        <p className="text-[9px] font-bold text-muted uppercase">{e.department}</p>
-                      </div>
-                    </label>
-                  ))}
-                </div>
+                      <Button size="sm" variant="danger" onClick={() => removeAssignment(a.id)}>Remove</Button>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
-            <div className="shrink-0 px-8 py-5 border-t border-rule">
-              <button onClick={saveAssignments} disabled={assignSaving || !assignSelected.size || !assignDate}
-                className="w-full py-3 bg-accent hover:bg-accent disabled:opacity-50 text-paper text-[10px] font-black uppercase tracking-widest transition-all">
-                {assignSaving ? 'Assigning…' : `Assign ${assignSelected.size > 0 ? assignSelected.size + ' ' : ''}Employee${assignSelected.size !== 1 ? 's' : ''} from ${assignDate || '—'}`}
-              </button>
+            )}
+            <div className="flex flex-col gap-3 pt-4 border-t border-rule">
+              <p className="text-[12.5px] font-semibold text-muted">Select employees to assign</p>
+              <SearchInput value={assignSearch} onChange={e => setAssignSearch(e.target.value)} placeholder="Search by name" />
+              <div className="flex flex-col gap-0.5 max-h-56 overflow-y-auto">
+                {availableEmps.length === 0 ? (
+                  <p className="text-sm text-muted text-center py-4">{assignSearch ? 'No one matches that search.' : 'Everyone is already assigned.'}</p>
+                ) : availableEmps.map(e => (
+                  <label key={e.id} className="flex items-center gap-3 px-2.5 py-2 rounded-control hover:bg-page cursor-pointer transition-colors">
+                    <input type="checkbox" checked={assignSelected.has(e.id)} onChange={ev => setAssignSelected(prev => { const s = new Set(prev); ev.target.checked ? s.add(e.id) : s.delete(e.id); return s; })} className="w-4 h-4 accent-accent" />
+                    <Avatar name={e.fullName} size={24} tone="soft" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-ink truncate">{e.fullName}</span>
+                      <span className="block text-xs text-muted truncate">{e.department}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Project edit modal when inside project detail */}
-      {projModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-          <div className="w-full max-w-sm bg-paper p-8">
-            <h3 className="text-base font-black text-ink tracking-tighter mb-5">Edit Project</h3>
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Project Name *</label>
-                <input value={projForm.name} onChange={e => setProjForm(f => ({ ...f, name: e.target.value }))}
-                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Description</label>
-                <textarea value={projForm.description} onChange={e => setProjForm(f => ({ ...f, description: e.target.value }))} rows={3}
-                  className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent transition-all resize-none" />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setProjModal(null)} className="flex-1 py-3 border border-rule text-[10px] font-black uppercase tracking-widest text-muted hover:bg-page">Cancel</button>
-              <button onClick={saveProject} disabled={projSaving || !projForm.name}
-                className="flex-1 py-3 bg-accent hover:bg-accent disabled:opacity-50 text-paper text-[10px] font-black uppercase tracking-widest transition-all">
-                {projSaving ? 'Saving…' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {projectModal}
     </div>
   );
 }

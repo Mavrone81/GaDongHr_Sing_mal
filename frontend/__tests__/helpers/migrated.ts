@@ -24,4 +24,8 @@ export const MIGRATED: string[] = [
   'app/register/',
   'app/auth/forgot-password/',
   'app/auth/reset-password/',
+  // redesign/time — leave, claims, attendance
+  'app/(dashboard)/leave/',
+  'app/(dashboard)/claims/',
+  'app/(dashboard)/attendance/',
 ];
