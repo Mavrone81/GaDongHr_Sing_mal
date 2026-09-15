@@ -7,7 +7,7 @@
  */
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
-import { DataTable, Modal, SplitPane } from '../src/components/ui';
+import { Avatar, DataTable, Modal, SplitPane, Tabs } from '../src/components/ui';
 
 type Row = { id: string; name: string };
 const ROWS: Row[] = [{ id: 'a', name: 'Acme' }];
@@ -87,6 +87,31 @@ describe('Modal focus trap', () => {
     screen.getByText('Outside').focus();
     fireEvent.keyDown(document, { key: 'Tab' });
     expect(document.activeElement).toBe(screen.getByLabelText('Close'));
+  });
+});
+
+describe('Tabs roving focus', () => {
+  function Harness() {
+    const [t, setT] = useState<'a' | 'b' | 'c'>('a');
+    return <Tabs items={[{ id: 'a', label: 'Alpha' }, { id: 'b', label: 'Beta' }, { id: 'c', label: 'Gamma' }]} active={t} onChange={setT} />;
+  }
+  it('moves focus with selection on ArrowRight / ArrowLeft', () => {
+    render(<Harness />);
+    const alpha = screen.getByRole('tab', { name: 'Alpha' });
+    alpha.focus();
+    fireEvent.keyDown(alpha, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Beta' }));
+    expect(screen.getByRole('tab', { name: 'Beta' }).getAttribute('aria-selected')).toBe('true');
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowLeft' });
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowLeft' });
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Gamma' }));
+  });
+});
+
+describe('Avatar', () => {
+  it('never renders initials below 12px', () => {
+    render(<Avatar name="Tan Wei" size={24} />);
+    expect(parseFloat((screen.getByTitle('Tan Wei') as HTMLElement).style.fontSize)).toBeGreaterThanOrEqual(12);
   });
 });
 
