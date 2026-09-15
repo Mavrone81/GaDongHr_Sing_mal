@@ -72,7 +72,7 @@ export default function FloatingAssistant() {
           aria-label="Open HR assistant"
           className="fixed bottom-20 lg:bottom-5 right-4 lg:right-5 z-50 flex h-[56px] w-[56px] items-center justify-center rounded-full bg-tint border-2 border-accent shadow-card transition hover:scale-105"
         >
-          <TurtleAvatar size={40} />
+          <TurtleAvatar size={46} />
         </button>
       )}
 
@@ -87,7 +87,7 @@ export default function FloatingAssistant() {
           <div className="flex items-center justify-between border-b border-rule px-4 h-14">
             <div className="flex items-center gap-2.5">
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-tint">
-                <TurtleAvatar size={30} />
+                <TurtleAvatar size={32} />
               </span>
               <div className="leading-tight">
                 <p className="text-sm font-bold text-ink">ToTo</p>
@@ -172,24 +172,24 @@ function TurtleAvatar({ size = 32 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" style={{ display: 'block', flexShrink: 0 }}>
       {/* back flippers */}
-      <ellipse cx="17" cy="47" rx="7" ry="4" fill="#3FA07C" transform="rotate(-25 17 47)" />
-      <ellipse cx="47" cy="47" rx="7" ry="4" fill="#3FA07C" transform="rotate(25 47 47)" />
+      <ellipse cx="16" cy="46" rx="7.5" ry="4.2" fill="#3FA07C" transform="rotate(-25 16 46)" />
+      <ellipse cx="48" cy="46" rx="7.5" ry="4.2" fill="#3FA07C" transform="rotate(25 48 46)" />
       {/* shell */}
-      <path d="M14 40 C14 24 22 16 32 16 C42 16 50 24 50 40 Z" fill="var(--accent)" />
-      <path d="M12 40 H52 C52 44 48 46 44 46 H20 C16 46 12 44 12 40 Z" fill="#C08A3E" />
+      <path d="M12 38 C12 22 21 14 32 14 C43 14 52 22 52 38 Z" fill="var(--accent)" />
+      <path d="M10 38 H54 C54 42 50 44 46 44 H18 C14 44 10 42 10 38 Z" fill="#C08A3E" />
       {/* scutes */}
-      <path d="M32 21 L38 25 L36 32 L28 32 L26 25 Z" fill="none" stroke="#C08A3E" strokeWidth="1.6" strokeLinejoin="round" />
-      <path d="M26 25 L20 30 M38 25 L44 30 M28 32 L24 39 M36 32 L40 39 M28 32 L36 32" fill="none" stroke="#C08A3E" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M32 19 L39 24 L36 31 L28 31 L25 24 Z" fill="none" stroke="#C08A3E" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M25 24 L18 29 M39 24 L46 29 M28 31 L23 38 M36 31 L41 38" fill="none" stroke="#C08A3E" strokeWidth="1.8" strokeLinecap="round" />
       {/* head */}
-      <circle cx="32" cy="45" r="9" fill="#3FA07C" />
-      <circle cx="28.5" cy="43.5" r="1.7" fill="#1A1A18" />
-      <circle cx="35.5" cy="43.5" r="1.7" fill="#1A1A18" />
-      <circle cx="29" cy="43" r="0.6" fill="#FFFFFF" />
-      <circle cx="36" cy="43" r="0.6" fill="#FFFFFF" />
-      <path d="M29 48 Q32 50.5 35 48" fill="none" stroke="#1A1A18" strokeWidth="1.4" strokeLinecap="round" />
+      <circle cx="32" cy="46" r="11" fill="#3FA07C" />
+      <circle cx="27.5" cy="44" r="2.3" fill="#1A1A18" />
+      <circle cx="36.5" cy="44" r="2.3" fill="#1A1A18" />
+      <circle cx="28.3" cy="43.2" r="0.8" fill="#FFFFFF" />
+      <circle cx="37.3" cy="43.2" r="0.8" fill="#FFFFFF" />
+      <path d="M28 49 Q32 52.5 36 49" fill="none" stroke="#1A1A18" strokeWidth="1.6" strokeLinecap="round" />
       {/* cheeks */}
-      <circle cx="25.5" cy="47" r="1.6" fill="#E5735F" opacity="0.6" />
-      <circle cx="38.5" cy="47" r="1.6" fill="#E5735F" opacity="0.6" />
+      <circle cx="23.5" cy="47.5" r="1.9" fill="#E5735F" opacity="0.6" />
+      <circle cx="40.5" cy="47.5" r="1.9" fill="#E5735F" opacity="0.6" />
     </svg>
   );
 }
