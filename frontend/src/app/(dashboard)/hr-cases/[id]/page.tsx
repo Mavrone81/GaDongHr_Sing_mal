@@ -106,6 +106,7 @@ export default function CaseDetailPage() {
   const [showIncidentModal, setShowIncidentModal] = useState(false);
   const [showInquiryModal, setShowInquiryModal]   = useState(false);
   const [showAppealModal, setShowAppealModal]     = useState(false);
+  const [reasonDialog, setReasonDialog]           = useState<'escalate' | 'resolve' | null>(null);
 
   async function loadCase() {
     setLoading(true);
@@ -119,26 +120,27 @@ export default function CaseDetailPage() {
 
   useEffect(() => { if (id) loadCase(); }, [id]);
 
-  async function escalate() {
-    const reason = window.prompt('Reason for escalation?');
-    if (!reason || !reason.trim()) return;
+  // Escalate and Resolve used to collect their text with window.prompt(). They
+  // now take it from ReasonModal; the request is unchanged (same endpoint,
+  // method and trimmed body, and an empty reason still sends nothing — the
+  // dialog will not submit one). A failure is shown in the dialog instead of
+  // alert(); returns the error text, or null on success.
+  async function escalate(reason: string): Promise<string | null> {
     const res = await apiFetchRaw(`/hr-cases/${id}/escalate`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: reason.trim() }),
     });
-    if (res.ok) loadCase();
-    else alert((await res.json()).error || 'Failed');
+    if (res.ok) { loadCase(); return null; }
+    return (await res.json()).error || 'Failed';
   }
 
-  async function resolve() {
-    const resolution = window.prompt('Resolution / final decision?');
-    if (!resolution || !resolution.trim()) return;
+  async function resolve(resolution: string): Promise<string | null> {
     const res = await apiFetchRaw(`/hr-cases/${id}/resolve`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ resolution: resolution.trim() }),
     });
-    if (res.ok) loadCase();
-    else alert((await res.json()).error || 'Failed');
+    if (res.ok) { loadCase(); return null; }
+    return (await res.json()).error || 'Failed';
   }
 
   async function close() {
@@ -255,7 +257,7 @@ export default function CaseDetailPage() {
 
         {hasActions && (
           <div className="mt-5 pt-5 border-t border-rule flex flex-wrap gap-2.5">
-            {canResolve && <Button onClick={resolve} icon="check">Resolve</Button>}
+            {canResolve && <Button onClick={() => setReasonDialog('resolve')} icon="check">Resolve</Button>}
             {canFileAppeal && <Button onClick={() => setShowAppealModal(true)}>File an appeal</Button>}
             {canActOnCase && (
               <>
@@ -264,7 +266,7 @@ export default function CaseDetailPage() {
                 {isHrMgr && !c.committee && (
                   <Button variant="secondary" icon="users" onClick={() => setShowInquiryModal(true)}>Form inquiry</Button>
                 )}
-                <Button variant="secondary" icon="arrowRight" onClick={escalate}>Escalate</Button>
+                <Button variant="secondary" icon="arrowRight" onClick={() => setReasonDialog('escalate')}>Escalate</Button>
               </>
             )}
             {isHr && c.status === 'RESOLVED' && <Button variant="secondary" onClick={close}>Close case</Button>}
@@ -404,6 +406,25 @@ export default function CaseDetailPage() {
       {showInquiryModal && (
         <InquiryModal caseId={c.id} onClose={() => setShowInquiryModal(false)} onSuccess={() => { setShowInquiryModal(false); loadCase(); }} />
       )}
+      {reasonDialog === 'escalate' && (
+        <ReasonModal
+          title="Escalate this case"
+          caption={c.escalation?.nextLevel ? `It moves up to ${sentence(c.escalation.nextLevel)}.` : undefined}
+          label="Reason for escalation"
+          submitLabel="Escalate"
+          onSubmit={escalate}
+          onClose={() => setReasonDialog(null)}
+        />
+      )}
+      {reasonDialog === 'resolve' && (
+        <ReasonModal
+          title="Resolve this case"
+          label="Resolution or final decision"
+          submitLabel="Resolve case"
+          onSubmit={resolve}
+          onClose={() => setReasonDialog(null)}
+        />
+      )}
       {showAppealModal && (
         <AppealModal caseId={c.id} onClose={() => setShowAppealModal(false)} onSuccess={() => { setShowAppealModal(false); loadCase(); }} />
       )}
@@ -437,6 +458,43 @@ function ModalActions({ onSave, onClose, saving, saveLabel, disabled, reason }: 
         {saving ? 'Saving…' : saveLabel}
       </Button>
     </>
+  );
+}
+
+// ─── Reason Modal (escalate / resolve) ───────────────────────────────────────
+function ReasonModal({ title, caption, label, submitLabel, onSubmit, onClose }: {
+  title: string; caption?: string; label: string; submitLabel: string;
+  onSubmit: (text: string) => Promise<string | null>; onClose: () => void;
+}) {
+  const [text, setText] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function submit() {
+    if (!text.trim()) return;
+    setSaving(true); setError('');
+    try {
+      const err = await onSubmit(text);
+      if (err) setError(err); else onClose();
+    } catch { setError('Network error. Please try again.'); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={title}
+      caption={caption}
+      footer={<ModalActions onSave={submit} onClose={onClose} saving={saving} saveLabel={submitLabel} disabled={!text.trim()} reason="Write a reason first" />}
+    >
+      <div className="flex flex-col gap-4">
+        <Field label={label} required>
+          <Textarea rows={4} value={text} onChange={e => setText(e.target.value)} autoFocus />
+        </Field>
+        <ErrorText error={error} />
+      </div>
+    </Modal>
   );
 }
 
