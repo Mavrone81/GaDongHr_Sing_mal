@@ -36,4 +36,11 @@ export const MIGRATED: string[] = [
   'app/(dashboard)/benefits/',
   // redesign/settings
   'app/(dashboard)/settings/',
+  // redesign/employees:
+  'app/(dashboard)/movements/',
+  'app/(dashboard)/succession/',
+  'app/(dashboard)/staff/',
+  'app/(dashboard)/employees/',
+  'components/employee/',
+  'app/onboard/',
 ];

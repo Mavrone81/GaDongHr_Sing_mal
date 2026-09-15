@@ -1,6 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
+import GaDongLogo from '@/components/GaDongLogo';
+import { Button, Card, EmptyState, Field, Icon, Input, Select, Stepper, Textarea } from '@/components/ui';
+import { KeyValue, Notice, Spinner } from '@/components/employee/RecordParts';
 
 function apiUrl() {
   if (typeof window === 'undefined') return 'http://localhost:4000/api';
@@ -162,204 +166,223 @@ export default function OnboardPage() {
     }
   }
 
-  function field(key: keyof FormData, label: string, opts?: { type?: string; placeholder?: string; required?: boolean }) {
+  function field(key: keyof FormData, label: string, opts?: { type?: string; placeholder?: string; required?: boolean; help?: string; inputMode?: HTMLAttributes<HTMLInputElement>['inputMode']; autoComplete?: string }) {
     return (
-      <div className="flex flex-col gap-1.5">
-        <label className="text-[9px] font-black text-muted uppercase tracking-widest">
-          {label}{opts?.required !== false ? ' *' : ''}
-        </label>
-        <input
+      <Field label={label} required={opts?.required !== false} error={errors[key]} help={opts?.help}>
+        <Input
           type={opts?.type || 'text'}
           value={form[key]}
           onChange={e => { setForm(p => ({ ...p, [key]: e.target.value })); setErrors(p => ({ ...p, [key]: undefined })); }}
           placeholder={opts?.placeholder}
-          className={`border  px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent ${errors[key] ? 'border-ink bg-page' : 'border-rule'}`}
+          inputMode={opts?.inputMode}
+          autoComplete={opts?.autoComplete}
+          invalid={!!errors[key]}
+          aria-invalid={!!errors[key] || undefined}
         />
-        {errors[key] && <p className="text-[9px] font-bold text-ink">{errors[key]}</p>}
-      </div>
+      </Field>
     );
   }
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen bg-page flex items-center justify-center">
-        <div className="bg-paper p-12 flex flex-col items-center gap-5">
-          <div className="w-12 h-12 bg-page flex items-center justify-center">
-            <svg className="w-6 h-6 text-accent animate-spin rounded-full" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-          </div>
-          <p className="text-sm font-black text-muted uppercase tracking-widest">Verifying invite…</p>
-        </div>
-      </div>
+      <OnboardFrame>
+        <Card className="items-center gap-3 py-12 text-center">
+          <Spinner className="w-6 h-6 text-accent" />
+          <p className="text-sm text-muted" role="status">Checking your invite link…</p>
+        </Card>
+      </OnboardFrame>
     );
   }
 
   if (status === 'invalid') {
     return (
-      <div className="min-h-screen bg-page flex items-center justify-center p-6">
-        <div className="bg-paper p-10 w-full max-w-sm text-center flex flex-col items-center gap-5">
-          <div className="w-14 h-14 bg-page border-2 border-ink flex items-center justify-center text-2xl">✕</div>
-          <div>
-            <h2 className="text-base font-black text-ink tracking-tighter">Invalid or Expired Link</h2>
-            <p className="text-xs font-bold text-muted mt-2 leading-relaxed">This invite link is invalid or has expired. Please contact HR to request a new invitation.</p>
-          </div>
-        </div>
-      </div>
+      <OnboardFrame>
+        <Card padding="p-0">
+          <EmptyState
+            icon="alert"
+            title="This link has expired or is not valid"
+            description="Invite links can only be used once and expire after a while. Ask HR to send you a new invitation."
+          />
+        </Card>
+      </OnboardFrame>
     );
   }
 
   if (status === 'submitted') {
     return (
-      <div className="min-h-screen bg-page flex items-center justify-center p-6">
-        <div className="bg-paper p-10 w-full max-w-sm text-center flex flex-col items-center gap-6">
-          <div className="w-16 h-16 bg-page border-2 border-accent flex items-center justify-center text-3xl">✓</div>
-          <div>
-            <h2 className="text-lg font-black text-ink tracking-tighter">Profile Submitted!</h2>
-            <p className="text-xs font-bold text-muted mt-2 leading-relaxed">
-              Thank you, {form.fullName}. Your profile has been submitted for HR review. You will be notified once your employee account is activated.
+      <OnboardFrame>
+        <Card className="gap-5">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-ok-bg text-ok"><Icon name="check" size={24} strokeWidth={2.5} /></span>
+            <h1 className="text-[22px] font-extrabold tracking-[-0.02em] text-ink">Profile submitted</h1>
+            <p className="text-sm text-muted max-w-sm">
+              Thank you, {form.fullName}. HR will review your details and email you once your employee account is ready.
             </p>
           </div>
-          <div className="bg-page border border-rule p-4 w-full text-left">
-            <p className="label-form mb-2">What happens next?</p>
-            <ul className="flex flex-col gap-2">
-              {['HR reviews your profile', 'Employee record is created', 'You receive confirmation email', 'Access full HR system'].map((s, i) => (
-                <li key={s} className="flex items-center gap-3">
-                  <div className="w-5 h-5 bg-accent flex items-center justify-center text-[9px] font-black text-paper flex-shrink-0">{i + 1}</div>
-                  <span className="text-xs font-bold text-ink">{s}</span>
+          <div className="rounded-control bg-page p-4">
+            <p className="mb-3 text-[13px] font-semibold text-ink">What happens next</p>
+            <ol className="flex flex-col gap-2.5">
+              {['HR reviews your profile', 'Your employee record is created', 'You get a confirmation email', 'You can sign in to GaDongHR'].map((s, i) => (
+                <li key={s} className="flex items-center gap-3 text-sm text-ink">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-tint text-xs font-bold text-accent tabular-nums">{i + 1}</span>
+                  {s}
                 </li>
               ))}
-            </ul>
+            </ol>
           </div>
-        </div>
-      </div>
+        </Card>
+      </OnboardFrame>
     );
   }
 
-  const STEP_LABELS = ['Personal Details', 'Contact & ID', 'Employment'];
+  const STEP_LABELS = ['Personal details', 'Contact and ID', 'Employment', 'Review'];
+  const LAST = STEP_LABELS.length;
+
+  const reviewRows: { step: number; title: string; rows: [string, string][] }[] = [
+    { step: 1, title: 'Personal details', rows: [
+      ['Full legal name', form.fullName], ['Preferred name', form.preferredName],
+      ['Gender', GENDER_LABEL[form.gender] ?? form.gender], ['Date of birth', form.dateOfBirth], ['Nationality', form.nationality],
+    ] },
+    { step: 2, title: 'Contact and ID', rows: [
+      ['NRIC / FIN', form.nricFin], ['Mobile', form.personalPhone], ['Home address', form.homeAddress],
+      ['Bank', form.bankName], ['Account number', form.bankAccount],
+    ] },
+    { step: 3, title: 'Employment', rows: [
+      ['Department', form.department], ['Designation', form.designation],
+      ['Employment type', EMPLOYMENT_LABEL[form.employmentType] ?? form.employmentType], ['Start date', form.startDate], ['Notes', form.notes],
+    ] },
+  ];
 
   return (
-    <div className="min-h-screen bg-page flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-lg">
+    <OnboardFrame>
+      <Card padding="p-0">
         {/* Header */}
-        <div className="bg-accent rounded-t-[2rem] p-8 text-paper">
-          <p className="text-[9px] font-black uppercase tracking-[0.2em] text-paper">Employee Onboarding</p>
-          <h1 className="text-xl font-black tracking-tighter mt-1">Complete Your Profile</h1>
-          <p className="text-xs font-bold text-paper mt-1">Welcome, {userInfo?.name} · {userInfo?.email}</p>
-          {/* Encryption badge */}
-          {rawToken && (
-            <div className="mt-3 inline-flex items-center gap-1.5 bg-accent border border-accent px-3 py-1.5">
-              <svg className="w-3 h-3 text-paper" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-              <span className="text-[9px] font-black text-paper uppercase tracking-widest">End-to-end encrypted</span>
-            </div>
-          )}
-          {/* Progress */}
-          <div className="flex items-center gap-2 mt-4">
-            {STEP_LABELS.map((label, i) => (
-              <div key={label} className="flex items-center gap-2">
-                <div className={`w-6 h-6  flex items-center justify-center text-[9px] font-black transition-all ${step > i + 1 ? 'bg-paper text-accent' : step === i + 1 ? 'bg-paper text-accent' : 'bg-accent text-paper'}`}>
-                  {step > i + 1 ? '✓' : i + 1}
-                </div>
-                <span className={`text-[9px] font-black uppercase tracking-widest ${step === i + 1 ? 'text-paper' : 'text-accent'}`}>{label}</span>
-                {i < STEP_LABELS.length - 1 && <div className="w-6 h-px bg-accent mx-1" />}
-              </div>
-            ))}
+        <div className="flex flex-col gap-3 px-5 pt-6 pb-5 sm:px-7 border-b border-rule">
+          <div>
+            <h1 className="text-[24px] font-extrabold tracking-[-0.02em] text-ink">Complete your profile</h1>
+            <p className="mt-1 text-sm text-muted">Welcome, {userInfo?.name} · {userInfo?.email}</p>
           </div>
+          {rawToken && (
+            <p className="inline-flex w-fit items-center gap-1.5 rounded-full bg-tint px-3 h-7 text-xs font-semibold text-accent">
+              <Icon name="lock" size={14} /> Encrypted in your browser before it is sent
+            </p>
+          )}
+          <Stepper
+            className="mt-2 relative"
+            steps={STEP_LABELS.map((label, i) => ({ label, state: step > i + 1 ? 'done' : step === i + 1 ? 'now' : 'todo' }))}
+          />
         </div>
 
-        {/* Form */}
-        <div className="bg-paper rounded-b-[2rem] p-8">
+        {/* Step body */}
+        <div className="flex flex-col gap-4 px-5 py-6 sm:px-7">
+          <p className="text-[13px] font-semibold text-muted tabular-nums">Step {step} of {LAST} · {STEP_LABELS[step - 1]}</p>
+
           {step === 1 && (
-            <div className="flex flex-col gap-4">
-              <p className="label-form border-b border-rule pb-3">Step 1 · Personal Details</p>
-              {field('fullName', 'Full Legal Name', { placeholder: 'As per NRIC/FIN' })}
-              {field('preferredName', 'Preferred / Display Name', { required: false, placeholder: 'Optional' })}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Gender *</label>
-                <select value={form.gender} onChange={e => { setForm(p => ({ ...p, gender: e.target.value })); setErrors(p => ({ ...p, gender: undefined })); }}
-                  className={`border  px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent ${errors.gender ? 'border-ink bg-page' : 'border-rule'}`}>
+            <>
+              {field('fullName', 'Full legal name', { placeholder: 'As on your NRIC or FIN', autoComplete: 'name' })}
+              {field('preferredName', 'Preferred name', { required: false, help: 'Optional — what colleagues call you' })}
+              <Field label="Gender" required error={errors.gender}>
+                <Select
+                  value={form.gender}
+                  invalid={!!errors.gender}
+                  onChange={e => { setForm(p => ({ ...p, gender: e.target.value })); setErrors(p => ({ ...p, gender: undefined })); }}
+                >
                   <option value="">Select gender</option>
                   <option value="MALE">Male</option>
                   <option value="FEMALE">Female</option>
                   <option value="PREFER_NOT_TO_SAY">Prefer not to say</option>
-                </select>
-                {errors.gender && <p className="text-[9px] font-bold text-ink">{errors.gender}</p>}
+                </Select>
+              </Field>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {field('dateOfBirth', 'Date of birth', { type: 'date' })}
+                {field('nationality', 'Nationality', { placeholder: 'e.g. Singaporean' })}
               </div>
-              {field('dateOfBirth', 'Date of Birth', { type: 'date' })}
-              {field('nationality', 'Nationality', { placeholder: 'e.g. Singaporean' })}
-            </div>
+            </>
           )}
 
           {step === 2 && (
-            <div className="flex flex-col gap-4">
-              <p className="label-form border-b border-rule pb-3">Step 2 · Contact & Identity</p>
-              <div className="bg-page border border-accent p-3 flex items-start gap-2.5">
-                <svg className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-                <div>
-                  <p className="text-[9px] font-black text-accent uppercase tracking-widest">AES-256-GCM Encrypted</p>
-                  <p className="text-[10px] font-bold text-accent mt-0.5">Your personal data is encrypted in your browser before being sent. Only authorised HR personnel can access it.</p>
-                </div>
+            <>
+              <Notice tone="accent" title="Your personal data is protected">
+                It is encrypted in your browser (AES-256-GCM) before it is sent, and only authorised HR staff can read it.
+              </Notice>
+              {field('nricFin', 'NRIC / FIN number', { placeholder: 'S1234567A' })}
+              {field('personalPhone', 'Mobile number', { type: 'tel', placeholder: '+65 9123 4567', inputMode: 'tel', autoComplete: 'tel' })}
+              {field('homeAddress', 'Home address', { placeholder: 'Block, street, unit, postal code', autoComplete: 'street-address' })}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {field('bankName', 'Bank', { required: false, placeholder: 'e.g. DBS, OCBC, UOB' })}
+                {field('bankAccount', 'Bank account number', { required: false, help: 'Used for salary payment', inputMode: 'numeric' })}
               </div>
-              {field('nricFin', 'NRIC / FIN Number', { placeholder: 'S1234567A' })}
-              {field('personalPhone', 'Mobile Number', { type: 'tel', placeholder: '+65 9123 4567' })}
-              {field('homeAddress', 'Home Address', { placeholder: 'Block, Street, Unit, Postal Code' })}
-              {field('bankName', 'Bank Name', { required: false, placeholder: 'e.g. DBS, OCBC, UOB' })}
-              {field('bankAccount', 'Bank Account Number', { required: false, placeholder: 'For payroll GIRO' })}
-            </div>
+            </>
           )}
 
           {step === 3 && (
-            <div className="flex flex-col gap-4">
-              <p className="label-form border-b border-rule pb-3">Step 3 · Employment Details</p>
-              <p className="text-[10px] font-bold text-muted">Fill in what you know — HR will confirm the final details.</p>
+            <>
+              <p className="text-sm text-muted">Fill in what you know — HR will confirm the final details.</p>
               {field('department', 'Department', { required: false, placeholder: 'e.g. Engineering, Sales' })}
-              {field('designation', 'Designation / Job Title', { required: false, placeholder: 'e.g. Software Engineer' })}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Employment Type</label>
-                <select value={form.employmentType} onChange={e => setForm(p => ({ ...p, employmentType: e.target.value }))}
-                  className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent">
-                  <option value="FULL_TIME">Full Time</option>
-                  <option value="PART_TIME">Part Time</option>
-                  <option value="CONTRACT">Contract</option>
-                </select>
+              {field('designation', 'Job title', { required: false, placeholder: 'e.g. Software Engineer' })}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Employment type">
+                  <Select value={form.employmentType} onChange={e => setForm(p => ({ ...p, employmentType: e.target.value }))}>
+                    <option value="FULL_TIME">Full time</option>
+                    <option value="PART_TIME">Part time</option>
+                    <option value="CONTRACT">Contract</option>
+                  </Select>
+                </Field>
+                {field('startDate', 'Start date', { type: 'date', required: false })}
               </div>
-              {field('startDate', 'Start Date', { type: 'date', required: false })}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Additional Notes</label>
-                <textarea rows={3} value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-                  placeholder="Anything HR should know about you or your employment arrangement..."
-                  className="border border-rule px-4 py-3 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-accent resize-none" />
-              </div>
-            </div>
+              <Field label="Anything else HR should know" help="Optional">
+                <Textarea rows={3} value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
+              </Field>
+            </>
           )}
 
-          {/* Navigation */}
-          <div className="flex items-center justify-between mt-8">
-            {step > 1 ? (
-              <button onClick={() => setStep(s => s - 1)}
-                className="px-5 py-2.5 text-[10px] font-black text-ink bg-page border border-rule uppercase tracking-widest hover:bg-page transition-all">
-                ← Back
-              </button>
-            ) : <div />}
-            {step < 3 ? (
-              <button onClick={nextStep}
-                className="px-6 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent uppercase tracking-widest transition-all">
-                Continue →
-              </button>
-            ) : (
-              <button onClick={submit} disabled={submitting}
-                className="px-6 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent uppercase tracking-widest disabled:opacity-50 transition-all flex items-center gap-2">
-                {submitting && <span className="w-3.5 h-3.5 border-2 border-paper/30 border-t-paper animate-spin rounded-full" />}
-                {submitting ? 'Encrypting & Submitting…' : 'Submit Profile'}
-              </button>
-            )}
-          </div>
+          {step === LAST && (
+            <div className="flex flex-col gap-4">
+              <p className="text-sm text-muted">Check your details before you submit. You can go back and change anything.</p>
+              {reviewRows.map(sec => (
+                <div key={sec.title} className="rounded-control border border-rule px-4 py-2">
+                  <div className="flex items-center justify-between py-1.5">
+                    <p className="text-[14px] font-bold text-ink">{sec.title}</p>
+                    <Button size="sm" variant="ghost" onClick={() => setStep(sec.step)}>Edit</Button>
+                  </div>
+                  {sec.rows.map(([label, value]) => (
+                    <KeyValue key={label} label={label} value={value || <span className="font-normal text-muted">Not given</span>} />
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+
+        {/* Navigation — sticks to the bottom of the screen on phones */}
+        <div className="sticky bottom-0 rounded-b-card flex items-center justify-between gap-3 border-t border-rule bg-paper px-5 py-4 sm:px-7">
+          {step > 1 ? (
+            <Button variant="secondary" onClick={() => setStep(s => s - 1)}>Back</Button>
+          ) : <span />}
+          {step < LAST ? (
+            <Button onClick={nextStep} icon="arrowRight">Continue</Button>
+          ) : (
+            <Button onClick={submit} disabled={submitting}>
+              {submitting && <Spinner />}
+              {submitting ? 'Encrypting and submitting…' : 'Submit profile'}
+            </Button>
+          )}
+        </div>
+      </Card>
+    </OnboardFrame>
+  );
+}
+
+const GENDER_LABEL: Record<string, string> = { MALE: 'Male', FEMALE: 'Female', PREFER_NOT_TO_SAY: 'Prefer not to say' };
+const EMPLOYMENT_LABEL: Record<string, string> = { FULL_TIME: 'Full time', PART_TIME: 'Part time', CONTRACT: 'Contract' };
+
+/** Public page frame: logo on top, one column no wider than a form. */
+function OnboardFrame({ children }: { children: ReactNode }) {
+  return (
+    <div className="min-h-screen bg-page font-sans text-ink">
+      <div className="mx-auto flex w-full max-w-[640px] flex-col gap-6 px-4 py-8 sm:py-12">
+        <GaDongLogo variant="light" markSize={30} />
+        {children}
       </div>
     </div>
   );

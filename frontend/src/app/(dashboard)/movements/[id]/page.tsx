@@ -3,37 +3,40 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { apiFetch } from '@/lib/api';
+import { apiFetchRaw } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { Badge, Button, Card, CardHeader, EmptyState, Icon } from '@/components/ui';
+import { KeyValue, Notice, PageLoading } from '@/components/employee/RecordParts';
 
 const HR_ROLES = ['HR_ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'];
 
 const TYPE_LABELS: Record<string, string> = {
-  DEPARTMENT_TRANSFER:     'Department Transfer',
-  LOCATION_TRANSFER:       'Location Transfer',
-  INTER_COMPANY_TRANSFER:  'Inter-Company Transfer',
-  ROLE_CHANGE:             'Role Change',
+  DEPARTMENT_TRANSFER:     'Department transfer',
+  LOCATION_TRANSFER:       'Location transfer',
+  INTER_COMPANY_TRANSFER:  'Inter-company transfer',
+  ROLE_CHANGE:             'Role change',
   PROMOTION:               'Promotion',
-  REPORTING_CHANGE:        'Reporting Change',
-  COST_CENTRE_REALLOC:     'Cost Centre Realloc',
+  REPORTING_CHANGE:        'Reporting change',
+  COST_CENTRE_REALLOC:     'Cost centre reallocation',
 };
 
 /**
- * Weighted by what still needs someone's attention, since the palette has no
- * five-way hue vocabulary: rejection is filled ink and therefore loudest,
- * an applied movement is filled accent because it is now in force, approval is
- * an outline, pending carries the highlight, and a cancellation recedes.
- *
- * Straight token mapping had rendered PENDING, REJECTED and CANCELLED
- * identically — three states with very different consequences.
+ * Five states, five tones. Pending waits on someone (warn); approved is agreed
+ * but not in force (accent); applied is in force (ok); rejected is the loud
+ * one (danger); a cancellation recedes (neutral). The label is always printed.
  */
-const STATUS_COLORS: Record<string, string> = {
-  PENDING:   'bg-paper text-ink border border-highlight',
-  APPROVED:  'bg-paper text-accent border border-accent',
-  APPLIED:   'bg-accent text-paper border border-accent',
-  REJECTED:  'bg-ink text-paper border border-ink',
-  CANCELLED: 'bg-page text-muted border border-rule line-through',
+const STATUS_TONE: Record<string, 'warn' | 'accent' | 'ok' | 'danger' | 'neutral'> = {
+  PENDING:   'warn',
+  APPROVED:  'accent',
+  APPLIED:   'ok',
+  REJECTED:  'danger',
+  CANCELLED: 'neutral',
 };
+const STATUS_LABEL: Record<string, string> = {
+  PENDING: 'Pending', APPROVED: 'Approved', APPLIED: 'Applied', REJECTED: 'Rejected', CANCELLED: 'Cancelled',
+};
+
+const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
 
 export default function MovementDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -50,7 +53,7 @@ export default function MovementDetailPage() {
   async function load() {
     setLoading(true);
     try {
-      const res = await apiFetch(`/movements/${id}`);
+      const res = await apiFetchRaw(`/movements/${id}`);
       if (!res.ok) { const e = await res.json(); setError(e.error || 'Failed'); return; }
       setMovement(await res.json());
     } catch { setError('Network error'); }
@@ -60,14 +63,14 @@ export default function MovementDetailPage() {
 
   async function loadLetter() {
     setLoadingLetter(true);
-    const res = await apiFetch(`/movements/${id}/letter`).then(r => r.json());
+    const res = await apiFetchRaw(`/movements/${id}/letter`).then(r => r.json());
     setLetter(res.html || '');
     setLoadingLetter(false);
   }
 
   async function approve() {
     if (!confirm('Approve this movement?')) return;
-    const res = await apiFetch(`/movements/${id}/approve`, { method: 'PUT' });
+    const res = await apiFetchRaw(`/movements/${id}/approve`, { method: 'PUT' });
     if (res.ok) load();
     else alert((await res.json()).error || 'Failed');
   }
@@ -75,7 +78,7 @@ export default function MovementDetailPage() {
   async function reject() {
     const reason = window.prompt('Reason for rejection?');
     if (!reason || !reason.trim()) return;
-    const res = await apiFetch(`/movements/${id}/reject`, {
+    const res = await apiFetchRaw(`/movements/${id}/reject`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rejectionReason: reason.trim() }),
     });
@@ -85,28 +88,29 @@ export default function MovementDetailPage() {
 
   async function cancelMov() {
     if (!confirm('Cancel this movement?')) return;
-    const res = await apiFetch(`/movements/${id}/cancel`, { method: 'PUT' });
+    const res = await apiFetchRaw(`/movements/${id}/cancel`, { method: 'PUT' });
     if (res.ok) load();
     else alert((await res.json()).error || 'Failed');
   }
 
   async function apply() {
     if (!confirm('Apply this movement to the employee record now?')) return;
-    const res = await apiFetch(`/movements/${id}/apply`, { method: 'POST' });
+    const res = await apiFetchRaw(`/movements/${id}/apply`, { method: 'POST' });
     if (res.ok) load();
     else alert((await res.json()).error || 'Failed');
   }
 
-  if (loading) {
-    return <div className="flex items-center justify-center min-h-[400px]"><div className="w-10 h-10 border-4 border-t-accent border-accent animate-spin rounded-full" /></div>;
-  }
+  if (loading) return <PageLoading label="Loading movement…" />;
   if (error || !m) {
     return (
-      <div className="max-w-2xl mx-auto mt-16 text-center">
-        <h2 className="text-lg font-black text-ink mb-2">Movement Not Found</h2>
-        <p className="text-sm text-muted mb-6">{error}</p>
-        <Link href="/movements" className="text-xs font-bold text-accent hover:text-accent">← Back to Movements</Link>
-      </div>
+      <Card padding="p-0" className="max-w-2xl mx-auto mt-10">
+        <EmptyState
+          icon="alert"
+          title="Movement not found"
+          description={error || 'It may have been removed, or you may not have access to it.'}
+          action={<Link href="/movements" className="text-sm font-semibold text-accent hover:underline">Back to movements</Link>}
+        />
+      </Card>
     );
   }
 
@@ -115,124 +119,141 @@ export default function MovementDetailPage() {
   const canApprove = isHr && m.status === 'PENDING';
   const canApply   = isHr && m.status === 'APPROVED' && effectivePast;
   const canCancel  = (m.initiatedBy === (user?.id || (user as any)?.sub) || isHr) && ['PENDING','APPROVED'].includes(m.status);
+  // Shown disabled so HR can see why "Apply" is not available yet.
+  const applyLater = isHr && m.status === 'APPROVED' && !effectivePast;
+  const hasLetter  = ['APPROVED','APPLIED'].includes(m.status);
+
+  const changes: { label: string; from: any; to: any }[] = [
+    { label: 'Department',  from: m.fromDepartment,  to: m.toDepartment },
+    { label: 'Designation', from: m.fromDesignation, to: m.toDesignation },
+    ...((m.fromCostCentre || m.toCostCentre) ? [{ label: 'Cost centre', from: m.fromCostCentre, to: m.toCostCentre }] : []),
+    ...((m.fromLocation   || m.toLocation)   ? [{ label: 'Location',    from: m.fromLocation,   to: m.toLocation }] : []),
+    ...((m.fromCompany    || m.toCompany)    ? [{ label: 'Company',     from: m.fromCompany,    to: m.toCompany }] : []),
+    ...((m.fromReportingManagerId || m.toReportingManagerId) ? [{ label: 'Reporting manager', from: m.fromReportingManagerId, to: m.toReportingManagerId }] : []),
+    ...((m.fromEmploymentType || m.toEmploymentType) ? [{ label: 'Employment type', from: m.fromEmploymentType, to: m.toEmploymentType }] : []),
+  ];
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <Link href="/movements" className="text-xs font-bold text-muted hover:text-accent">← Back to Movements</Link>
-        <div className="flex items-center gap-2 flex-wrap">
-          {m.additionalApproval?.required && m.status === 'PENDING' && (
-            <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest bg-page text-ink">
-              Needs HR_MANAGER
-            </span>
-          )}
-          <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[m.status] || 'bg-page text-ink'}`}>
-            {m.status}
-          </span>
-        </div>
-      </div>
+    <div className="flex flex-col gap-5 pb-24 sm:pb-10">
+      <Link href="/movements" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted hover:text-accent w-fit focus:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-control">
+        <Icon name="chevronRight" size={14} className="rotate-180" /> Movements
+      </Link>
 
-      {/* Top Card */}
-      <div className="bg-paper border border-rule p-4 sm:p-6">
-        <p className="text-xs font-mono font-black text-muted mb-1">{m.movementNumber}</p>
-        <h1 className="text-xl font-black text-ink mb-1">
-          {TYPE_LABELS[m.type] || m.type}
-        </h1>
-        <p className="text-sm text-muted mb-4">for <span className="font-bold text-ink">{m.employeeName}</span></p>
-
-        <p className="text-sm text-ink mb-5 p-3 bg-page italic">"{m.reason}"</p>
-
-        {/* Before / After grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <ChangeCard label="Department"  from={m.fromDepartment}  to={m.toDepartment} />
-          <ChangeCard label="Designation" from={m.fromDesignation} to={m.toDesignation} />
-          {(m.fromCostCentre || m.toCostCentre) && <ChangeCard label="Cost Centre" from={m.fromCostCentre} to={m.toCostCentre} />}
-          {(m.fromLocation   || m.toLocation)   && <ChangeCard label="Location"    from={m.fromLocation}   to={m.toLocation} />}
-          {(m.fromCompany    || m.toCompany)    && <ChangeCard label="Company"     from={m.fromCompany}    to={m.toCompany} />}
-          {(m.fromReportingManagerId || m.toReportingManagerId) && <ChangeCard label="Reporting Manager" from={m.fromReportingManagerId} to={m.toReportingManagerId} />}
-          {(m.fromEmploymentType || m.toEmploymentType) && <ChangeCard label="Employment Type" from={m.fromEmploymentType} to={m.toEmploymentType} />}
+      {/* Identity band */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex items-start gap-4 min-w-0">
+          <div className="hidden sm:flex w-14 h-14 shrink-0 items-center justify-center rounded-full bg-tint text-accent">
+            <Icon name="arrowRight" size={24} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="text-2xl font-extrabold tracking-[-0.02em] text-ink">{m.employeeName}</h1>
+              <Badge tone={STATUS_TONE[m.status] ?? 'neutral'}>{STATUS_LABEL[m.status] ?? m.status}</Badge>
+              {m.additionalApproval?.required && m.status === 'PENDING' && (
+                <Badge tone="neutral">Needs HR manager approval</Badge>
+              )}
+            </div>
+            <p className="mt-1 text-sm text-muted">
+              {TYPE_LABELS[m.type] || m.type} · <span className="tabular-nums">{m.movementNumber}</span> · effective <span className="tabular-nums">{fmtDate(m.effectiveDate)}</span>
+            </p>
+          </div>
         </div>
 
-        {m.hasSalaryRevision && (
-          <div className="mt-4 p-4 bg-page border border-accent">
-            <p className="text-xs font-black text-accent uppercase tracking-widest mb-1">Salary Revision</p>
-            <p className="text-sm text-accent">Reason: {m.salaryReasonCode || '—'} · {isHr ? '(salary visible to HR via approved record)' : 'New salary applied on effective date'}</p>
+        {/* Actions — a sticky bar on phones */}
+        {(canApprove || canApply || applyLater || canCancel || hasLetter) && (
+          <div className="fixed inset-x-0 bottom-16 z-20 flex flex-wrap items-center justify-end gap-2 border-t border-rule bg-paper px-4 py-3 sm:static sm:border-0 sm:bg-transparent sm:p-0">
+            {canCancel && <Button variant="danger" onClick={cancelMov}>Cancel movement</Button>}
+            {hasLetter && (
+              <Button variant="secondary" icon="file" onClick={() => { if (!letter) loadLetter(); }} disabled={!!letter || loadingLetter}>
+                {letter ? 'Letter shown below' : loadingLetter ? 'Loading letter…' : 'View transfer letter'}
+              </Button>
+            )}
+            {canApprove && (
+              <>
+                <Button variant="secondary" onClick={reject}>Reject</Button>
+                <Button icon="check" onClick={approve}>Approve</Button>
+              </>
+            )}
+            {canApply && <Button icon="check" onClick={apply}>Apply now</Button>}
+            {applyLater && <Button disabled reason={`Can be applied from ${fmtDate(m.effectiveDate)}`}>Apply now</Button>}
           </div>
         )}
+      </div>
 
-        <div className="mt-6 pt-4 border-t border-rule grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-          <Meta label="Effective" value={new Date(m.effectiveDate).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })} />
-          <Meta label="Initiated" value={`${new Date(m.createdAt).toLocaleDateString('en-SG')} by ${m.initiatedByName || '—'}`} />
-          {m.approvedAt && <Meta label="Approved"  value={`${new Date(m.approvedAt).toLocaleDateString('en-SG')} by ${m.approvedByName || '—'}`} />}
-          {m.rejectedAt && <Meta label="Rejected"  value={new Date(m.rejectedAt).toLocaleDateString('en-SG')} />}
-          {m.appliedAt  && <Meta label="Applied"   value={new Date(m.appliedAt).toLocaleDateString('en-SG')} />}
-          {m.cancelledAt && <Meta label="Cancelled" value={new Date(m.cancelledAt).toLocaleDateString('en-SG')} />}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        {/* Main */}
+        <div className="flex flex-col gap-5 lg:col-span-2">
+          <Card>
+            <CardHeader title="What changes" caption="Changed fields are marked; the rest carry over as they are." />
+            <div className="flex flex-col">
+              {changes.map(c => <ChangeRow key={c.label} {...c} />)}
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader title="Reason" />
+            <p className="text-sm text-ink whitespace-pre-wrap">{m.reason || '—'}</p>
+          </Card>
+
+          {m.hasSalaryRevision && (
+            <Card>
+              <CardHeader title="Salary revision" caption="Included with this movement" />
+              <KeyValue label="Reason code" value={m.salaryReasonCode || '—'} />
+              <KeyValue label="When it applies" value={isHr ? 'Salary is visible to HR on the approved record' : 'New salary applies on the effective date'} />
+            </Card>
+          )}
+
+          {letter && (
+            <Card>
+              <CardHeader
+                title="Transfer letter"
+                action={<Button variant="secondary" size="sm" icon="download" onClick={() => window.print()}>Print</Button>}
+              />
+              <div className="prose max-w-none text-sm text-ink" dangerouslySetInnerHTML={{ __html: letter }} />
+            </Card>
+          )}
         </div>
 
-        {m.rejectionReason && (
-          <div className="mt-4 p-3 bg-page border border-ink">
-            <p className="text-xs font-black text-ink uppercase tracking-widest mb-1">Rejection Reason</p>
-            <p className="text-sm text-ink">{m.rejectionReason}</p>
-          </div>
-        )}
+        {/* Side */}
+        <div className="flex flex-col gap-5">
+          <Card>
+            <CardHeader title="Timeline" />
+            <KeyValue label="Effective" value={<span className="tabular-nums">{fmtDate(m.effectiveDate)}</span>} />
+            <KeyValue label="Initiated" value={<span className="tabular-nums">{new Date(m.createdAt).toLocaleDateString('en-SG')} by {m.initiatedByName || '—'}</span>} />
+            {m.approvedAt && <KeyValue label="Approved" value={<span className="tabular-nums">{new Date(m.approvedAt).toLocaleDateString('en-SG')} by {m.approvedByName || '—'}</span>} />}
+            {m.rejectedAt && <KeyValue label="Rejected" tone="danger" value={<span className="tabular-nums">{new Date(m.rejectedAt).toLocaleDateString('en-SG')}</span>} />}
+            {m.appliedAt  && <KeyValue label="Applied" tone="ok" value={<span className="tabular-nums">{new Date(m.appliedAt).toLocaleDateString('en-SG')}</span>} />}
+            {m.cancelledAt && <KeyValue label="Cancelled" value={<span className="tabular-nums">{new Date(m.cancelledAt).toLocaleDateString('en-SG')}</span>} />}
+          </Card>
 
-        {/* Action bar */}
-        <div className="mt-6 pt-4 border-t border-rule flex flex-wrap gap-2">
-          {canApprove && (
-            <>
-              <button onClick={approve} className="px-4 py-2 text-xs font-bold text-accent border border-accent hover:bg-page">Approve</button>
-              <button onClick={reject}  className="px-4 py-2 text-xs font-bold text-ink border border-ink hover:bg-page">Reject</button>
-            </>
-          )}
-          {canApply && (
-            <button onClick={apply} className="px-4 py-2 text-xs font-bold text-accent border border-accent hover:bg-page">Apply Now</button>
-          )}
-          {canCancel && (
-            <button onClick={cancelMov} className="px-4 py-2 text-xs font-bold text-muted border border-rule hover:bg-page">Cancel Movement</button>
-          )}
-          {['APPROVED','APPLIED'].includes(m.status) && (
-            <button onClick={() => { if (!letter) loadLetter(); }} className="px-4 py-2 text-xs font-bold text-accent border border-accent hover:bg-page ml-auto">
-              {letter ? 'Letter loaded ↓' : 'View Transfer Letter'}
-            </button>
+          {m.rejectionReason && (
+            <Notice tone="danger" title="Rejection reason">{m.rejectionReason}</Notice>
           )}
         </div>
       </div>
-
-      {/* Letter Preview */}
-      {letter && (
-        <div className="bg-paper border border-rule p-4 sm:p-6">
-          <h3 className="text-xs font-black text-ink uppercase tracking-widest mb-3">Transfer Letter</h3>
-          <div className="prose prose-slate max-w-none text-sm" dangerouslySetInnerHTML={{ __html: letter }} />
-          <div className="mt-4 flex gap-3">
-            <button onClick={() => window.print()} className="px-4 py-2 text-xs font-bold text-ink border border-rule hover:bg-page">Print</button>
-          </div>
-        </div>
-      )}
-      {loadingLetter && <p className="text-xs text-muted italic text-center">Loading letter…</p>}
     </div>
   );
 }
 
-function ChangeCard({ label, from, to }: { label: string; from: any; to: any }) {
+function ChangeRow({ label, from, to }: { label: string; from: any; to: any }) {
   const changed = (from || '') !== (to || '');
   return (
-    <div className={`p-3  border ${changed ? 'border-accent bg-page' : 'border-rule bg-page'}`}>
-      <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-1.5">{label}</p>
-      <div className="flex items-center gap-2">
-        <p className="text-sm font-bold text-muted line-through">{from || '—'}</p>
-        <span className="text-muted">→</span>
-        <p className="text-sm font-black text-ink">{to || '—'}</p>
+    <div className="grid grid-cols-1 gap-1 py-3 border-t border-rule first:border-t-0 sm:grid-cols-[160px_1fr] sm:gap-4 sm:items-center">
+      <div className="flex items-center gap-2 text-[13.5px] text-muted">
+        {label}
+        {changed && <Badge tone="accent">Changed</Badge>}
       </div>
-    </div>
-  );
-}
-
-function Meta({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-[10px] font-black text-muted uppercase tracking-wider">{label}</p>
-      <p className="text-xs font-bold text-ink mt-0.5">{value}</p>
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        {changed ? (
+          <>
+            <span className="text-muted line-through">{from || '—'}</span>
+            <Icon name="arrowRight" size={14} className="text-faint" />
+            <span className="font-semibold text-ink">{to || '—'}</span>
+          </>
+        ) : (
+          <span className="text-ink">{to || '—'} <span className="text-faint">· no change</span></span>
+        )}
+      </div>
     </div>
   );
 }
