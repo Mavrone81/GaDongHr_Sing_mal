@@ -41,6 +41,16 @@ export default function CompanyPage() {
     try { await api(`/tenants/${id}${path}`, { method: 'POST', body: body ? JSON.stringify(body) : undefined }); await loadTenant(); await loadDetail(); }
     catch (e) { setErr(String(e)); }
   }
+  function radioArrows(e: React.KeyboardEvent<HTMLDivElement>) {
+    const step = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0;
+    if (!step) return;
+    const radios = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]'));
+    const at = radios.indexOf(document.activeElement as HTMLButtonElement);
+    if (at < 0) return;
+    e.preventDefault();
+    radios[(at + step + radios.length) % radios.length].focus();
+  }
+
   async function setAi(provider: string) {
     setErr('');
     try { await api(`/tenants/${id}/ai-provider`, { method: 'POST', body: JSON.stringify({ provider }) }); await loadDetail(); }
@@ -130,14 +140,17 @@ export default function CompanyPage() {
 
           <Card padding="px-5 pt-[18px] pb-5">
             <CardHeader title="AI assistant" caption="Which model answers this company's HR assistant." />
-            <div className="flex flex-col gap-2" role="radiogroup" aria-label="AI provider">
+            {/* One Tab stop; arrows move focus between providers. Arrows do not select:
+                picking Claude sends masked HR data to the cloud, so the switch stays a
+                deliberate Space, Enter or click. */}
+            <div className="flex flex-col gap-2" role="radiogroup" aria-label="AI provider" onKeyDown={radioArrows}>
               {[
                 { id: 'ollama', name: 'Ollama · local', note: 'Private. No data leaves the host. Default.' },
                 { id: 'claude', name: 'Claude · Anthropic', note: 'Cloud. Higher quality. Personal data is masked before sending.' },
               ].map((p) => {
                 const on = (detail?.aiProvider ?? 'ollama') === p.id;
                 return (
-                  <button key={p.id} type="button" role="radio" aria-checked={on} onClick={() => setAi(p.id)} className={`flex items-start gap-3 rounded-control border px-3.5 py-3 text-left transition-colors ${on ? 'border-accent bg-tint' : 'border-rule bg-paper hover:border-accent'}`}>
+                  <button key={p.id} type="button" role="radio" aria-checked={on} tabIndex={on ? 0 : -1} onClick={() => setAi(p.id)} className={`flex items-start gap-3 rounded-control border px-3.5 py-3 text-left transition-colors ${on ? 'border-accent bg-tint' : 'border-rule bg-paper hover:border-accent'}`}>
                     <span aria-hidden="true" className={`mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2 ${on ? 'border-accent bg-accent' : 'border-faint'}`} />
                     <span className="flex flex-col gap-0.5">
                       <span className="text-[13.5px] font-semibold text-ink">{p.name}</span>
