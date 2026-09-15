@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { PageHeader } from '@/components/ui';
 
@@ -28,7 +28,7 @@ const SECTIONS: Section[] = [
   { href: '/settings/audit', label: 'Audit log' },
   { href: '/settings/rates', label: 'Statutory tables' },
   { href: '/settings/pdpa', label: 'PDPA & retention' },
-  { href: '/settings/api', label: 'API & webhooks' },
+  { href: '/settings/api', label: 'API & integrations' },
   { href: '/settings/overrides', label: 'System overrides' },
   { href: '/settings/billing', label: 'Billing' },
 ];
@@ -63,6 +63,12 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
   const role = (user?.role || '').toUpperCase().trim();
   const sections = user ? visibleSections(role, pathname) : [];
 
+  // Below lg the sub-nav is a horizontal pill row; keep the current section in view.
+  const activeRef = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [pathname, sections.length]);
+
   return (
     <div className="flex flex-col gap-6 pb-16">
       <PageHeader title="Settings" subtitle="Company, access, security and statutory configuration for this workspace." />
@@ -76,6 +82,7 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
                 <li key={s.href} className="shrink-0">
                   <Link
                     href={s.href}
+                    ref={on ? activeRef : undefined}
                     aria-current={on ? 'page' : undefined}
                     className={`flex items-center rounded-control px-3 py-[9px] text-sm whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
                       on ? 'bg-tint font-bold text-accent' : 'font-medium text-muted hover:bg-pill hover:text-ink'

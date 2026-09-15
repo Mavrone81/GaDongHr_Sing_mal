@@ -17,7 +17,7 @@ export function Toggle({ on, onChange, disabled, label }: { on: boolean; onChang
       } ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
     >
       <span
-        className={`absolute top-0.5 h-[18px] w-[18px] rounded-full bg-paper shadow-card transition-transform duration-200 ${on ? 'translate-x-[20px]' : 'translate-x-0.5'}`}
+        className={`absolute left-0 top-0.5 h-[18px] w-[18px] rounded-full bg-paper shadow-card transition-transform duration-200 ${on ? 'translate-x-[20px]' : 'translate-x-0.5'}`}
       />
     </button>
   );
