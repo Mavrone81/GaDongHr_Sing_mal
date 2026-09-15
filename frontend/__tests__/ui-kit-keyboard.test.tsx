@@ -90,6 +90,23 @@ describe('Modal focus trap', () => {
   });
 });
 
+describe('Nested Modals', () => {
+  it('Escape closes only the topmost dialog', () => {
+    const closeOuter = jest.fn();
+    const closeInner = jest.fn();
+    render(
+      <Modal open onClose={closeOuter} title="Pending profiles">
+        <Modal open onClose={closeInner} title="Review">
+          <p>Inner</p>
+        </Modal>
+      </Modal>,
+    );
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(closeInner).toHaveBeenCalledTimes(1);
+    expect(closeOuter).not.toHaveBeenCalled();
+  });
+});
+
 describe('SplitPane focus (narrow screens)', () => {
   function Inbox({ removeOnApprove = false }: { removeOnApprove?: boolean }) {
     const [items, setItems] = useState(['a', 'b']);
