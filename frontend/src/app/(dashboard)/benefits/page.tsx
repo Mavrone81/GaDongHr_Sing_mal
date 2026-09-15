@@ -1,154 +1,26 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+/**
+ * Benefits — group insurance, claims, dependents, open enrollment, and the
+ * flexi-benefits wallet. Employees see their own plans and claims; HR gets the
+ * admin tabs (plans, enrollments, claims, open enrollment, flexi).
+ *
+ * Rebuilt to the "Clean workspace" kit (2026-09). Presentation only — every
+ * fetch, action and modal save lives in useBenefits or the modal components and
+ * is unchanged. See useBenefits.ts for the logic.
+ */
+
+import React, { useState } from 'react';
 import { TONES } from '@/lib/statusTone';
-import { apiFetch } from '@/lib/api';
-import { useAuth } from '@/context/AuthContext';
+import { apiFetchRaw } from '@/lib/api';
+import { PageHeader, Card, CardHeader, Stat, DataTable, Button, Field, Input, Select, Textarea, Modal, EmptyState, Icon } from '@/components/ui';
+import type { Column } from '@/components/ui';
+import {
+  useBenefits,
+  type Plan, type Enrollment, type Dependent, type Claim, type OpenEnrollmentPeriod,
+  type FlexiCategory, type FlexiWallet, type FlexiClaim, type FlexiWalletConfig,
+} from './useBenefits';
 
-interface Plan {
-  id: string;
-  code: string;
-  name: string;
-  type: string;
-  insurerName: string;
-  coverageAmount: number;
-  premiumEmployer: number;
-  premiumEmployee: number;
-  premiumDependent: number;
-  bikTaxable: boolean;
-  eligibilityGrades: string[];
-  minTenureMonths: number;
-  coversDependents: boolean;
-  effectiveFrom: string;
-  effectiveTo: string | null;
-  isActive: boolean;
-  description: string | null;
-}
-
-interface Enrollment {
-  id: string;
-  employeeId: string;
-  employeeName: string;
-  planId: string;
-  status: 'ACTIVE' | 'CANCELLED' | 'EXPIRED';
-  effectiveFrom: string;
-  effectiveTo: string | null;
-  cancelReason: string | null;
-  enrolledDependentIds: string[];
-  annualPremiumEmployer: number;
-  annualPremiumEmployee: number;
-  plan?: Plan;
-}
-
-interface Dependent {
-  id: string;
-  fullName: string;
-  relationship: 'SPOUSE' | 'CHILD' | 'PARENT' | 'OTHER';
-  dateOfBirth: string;
-  nric: string | null;
-  isActive: boolean;
-}
-
-interface Claim {
-  id: string;
-  claimNumber: string;
-  enrollmentId: string;
-  planId: string;
-  employeeId: string;
-  employeeName: string;
-  patientName: string;
-  treatmentDate: string;
-  treatmentType: string;
-  hospitalProvider: string | null;
-  diagnosis: string | null;
-  claimAmount: number;
-  approvedAmount: number | null;
-  status: string;
-  rejectedReason: string | null;
-  submittedAt: string;
-}
-
-interface OpenEnrollmentPeriod {
-  id: string;
-  name: string;
-  year: number;
-  startDate: string;
-  endDate: string;
-  status: string;
-  planIds: string[];
-}
-
-// ── BEN-002: Flexi-Benefits Wallet types ─────────────────────────────────────
-interface FlexiCategory {
-  id: string;
-  code: string;
-  name: string;
-  description: string | null;
-  requiresReceipt: boolean;
-  isActive: boolean;
-}
-
-interface FlexiWallet {
-  id: string;
-  employeeId: string;
-  employeeName: string;
-  employeeGrade: string | null;
-  year: number;
-  creditedAmount: number;
-  usedAmount: number;
-  forfeitedAmount: number;
-  encashedAmount: number;
-  status: 'ACTIVE' | 'EXPIRED';
-  expiresAt: string;
-}
-
-interface FlexiBalance {
-  credited: number;
-  used: number;
-  pending: number;
-  remaining: number;
-  encashed: number;
-  forfeited: number;
-}
-
-interface FlexiClaim {
-  id: string;
-  claimNumber: string;
-  walletId: string;
-  employeeId: string;
-  employeeName: string;
-  categoryCode: string;
-  categoryName: string;
-  receiptDate: string;
-  vendor: string | null;
-  description: string;
-  claimAmount: number;
-  approvedAmount: number | null;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
-  autoApproved: boolean;
-  rejectedReason: string | null;
-  submittedAt: string;
-}
-
-interface FlexiWalletConfig {
-  id: string | null;
-  grade: string;
-  annualAmount: number;
-  autoApproveThreshold: number;
-  isActive: boolean;
-  isDefault: boolean;
-}
-
-const CATEGORY_COLORS: Record<string, string> = {
-  GYM:                    'bg-page text-accent',
-  DENTAL:                 'bg-page text-accent',
-  OPTICAL:                'bg-page text-accent',
-  HEALTH_SCREENING:       'bg-page text-ink',
-  WELLNESS:               'bg-page text-accent',
-  PROFESSIONAL_DEVELOPMENT:'bg-page text-ink',
-};
-
-const HR_ROLES = ['HR_ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'];
 const PLAN_TYPES = ['GHS', 'GTL', 'PA', 'DENTAL', 'OUTPATIENT', 'OTHER'];
 
 const TYPE_LABELS: Record<string, string> = {
@@ -156,16 +28,11 @@ const TYPE_LABELS: Record<string, string> = {
   DENTAL: 'Dental', OUTPATIENT: 'Outpatient', OTHER: 'Other',
 };
 
-const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
-  GHS:        { bg: 'bg-page',    text: 'text-ink'    },
-  GTL:        { bg: 'bg-page',  text: 'text-accent'  },
-  PA:         { bg: 'bg-page',   text: 'text-ink'   },
-  DENTAL:     { bg: 'bg-page',    text: 'text-accent'    },
-  OUTPATIENT: { bg: 'bg-page', text: 'text-accent' },
-  OTHER:      { bg: 'bg-page',  text: 'text-ink'   },
-};
-
-const STATUS_COLORS: Record<string, string> = {
+/**
+ * Status by weight and fill, not hue — the palette has no error red or success
+ * green to spend (seal red is reserved). TONES is the shared workflow-state kit.
+ */
+const STATUS_TONE: Record<string, string> = {
   SUBMITTED:    TONES.pending,
   UNDER_REVIEW: TONES.active,
   APPROVED:     TONES.approved,
@@ -174,238 +41,53 @@ const STATUS_COLORS: Record<string, string> = {
   EXPIRED:      TONES.warning,
   REJECTED:     TONES.critical,
   CANCELLED:    TONES.inert,
+  PENDING:      TONES.pending,
+  SCHEDULED:    TONES.active,
+  CLOSED:       TONES.inert,
 };
 
+const sentence = (s: string) => s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ');
+const sgd = (n: number | null | undefined) => `S$${Number(n || 0).toLocaleString('en-SG')}`;
+const fmtDate = (v: string) => new Date(v).toLocaleDateString('en-SG');
+
+function Chip({ label, cls = 'bg-pill text-muted' }: { label: string; cls?: string }) {
+  return <span className={`inline-flex items-center h-6 px-2.5 rounded-full text-xs whitespace-nowrap ${cls}`}>{label}</span>;
+}
+const StatusChip = ({ status, extra = '' }: { status: string; extra?: string }) =>
+  <Chip label={`${sentence(status)}${extra}`} cls={STATUS_TONE[status] ?? 'bg-pill text-muted'} />;
+
 export default function BenefitsPage() {
-  const { user } = useAuth();
-  const role = (user?.role || '').toUpperCase();
-  const isHr = HR_ROLES.includes(role);
+  const {
+    isHr,
+    hrTab, setHrTab,
+    flexiSubTab, setFlexiSubTab,
+    plans, myEnrollments, allEnrollments, myDependents, myClaims, allClaims,
+    openPeriod, allPeriods, dashboard, loading,
+    flexiWallet, flexiBalance, myFlexiClaims, flexiCategories,
+    allFlexiWallets, allFlexiClaims, flexiDashboard, flexiConfigs,
+    flexiYearEndPreview, flexiYear, setFlexiYear,
+    showPlanModal, setShowPlanModal,
+    editingPlan, setEditingPlan,
+    showEnrollModal, setShowEnrollModal,
+    enrollPlan, setEnrollPlan,
+    showDependentModal, setShowDependentModal,
+    showClaimModal, setShowClaimModal,
+    claimEnrollment, setClaimEnrollment,
+    showPeriodModal, setShowPeriodModal,
+    showFlexiClaimModal, setShowFlexiClaimModal,
+    showFlexiCreditModal, setShowFlexiCreditModal,
+    loadData,
+    cancelEnrollment, approveClaim, rejectClaim, reimburseClaim, deleteDependent,
+    closePeriod, approveFlexiClaim, rejectFlexiClaim, cancelFlexiClaim,
+    runFlexiYearEnd, loadYearEndPreview, seedFlexiCategories,
+  } = useBenefits();
 
-  // ─── HR Tabs ─────────────────────────────────────────────────────────────────
-  const [hrTab, setHrTab] = useState<'plans'|'enrollments'|'claims'|'openEnroll'|'flexi'>('plans');
-  const [flexiSubTab, setFlexiSubTab] = useState<'wallets'|'claims'|'config'|'yearend'>('wallets');
-
-  // ─── Data state ─────────────────────────────────────────────────────────────
-  const [plans, setPlans]             = useState<Plan[]>([]);
-  const [myEnrollments, setMyEnrollments] = useState<Enrollment[]>([]);
-  const [allEnrollments, setAllEnrollments] = useState<Enrollment[]>([]);
-  const [myDependents, setMyDependents]   = useState<Dependent[]>([]);
-  const [myClaims, setMyClaims]           = useState<Claim[]>([]);
-  const [allClaims, setAllClaims]         = useState<Claim[]>([]);
-  const [openPeriod, setOpenPeriod]       = useState<OpenEnrollmentPeriod | null>(null);
-  const [allPeriods, setAllPeriods]       = useState<OpenEnrollmentPeriod[]>([]);
-  const [dashboard, setDashboard]         = useState<any>(null);
-  const [loading, setLoading]             = useState(true);
-
-  // ─── Flexi Benefits state (BEN-002) ─────────────────────────────────────────
-  const [flexiWallet, setFlexiWallet]         = useState<FlexiWallet | null>(null);
-  const [flexiBalance, setFlexiBalance]       = useState<FlexiBalance | null>(null);
-  const [myFlexiClaims, setMyFlexiClaims]     = useState<FlexiClaim[]>([]);
-  const [flexiCategories, setFlexiCategories] = useState<FlexiCategory[]>([]);
-  const [allFlexiWallets, setAllFlexiWallets] = useState<FlexiWallet[]>([]);
-  const [allFlexiClaims, setAllFlexiClaims]   = useState<FlexiClaim[]>([]);
-  const [flexiDashboard, setFlexiDashboard]   = useState<any>(null);
-  const [flexiConfigs, setFlexiConfigs]       = useState<FlexiWalletConfig[]>([]);
-  const [flexiYearEndPreview, setFlexiYearEndPreview] = useState<any>(null);
-  const [flexiYear, setFlexiYear]             = useState(new Date().getFullYear());
-
-  // ─── Modal state ───────────────────────────────────────────────────────────
-  const [showPlanModal, setShowPlanModal]       = useState(false);
-  const [editingPlan, setEditingPlan]           = useState<Plan | null>(null);
-  const [showEnrollModal, setShowEnrollModal]   = useState(false);
-  const [enrollPlan, setEnrollPlan]             = useState<Plan | null>(null);
-  const [showDependentModal, setShowDependentModal] = useState(false);
-  const [showClaimModal, setShowClaimModal]     = useState(false);
-  const [claimEnrollment, setClaimEnrollment]   = useState<Enrollment | null>(null);
-  const [showPeriodModal, setShowPeriodModal]   = useState(false);
-  const [showFlexiClaimModal, setShowFlexiClaimModal] = useState(false);
-  const [showFlexiCreditModal, setShowFlexiCreditModal] = useState(false);
-
-  // ─── Load data ──────────────────────────────────────────────────────────────
-  async function loadData() {
-    setLoading(true);
-    try {
-      const [plansRes, periodRes, catRes] = await Promise.all([
-        apiFetch('/benefits/plans').then(r => r.json()),
-        apiFetch('/benefits/open-enrollment/current').then(r => r.json()),
-        apiFetch('/benefits/flexi-categories').then(r => r.json()),
-      ]);
-      setPlans(plansRes.plans || []);
-      setOpenPeriod(periodRes.active ? periodRes.period : null);
-      setFlexiCategories(catRes.categories || []);
-
-      if (isHr) {
-        const [enrRes, claimsRes, periodsRes, dashRes, fWalletsRes, fClaimsRes, fDashRes, fCfgRes] = await Promise.all([
-          apiFetch('/benefits/enrollments').then(r => r.json()),
-          apiFetch('/benefits/claims').then(r => r.json()),
-          apiFetch('/benefits/open-enrollment').then(r => r.json()),
-          apiFetch('/benefits/dashboard').then(r => r.json()),
-          apiFetch(`/benefits/flexi-wallets?year=${flexiYear}`).then(r => r.json()),
-          apiFetch(`/benefits/flexi-claims?year=${flexiYear}`).then(r => r.json()),
-          apiFetch(`/benefits/flexi-dashboard?year=${flexiYear}`).then(r => r.json()),
-          apiFetch('/benefits/flexi-config').then(r => r.json()),
-        ]);
-        setAllEnrollments(enrRes.enrollments || []);
-        setAllClaims(claimsRes.claims || []);
-        setAllPeriods(periodsRes.periods || []);
-        setDashboard(dashRes);
-        setAllFlexiWallets(fWalletsRes.wallets || []);
-        setAllFlexiClaims(fClaimsRes.claims || []);
-        setFlexiDashboard(fDashRes);
-        setFlexiConfigs(fCfgRes.configs || []);
-      } else {
-        const [myEnrRes, depRes, myClaimRes, myWalletRes, myFlexiClaimRes] = await Promise.all([
-          apiFetch('/benefits/enrollments/me').then(r => r.json()),
-          apiFetch('/benefits/dependents').then(r => r.json()),
-          apiFetch('/benefits/claims').then(r => r.json()),
-          apiFetch(`/benefits/flexi-wallets/me?year=${new Date().getFullYear()}`).then(r => r.json()),
-          apiFetch('/benefits/flexi-claims').then(r => r.json()),
-        ]);
-        setMyEnrollments(myEnrRes.enrollments || []);
-        setMyDependents(depRes.dependents || []);
-        setMyClaims(myClaimRes.claims || []);
-        setFlexiWallet(myWalletRes.wallet || null);
-        setFlexiBalance(myWalletRes.balance || null);
-        setMyFlexiClaims(myFlexiClaimRes.claims || []);
-      }
-    } catch (err) {
-      console.error('[benefits] load failed', err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => { if (user) loadData(); }, [user, isHr]);
-
-  // ─── Actions ────────────────────────────────────────────────────────────────
-  async function cancelEnrollment(id: string) {
-    const reason = window.prompt('Reason for cancelling?');
-    if (!reason || !reason.trim()) return;
-    const res = await apiFetch(`/benefits/enrollments/${id}/cancel`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cancelReason: reason.trim() }),
-    });
-    if (res.ok) loadData();
-    else {
-      const e = await res.json();
-      alert(e.error || 'Failed to cancel');
-    }
-  }
-
-  async function approveClaim(id: string) {
-    const amtStr = window.prompt('Approved amount (SGD, leave blank for full):', '');
-    const body: any = {};
-    if (amtStr && amtStr.trim()) {
-      const amt = parseFloat(amtStr);
-      if (isNaN(amt) || amt < 0) { alert('Invalid amount'); return; }
-      body.approvedAmount = amt;
-    }
-    const res = await apiFetch(`/benefits/claims/${id}/approve`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) loadData();
-    else alert((await res.json()).error || 'Failed');
-  }
-
-  async function rejectClaim(id: string) {
-    const reason = window.prompt('Reason for rejection?');
-    if (!reason || !reason.trim()) return;
-    const res = await apiFetch(`/benefits/claims/${id}/reject`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rejectedReason: reason.trim() }),
-    });
-    if (res.ok) loadData();
-    else alert((await res.json()).error || 'Failed');
-  }
-
-  async function reimburseClaim(id: string) {
-    if (!confirm('Mark this claim as reimbursed?')) return;
-    const res = await apiFetch(`/benefits/claims/${id}/reimburse`, { method: 'PUT' });
-    if (res.ok) loadData();
-    else alert((await res.json()).error || 'Failed');
-  }
-
-  async function deleteDependent(id: string) {
-    if (!confirm('Remove this dependent?')) return;
-    const res = await apiFetch(`/benefits/dependents/${id}`, { method: 'DELETE' });
-    if (res.ok) loadData();
-    else alert((await res.json()).error || 'Failed');
-  }
-
-  async function closePeriod(id: string) {
-    if (!confirm('Close this open enrollment window?')) return;
-    const res = await apiFetch(`/benefits/open-enrollment/${id}/close`, { method: 'PUT' });
-    if (res.ok) loadData();
-    else alert((await res.json()).error || 'Failed');
-  }
-
-  async function approveFlexiClaim(id: string, claimAmount: number) {
-    const amtStr = window.prompt(`Approve amount (SGD, leave blank for full SGD ${claimAmount}):`, '');
-    const body: any = {};
-    if (amtStr !== null && amtStr.trim()) {
-      const amt = parseFloat(amtStr);
-      if (isNaN(amt) || amt < 0) { alert('Invalid amount'); return; }
-      body.approvedAmount = amt;
-    }
-    const res = await apiFetch(`/benefits/flexi-claims/${id}/approve`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-    });
-    if (res.ok) loadData();
-    else alert((await res.json()).error || 'Failed to approve');
-  }
-
-  async function rejectFlexiClaim(id: string) {
-    const reason = window.prompt('Reason for rejection?');
-    if (!reason || !reason.trim()) return;
-    const res = await apiFetch(`/benefits/flexi-claims/${id}/reject`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rejectedReason: reason.trim() }),
-    });
-    if (res.ok) loadData();
-    else alert((await res.json()).error || 'Failed to reject');
-  }
-
-  async function cancelFlexiClaim(id: string) {
-    if (!confirm('Cancel this claim?')) return;
-    const res = await apiFetch(`/benefits/flexi-claims/${id}/cancel`, { method: 'PUT' });
-    if (res.ok) loadData();
-    else alert((await res.json()).error || 'Failed to cancel');
-  }
-
-  async function runFlexiYearEnd(encash: boolean) {
-    const label = encash ? 'encash (add to payroll)' : 'forfeit (lose unused balance)';
-    if (!confirm(`Year-end ${flexiYear}: ${label} all unused flexi wallet balances?`)) return;
-    const res = await apiFetch('/benefits/flexi-wallets/year-end', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ year: flexiYear, encash }),
-    });
-    if (res.ok) { const d = await res.json(); alert(`Done. Processed ${d.processed} wallets.`); loadData(); }
-    else alert((await res.json()).error || 'Failed');
-  }
-
-  async function loadYearEndPreview() {
-    try {
-      const res = await apiFetch(`/benefits/flexi-wallets/year-end-preview?year=${flexiYear}`);
-      if (res.ok) setFlexiYearEndPreview(await res.json());
-    } catch (_) { /* ignore */ }
-  }
-
-  async function seedFlexiCategories() {
-    const res = await apiFetch('/benefits/flexi-categories/seed', { method: 'POST' });
-    if (res.ok) { const d = await res.json(); alert(`Seeded ${d.created} categories (${d.skipped} skipped).`); loadData(); }
-    else alert('Failed to seed categories');
-  }
+  const openBadge = openPeriod
+    ? <Chip label={`Open enrollment · ends ${fmtDate(openPeriod.endDate)}`} cls="bg-tint text-accent" />
+    : undefined;
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="w-10 h-10 border-4 border-accent border-accent animate-spin rounded-full" />
-      </div>
-    );
+    return <div className="py-16 text-center text-sm text-muted">Loading…</div>;
   }
 
   // ─── EMPLOYEE VIEW ──────────────────────────────────────────────────────────
@@ -416,291 +98,159 @@ export default function BenefitsPage() {
       : [];
 
     return (
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-black text-ink">My Benefits</h1>
-            <p className="text-xs text-muted mt-0.5 uppercase tracking-widest font-bold">Insurance · Claims · Dependents</p>
-          </div>
-          {openPeriod && (
-            <div className="px-4 py-2 bg-page border border-accent ">
-              <p className="text-xs font-black text-accent uppercase tracking-widest">◑ Open Enrollment Active</p>
-              <p className="text-[10px] text-accent font-bold mt-0.5">
-                {openPeriod.name} · ends {new Date(openPeriod.endDate).toLocaleDateString('en-SG')}
-              </p>
-            </div>
-          )}
-        </div>
+      <div className="max-w-6xl mx-auto flex flex-col gap-6">
+        <PageHeader
+          title="My benefits"
+          subtitle="Your insurance plans, claims, dependents and flexi-benefits wallet."
+          actions={openBadge}
+        />
 
-        {/* Active Enrollments */}
-        <section>
-          <h2 className="text-sm font-black text-ink uppercase tracking-widest mb-3">Active Plans ({activeEnrollments.length})</h2>
+        {/* Active plans */}
+        <section className="flex flex-col gap-3">
+          <h2 className="text-[15.5px] font-bold text-ink">Active plans ({activeEnrollments.length})</h2>
           {activeEnrollments.length === 0 ? (
-            <div className="bg-paper border border-rule p-4 sm:p-6 lg:p-8 text-center">
-              <p className="text-sm text-muted">You have no active benefit plans.</p>
-              {openPeriod && availablePlansForSelfEnroll.length > 0 && (
-                <p className="text-xs text-accent mt-2 font-bold">Enroll in a plan below ↓</p>
-              )}
-            </div>
+            <EmptyState icon="shield" title="No active benefit plans"
+              description={openPeriod && availablePlansForSelfEnroll.length > 0 ? 'Enrol in a plan from the list below.' : 'You are not enrolled in any plan yet.'} />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {activeEnrollments.map(e => {
-                const tc = TYPE_COLORS[e.plan?.type || 'OTHER'];
-                return (
-                  <div key={e.id} className="bg-paper border border-rule p-5 hover: transition-all">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h3 className="text-base font-black text-ink">{e.plan?.name}</h3>
-                        <p className="text-xs text-muted mt-0.5 font-bold">{e.plan?.insurerName}</p>
-                      </div>
-                      <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest  ${tc.bg} ${tc.text}`}>
-                        {TYPE_LABELS[e.plan?.type || 'OTHER']}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div>
-                        <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Coverage</p>
-                        <p className="text-ink font-black mt-0.5">SGD {(e.plan?.coverageAmount || 0).toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Effective</p>
-                        <p className="text-ink font-black mt-0.5">{new Date(e.effectiveFrom).toLocaleDateString('en-SG')}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Dependents</p>
-                        <p className="text-ink font-black mt-0.5">{e.enrolledDependentIds.length}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Your Co-Pay</p>
-                        <p className="text-ink font-black mt-0.5">
-                          {e.annualPremiumEmployee > 0 ? `SGD ${e.annualPremiumEmployee}/yr` : 'Employer-paid'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-4 flex gap-2">
-                      <button
-                        onClick={() => { setClaimEnrollment(e); setShowClaimModal(true); }}
-                        className="flex-1 py-2 px-3 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent transition-all"
-                      >
-                        Submit Claim
-                      </button>
-                      <button
-                        onClick={() => cancelEnrollment(e.id)}
-                        className="py-2 px-3 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page transition-all"
-                      >
-                        Cancel
-                      </button>
-                    </div>
+              {activeEnrollments.map(e => (
+                <Card key={e.id}>
+                  <CardHeader
+                    title={e.plan?.name}
+                    caption={e.plan?.insurerName}
+                    action={<Chip label={TYPE_LABELS[e.plan?.type || 'OTHER']} />}
+                  />
+                  <div className="grid grid-cols-2 gap-3 text-[13px]">
+                    <div><p className="text-muted">Coverage</p><p className="font-semibold text-ink tabular-nums">{sgd(e.plan?.coverageAmount)}</p></div>
+                    <div><p className="text-muted">Effective</p><p className="font-semibold text-ink tabular-nums">{fmtDate(e.effectiveFrom)}</p></div>
+                    <div><p className="text-muted">Dependents</p><p className="font-semibold text-ink tabular-nums">{e.enrolledDependentIds.length}</p></div>
+                    <div><p className="text-muted">Your co-pay</p><p className="font-semibold text-ink tabular-nums">{e.annualPremiumEmployee > 0 ? `${sgd(e.annualPremiumEmployee)}/yr` : 'Employer-paid'}</p></div>
                   </div>
-                );
-              })}
+                  <div className="mt-4 flex gap-2">
+                    <Button className="flex-1" onClick={() => { setClaimEnrollment(e); setShowClaimModal(true); }}>Submit claim</Button>
+                    <Button variant="secondary" onClick={() => cancelEnrollment(e.id)}>Cancel</Button>
+                  </div>
+                </Card>
+              ))}
             </div>
           )}
         </section>
 
-        {/* Available plans (only during open enrollment) */}
+        {/* Available during open enrollment */}
         {openPeriod && availablePlansForSelfEnroll.length > 0 && (
-          <section>
-            <h2 className="text-sm font-black text-ink uppercase tracking-widest mb-3">Available During Open Enrollment</h2>
+          <section className="flex flex-col gap-3">
+            <h2 className="text-[15.5px] font-bold text-ink">Available during open enrollment</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {availablePlansForSelfEnroll.map(p => {
-                const tc = TYPE_COLORS[p.type];
-                return (
-                  <div key={p.id} className="bg-paper border-2 border-accent p-5 hover: transition-all">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h3 className="text-base font-black text-ink">{p.name}</h3>
-                        <p className="text-xs text-muted mt-0.5 font-bold">{p.insurerName}</p>
-                      </div>
-                      <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest  ${tc.bg} ${tc.text}`}>
-                        {TYPE_LABELS[p.type]}
-                      </span>
-                    </div>
-                    {p.description && <p className="text-xs text-muted mb-3">{p.description}</p>}
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div>
-                        <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Coverage</p>
-                        <p className="text-ink font-black mt-0.5">SGD {p.coverageAmount.toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Your Co-Pay</p>
-                        <p className="text-ink font-black mt-0.5">{p.premiumEmployee > 0 ? `SGD ${p.premiumEmployee}/yr` : 'Free'}</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => { setEnrollPlan(p); setShowEnrollModal(true); }}
-                      className="mt-4 w-full py-2 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent transition-all"
-                    >
-                      Enroll
-                    </button>
+              {availablePlansForSelfEnroll.map(p => (
+                <Card key={p.id} className="border-accent">
+                  <CardHeader title={p.name} caption={p.insurerName} action={<Chip label={TYPE_LABELS[p.type]} />} />
+                  {p.description && <p className="text-[13px] text-muted mb-3">{p.description}</p>}
+                  <div className="grid grid-cols-2 gap-3 text-[13px]">
+                    <div><p className="text-muted">Coverage</p><p className="font-semibold text-ink tabular-nums">{sgd(p.coverageAmount)}</p></div>
+                    <div><p className="text-muted">Your co-pay</p><p className="font-semibold text-ink tabular-nums">{p.premiumEmployee > 0 ? `${sgd(p.premiumEmployee)}/yr` : 'Free'}</p></div>
                   </div>
-                );
-              })}
+                  <Button className="mt-4 w-full" onClick={() => { setEnrollPlan(p); setShowEnrollModal(true); }}>Enrol</Button>
+                </Card>
+              ))}
             </div>
           </section>
         )}
 
         {/* Dependents */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-black text-ink uppercase tracking-widest">My Dependents ({myDependents.length})</h2>
-            <button
-              onClick={() => setShowDependentModal(true)}
-              className="text-xs font-bold text-accent hover:text-accent border border-accent px-3 py-1.5 hover:bg-page transition-all"
-            >
-              + Add Dependent
-            </button>
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-[15.5px] font-bold text-ink">My dependents ({myDependents.length})</h2>
+            <Button variant="secondary" size="sm" icon="plus" onClick={() => setShowDependentModal(true)}>Add dependent</Button>
           </div>
           {myDependents.length === 0 ? (
-            <div className="bg-paper border border-rule p-4 sm:p-6 text-center text-sm text-muted">
-              No dependents on file.
-            </div>
+            <EmptyState icon="users" title="No dependents on file" description="Add a spouse, child or parent to include them in eligible plans." />
           ) : (
-            <div className="bg-paper border border-rule overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-page border-b border-rule">
-                  <tr>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Name</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Relationship</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">DOB</th>
-                    <th className="px-4 py-2.5 text-right"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {myDependents.map(d => (
-                    <tr key={d.id} className="border-b border-rule last:border-0 hover:bg-page">
-                      <td className="px-4 py-2.5 text-sm font-bold text-ink">{d.fullName}</td>
-                      <td className="px-4 py-2.5 text-sm text-ink">{d.relationship}</td>
-                      <td className="px-4 py-2.5 text-sm text-ink">{new Date(d.dateOfBirth).toLocaleDateString('en-SG')}</td>
-                      <td className="px-4 py-2.5 text-right">
-                        <button onClick={() => deleteDependent(d.id)} className="text-xs font-bold text-ink hover:text-ink">Remove</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable<Dependent>
+              aria-label="Dependents"
+              rows={myDependents}
+              rowKey={(d) => d.id}
+              columns={[
+                { key: 'name', label: 'Name', width: 'minmax(0,1.5fr)', render: (d) => <span className="font-semibold text-ink">{d.fullName}</span> },
+                { key: 'rel', label: 'Relationship', render: (d) => sentence(d.relationship) },
+                { key: 'dob', label: 'Date of birth', numeric: true, render: (d) => fmtDate(d.dateOfBirth) },
+                { key: 'action', label: '', width: '100px', align: 'right', render: (d) => <Button variant="ghost" size="sm" onClick={() => deleteDependent(d.id)}>Remove</Button> },
+              ]}
+              mobileCard={(d) => (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex flex-col"><span className="font-semibold text-ink">{d.fullName}</span><span className="text-[13px] text-muted">{sentence(d.relationship)} · {fmtDate(d.dateOfBirth)}</span></span>
+                  <Button variant="ghost" size="sm" onClick={() => deleteDependent(d.id)}>Remove</Button>
+                </div>
+              )}
+            />
           )}
         </section>
 
-        {/* My Claims */}
-        <section>
-          <h2 className="text-sm font-black text-ink uppercase tracking-widest mb-3">My Claims ({myClaims.length})</h2>
+        {/* My claims */}
+        <section className="flex flex-col gap-3">
+          <h2 className="text-[15.5px] font-bold text-ink">My claims ({myClaims.length})</h2>
           {myClaims.length === 0 ? (
-            <div className="bg-paper border border-rule p-4 sm:p-6 text-center text-sm text-muted">
-              No claims submitted yet.
-            </div>
+            <EmptyState icon="receipt" title="No claims submitted yet" description="Submit a claim from one of your active plans above." />
           ) : (
-            <div className="bg-paper border border-rule overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-page border-b border-rule">
-                  <tr>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Claim #</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Treatment</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Date</th>
-                    <th className="px-4 py-2.5 text-right text-[10px] font-black text-muted uppercase tracking-widest">Amount</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {myClaims.map(c => (
-                    <tr key={c.id} className="border-b border-rule last:border-0">
-                      <td className="px-4 py-2.5 text-sm font-mono font-bold text-ink">{c.claimNumber}</td>
-                      <td className="px-4 py-2.5 text-sm text-ink">{c.treatmentType}</td>
-                      <td className="px-4 py-2.5 text-sm text-ink">{new Date(c.treatmentDate).toLocaleDateString('en-SG')}</td>
-                      <td className="px-4 py-2.5 text-sm text-ink font-bold text-right">SGD {c.claimAmount}</td>
-                      <td className="px-4 py-2.5">
-                        <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[c.status] || 'bg-page text-ink'}`}>
-                          {c.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable<Claim>
+              aria-label="My claims"
+              rows={myClaims}
+              rowKey={(c) => c.id}
+              columns={[
+                { key: 'num', label: 'Claim #', render: (c) => <span className="tabular-nums">{c.claimNumber}</span> },
+                { key: 'treat', label: 'Treatment', render: (c) => c.treatmentType },
+                { key: 'date', label: 'Date', numeric: true, render: (c) => fmtDate(c.treatmentDate) },
+                { key: 'amt', label: 'Amount', numeric: true, align: 'right', render: (c) => sgd(c.claimAmount) },
+                { key: 'status', label: 'Status', width: '130px', render: (c) => <StatusChip status={c.status} /> },
+              ]}
+              mobileCard={(c) => (
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between gap-2"><span className="font-semibold text-ink">{c.treatmentType}</span><StatusChip status={c.status} /></div>
+                  <span className="text-[13px] text-muted tabular-nums">{c.claimNumber} · {fmtDate(c.treatmentDate)} · {sgd(c.claimAmount)}</span>
+                </div>
+              )}
+            />
           )}
         </section>
 
-        {/* Flexi Benefits Wallet */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-black text-ink uppercase tracking-widest">My Flexi Benefits Wallet</h2>
+        {/* Flexi wallet */}
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-[15.5px] font-bold text-ink">My flexi-benefits wallet</h2>
             {flexiWallet && flexiCategories.length > 0 && (
-              <button
-                onClick={() => setShowFlexiClaimModal(true)}
-                className="text-xs font-bold text-accent hover:text-accent border border-accent px-3 py-1.5 hover:bg-page transition-all"
-              >
-                + Submit Claim
-              </button>
+              <Button variant="secondary" size="sm" icon="plus" onClick={() => setShowFlexiClaimModal(true)}>Submit claim</Button>
             )}
           </div>
-
           {!flexiWallet ? (
-            <div className="bg-paper border border-rule p-4 sm:p-6 text-center text-sm text-muted">
-              No flexi benefits wallet for {new Date().getFullYear()}. Contact HR to have one credited.
-            </div>
+            <EmptyState icon="wallet" title={`No flexi wallet for ${new Date().getFullYear()}`} description="Contact HR to have a wallet credited." />
           ) : (
-            <div className="space-y-4">
-              {/* Balance Card */}
-              <div className={`bg-paper  border-2 p-5 ${flexiWallet.status === 'EXPIRED' ? 'border-rule opacity-70' : 'border-accent'}`}>
-                <div className="flex items-start justify-between mb-4">
+            <div className="flex flex-col gap-4">
+              <Card className={flexiWallet.status === 'EXPIRED' ? 'opacity-70' : 'border-accent'}>
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-[10px] font-black text-muted uppercase tracking-widest">Flexi Benefits Wallet {flexiWallet.year}</p>
-                    <p className={`text-3xl font-black mt-1 ${flexiWallet.status === 'EXPIRED' ? 'text-muted' : 'text-accent'}`}>
-                      SGD {flexiBalance?.remaining?.toLocaleString() || 0}
-                    </p>
-                    <p className="text-xs text-muted mt-0.5 font-bold">remaining balance</p>
+                    <p className="text-[12.5px] font-semibold text-muted">Flexi wallet {flexiWallet.year}</p>
+                    <p className={`text-[30px] font-extrabold tracking-[-0.02em] tabular-nums mt-1 ${flexiWallet.status === 'EXPIRED' ? 'text-muted' : 'text-accent'}`}>{sgd(flexiBalance?.remaining)}</p>
+                    <p className="text-[13px] text-muted">remaining balance</p>
                   </div>
-                  <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest  ${flexiWallet.status === 'EXPIRED' ? 'bg-page text-ink' : 'bg-page text-accent'}`}>
-                    {flexiWallet.status}
-                  </span>
+                  <StatusChip status={flexiWallet.status} />
                 </div>
-                {/* Progress bar */}
                 {flexiBalance && flexiBalance.credited > 0 && (
-                  <div className="mb-4">
-                    <div className="flex justify-between text-[10px] font-black text-muted uppercase tracking-widest mb-1.5">
-                      <span>Used</span>
-                      <span>{Math.round((flexiBalance.used / flexiBalance.credited) * 100)}%</span>
-                    </div>
-                    <div className="h-2 bg-page overflow-hidden">
-                      <div
-                        className="h-full bg-accent transition-all"
-                        style={{ width: `${Math.min(100, (flexiBalance.used / flexiBalance.credited) * 100)}%` }}
-                      />
-                    </div>
+                  <div className="mt-4">
+                    <div className="flex justify-between text-[13px] text-muted mb-1.5"><span>Used</span><span className="tabular-nums">{Math.round((flexiBalance.used / flexiBalance.credited) * 100)}%</span></div>
+                    <div className="h-2 rounded-full bg-pill overflow-hidden"><div className="h-full bg-accent" style={{ width: `${Math.min(100, (flexiBalance.used / flexiBalance.credited) * 100)}%` }} /></div>
                   </div>
                 )}
-                <div className="grid grid-cols-3 gap-3 text-xs">
-                  <div>
-                    <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Credited</p>
-                    <p className="text-ink font-black mt-0.5">SGD {flexiBalance?.credited}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Approved Used</p>
-                    <p className="text-ink font-black mt-0.5">SGD {flexiBalance?.used}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Pending</p>
-                    <p className="text-ink font-black mt-0.5">SGD {flexiBalance?.pending || 0}</p>
-                  </div>
+                <div className="grid grid-cols-3 gap-3 mt-4 text-[13px]">
+                  <div><p className="text-muted">Credited</p><p className="font-semibold text-ink tabular-nums">{sgd(flexiBalance?.credited)}</p></div>
+                  <div><p className="text-muted">Approved used</p><p className="font-semibold text-ink tabular-nums">{sgd(flexiBalance?.used)}</p></div>
+                  <div><p className="text-muted">Pending</p><p className="font-semibold text-ink tabular-nums">{sgd(flexiBalance?.pending)}</p></div>
                 </div>
-                <p className="text-[10px] text-muted font-bold mt-3">
-                  Expires: {new Date(flexiWallet.expiresAt).toLocaleDateString('en-SG', { day: 'numeric', month: 'long', year: 'numeric' })}
-                </p>
-              </div>
-
-              {/* Eligible Categories */}
+                <p className="text-[13px] text-muted mt-3">Expires {new Date(flexiWallet.expiresAt).toLocaleDateString('en-SG', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+              </Card>
               {flexiCategories.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-2">Eligible Spend Categories</p>
+                  <p className="text-[12.5px] font-semibold text-muted mb-2">Eligible spend categories</p>
                   <div className="flex flex-wrap gap-2">
-                    {flexiCategories.map(cat => (
-                      <span key={cat.id} className={`px-3 py-1 text-xs font-black uppercase tracking-widest  ${CATEGORY_COLORS[cat.code] || 'bg-page text-ink'}`}>
-                        {cat.name}
-                      </span>
-                    ))}
+                    {flexiCategories.map(cat => <Chip key={cat.id} label={cat.name} cls="bg-tint text-accent" />)}
                   </div>
                 </div>
               )}
@@ -708,80 +258,50 @@ export default function BenefitsPage() {
           )}
         </section>
 
-        {/* My Flexi Claims */}
+        {/* My flexi claims */}
         {myFlexiClaims.length > 0 && (
-          <section>
-            <h2 className="text-sm font-black text-ink uppercase tracking-widest mb-3">My Flexi Claims ({myFlexiClaims.length})</h2>
-            <div className="bg-paper border border-rule overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-page border-b border-rule">
-                  <tr>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Claim #</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Category</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Description</th>
-                    <th className="px-4 py-2.5 text-right text-[10px] font-black text-muted uppercase tracking-widest">Amount</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-black text-muted uppercase tracking-widest">Status</th>
-                    <th className="px-4 py-2.5 text-right"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {myFlexiClaims.map(c => (
-                    <tr key={c.id} className="border-b border-rule last:border-0">
-                      <td className="px-4 py-2.5 text-xs font-mono font-bold text-ink">{c.claimNumber}</td>
-                      <td className="px-4 py-2.5">
-                        <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest  ${CATEGORY_COLORS[c.categoryCode] || 'bg-page text-ink'}`}>
-                          {c.categoryName}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-sm text-ink max-w-[180px] truncate">{c.description}</td>
-                      <td className="px-4 py-2.5 text-sm font-bold text-right">SGD {c.claimAmount}</td>
-                      <td className="px-4 py-2.5">
-                        <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[c.status] || 'bg-page text-ink'}`}>
-                          {c.status}{c.autoApproved && c.status === 'APPROVED' ? ' (auto)' : ''}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        {c.status === 'PENDING' && (
-                          <button onClick={() => cancelFlexiClaim(c.id)} className="text-xs font-bold text-ink hover:text-ink">Cancel</button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <section className="flex flex-col gap-3">
+            <h2 className="text-[15.5px] font-bold text-ink">My flexi claims ({myFlexiClaims.length})</h2>
+            <DataTable<FlexiClaim>
+              aria-label="My flexi claims"
+              rows={myFlexiClaims}
+              rowKey={(c) => c.id}
+              columns={[
+                { key: 'num', label: 'Claim #', render: (c) => <span className="tabular-nums">{c.claimNumber}</span> },
+                { key: 'cat', label: 'Category', render: (c) => <Chip label={c.categoryName} cls="bg-tint text-accent" /> },
+                { key: 'desc', label: 'Description', width: 'minmax(0,1.5fr)', render: (c) => c.description },
+                { key: 'amt', label: 'Amount', numeric: true, align: 'right', render: (c) => sgd(c.claimAmount) },
+                { key: 'status', label: 'Status', width: '140px', render: (c) => <StatusChip status={c.status} extra={c.autoApproved && c.status === 'APPROVED' ? ' (auto)' : ''} /> },
+                { key: 'action', label: '', width: '90px', align: 'right', render: (c) => c.status === 'PENDING' ? <Button variant="ghost" size="sm" onClick={() => cancelFlexiClaim(c.id)}>Cancel</Button> : null },
+              ]}
+              mobileCard={(c) => (
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between gap-2"><span className="font-semibold text-ink">{c.categoryName}</span><StatusChip status={c.status} extra={c.autoApproved && c.status === 'APPROVED' ? ' (auto)' : ''} /></div>
+                  <span className="text-[13px] text-muted tabular-nums">{c.claimNumber} · {sgd(c.claimAmount)}</span>
+                  <span className="text-[13px] text-muted">{c.description}</span>
+                  {c.status === 'PENDING' && <Button variant="ghost" size="sm" className="self-start" onClick={() => cancelFlexiClaim(c.id)}>Cancel</Button>}
+                </div>
+              )}
+            />
           </section>
         )}
 
         {showEnrollModal && enrollPlan && (
-          <EnrollModal
-            plan={enrollPlan}
-            dependents={myDependents}
+          <EnrollModal plan={enrollPlan} dependents={myDependents}
             onClose={() => { setShowEnrollModal(false); setEnrollPlan(null); }}
-            onSuccess={() => { setShowEnrollModal(false); setEnrollPlan(null); loadData(); }}
-          />
+            onSuccess={() => { setShowEnrollModal(false); setEnrollPlan(null); loadData(); }} />
         )}
         {showDependentModal && (
-          <DependentModal
-            onClose={() => setShowDependentModal(false)}
-            onSuccess={() => { setShowDependentModal(false); loadData(); }}
-          />
+          <DependentModal onClose={() => setShowDependentModal(false)} onSuccess={() => { setShowDependentModal(false); loadData(); }} />
         )}
         {showClaimModal && claimEnrollment && (
-          <ClaimModal
-            enrollment={claimEnrollment}
-            dependents={myDependents}
+          <ClaimModal enrollment={claimEnrollment} dependents={myDependents}
             onClose={() => { setShowClaimModal(false); setClaimEnrollment(null); }}
-            onSuccess={() => { setShowClaimModal(false); setClaimEnrollment(null); loadData(); }}
-          />
+            onSuccess={() => { setShowClaimModal(false); setClaimEnrollment(null); loadData(); }} />
         )}
         {showFlexiClaimModal && flexiWallet && (
-          <FlexiClaimModal
-            wallet={flexiWallet}
-            categories={flexiCategories}
-            onClose={() => setShowFlexiClaimModal(false)}
-            onSuccess={() => { setShowFlexiClaimModal(false); loadData(); }}
-          />
+          <FlexiClaimModal wallet={flexiWallet} categories={flexiCategories}
+            onClose={() => setShowFlexiClaimModal(false)} onSuccess={() => { setShowFlexiClaimModal(false); loadData(); }} />
         )}
       </div>
     );
@@ -791,548 +311,358 @@ export default function BenefitsPage() {
   const stats = dashboard?.enrollmentSummary || {};
   const claimsStats = dashboard?.claimsSummary || {};
 
+  const tabBtn = (active: boolean) =>
+    `px-1 pb-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${active ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'}`;
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-black text-ink">Benefits Administration</h1>
-          <p className="text-xs text-muted mt-0.5 uppercase tracking-widest font-bold">Group Insurance · Claims · Open Enrollment</p>
-        </div>
-        {openPeriod && (
-          <div className="px-4 py-2 bg-page border border-accent ">
-            <p className="text-xs font-black text-accent uppercase tracking-widest">● Open Enrollment Active</p>
-            <p className="text-[10px] text-accent font-bold mt-0.5">
-              {openPeriod.name} · ends {new Date(openPeriod.endDate).toLocaleDateString('en-SG')}
-            </p>
-          </div>
-        )}
-      </div>
+    <div className="max-w-7xl mx-auto flex flex-col gap-6">
+      <PageHeader
+        title="Benefits administration"
+        subtitle="Group insurance, claims, open enrollment and the flexi-benefits wallet."
+        actions={openBadge}
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="Active Enrollments"  value={stats.active || 0}             accent="emerald" />
-        <StatCard label="Open Claims"         value={(claimsStats.byStatus?.SUBMITTED || 0) + (claimsStats.byStatus?.UNDER_REVIEW || 0)} accent="blue" />
-        <StatCard label="Reimbursed YTD"      value={`SGD ${(claimsStats.totalReimbursed || 0).toLocaleString()}`} accent="teal" />
-        <StatCard label="Employer Premium/yr" value={`SGD ${(stats.totalEmployerPremium || 0).toLocaleString()}`}  accent="violet" />
+        <Stat label="Active enrollments" value={<span className="tabular-nums">{stats.active || 0}</span>} />
+        <Stat label="Open claims" value={<span className="tabular-nums">{(claimsStats.byStatus?.SUBMITTED || 0) + (claimsStats.byStatus?.UNDER_REVIEW || 0)}</span>} />
+        <Stat label="Reimbursed YTD" value={<span className="tabular-nums">{sgd(claimsStats.totalReimbursed)}</span>} />
+        <Stat label="Employer premium/yr" value={<span className="tabular-nums">{sgd(stats.totalEmployerPremium)}</span>} />
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-rule flex-wrap">
+      <div className="flex gap-5 border-b border-rule flex-wrap">
         {([
-          ['plans',       'Plans',           plans.length],
-          ['enrollments', 'Enrollments',     allEnrollments.length],
-          ['claims',      'Claims',          allClaims.length],
-          ['openEnroll',  'Open Enrollment', allPeriods.length],
-          ['flexi',       'Flexi Benefits',  allFlexiWallets.length],
+          ['plans', 'Plans', plans.length],
+          ['enrollments', 'Enrollments', allEnrollments.length],
+          ['claims', 'Claims', allClaims.length],
+          ['openEnroll', 'Open enrollment', allPeriods.length],
+          ['flexi', 'Flexi benefits', allFlexiWallets.length],
         ] as const).map(([id, label, n]) => (
-          <button
-            key={id}
-            onClick={() => setHrTab(id)}
-            className={`px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-all border-b-2 -mb-px ${
-              hrTab === id ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'
-            }`}
-          >
-            {label} <span className="ml-1 opacity-60">{n}</span>
+          <button key={id} onClick={() => setHrTab(id)} className={tabBtn(hrTab === id)}>
+            {label} <span className="text-muted tabular-nums">{n}</span>
           </button>
         ))}
       </div>
 
-      {/* Plans Tab */}
+      {/* Plans */}
       {hrTab === 'plans' && (
-        <div className="space-y-4">
+        <div className="flex flex-col gap-4">
           <div className="flex justify-end">
-            <button
-              onClick={() => { setEditingPlan(null); setShowPlanModal(true); }}
-              className="px-4 py-2 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent transition-all"
-            >
-              + New Plan
-            </button>
+            <Button icon="plus" onClick={() => { setEditingPlan(null); setShowPlanModal(true); }}>New plan</Button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {plans.map(p => {
-              const tc = TYPE_COLORS[p.type];
               const active = allEnrollments.filter(e => e.planId === p.id && e.status === 'ACTIVE').length;
               return (
-                <div key={p.id} className={`bg-paper  border p-5 ${p.isActive ? 'border-rule' : 'border-rule opacity-60'}`}>
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-black text-ink">{p.name}</h3>
-                        {!p.isActive && <span className="text-[9px] font-black text-muted uppercase tracking-widest">Inactive</span>}
-                      </div>
-                      <p className="text-xs text-muted mt-0.5 font-bold font-mono">{p.code} · {p.insurerName}</p>
-                    </div>
-                    <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest  ${tc.bg} ${tc.text}`}>
-                      {TYPE_LABELS[p.type]}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 mt-3 text-xs">
-                    <div>
-                      <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Coverage</p>
-                      <p className="text-ink font-black mt-0.5">SGD {p.coverageAmount.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Employer/yr</p>
-                      <p className="text-ink font-black mt-0.5">SGD {p.premiumEmployer}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Active Enrolled</p>
-                      <p className="text-ink font-black mt-0.5">{active}</p>
-                    </div>
+                <Card key={p.id} className={p.isActive ? '' : 'opacity-60'}>
+                  <CardHeader
+                    title={<span className="flex items-center gap-2">{p.name}{!p.isActive && <Chip label="Inactive" />}</span>}
+                    caption={`${p.code} · ${p.insurerName}`}
+                    action={<Chip label={TYPE_LABELS[p.type]} />}
+                  />
+                  <div className="grid grid-cols-3 gap-2 text-[13px]">
+                    <div><p className="text-muted">Coverage</p><p className="font-semibold text-ink tabular-nums">{sgd(p.coverageAmount)}</p></div>
+                    <div><p className="text-muted">Employer/yr</p><p className="font-semibold text-ink tabular-nums">{sgd(p.premiumEmployer)}</p></div>
+                    <div><p className="text-muted">Active enrolled</p><p className="font-semibold text-ink tabular-nums">{active}</p></div>
                   </div>
                   <div className="mt-4 flex gap-2">
-                    <button
-                      onClick={() => { setEditingPlan(p); setShowPlanModal(true); }}
-                      className="flex-1 py-1.5 text-xs font-bold text-accent border border-accent hover:bg-page transition-all"
-                    >
-                      Edit
-                    </button>
+                    <Button variant="secondary" size="sm" className="flex-1" onClick={() => { setEditingPlan(p); setShowPlanModal(true); }}>Edit</Button>
                     {p.isActive && (
-                      <button
-                        onClick={() => {
-                          if (confirm(`Deactivate ${p.name}?`)) {
-                            apiFetch(`/benefits/plans/${p.id}`, { method: 'DELETE' })
-                              .then(r => r.ok ? loadData() : r.json().then((e: any) => alert(e.error || 'Failed')));
-                          }
-                        }}
-                        className="py-1.5 px-3 text-xs font-bold text-ink border border-ink hover:bg-page transition-all"
-                      >
-                        Deactivate
-                      </button>
+                      <Button variant="danger" size="sm" onClick={() => {
+                        if (confirm(`Deactivate ${p.name}?`)) {
+                          apiFetchRaw(`/benefits/plans/${p.id}`, { method: 'DELETE' })
+                            .then(r => r.ok ? loadData() : r.json().then((e: any) => alert(e.error || 'Failed')));
+                        }
+                      }}>Deactivate</Button>
                     )}
                   </div>
-                </div>
+                </Card>
               );
             })}
           </div>
         </div>
       )}
 
-      {/* Enrollments Tab */}
+      {/* Enrollments */}
       {hrTab === 'enrollments' && (
-        <div className="bg-paper border border-rule overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-page border-b border-rule">
-              <tr>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Employee</th>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Plan</th>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Source</th>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Effective From</th>
-                <th className="px-4 py-3 text-right text-[10px] font-black text-muted uppercase tracking-widest">Premium/yr</th>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {allEnrollments.map(e => (
-                <tr key={e.id} className="border-b border-rule last:border-0">
-                  <td className="px-4 py-3 text-sm font-bold text-ink">{e.employeeName}</td>
-                  <td className="px-4 py-3 text-sm text-ink">{e.plan?.name || e.planId}</td>
-                  <td className="px-4 py-3 text-xs text-muted uppercase tracking-wider font-bold">{(e as any).enrollmentSource}</td>
-                  <td className="px-4 py-3 text-sm text-ink">{new Date(e.effectiveFrom).toLocaleDateString('en-SG')}</td>
-                  <td className="px-4 py-3 text-sm text-ink font-bold text-right">SGD {e.annualPremiumEmployer}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[e.status] || 'bg-page text-ink'}`}>
-                      {e.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable<Enrollment>
+          aria-label="Enrollments"
+          rows={allEnrollments}
+          rowKey={(e) => e.id}
+          empty="No enrollments yet."
+          columns={[
+            { key: 'emp', label: 'Employee', width: 'minmax(0,1.4fr)', render: (e) => <span className="font-semibold text-ink">{e.employeeName}</span> },
+            { key: 'plan', label: 'Plan', render: (e) => e.plan?.name || e.planId },
+            { key: 'src', label: 'Source', render: (e) => <span className="text-muted">{sentence(String((e as any).enrollmentSource ?? ''))}</span> },
+            { key: 'eff', label: 'Effective', numeric: true, render: (e) => fmtDate(e.effectiveFrom) },
+            { key: 'prem', label: 'Premium/yr', numeric: true, align: 'right', render: (e) => sgd(e.annualPremiumEmployer) },
+            { key: 'status', label: 'Status', width: '120px', render: (e) => <StatusChip status={e.status} /> },
+          ]}
+          mobileCard={(e) => (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between gap-2"><span className="font-semibold text-ink">{e.employeeName}</span><StatusChip status={e.status} /></div>
+              <span className="text-[13px] text-muted">{e.plan?.name || e.planId} · {fmtDate(e.effectiveFrom)} · <span className="tabular-nums">{sgd(e.annualPremiumEmployer)}/yr</span></span>
+            </div>
+          )}
+        />
       )}
 
-      {/* Claims Tab */}
+      {/* Claims */}
       {hrTab === 'claims' && (
-        <div className="bg-paper border border-rule overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-page border-b border-rule">
-              <tr>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Claim #</th>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Employee</th>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Treatment</th>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Date</th>
-                <th className="px-4 py-3 text-right text-[10px] font-black text-muted uppercase tracking-widest">Claim</th>
-                <th className="px-4 py-3 text-right text-[10px] font-black text-muted uppercase tracking-widest">Approved</th>
-                <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Status</th>
-                <th className="px-4 py-3 text-right"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {allClaims.map(c => (
-                <tr key={c.id} className="border-b border-rule last:border-0">
-                  <td className="px-4 py-3 text-xs font-mono font-bold text-ink">{c.claimNumber}</td>
-                  <td className="px-4 py-3 text-sm text-ink">{c.employeeName}</td>
-                  <td className="px-4 py-3 text-sm text-ink">{c.treatmentType}</td>
-                  <td className="px-4 py-3 text-sm text-ink">{new Date(c.treatmentDate).toLocaleDateString('en-SG')}</td>
-                  <td className="px-4 py-3 text-sm font-bold text-right">SGD {c.claimAmount}</td>
-                  <td className="px-4 py-3 text-sm font-bold text-right">{c.approvedAmount !== null ? `SGD ${c.approvedAmount}` : '—'}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[c.status] || 'bg-page text-ink'}`}>
-                      {c.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right space-x-1">
-                    {(c.status === 'SUBMITTED' || c.status === 'UNDER_REVIEW') && (
-                      <>
-                        <button onClick={() => approveClaim(c.id)} className="text-xs font-bold text-accent hover:text-accent px-2">Approve</button>
-                        <button onClick={() => rejectClaim(c.id)}  className="text-xs font-bold text-ink hover:text-ink px-2">Reject</button>
-                      </>
-                    )}
-                    {c.status === 'APPROVED' && (
-                      <button onClick={() => reimburseClaim(c.id)} className="text-xs font-bold text-accent hover:text-accent px-2">Mark Reimbursed</button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable<Claim>
+          aria-label="Claims"
+          rows={allClaims}
+          rowKey={(c) => c.id}
+          empty="No claims yet."
+          columns={[
+            { key: 'num', label: 'Claim #', render: (c) => <span className="tabular-nums">{c.claimNumber}</span> },
+            { key: 'emp', label: 'Employee', render: (c) => c.employeeName },
+            { key: 'treat', label: 'Treatment', render: (c) => c.treatmentType },
+            { key: 'date', label: 'Date', numeric: true, render: (c) => fmtDate(c.treatmentDate) },
+            { key: 'claim', label: 'Claim', numeric: true, align: 'right', render: (c) => sgd(c.claimAmount) },
+            { key: 'appr', label: 'Approved', numeric: true, align: 'right', render: (c) => c.approvedAmount !== null ? sgd(c.approvedAmount) : '—' },
+            { key: 'status', label: 'Status', width: '124px', render: (c) => <StatusChip status={c.status} /> },
+            { key: 'action', label: '', width: 'minmax(160px,0.9fr)', align: 'right', render: (c) => (
+              <span className="flex justify-end gap-1">
+                {(c.status === 'SUBMITTED' || c.status === 'UNDER_REVIEW') && (<>
+                  <Button variant="ghost" size="sm" onClick={() => approveClaim(c.id)}>Approve</Button>
+                  <Button variant="ghost" size="sm" onClick={() => rejectClaim(c.id)}>Reject</Button>
+                </>)}
+                {c.status === 'APPROVED' && <Button variant="ghost" size="sm" onClick={() => reimburseClaim(c.id)}>Mark reimbursed</Button>}
+              </span>
+            ) },
+          ]}
+          mobileCard={(c) => (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between gap-2"><span className="font-semibold text-ink">{c.employeeName}</span><StatusChip status={c.status} /></div>
+              <span className="text-[13px] text-muted tabular-nums">{c.claimNumber} · {c.treatmentType} · {sgd(c.claimAmount)}</span>
+              <span className="flex gap-1">
+                {(c.status === 'SUBMITTED' || c.status === 'UNDER_REVIEW') && (<>
+                  <Button variant="ghost" size="sm" onClick={() => approveClaim(c.id)}>Approve</Button>
+                  <Button variant="ghost" size="sm" onClick={() => rejectClaim(c.id)}>Reject</Button>
+                </>)}
+                {c.status === 'APPROVED' && <Button variant="ghost" size="sm" onClick={() => reimburseClaim(c.id)}>Mark reimbursed</Button>}
+              </span>
+            </div>
+          )}
+        />
       )}
 
-      {/* Open Enrollment Tab */}
+      {/* Open enrollment */}
       {hrTab === 'openEnroll' && (
-        <div className="space-y-4">
+        <div className="flex flex-col gap-4">
           <div className="flex justify-end">
-            <button
-              onClick={() => setShowPeriodModal(true)}
-              className="px-4 py-2 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent transition-all"
-            >
-              + New Period
-            </button>
+            <Button icon="plus" onClick={() => setShowPeriodModal(true)}>New period</Button>
           </div>
-          <div className="bg-paper border border-rule overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-page border-b border-rule">
-                <tr>
-                  <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Name</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Year</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Window</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Plans</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Status</th>
-                  <th className="px-4 py-3 text-right"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {allPeriods.map(p => (
-                  <tr key={p.id} className="border-b border-rule last:border-0">
-                    <td className="px-4 py-3 text-sm font-bold text-ink">{p.name}</td>
-                    <td className="px-4 py-3 text-sm text-ink">{p.year}</td>
-                    <td className="px-4 py-3 text-sm text-ink">
-                      {new Date(p.startDate).toLocaleDateString('en-SG')} → {new Date(p.endDate).toLocaleDateString('en-SG')}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-ink">{p.planIds.length || 'All'}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest  ${
-                        p.status === 'ACTIVE'    ? 'bg-page text-accent' :
-                        p.status === 'SCHEDULED' ? 'bg-page text-accent' :
-                                                    'bg-page text-ink'
-                      }`}>
-                        {p.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {p.status !== 'CLOSED' && (
-                        <button onClick={() => closePeriod(p.id)} className="text-xs font-bold text-muted hover:text-ink">Close</button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable<OpenEnrollmentPeriod>
+            aria-label="Open enrollment periods"
+            rows={allPeriods}
+            rowKey={(p) => p.id}
+            empty="No open enrollment periods yet."
+            columns={[
+              { key: 'name', label: 'Name', width: 'minmax(0,1.4fr)', render: (p) => <span className="font-semibold text-ink">{p.name}</span> },
+              { key: 'year', label: 'Year', numeric: true, render: (p) => p.year },
+              { key: 'window', label: 'Window', width: 'minmax(0,1.4fr)', render: (p) => <span className="tabular-nums">{fmtDate(p.startDate)} → {fmtDate(p.endDate)}</span> },
+              { key: 'plans', label: 'Plans', render: (p) => p.planIds.length || 'All' },
+              { key: 'status', label: 'Status', width: '120px', render: (p) => <StatusChip status={p.status} /> },
+              { key: 'action', label: '', width: '90px', align: 'right', render: (p) => p.status !== 'CLOSED' ? <Button variant="ghost" size="sm" onClick={() => closePeriod(p.id)}>Close</Button> : null },
+            ]}
+            mobileCard={(p) => (
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between gap-2"><span className="font-semibold text-ink">{p.name}</span><StatusChip status={p.status} /></div>
+                <span className="text-[13px] text-muted tabular-nums">{p.year} · {fmtDate(p.startDate)} → {fmtDate(p.endDate)}</span>
+                {p.status !== 'CLOSED' && <Button variant="ghost" size="sm" className="self-start" onClick={() => closePeriod(p.id)}>Close</Button>}
+              </div>
+            )}
+          />
         </div>
       )}
 
-      {/* Flexi Benefits Tab */}
+      {/* Flexi benefits */}
       {hrTab === 'flexi' && (
-        <div className="space-y-4">
-          {/* Sub-tab strip */}
-          <div className="flex gap-1 border-b border-rule">
+        <div className="flex flex-col gap-4">
+          <div className="flex gap-5 border-b border-rule flex-wrap">
             {([
-              ['wallets', 'Wallets',  allFlexiWallets.length],
-              ['claims',  'Claims',   allFlexiClaims.length],
-              ['config',  'Config',   flexiConfigs.length],
-              ['yearend', 'Year-End', 0],
+              ['wallets', 'Wallets', allFlexiWallets.length],
+              ['claims', 'Claims', allFlexiClaims.length],
+              ['config', 'Config', flexiConfigs.length],
+              ['yearend', 'Year-end', 0],
             ] as const).map(([id, label, n]) => (
-              <button
-                key={id}
-                onClick={() => setFlexiSubTab(id)}
-                className={`px-4 py-2 text-xs font-black uppercase tracking-widest transition-all border-b-2 -mb-px ${
-                  flexiSubTab === id ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'
-                }`}
-              >
-                {label}{n > 0 && <span className="ml-1 opacity-60">{n}</span>}
+              <button key={id} onClick={() => setFlexiSubTab(id)} className={tabBtn(flexiSubTab === id)}>
+                {label}{n > 0 && <span className="text-muted tabular-nums"> {n}</span>}
               </button>
             ))}
           </div>
 
-          {/* Year selector + seed */}
-          <div className="flex items-center gap-3">
-            <label className="text-xs font-black text-muted uppercase tracking-widest">Year</label>
-            <select
-              value={flexiYear}
-              onChange={e => setFlexiYear(parseInt(e.target.value))}
-              className="border border-rule px-3 py-1.5 text-sm font-bold text-ink outline-none focus:border-accent"
-            >
-              {[flexiYear - 1, flexiYear, flexiYear + 1].map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
-            <button
-              onClick={() => loadData()}
-              className="px-3 py-1.5 text-xs font-black uppercase tracking-widest border border-rule hover:bg-page transition-all"
-            >
-              Refresh
-            </button>
-            <button
-              onClick={seedFlexiCategories}
-              className="px-3 py-1.5 text-xs font-black uppercase tracking-widest border border-accent text-accent hover:bg-page transition-all"
-            >
-              Seed Categories
-            </button>
+          <div className="flex flex-wrap items-end gap-3">
+            <Field label="Year" className="w-28">
+              <Select value={flexiYear} onChange={e => setFlexiYear(parseInt(e.target.value))}>
+                {[flexiYear - 1, flexiYear, flexiYear + 1].map(y => <option key={y} value={y}>{y}</option>)}
+              </Select>
+            </Field>
+            <Button variant="secondary" onClick={() => loadData()}>Refresh</Button>
+            <Button variant="secondary" onClick={seedFlexiCategories}>Seed categories</Button>
           </div>
 
-          {/* ── Wallets sub-tab ── */}
           {flexiSubTab === 'wallets' && (
-            <div className="space-y-4">
-              {/* Dashboard stats */}
+            <div className="flex flex-col gap-4">
               {flexiDashboard && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <StatCard label="Active Wallets"   value={flexiDashboard.activeWallets || 0}                                          accent="emerald" />
-                  <StatCard label="Total Credited"   value={`SGD ${(flexiDashboard.totalCredited || 0).toLocaleString()}`}              accent="blue" />
-                  <StatCard label="Total Used"       value={`SGD ${(flexiDashboard.totalUsed || 0).toLocaleString()}`}                  accent="violet" />
-                  <StatCard label="Total Remaining"  value={`SGD ${(flexiDashboard.totalRemaining || 0).toLocaleString()}`}             accent="teal" />
+                  <Stat label="Active wallets" value={<span className="tabular-nums">{flexiDashboard.activeWallets || 0}</span>} />
+                  <Stat label="Total credited" value={<span className="tabular-nums">{sgd(flexiDashboard.totalCredited)}</span>} />
+                  <Stat label="Total used" value={<span className="tabular-nums">{sgd(flexiDashboard.totalUsed)}</span>} />
+                  <Stat label="Total remaining" value={<span className="tabular-nums">{sgd(flexiDashboard.totalRemaining)}</span>} />
                 </div>
               )}
               <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => setShowFlexiCreditModal(true)}
-                  className="px-4 py-2 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent transition-all"
-                >
-                  + Credit Wallet
-                </button>
-                <button
-                  onClick={async () => {
-                    if (!confirm('Credit flexi wallets for ALL active employees based on their grade? This uses the batch endpoint.')) return;
-                    const res = await apiFetch('/benefits/flexi-wallets/credit-batch', {
-                      method: 'POST', headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ year: flexiYear }),
-                    });
-                    if (res.ok) { const d = await res.json(); alert(`Credited ${d.credited} wallets (${d.skipped} skipped).`); loadData(); }
-                    else alert((await res.json()).error || 'Failed');
-                  }}
-                  className="px-4 py-2 border border-accent text-accent text-xs font-black uppercase tracking-widest hover:bg-page transition-all"
-                >
-                  Batch Credit All
-                </button>
+                <Button icon="plus" onClick={() => setShowFlexiCreditModal(true)}>Credit wallet</Button>
+                <Button variant="secondary" onClick={async () => {
+                  if (!confirm('Credit flexi wallets for ALL active employees based on their grade? This uses the batch endpoint.')) return;
+                  const res = await apiFetchRaw('/benefits/flexi-wallets/credit-batch', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ year: flexiYear }),
+                  });
+                  if (res.ok) { const d = await res.json(); alert(`Credited ${d.credited} wallets (${d.skipped} skipped).`); loadData(); }
+                  else alert((await res.json()).error || 'Failed');
+                }}>Batch credit all</Button>
               </div>
-              <div className="bg-paper border border-rule overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-page border-b border-rule">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Employee</th>
-                      <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Grade</th>
-                      <th className="px-4 py-3 text-right text-[10px] font-black text-muted uppercase tracking-widest">Credited</th>
-                      <th className="px-4 py-3 text-right text-[10px] font-black text-muted uppercase tracking-widest">Used</th>
-                      <th className="px-4 py-3 text-right text-[10px] font-black text-muted uppercase tracking-widest">Remaining</th>
-                      <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Expires</th>
-                      <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allFlexiWallets.length === 0 ? (
-                      <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-muted">No wallets for {flexiYear}.</td></tr>
-                    ) : allFlexiWallets.map(w => (
-                      <tr key={w.id} className="border-b border-rule last:border-0 hover:bg-page">
-                        <td className="px-4 py-3 text-sm font-bold text-ink">{w.employeeName}</td>
-                        <td className="px-4 py-3 text-xs font-black text-muted">{w.employeeGrade || '—'}</td>
-                        <td className="px-4 py-3 text-sm text-right">SGD {w.creditedAmount.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-sm text-right">SGD {w.usedAmount.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-sm font-bold text-right text-accent">
-                          SGD {(w.creditedAmount - w.usedAmount).toLocaleString()}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-muted">
-                          {new Date(w.expiresAt).toLocaleDateString('en-SG')}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest  ${
-                            w.status === 'ACTIVE' ? 'bg-page text-accent' : 'bg-page text-ink'
-                          }`}>{w.status}</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable<FlexiWallet>
+                aria-label="Flexi wallets"
+                rows={allFlexiWallets}
+                rowKey={(w) => w.id}
+                empty={`No wallets for ${flexiYear}.`}
+                columns={[
+                  { key: 'emp', label: 'Employee', width: 'minmax(0,1.4fr)', render: (w) => <span className="font-semibold text-ink">{w.employeeName}</span> },
+                  { key: 'grade', label: 'Grade', render: (w) => w.employeeGrade || '—' },
+                  { key: 'credited', label: 'Credited', numeric: true, align: 'right', render: (w) => sgd(w.creditedAmount) },
+                  { key: 'used', label: 'Used', numeric: true, align: 'right', render: (w) => sgd(w.usedAmount) },
+                  { key: 'remaining', label: 'Remaining', numeric: true, align: 'right', render: (w) => <span className="font-semibold text-accent">{sgd(w.creditedAmount - w.usedAmount)}</span> },
+                  { key: 'expires', label: 'Expires', numeric: true, render: (w) => fmtDate(w.expiresAt) },
+                  { key: 'status', label: 'Status', width: '110px', render: (w) => <StatusChip status={w.status} /> },
+                ]}
+                mobileCard={(w) => (
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between gap-2"><span className="font-semibold text-ink">{w.employeeName}</span><StatusChip status={w.status} /></div>
+                    <span className="text-[13px] text-muted tabular-nums">Remaining {sgd(w.creditedAmount - w.usedAmount)} of {sgd(w.creditedAmount)}</span>
+                  </div>
+                )}
+              />
             </div>
           )}
 
-          {/* ── Claims sub-tab ── */}
           {flexiSubTab === 'claims' && (
-            <div className="bg-paper border border-rule overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-page border-b border-rule">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Claim #</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Employee</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Category</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Description</th>
-                    <th className="px-4 py-3 text-right text-[10px] font-black text-muted uppercase tracking-widest">Amount</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Status</th>
-                    <th className="px-4 py-3 text-right"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {allFlexiClaims.length === 0 ? (
-                    <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-muted">No claims for {flexiYear}.</td></tr>
-                  ) : allFlexiClaims.map(c => (
-                    <tr key={c.id} className="border-b border-rule last:border-0 hover:bg-page">
-                      <td className="px-4 py-3 text-xs font-mono font-bold text-ink">{c.claimNumber}</td>
-                      <td className="px-4 py-3 text-sm text-ink">{c.employeeName}</td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest  ${CATEGORY_COLORS[c.categoryCode] || 'bg-page text-ink'}`}>
-                          {c.categoryName}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-ink max-w-[150px] truncate">{c.description}</td>
-                      <td className="px-4 py-3 text-sm font-bold text-right">SGD {c.claimAmount}</td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest  ${STATUS_COLORS[c.status] || 'bg-page text-ink'}`}>
-                          {c.status}{c.autoApproved && c.status === 'APPROVED' ? ' (auto)' : ''}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right space-x-1">
-                        {c.status === 'PENDING' && (
-                          <>
-                            <button onClick={() => approveFlexiClaim(c.id, c.claimAmount)} className="text-xs font-bold text-accent hover:text-accent px-2">Approve</button>
-                            <button onClick={() => rejectFlexiClaim(c.id)}                  className="text-xs font-bold text-ink hover:text-ink px-2">Reject</button>
-                          </>
-                        )}
-                        {c.status === 'APPROVED' && (
-                          <button onClick={() => rejectFlexiClaim(c.id)} className="text-xs font-bold text-ink hover:text-ink px-2">Reverse</button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable<FlexiClaim>
+              aria-label="Flexi claims"
+              rows={allFlexiClaims}
+              rowKey={(c) => c.id}
+              empty={`No claims for ${flexiYear}.`}
+              columns={[
+                { key: 'num', label: 'Claim #', render: (c) => <span className="tabular-nums">{c.claimNumber}</span> },
+                { key: 'emp', label: 'Employee', render: (c) => c.employeeName },
+                { key: 'cat', label: 'Category', render: (c) => <Chip label={c.categoryName} cls="bg-tint text-accent" /> },
+                { key: 'desc', label: 'Description', width: 'minmax(0,1.4fr)', render: (c) => c.description },
+                { key: 'amt', label: 'Amount', numeric: true, align: 'right', render: (c) => sgd(c.claimAmount) },
+                { key: 'status', label: 'Status', width: '140px', render: (c) => <StatusChip status={c.status} extra={c.autoApproved && c.status === 'APPROVED' ? ' (auto)' : ''} /> },
+                { key: 'action', label: '', width: 'minmax(150px,0.8fr)', align: 'right', render: (c) => (
+                  <span className="flex justify-end gap-1">
+                    {c.status === 'PENDING' && (<>
+                      <Button variant="ghost" size="sm" onClick={() => approveFlexiClaim(c.id, c.claimAmount)}>Approve</Button>
+                      <Button variant="ghost" size="sm" onClick={() => rejectFlexiClaim(c.id)}>Reject</Button>
+                    </>)}
+                    {c.status === 'APPROVED' && <Button variant="ghost" size="sm" onClick={() => rejectFlexiClaim(c.id)}>Reverse</Button>}
+                  </span>
+                ) },
+              ]}
+              mobileCard={(c) => (
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2"><span className="font-semibold text-ink">{c.employeeName}</span><StatusChip status={c.status} extra={c.autoApproved && c.status === 'APPROVED' ? ' (auto)' : ''} /></div>
+                  <span className="text-[13px] text-muted tabular-nums">{c.claimNumber} · {c.categoryName} · {sgd(c.claimAmount)}</span>
+                  <span className="flex gap-1">
+                    {c.status === 'PENDING' && (<>
+                      <Button variant="ghost" size="sm" onClick={() => approveFlexiClaim(c.id, c.claimAmount)}>Approve</Button>
+                      <Button variant="ghost" size="sm" onClick={() => rejectFlexiClaim(c.id)}>Reject</Button>
+                    </>)}
+                    {c.status === 'APPROVED' && <Button variant="ghost" size="sm" onClick={() => rejectFlexiClaim(c.id)}>Reverse</Button>}
+                  </span>
+                </div>
+              )}
+            />
           )}
 
-          {/* ── Config sub-tab ── */}
           {flexiSubTab === 'config' && (
-            <div className="space-y-4">
-              <p className="text-xs text-muted">Configure annual wallet amounts and auto-approve thresholds by employment grade.</p>
-              <div className="bg-paper border border-rule overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-page border-b border-rule">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Grade</th>
-                      <th className="px-4 py-3 text-right text-[10px] font-black text-muted uppercase tracking-widest">Annual Amount (SGD)</th>
-                      <th className="px-4 py-3 text-right text-[10px] font-black text-muted uppercase tracking-widest">Auto-Approve ≤ (SGD)</th>
-                      <th className="px-4 py-3 text-left text-[10px] font-black text-muted uppercase tracking-widest">Source</th>
-                      <th className="px-4 py-3 text-right"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {flexiConfigs.map(cfg => (
-                      <tr key={cfg.grade} className="border-b border-rule last:border-0 hover:bg-page">
-                        <td className="px-4 py-3 text-sm font-black text-ink">{cfg.grade}</td>
-                        <td className="px-4 py-3 text-sm font-bold text-right">{cfg.annualAmount.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-sm text-right">{cfg.autoApproveThreshold}</td>
-                        <td className="px-4 py-3">
-                          {cfg.isDefault
-                            ? <span className="px-2 py-1 text-[10px] font-black uppercase tracking-widest bg-page text-muted">Default</span>
-                            : <span className="px-2 py-1 text-[10px] font-black uppercase tracking-widest bg-page text-accent">Custom</span>}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={async () => {
-                              const amtStr = window.prompt(`Annual amount for ${cfg.grade} (SGD):`, String(cfg.annualAmount));
-                              if (!amtStr) return;
-                              const thrStr = window.prompt(`Auto-approve threshold for ${cfg.grade} (SGD, 0 = disabled):`, String(cfg.autoApproveThreshold));
-                              if (thrStr === null) return;
-                              const res = await apiFetch('/benefits/flexi-config', {
-                                method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ grade: cfg.grade, annualAmount: parseFloat(amtStr) || 0, autoApproveThreshold: parseFloat(thrStr) || 0 }),
-                              });
-                              if (res.ok) loadData();
-                              else alert((await res.json()).error || 'Failed');
-                            }}
-                            className="text-xs font-bold text-accent hover:text-accent"
-                          >
-                            Edit
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <div className="flex flex-col gap-3">
+              <p className="text-[13px] text-muted">Configure annual wallet amounts and auto-approve thresholds by employment grade.</p>
+              <DataTable<FlexiWalletConfig>
+                aria-label="Flexi wallet config"
+                rows={flexiConfigs}
+                rowKey={(cfg) => cfg.grade}
+                empty="No grades configured yet."
+                columns={[
+                  { key: 'grade', label: 'Grade', render: (cfg) => <span className="font-semibold text-ink">{cfg.grade}</span> },
+                  { key: 'annual', label: 'Annual amount', numeric: true, align: 'right', render: (cfg) => sgd(cfg.annualAmount) },
+                  { key: 'auto', label: 'Auto-approve ≤', numeric: true, align: 'right', render: (cfg) => sgd(cfg.autoApproveThreshold) },
+                  { key: 'src', label: 'Source', render: (cfg) => <Chip label={cfg.isDefault ? 'Default' : 'Custom'} cls={cfg.isDefault ? 'bg-pill text-muted' : 'bg-tint text-accent'} /> },
+                  { key: 'action', label: '', width: '90px', align: 'right', render: (cfg) => (
+                    <Button variant="ghost" size="sm" onClick={async () => {
+                      const amtStr = window.prompt(`Annual amount for ${cfg.grade} (SGD):`, String(cfg.annualAmount));
+                      if (!amtStr) return;
+                      const thrStr = window.prompt(`Auto-approve threshold for ${cfg.grade} (SGD, 0 = disabled):`, String(cfg.autoApproveThreshold));
+                      if (thrStr === null) return;
+                      const res = await apiFetchRaw('/benefits/flexi-config', {
+                        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ grade: cfg.grade, annualAmount: parseFloat(amtStr) || 0, autoApproveThreshold: parseFloat(thrStr) || 0 }),
+                      });
+                      if (res.ok) loadData();
+                      else alert((await res.json()).error || 'Failed');
+                    }}>Edit</Button>
+                  ) },
+                ]}
+                mobileCard={(cfg) => (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex flex-col"><span className="font-semibold text-ink">{cfg.grade}</span><span className="text-[13px] text-muted tabular-nums">{sgd(cfg.annualAmount)} · auto ≤ {sgd(cfg.autoApproveThreshold)}</span></span>
+                    <Chip label={cfg.isDefault ? 'Default' : 'Custom'} cls={cfg.isDefault ? 'bg-pill text-muted' : 'bg-tint text-accent'} />
+                  </div>
+                )}
+              />
             </div>
           )}
 
-          {/* ── Year-End sub-tab ── */}
           {flexiSubTab === 'yearend' && (
-            <div className="space-y-6">
-              <div className="bg-page border border-highlight p-4">
-                <p className="text-sm font-black text-ink">Year-End Processing — {flexiYear}</p>
-                <p className="text-xs text-ink mt-1">
-                  This marks all ACTIVE wallets for {flexiYear} as EXPIRED and either encashes remaining balances via payroll or forfeits them. This action is irreversible.
+            <div className="flex flex-col gap-5">
+              <Card className="border-highlight">
+                <p className="text-[15.5px] font-bold text-ink">Year-end processing — {flexiYear}</p>
+                <p className="text-[13px] text-muted mt-1">
+                  This marks all active wallets for {flexiYear} as expired and either encashes remaining balances via payroll or forfeits them. This action is irreversible.
                 </p>
+              </Card>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={loadYearEndPreview}>Preview</Button>
+                <Button variant="danger" onClick={() => runFlexiYearEnd(false)}>Forfeit unused balances</Button>
+                <Button onClick={() => runFlexiYearEnd(true)}>Encash to payroll</Button>
               </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={loadYearEndPreview}
-                  className="px-4 py-2 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page transition-all"
-                >
-                  Preview
-                </button>
-                <button
-                  onClick={() => runFlexiYearEnd(false)}
-                  className="px-4 py-2 border border-ink text-ink text-xs font-black uppercase tracking-widest hover:bg-page transition-all"
-                >
-                  Forfeit Unused Balances
-                </button>
-                <button
-                  onClick={() => runFlexiYearEnd(true)}
-                  className="px-4 py-2 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent transition-all"
-                >
-                  Encash to Payroll
-                </button>
-              </div>
-
               {flexiYearEndPreview && (
-                <div className="bg-paper border border-rule p-5 space-y-4">
-                  <h3 className="text-sm font-black text-ink">Preview — {flexiYearEndPreview.year}</h3>
-                  <div className="grid grid-cols-3 gap-4 text-xs">
-                    <div>
-                      <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Active Wallets</p>
-                      <p className="text-2xl font-black text-ink mt-1">{flexiYearEndPreview.totalWallets}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Total Credited</p>
-                      <p className="text-2xl font-black text-ink mt-1">SGD {(flexiYearEndPreview.totalCredited || 0).toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted font-bold uppercase tracking-wider text-[9px]">Total Remaining</p>
-                      <p className="text-2xl font-black text-accent mt-1">SGD {(flexiYearEndPreview.totalRemaining || 0).toLocaleString()}</p>
-                    </div>
+                <Card className="gap-4">
+                  <h3 className="text-[15.5px] font-bold text-ink">Preview — {flexiYearEndPreview.year}</h3>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div><p className="text-[12.5px] font-semibold text-muted">Active wallets</p><p className="text-2xl font-extrabold text-ink tabular-nums mt-1">{flexiYearEndPreview.totalWallets}</p></div>
+                    <div><p className="text-[12.5px] font-semibold text-muted">Total credited</p><p className="text-2xl font-extrabold text-ink tabular-nums mt-1">{sgd(flexiYearEndPreview.totalCredited)}</p></div>
+                    <div><p className="text-[12.5px] font-semibold text-muted">Total remaining</p><p className="text-2xl font-extrabold text-accent tabular-nums mt-1">{sgd(flexiYearEndPreview.totalRemaining)}</p></div>
                   </div>
                   {flexiYearEndPreview.byGrade && Object.keys(flexiYearEndPreview.byGrade).length > 0 && (
                     <div>
-                      <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-2">By Grade</p>
-                      <div className="space-y-1">
+                      <p className="text-[12.5px] font-semibold text-muted mb-2">By grade</p>
+                      <div className="flex flex-col">
                         {Object.entries(flexiYearEndPreview.byGrade).map(([grade, data]: [string, any]) => (
-                          <div key={grade} className="flex items-center justify-between py-1.5 border-b border-rule last:border-0 text-xs">
-                            <span className="font-black text-ink">{grade}</span>
-                            <span className="text-muted">{data.count} wallets · SGD {(data.remaining || 0).toLocaleString()} remaining</span>
+                          <div key={grade} className="flex items-center justify-between py-1.5 border-b border-rule last:border-0 text-[13px]">
+                            <span className="font-semibold text-ink">{grade}</span>
+                            <span className="text-muted tabular-nums">{data.count} wallets · {sgd(data.remaining)} remaining</span>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
-                </div>
+                </Card>
               )}
             </div>
           )}
@@ -1341,42 +671,16 @@ export default function BenefitsPage() {
 
       {/* Modals */}
       {showPlanModal && (
-        <PlanModal
-          plan={editingPlan}
+        <PlanModal plan={editingPlan}
           onClose={() => { setShowPlanModal(false); setEditingPlan(null); }}
-          onSuccess={() => { setShowPlanModal(false); setEditingPlan(null); loadData(); }}
-        />
+          onSuccess={() => { setShowPlanModal(false); setEditingPlan(null); loadData(); }} />
       )}
       {showPeriodModal && (
-        <PeriodModal
-          plans={plans}
-          onClose={() => setShowPeriodModal(false)}
-          onSuccess={() => { setShowPeriodModal(false); loadData(); }}
-        />
+        <PeriodModal plans={plans} onClose={() => setShowPeriodModal(false)} onSuccess={() => { setShowPeriodModal(false); loadData(); }} />
       )}
       {showFlexiCreditModal && (
-        <FlexiWalletCreditModal
-          year={flexiYear}
-          onClose={() => setShowFlexiCreditModal(false)}
-          onSuccess={() => { setShowFlexiCreditModal(false); loadData(); }}
-        />
+        <FlexiWalletCreditModal year={flexiYear} onClose={() => setShowFlexiCreditModal(false)} onSuccess={() => { setShowFlexiCreditModal(false); loadData(); }} />
       )}
-    </div>
-  );
-}
-
-// ─── StatCard ────────────────────────────────────────────────────────────────
-function StatCard({ label, value, accent }: { label: string; value: string | number; accent: string }) {
-  const colorMap: Record<string, string> = {
-    emerald: 'text-accent',
-    blue:    'text-accent',
-    teal:    'text-accent',
-    violet:  'text-accent',
-  };
-  return (
-    <div className="bg-paper border border-rule p-4">
-      <p className="text-[10px] font-black text-muted uppercase tracking-widest mb-2">{label}</p>
-      <p className={`text-2xl font-black ${colorMap[accent] || 'text-ink'}`}>{value}</p>
     </div>
   );
 }
@@ -1405,7 +709,7 @@ function PlanModal({ plan, onClose, onSuccess }: { plan: Plan | null; onClose: (
     setSaving(true); setError('');
     const url = plan ? `/benefits/plans/${plan.id}` : '/benefits/plans';
     const method = plan ? 'PUT' : 'POST';
-    const res = await apiFetch(url, {
+    const res = await apiFetchRaw(url, {
       method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
     });
     if (res.ok) onSuccess();
@@ -1414,87 +718,41 @@ function PlanModal({ plan, onClose, onSuccess }: { plan: Plan | null; onClose: (
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow backdrop- p-4">
-      <div className="bg-paper w-full max-w-2xl border border-rule max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-rule flex items-center justify-between sticky top-0 bg-paper">
-          <h3 className="text-sm font-black text-ink">{plan ? 'Edit Plan' : 'New Plan'}</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center hover:bg-page text-muted text-lg">×</button>
+    <Modal open size="lg" onClose={onClose} title={plan ? 'Edit plan' : 'New plan'}
+      footer={<>
+        <Button variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button disabled={saving} onClick={save}>{saving ? 'Saving…' : (plan ? 'Update' : 'Create')}</Button>
+      </>}
+    >
+      <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Code" required><Input value={form.code} onChange={e => setForm({...form, code: e.target.value})} disabled={!!plan} /></Field>
+          <Field label="Type" required>
+            <Select value={form.type} onChange={e => setForm({...form, type: e.target.value})}>
+              {PLAN_TYPES.map(t => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
+            </Select>
+          </Field>
         </div>
-        <div className="p-4 sm:p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Code" required>
-              <input value={form.code} onChange={e => setForm({...form, code: e.target.value})} disabled={!!plan} className="input" />
-            </Field>
-            <Field label="Type" required>
-              <select value={form.type} onChange={e => setForm({...form, type: e.target.value})} className="input">
-                {PLAN_TYPES.map(t => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
-              </select>
-            </Field>
-          </div>
-          <Field label="Plan Name" required>
-            <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="input" />
-          </Field>
-          <Field label="Insurer Name" required>
-            <input value={form.insurerName} onChange={e => setForm({...form, insurerName: e.target.value})} className="input" />
-          </Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Coverage Amount (SGD)" required>
-              <input type="number" value={form.coverageAmount} onChange={e => setForm({...form, coverageAmount: parseFloat(e.target.value) || 0})} className="input" />
-            </Field>
-            <Field label="Min Tenure (months)">
-              <input type="number" value={form.minTenureMonths} onChange={e => setForm({...form, minTenureMonths: parseInt(e.target.value) || 0})} className="input" />
-            </Field>
-          </div>
-          <div className="grid grid-cols-3 gap-4">
-            <Field label="Employer Premium/yr" required>
-              <input type="number" value={form.premiumEmployer} onChange={e => setForm({...form, premiumEmployer: parseFloat(e.target.value) || 0})} className="input" />
-            </Field>
-            <Field label="Employee Co-Pay/yr">
-              <input type="number" value={form.premiumEmployee} onChange={e => setForm({...form, premiumEmployee: parseFloat(e.target.value) || 0})} className="input" />
-            </Field>
-            <Field label="Per-Dependent/yr">
-              <input type="number" value={form.premiumDependent} onChange={e => setForm({...form, premiumDependent: parseFloat(e.target.value) || 0})} className="input" />
-            </Field>
-          </div>
-          <Field label="Effective From" required>
-            <input type="date" value={form.effectiveFrom} onChange={e => setForm({...form, effectiveFrom: e.target.value})} className="input" />
-          </Field>
-          <Field label="Description">
-            <textarea rows={2} value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="input resize-none" />
-          </Field>
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={form.bikTaxable} onChange={e => setForm({...form, bikTaxable: e.target.checked})} />
-              BIK Taxable (IR8A)
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={form.coversDependents} onChange={e => setForm({...form, coversDependents: e.target.checked})} />
-              Covers Dependents
-            </label>
-          </div>
-          {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
-          <div className="flex gap-3 pt-2">
-            <button onClick={save} disabled={saving} className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
-              {saving ? 'Saving…' : (plan ? 'Update' : 'Create')}
-            </button>
-            <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
-          </div>
+        <Field label="Plan name" required><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></Field>
+        <Field label="Insurer name" required><Input value={form.insurerName} onChange={e => setForm({...form, insurerName: e.target.value})} /></Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Coverage amount (SGD)" required><Input type="number" value={form.coverageAmount} onChange={e => setForm({...form, coverageAmount: parseFloat(e.target.value) || 0})} /></Field>
+          <Field label="Min tenure (months)"><Input type="number" value={form.minTenureMonths} onChange={e => setForm({...form, minTenureMonths: parseInt(e.target.value) || 0})} /></Field>
         </div>
+        <div className="grid grid-cols-3 gap-4">
+          <Field label="Employer premium/yr" required><Input type="number" value={form.premiumEmployer} onChange={e => setForm({...form, premiumEmployer: parseFloat(e.target.value) || 0})} /></Field>
+          <Field label="Employee co-pay/yr"><Input type="number" value={form.premiumEmployee} onChange={e => setForm({...form, premiumEmployee: parseFloat(e.target.value) || 0})} /></Field>
+          <Field label="Per-dependent/yr"><Input type="number" value={form.premiumDependent} onChange={e => setForm({...form, premiumDependent: parseFloat(e.target.value) || 0})} /></Field>
+        </div>
+        <Field label="Effective from" required><Input type="date" value={form.effectiveFrom} onChange={e => setForm({...form, effectiveFrom: e.target.value})} /></Field>
+        <Field label="Description"><Textarea rows={2} value={form.description} onChange={e => setForm({...form, description: e.target.value})} /></Field>
+        <div className="flex flex-wrap gap-4">
+          <label className="flex items-center gap-2 text-sm text-ink"><input type="checkbox" className="w-4 h-4 accent-accent" checked={form.bikTaxable} onChange={e => setForm({...form, bikTaxable: e.target.checked})} /> BIK taxable (IR8A)</label>
+          <label className="flex items-center gap-2 text-sm text-ink"><input type="checkbox" className="w-4 h-4 accent-accent" checked={form.coversDependents} onChange={e => setForm({...form, coversDependents: e.target.checked})} /> Covers dependents</label>
+        </div>
+        {error && <p className="text-sm text-danger font-semibold">{error}</p>}
       </div>
-      <style jsx>{`
-        :global(.input) {
-          width: 100%; border: 1px solid var(--rule);
-          padding: 0.6rem 0.9rem; font-size: 0.875rem; outline: none;
-          transition: all 0.15s;
-        }
-        :global(.input:focus) {
-          border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
-        }
-        :global(.input:disabled) {
-          background: rgb(248 250 252); cursor: not-allowed;
-        }
-      `}</style>
-    </div>
+    </Modal>
   );
 }
 
@@ -1509,7 +767,7 @@ function EnrollModal({ plan, dependents, onClose, onSuccess }: {
 
   async function enroll() {
     setSaving(true); setError('');
-    const res = await apiFetch('/benefits/enrollments', {
+    const res = await apiFetchRaw('/benefits/enrollments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1525,42 +783,33 @@ function EnrollModal({ plan, dependents, onClose, onSuccess }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow backdrop- p-4">
-      <div className="bg-paper w-full max-w-md border border-rule">
-        <div className="px-6 py-4 border-b border-rule">
-          <h3 className="text-sm font-black text-ink">Enroll in {plan.name}</h3>
-          <p className="text-xs text-muted mt-0.5">{plan.insurerName} · Coverage SGD {plan.coverageAmount.toLocaleString()}</p>
-        </div>
-        <div className="p-4 sm:p-6 space-y-4">
-          <Field label="Effective From" required>
-            <input type="date" value={effectiveFrom} onChange={e => setEffectiveFrom(e.target.value)} className="input" />
-          </Field>
-          {plan.coversDependents && dependents.length > 0 && (
-            <div>
-              <p className="text-xs font-black text-ink uppercase tracking-wider mb-2">Include Dependents (SGD {plan.premiumDependent}/yr each)</p>
-              <div className="space-y-1 max-h-40 overflow-y-auto border border-rule p-2">
-                {dependents.map(d => (
-                  <label key={d.id} className="flex items-center gap-2 p-2 hover:bg-page cursor-pointer">
-                    <input type="checkbox" checked={selectedDeps.includes(d.id)} onChange={e => {
-                      setSelectedDeps(prev => e.target.checked ? [...prev, d.id] : prev.filter(id => id !== d.id));
-                    }} />
-                    <span className="text-sm font-medium text-ink">{d.fullName}</span>
-                    <span className="text-xs text-muted">({d.relationship})</span>
-                  </label>
-                ))}
-              </div>
+    <Modal open onClose={onClose} title={`Enrol in ${plan.name}`} caption={`${plan.insurerName} · Coverage ${sgd(plan.coverageAmount)}`}
+      footer={<>
+        <Button variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button disabled={saving} onClick={enroll}>{saving ? 'Enrolling…' : 'Confirm enrollment'}</Button>
+      </>}
+    >
+      <div className="flex flex-col gap-4">
+        <Field label="Effective from" required><Input type="date" value={effectiveFrom} onChange={e => setEffectiveFrom(e.target.value)} /></Field>
+        {plan.coversDependents && dependents.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[12.5px] font-semibold text-muted">Include dependents ({sgd(plan.premiumDependent)}/yr each)</span>
+            <div className="flex flex-col gap-1 max-h-40 overflow-y-auto rounded-control border border-rule p-2">
+              {dependents.map(d => (
+                <label key={d.id} className="flex items-center gap-2 p-2 rounded-control hover:bg-page cursor-pointer">
+                  <input type="checkbox" className="w-4 h-4 accent-accent" checked={selectedDeps.includes(d.id)} onChange={e => {
+                    setSelectedDeps(prev => e.target.checked ? [...prev, d.id] : prev.filter(id => id !== d.id));
+                  }} />
+                  <span className="text-sm text-ink">{d.fullName}</span>
+                  <span className="text-[13px] text-muted">({sentence(d.relationship)})</span>
+                </label>
+              ))}
             </div>
-          )}
-          {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
-          <div className="flex gap-3 pt-2">
-            <button onClick={enroll} disabled={saving} className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
-              {saving ? 'Enrolling…' : 'Confirm Enrollment'}
-            </button>
-            <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
           </div>
-        </div>
+        )}
+        {error && <p className="text-sm text-danger font-semibold">{error}</p>}
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -1574,7 +823,7 @@ function DependentModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
 
   async function save() {
     setSaving(true); setError('');
-    const res = await apiFetch('/benefits/dependents', {
+    const res = await apiFetchRaw('/benefits/dependents', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
     });
     if (res.ok) onSuccess();
@@ -1583,48 +832,31 @@ function DependentModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow backdrop- p-4">
-      <div className="bg-paper w-full max-w-md border border-rule">
-        <div className="px-6 py-4 border-b border-rule">
-          <h3 className="text-sm font-black text-ink">Add Dependent</h3>
+    <Modal open onClose={onClose} title="Add dependent"
+      footer={<>
+        <Button variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Add dependent'}</Button>
+      </>}
+    >
+      <div className="flex flex-col gap-4">
+        <Field label="Full name" required><Input value={form.fullName} onChange={e => setForm({...form, fullName: e.target.value})} /></Field>
+        <Field label="Relationship" required>
+          <Select value={form.relationship} onChange={e => setForm({...form, relationship: e.target.value})}>
+            <option value="SPOUSE">Spouse</option><option value="CHILD">Child</option><option value="PARENT">Parent</option><option value="OTHER">Other</option>
+          </Select>
+        </Field>
+        <Field label="Date of birth" required><Input type="date" value={form.dateOfBirth} onChange={e => setForm({...form, dateOfBirth: e.target.value})} /></Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="NRIC last 4 digits"><Input value={form.nric} maxLength={9} onChange={e => setForm({...form, nric: e.target.value})} /></Field>
+          <Field label="Gender">
+            <Select value={form.gender} onChange={e => setForm({...form, gender: e.target.value})}>
+              <option value="">—</option><option value="M">Male</option><option value="F">Female</option>
+            </Select>
+          </Field>
         </div>
-        <div className="p-4 sm:p-6 space-y-4">
-          <Field label="Full Name" required>
-            <input value={form.fullName} onChange={e => setForm({...form, fullName: e.target.value})} className="input" />
-          </Field>
-          <Field label="Relationship" required>
-            <select value={form.relationship} onChange={e => setForm({...form, relationship: e.target.value})} className="input">
-              <option value="SPOUSE">Spouse</option>
-              <option value="CHILD">Child</option>
-              <option value="PARENT">Parent</option>
-              <option value="OTHER">Other</option>
-            </select>
-          </Field>
-          <Field label="Date of Birth" required>
-            <input type="date" value={form.dateOfBirth} onChange={e => setForm({...form, dateOfBirth: e.target.value})} className="input" />
-          </Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="NRIC last 4 digits">
-              <input value={form.nric} maxLength={9} onChange={e => setForm({...form, nric: e.target.value})} className="input" />
-            </Field>
-            <Field label="Gender">
-              <select value={form.gender} onChange={e => setForm({...form, gender: e.target.value})} className="input">
-                <option value="">—</option>
-                <option value="M">Male</option>
-                <option value="F">Female</option>
-              </select>
-            </Field>
-          </div>
-          {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
-          <div className="flex gap-3 pt-2">
-            <button onClick={save} disabled={saving} className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
-              {saving ? 'Saving…' : 'Add Dependent'}
-            </button>
-            <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
-          </div>
-        </div>
+        {error && <p className="text-sm text-danger font-semibold">{error}</p>}
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -1649,7 +881,7 @@ function ClaimModal({ enrollment, dependents, onClose, onSuccess }: {
     const patientName = form.patientDependentId
       ? enrolledDeps.find(d => d.id === form.patientDependentId)?.fullName
       : enrollment.employeeName;
-    const res = await apiFetch('/benefits/claims', {
+    const res = await apiFetchRaw('/benefits/claims', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1669,54 +901,35 @@ function ClaimModal({ enrollment, dependents, onClose, onSuccess }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow backdrop- p-4">
-      <div className="bg-paper w-full max-w-lg border border-rule max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-rule sticky top-0 bg-paper">
-          <h3 className="text-sm font-black text-ink">Submit Claim</h3>
-          <p className="text-xs text-muted mt-0.5">{enrollment.plan?.name} · Coverage SGD {enrollment.plan?.coverageAmount.toLocaleString()}</p>
+    <Modal open onClose={onClose} title="Submit claim" caption={`${enrollment.plan?.name} · Coverage ${sgd(enrollment.plan?.coverageAmount)}`}
+      footer={<>
+        <Button variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button disabled={saving || !form.claimAmount} onClick={save}>{saving ? 'Submitting…' : 'Submit claim'}</Button>
+      </>}
+    >
+      <div className="flex flex-col gap-4">
+        {enrolledDeps.length > 0 && (
+          <Field label="Patient">
+            <Select value={form.patientDependentId} onChange={e => setForm({...form, patientDependentId: e.target.value})}>
+              <option value="">Myself ({enrollment.employeeName})</option>
+              {enrolledDeps.map(d => <option key={d.id} value={d.id}>{d.fullName} ({sentence(d.relationship)})</option>)}
+            </Select>
+          </Field>
+        )}
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Treatment date" required><Input type="date" value={form.treatmentDate} onChange={e => setForm({...form, treatmentDate: e.target.value})} /></Field>
+          <Field label="Treatment type" required>
+            <Select value={form.treatmentType} onChange={e => setForm({...form, treatmentType: e.target.value})}>
+              <option value="outpatient">Outpatient</option><option value="hospitalisation">Hospitalisation</option><option value="surgery">Surgery</option><option value="dental">Dental</option><option value="specialist">Specialist consult</option>
+            </Select>
+          </Field>
         </div>
-        <div className="p-4 sm:p-6 space-y-4">
-          {enrolledDeps.length > 0 && (
-            <Field label="Patient">
-              <select value={form.patientDependentId} onChange={e => setForm({...form, patientDependentId: e.target.value})} className="input">
-                <option value="">Myself ({enrollment.employeeName})</option>
-                {enrolledDeps.map(d => <option key={d.id} value={d.id}>{d.fullName} ({d.relationship})</option>)}
-              </select>
-            </Field>
-          )}
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Treatment Date" required>
-              <input type="date" value={form.treatmentDate} onChange={e => setForm({...form, treatmentDate: e.target.value})} className="input" />
-            </Field>
-            <Field label="Treatment Type" required>
-              <select value={form.treatmentType} onChange={e => setForm({...form, treatmentType: e.target.value})} className="input">
-                <option value="outpatient">Outpatient</option>
-                <option value="hospitalisation">Hospitalisation</option>
-                <option value="surgery">Surgery</option>
-                <option value="dental">Dental</option>
-                <option value="specialist">Specialist Consult</option>
-              </select>
-            </Field>
-          </div>
-          <Field label="Hospital / Clinic">
-            <input value={form.hospitalProvider} onChange={e => setForm({...form, hospitalProvider: e.target.value})} className="input" />
-          </Field>
-          <Field label="Diagnosis (optional)">
-            <input value={form.diagnosis} onChange={e => setForm({...form, diagnosis: e.target.value})} className="input" />
-          </Field>
-          <Field label="Claim Amount (SGD)" required>
-            <input type="number" step="0.01" value={form.claimAmount} onChange={e => setForm({...form, claimAmount: e.target.value})} className="input" />
-          </Field>
-          {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
-          <div className="flex gap-3 pt-2">
-            <button onClick={save} disabled={saving || !form.claimAmount} className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
-              {saving ? 'Submitting…' : 'Submit Claim'}
-            </button>
-            <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
-          </div>
-        </div>
+        <Field label="Hospital / clinic"><Input value={form.hospitalProvider} onChange={e => setForm({...form, hospitalProvider: e.target.value})} /></Field>
+        <Field label="Diagnosis (optional)"><Input value={form.diagnosis} onChange={e => setForm({...form, diagnosis: e.target.value})} /></Field>
+        <Field label="Claim amount (SGD)" required><Input type="number" step="0.01" value={form.claimAmount} onChange={e => setForm({...form, claimAmount: e.target.value})} /></Field>
+        {error && <p className="text-sm text-danger font-semibold">{error}</p>}
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -1734,7 +947,7 @@ function PeriodModal({ plans, onClose, onSuccess }: { plans: Plan[]; onClose: ()
 
   async function save() {
     setSaving(true); setError('');
-    const res = await apiFetch('/benefits/open-enrollment', {
+    const res = await apiFetchRaw('/benefits/open-enrollment', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form),
     });
@@ -1744,58 +957,42 @@ function PeriodModal({ plans, onClose, onSuccess }: { plans: Plan[]; onClose: ()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow backdrop- p-4">
-      <div className="bg-paper w-full max-w-lg border border-rule max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-rule sticky top-0 bg-paper">
-          <h3 className="text-sm font-black text-ink">New Open Enrollment Period</h3>
+    <Modal open onClose={onClose} title="New open enrollment period"
+      footer={<>
+        <Button variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button disabled={saving} onClick={save}>{saving ? 'Creating…' : 'Create period'}</Button>
+      </>}
+    >
+      <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Name" required><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></Field>
+          <Field label="Year" required><Input type="number" value={form.year} onChange={e => setForm({...form, year: parseInt(e.target.value) || 0})} /></Field>
         </div>
-        <div className="p-4 sm:p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Name" required>
-              <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="input" />
-            </Field>
-            <Field label="Year" required>
-              <input type="number" value={form.year} onChange={e => setForm({...form, year: parseInt(e.target.value) || 0})} className="input" />
-            </Field>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Start Date" required>
-              <input type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value})} className="input" />
-            </Field>
-            <Field label="End Date" required>
-              <input type="date" value={form.endDate} onChange={e => setForm({...form, endDate: e.target.value})} className="input" />
-            </Field>
-          </div>
-          <Field label="Available Plans">
-            <div className="space-y-1 max-h-40 overflow-y-auto border border-rule p-2">
-              <label className="flex items-center gap-2 p-2 hover:bg-page cursor-pointer">
-                <input type="checkbox" checked={form.planIds.length === 0} onChange={() => setForm({...form, planIds: []})} />
-                <span className="text-sm font-medium text-ink">All active plans</span>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Start date" required><Input type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value})} /></Field>
+          <Field label="End date" required><Input type="date" value={form.endDate} onChange={e => setForm({...form, endDate: e.target.value})} /></Field>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[12.5px] font-semibold text-muted">Available plans</span>
+          <div className="flex flex-col gap-1 max-h-40 overflow-y-auto rounded-control border border-rule p-2">
+            <label className="flex items-center gap-2 p-2 rounded-control hover:bg-page cursor-pointer">
+              <input type="checkbox" className="w-4 h-4 accent-accent" checked={form.planIds.length === 0} onChange={() => setForm({...form, planIds: []})} />
+              <span className="text-sm text-ink">All active plans</span>
+            </label>
+            {plans.filter(p => p.isActive).map(p => (
+              <label key={p.id} className="flex items-center gap-2 p-2 rounded-control hover:bg-page cursor-pointer">
+                <input type="checkbox" className="w-4 h-4 accent-accent" checked={form.planIds.includes(p.id)} onChange={e => {
+                  setForm(prev => ({ ...prev, planIds: e.target.checked ? [...prev.planIds, p.id] : prev.planIds.filter(id => id !== p.id) }));
+                }} />
+                <span className="text-sm text-ink">{p.name}</span>
+                <span className="text-[13px] text-muted">({p.type})</span>
               </label>
-              {plans.filter(p => p.isActive).map(p => (
-                <label key={p.id} className="flex items-center gap-2 p-2 hover:bg-page cursor-pointer">
-                  <input type="checkbox" checked={form.planIds.includes(p.id)} onChange={e => {
-                    setForm(prev => ({
-                      ...prev,
-                      planIds: e.target.checked ? [...prev.planIds, p.id] : prev.planIds.filter(id => id !== p.id),
-                    }));
-                  }} />
-                  <span className="text-sm font-medium text-ink">{p.name}</span>
-                  <span className="text-xs text-muted">({p.type})</span>
-                </label>
-              ))}
-            </div>
-          </Field>
-          {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
-          <div className="flex gap-3 pt-2">
-            <button onClick={save} disabled={saving} className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
-              {saving ? 'Creating…' : 'Create Period'}
-            </button>
-            <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
+            ))}
           </div>
         </div>
+        {error && <p className="text-sm text-danger font-semibold">{error}</p>}
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -1816,7 +1013,7 @@ function FlexiClaimModal({ wallet, categories, onClose, onSuccess }: {
   async function save() {
     if (!form.claimAmount || parseFloat(form.claimAmount) <= 0) { setError('Enter a valid amount'); return; }
     setSaving(true); setError('');
-    const res = await apiFetch('/benefits/flexi-claims', {
+    const res = await apiFetchRaw('/benefits/flexi-claims', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1836,55 +1033,28 @@ function FlexiClaimModal({ wallet, categories, onClose, onSuccess }: {
   const selectedCat = categories.find(c => c.id === form.categoryId);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow backdrop- p-4">
-      <div className="bg-paper w-full max-w-lg border border-rule max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-rule sticky top-0 bg-paper">
-          <h3 className="text-sm font-black text-ink">Submit Flexi Claim</h3>
-          <p className="text-xs text-muted mt-0.5">Wallet {wallet.year} · SGD {wallet.creditedAmount.toLocaleString()} credited</p>
+    <Modal open onClose={onClose} title="Submit flexi claim" caption={`Wallet ${wallet.year} · ${sgd(wallet.creditedAmount)} credited`}
+      footer={<>
+        <Button variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button disabled={saving || !form.description.trim() || !form.claimAmount} onClick={save}>{saving ? 'Submitting…' : 'Submit claim'}</Button>
+      </>}
+    >
+      <div className="flex flex-col gap-4">
+        <Field label="Category" required help={selectedCat?.description ?? undefined}>
+          <Select value={form.categoryId} onChange={e => setForm({...form, categoryId: e.target.value})}>
+            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </Select>
+        </Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Receipt date" required><Input type="date" value={form.receiptDate} onChange={e => setForm({...form, receiptDate: e.target.value})} /></Field>
+          <Field label="Amount (SGD)" required><Input type="number" step="0.01" min="0.01" value={form.claimAmount} onChange={e => setForm({...form, claimAmount: e.target.value})} /></Field>
         </div>
-        <div className="p-4 sm:p-6 space-y-4">
-          <Field label="Category" required>
-            <select value={form.categoryId} onChange={e => setForm({...form, categoryId: e.target.value})} className="input">
-              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </Field>
-          {selectedCat && (
-            <p className="text-xs text-muted -mt-2">{selectedCat.description}</p>
-          )}
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Receipt Date" required>
-              <input type="date" value={form.receiptDate} onChange={e => setForm({...form, receiptDate: e.target.value})} className="input" />
-            </Field>
-            <Field label="Amount (SGD)" required>
-              <input type="number" step="0.01" min="0.01" value={form.claimAmount}
-                onChange={e => setForm({...form, claimAmount: e.target.value})} className="input" />
-            </Field>
-          </div>
-          <Field label="Vendor / Provider">
-            <input value={form.vendor} placeholder="e.g. Fitness First, NTUC Health"
-              onChange={e => setForm({...form, vendor: e.target.value})} className="input" />
-          </Field>
-          <Field label="Description" required>
-            <textarea rows={2} value={form.description} placeholder="Briefly describe the expense"
-              onChange={e => setForm({...form, description: e.target.value})} className="input resize-none" />
-          </Field>
-          {selectedCat?.requiresReceipt && (
-            <p className="text-[10px] text-ink font-bold uppercase tracking-widest">Receipt required — keep originals for audit</p>
-          )}
-          {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={save}
-              disabled={saving || !form.description.trim() || !form.claimAmount}
-              className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50"
-            >
-              {saving ? 'Submitting…' : 'Submit Claim'}
-            </button>
-            <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
-          </div>
-        </div>
+        <Field label="Vendor / provider"><Input value={form.vendor} placeholder="e.g. Fitness First, NTUC Health" onChange={e => setForm({...form, vendor: e.target.value})} /></Field>
+        <Field label="Description" required><Textarea rows={2} value={form.description} placeholder="Briefly describe the expense" onChange={e => setForm({...form, description: e.target.value})} /></Field>
+        {selectedCat?.requiresReceipt && <p className="text-[13px] text-ink font-semibold">Receipt required — keep originals for audit.</p>}
+        {error && <p className="text-sm text-danger font-semibold">{error}</p>}
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -1904,7 +1074,7 @@ function FlexiWalletCreditModal({ year, onClose, onSuccess }: {
   async function save() {
     if (!form.employeeId.trim() || !form.creditedAmount) { setError('Employee ID and amount are required'); return; }
     setSaving(true); setError('');
-    const res = await apiFetch('/benefits/flexi-wallets', {
+    const res = await apiFetchRaw('/benefits/flexi-wallets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1921,52 +1091,26 @@ function FlexiWalletCreditModal({ year, onClose, onSuccess }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow backdrop- p-4">
-      <div className="bg-paper w-full max-w-md border border-rule">
-        <div className="px-6 py-4 border-b border-rule">
-          <h3 className="text-sm font-black text-ink">Credit Flexi Wallet — {year}</h3>
-          <p className="text-xs text-muted mt-0.5">Creates or updates an employee's wallet for this year.</p>
-        </div>
-        <div className="p-4 sm:p-6 space-y-4">
-          <Field label="Employee ID" required>
-            <input value={form.employeeId} onChange={e => setForm({...form, employeeId: e.target.value})} className="input" />
+    <Modal open onClose={onClose} title={`Credit flexi wallet — ${year}`} caption="Creates or updates an employee's wallet for this year."
+      footer={<>
+        <Button variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button disabled={saving} onClick={save}>{saving ? 'Crediting…' : 'Credit wallet'}</Button>
+      </>}
+    >
+      <div className="flex flex-col gap-4">
+        <Field label="Employee ID" required><Input value={form.employeeId} onChange={e => setForm({...form, employeeId: e.target.value})} /></Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Employee name"><Input value={form.employeeName} onChange={e => setForm({...form, employeeName: e.target.value})} /></Field>
+          <Field label="Grade">
+            <Select value={form.employeeGrade} onChange={e => setForm({...form, employeeGrade: e.target.value})}>
+              <option value="">—</option>
+              {['STAFF','EXEC','MGR','DIR','VP','C_SUITE'].map(g => <option key={g} value={g}>{g}</option>)}
+            </Select>
           </Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Employee Name">
-              <input value={form.employeeName} onChange={e => setForm({...form, employeeName: e.target.value})} className="input" />
-            </Field>
-            <Field label="Grade">
-              <select value={form.employeeGrade} onChange={e => setForm({...form, employeeGrade: e.target.value})} className="input">
-                <option value="">—</option>
-                {['STAFF','EXEC','MGR','DIR','VP','C_SUITE'].map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
-            </Field>
-          </div>
-          <Field label="Credited Amount (SGD)" required>
-            <input type="number" step="0.01" min="1" value={form.creditedAmount}
-              onChange={e => setForm({...form, creditedAmount: e.target.value})} className="input" />
-          </Field>
-          {error && <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">{error}</div>}
-          <div className="flex gap-3 pt-2">
-            <button onClick={save} disabled={saving} className="flex-1 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50">
-              {saving ? 'Crediting…' : 'Credit Wallet'}
-            </button>
-            <button onClick={onClose} className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page">Cancel</button>
-          </div>
         </div>
+        <Field label="Credited amount (SGD)" required><Input type="number" step="0.01" min="1" value={form.creditedAmount} onChange={e => setForm({...form, creditedAmount: e.target.value})} /></Field>
+        {error && <p className="text-sm text-danger font-semibold">{error}</p>}
       </div>
-    </div>
-  );
-}
-
-// ─── Field wrapper ────────────────────────────────────────────────────────────
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-xs font-black text-ink uppercase tracking-wider mb-1.5">
-        {label}{required && <span className="text-ink"> *</span>}
-      </label>
-      {children}
-    </div>
+    </Modal>
   );
 }

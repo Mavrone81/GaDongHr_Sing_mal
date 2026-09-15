@@ -1,13 +1,17 @@
 'use client';
 
 /**
- * PAY-007 — IRAS / CPF Submission Tracking
+ * PAY-007 — IRAS / CPF submission tracking
  *
  * Lists every monthly CPF e-Submit, annual IR8A / Appendix 8A / Appendix 8B,
- * and per-employee IR21 filing. Records the IRAS / CPF Board reference
- * number on submission, walks the status machine
- * DRAFT → SUBMITTED → ACKNOWLEDGED / REJECTED, and surfaces a deadline
- * dashboard with urgency banding.
+ * and per-employee IR21 filing. Records the IRAS / CPF Board reference number
+ * on submission, walks the status machine DRAFT → SUBMITTED → ACKNOWLEDGED /
+ * REJECTED, and surfaces a deadline dashboard with urgency banding.
+ *
+ * Rebuilt to the "Clean workspace" kit (2026-09). Presentation only — every
+ * fetch, filter and status transition below is unchanged. The Seal citations
+ * stay: a missed filing here is a penalty, and the authority (ITA s.68, CPF
+ * Act s.7) belongs beside the date.
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -15,6 +19,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { Seal } from '@/components/official';
+import { PageHeader, Card, DataTable, Button, Field, Input, Select, Textarea, Modal, EmptyState, Icon } from '@/components/ui';
 
 const KINDS = ['CPF_E_SUBMIT', 'IR8A', 'APPENDIX_8A', 'APPENDIX_8B', 'IR21'] as const;
 const STATUSES = ['DRAFT', 'SUBMITTED', 'ACKNOWLEDGED', 'REJECTED'] as const;
@@ -61,20 +66,17 @@ interface ListResponse {
 }
 
 const KIND_LABELS: Record<Kind, string> = {
-  CPF_E_SUBMIT: 'CPF e-Submit (Monthly)',
-  IR8A: 'IR8A (Annual)',
+  CPF_E_SUBMIT: 'CPF e-Submit (monthly)',
+  IR8A: 'IR8A (annual)',
   APPENDIX_8A: 'Appendix 8A (BIK)',
   APPENDIX_8B: 'Appendix 8B (ESOP)',
-  IR21: 'IR21 (Tax Clearance)',
+  IR21: 'IR21 (tax clearance)',
 };
 
 /**
- * The authority behind each deadline.
- *
- * A missed filing here is a penalty, not an inconvenience, and the date is not
- * the same rule for every row — CPF is monthly, IR8A is annual, IR21 is keyed
- * to the employee's last day. Putting the citation beside the date means the
- * person chasing the filing can check the rule without leaving the screen.
+ * The authority behind each deadline. A missed filing here is a penalty, and
+ * the rule differs per row — CPF is monthly, IR8A annual, IR21 keyed to the
+ * employee's last day — so the citation sits beside the date on the screen.
  */
 const KIND_CITATIONS: Record<Kind, string> = {
   CPF_E_SUBMIT: 'CPF Act s.7 · by 14th of following month',
@@ -85,45 +87,44 @@ const KIND_CITATIONS: Record<Kind, string> = {
 };
 
 /**
- * Status and urgency are distinguished by WEIGHT and FILL, not by hue.
- *
- * The old screen keyed these off six different hues — blue, emerald, rose,
- * red, orange, amber, yellow. The Official Record palette has no error red and
- * no success green to spend (seal red is reserved for citations), so mapping
- * them onto tokens collapsed several states onto the same colour. Rather than
- * leave two states looking identical, the distinction is carried by fill:
- * the states that need action are FILLED and therefore heaviest on the page;
- * the settled ones are outlined; the inert ones are muted. The word is always
- * present regardless — colour never carries the meaning alone.
+ * Status and urgency are distinguished by weight and fill, not by hue — the
+ * Official Record palette has no error red or success green to spend (seal red
+ * is reserved). The states that need action are filled and heaviest; settled
+ * ones are outlined; inert ones recede. The word is always present.
  */
-const STATUS_STYLES: Record<Status, string> = {
-  DRAFT:        'bg-transparent text-muted ring-rule',
-  SUBMITTED:    'bg-transparent text-ink ring-ink font-medium',
-  ACKNOWLEDGED: 'bg-transparent text-accent ring-accent font-medium',
-  REJECTED:     'bg-ink text-paper ring-ink font-semibold',
+const STATUS_TONE: Record<Status, string> = {
+  DRAFT:        'bg-pill text-muted',
+  SUBMITTED:    'bg-paper text-ink border border-ink',
+  ACKNOWLEDGED: 'bg-tint text-accent',
+  REJECTED:     'bg-ink text-paper',
 };
+const URGENCY_TONE: Record<string, string> = {
+  OVERDUE:     'bg-ink text-paper',
+  CRITICAL:    'bg-highlight text-ink',
+  WARNING:     'bg-paper text-ink border border-highlight',
+  NOTICE:      'bg-pill text-muted',
+  OK:          'bg-tint text-accent',
+  UNSCHEDULED: 'bg-pill text-muted',
+};
+const URGENCY_LABEL: Record<string, string> = {
+  OVERDUE: 'Overdue', CRITICAL: 'Critical', WARNING: 'Warning', NOTICE: 'Notice', OK: 'On track', UNSCHEDULED: 'Unscheduled',
+};
+const sentence = (s: string) => s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ');
 
-const URGENCY_STYLES: Record<string, string> = {
-  OVERDUE:     'bg-ink text-paper font-semibold',
-  CRITICAL:    'bg-highlight text-ink font-semibold',
-  WARNING:     'bg-transparent text-ink ring-1 ring-highlight',
-  NOTICE:      'bg-transparent text-muted ring-1 ring-rule',
-  OK:          'bg-transparent text-accent',
-  UNSCHEDULED: 'bg-transparent text-muted',
-};
+function Chip({ label, cls }: { label: string; cls: string }) {
+  return <span className={`inline-flex items-center h-6 px-2.5 rounded-full text-xs whitespace-nowrap ${cls}`}>{label}</span>;
+}
 
 function fmtDate(value: string | null | undefined): string {
   if (!value) return '—';
   try { return new Date(value).toISOString().slice(0, 10); }
   catch { return '—'; }
 }
-
 function fmtScope(s: Submission): string {
   if (s.kind === 'CPF_E_SUBMIT') return s.period ?? '—';
   if (s.kind === 'IR21')         return s.employeeId ?? '—';
   return s.year != null ? String(s.year) : '—';
 }
-
 function fmtBytes(n: number | null | undefined): string {
   if (!n) return '—';
   if (n < 1024) return `${n} B`;
@@ -136,19 +137,16 @@ export default function IrasSubmissionsPage() {
   const role = String(user?.role || '').toUpperCase();
   const isAdmin = ['SUPER_ADMIN', 'HR_ADMIN', 'PAYROLL_OFFICER'].includes(role);
 
-  // ── Filters ─────────────────────────────────────────────────────────────
   const [kindFilter,   setKindFilter]   = useState<Kind | ''>('');
   const [statusFilter, setStatusFilter] = useState<Status | ''>('');
   const [periodFilter, setPeriodFilter] = useState<string>('');
   const [yearFilter,   setYearFilter]   = useState<string>('');
 
-  // ── Data ────────────────────────────────────────────────────────────────
   const [list,      setList]      = useState<ListResponse | null>(null);
   const [deadlines, setDeadlines] = useState<ListResponse | null>(null);
   const [loading,   setLoading]   = useState<boolean>(true);
   const [error,     setError]     = useState<string | null>(null);
 
-  // ── Modal state ─────────────────────────────────────────────────────────
   const [editing,  setEditing]   = useState<Submission | null>(null);
   const [creating, setCreating]  = useState<boolean>(false);
 
@@ -181,193 +179,127 @@ export default function IrasSubmissionsPage() {
   const dlSummary = deadlines?.summary;
 
   return (
-    <div className="px-6 py-8 max-w-7xl mx-auto">
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <div className="text-xs text-muted mb-1">
-            <Link href="/payroll" className="hover:underline">Payroll</Link>
-            <span className="mx-1">/</span>
-            <span>IRAS Submissions</span>
-          </div>
-          <h1 className="text-2xl font-semibold text-ink">IRAS / CPF Submission Tracking</h1>
-          <p className="text-sm text-ink mt-1">
-            Records every CPF e-Submit, annual IR8A / Appendix 8A / 8B, and per-employee IR21 filing.
-            Capture the IRAS / CPF Board reference number when submitted, then mark ACKNOWLEDGED on confirmation.
-          </p>
-        </div>
-        {isAdmin && (
-          <button
-            type="button"
-            className="px-4 py-2 bg-accent text-paper text-sm shadow hover:bg-accent"
-            onClick={() => setCreating(true)}
-          >
-            + New Submission
-          </button>
-        )}
+    <div className="max-w-7xl mx-auto flex flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <p className="text-[13px] text-muted">
+          <Link href="/payroll" className="hover:text-ink">Payroll</Link>
+          <span className="mx-1" aria-hidden>·</span>
+          <span>IRAS submissions</span>
+        </p>
+        <PageHeader
+          title="IRAS / CPF submission tracking"
+          subtitle="Every CPF e-Submit, annual IR8A / Appendix 8A / 8B and per-employee IR21. Capture the IRAS / CPF Board reference when submitted, then mark acknowledged on confirmation."
+          actions={isAdmin ? <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>New submission</Button> : undefined}
+        />
       </div>
 
-      {/* ── Deadline KPI band ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+      {/* Deadline band */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {URGENCIES.map(u => {
           const n = dlSummary?.byUrgency?.[u] ?? 0;
-          const styles = URGENCY_STYLES[u] ?? 'bg-page text-ink';
           return (
-            <div key={u} className={` px-4 py-3 ${styles}`}>
-              <div className="text-xs uppercase tracking-wide opacity-80">{u}</div>
-              <div className="text-2xl font-bold mt-1">{n}</div>
-            </div>
+            <Card key={u} padding="px-4 py-4">
+              <Chip label={URGENCY_LABEL[u]} cls={URGENCY_TONE[u]} />
+              <div className="text-[28px] font-extrabold tracking-[-0.02em] text-ink mt-2 tabular-nums">{n}</div>
+            </Card>
           );
         })}
       </div>
 
-      {/* ── Filters ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-3 mb-4 items-end">
-        <div>
-          <label className="block text-xs font-medium text-ink mb-1">Kind</label>
-          <select
-            value={kindFilter}
-            onChange={(e) => setKindFilter(e.target.value as Kind | '')}
-            className="border border-rule px-2 py-1 text-sm"
-          >
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3 items-end">
+        <Field label="Kind" className="w-56">
+          <Select value={kindFilter} onChange={(e) => setKindFilter(e.target.value as Kind | '')}>
             <option value="">All kinds</option>
             {KINDS.map(k => <option key={k} value={k}>{KIND_LABELS[k]}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-ink mb-1">Status</label>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as Status | '')}
-            className="border border-rule px-2 py-1 text-sm"
-          >
+          </Select>
+        </Field>
+        <Field label="Status" className="w-44">
+          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as Status | '')}>
             <option value="">All statuses</option>
-            {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-ink mb-1">Period (YYYY-MM)</label>
-          <input
-            type="text" placeholder="2026-05"
-            value={periodFilter}
-            onChange={(e) => setPeriodFilter(e.target.value)}
-            className="border border-rule px-2 py-1 text-sm w-28"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-ink mb-1">Year</label>
-          <input
-            type="number" placeholder="2026"
-            value={yearFilter}
-            onChange={(e) => setYearFilter(e.target.value)}
-            className="border border-rule px-2 py-1 text-sm w-24"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => { setKindFilter(''); setStatusFilter(''); setPeriodFilter(''); setYearFilter(''); }}
-          className="text-xs text-ink hover:text-ink underline ml-2 pb-2"
-        >
-          Clear
-        </button>
+            {STATUSES.map(s => <option key={s} value={s}>{sentence(s)}</option>)}
+          </Select>
+        </Field>
+        <Field label="Period (YYYY-MM)" className="w-36">
+          <Input type="text" placeholder="2026-05" value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value)} />
+        </Field>
+        <Field label="Year" className="w-28">
+          <Input type="number" placeholder="2026" value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} />
+        </Field>
+        <Button variant="ghost" onClick={() => { setKindFilter(''); setStatusFilter(''); setPeriodFilter(''); setYearFilter(''); }}>Clear</Button>
         {summary && (
-          <div className="ml-auto text-xs text-ink pb-2">
-            {list?.total ?? 0} total ·
-            {' '}{summary.byStatus?.DRAFT ?? 0} draft ·
-            {' '}{summary.byStatus?.SUBMITTED ?? 0} submitted ·
-            {' '}{summary.byStatus?.ACKNOWLEDGED ?? 0} acknowledged
+          <div className="ml-auto text-[13px] text-muted tabular-nums self-center">
+            {list?.total ?? 0} total · {summary.byStatus?.DRAFT ?? 0} draft · {summary.byStatus?.SUBMITTED ?? 0} submitted · {summary.byStatus?.ACKNOWLEDGED ?? 0} acknowledged
             {summary.byStatus?.REJECTED ? ` · ${summary.byStatus.REJECTED} rejected` : ''}
           </div>
         )}
       </div>
 
       {error && (
-        <div className="bg-page border border-ink text-ink px-3 py-2 text-sm mb-4">
-          {error}
-        </div>
+        <Card><p className="text-sm text-danger font-semibold">{error}</p></Card>
       )}
 
-      {/* ── Submissions table ──────────────────────────────────────────── */}
-      <div className="bg-paper border border-rule overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-page text-ink text-xs uppercase tracking-wide">
-            <tr>
-              <th className="text-left px-3 py-2">Kind</th>
-              <th className="text-left px-3 py-2">Scope</th>
-              <th className="text-left px-3 py-2">Status</th>
-              <th className="text-left px-3 py-2">Deadline</th>
-              <th className="text-left px-3 py-2">Urgency</th>
-              <th className="text-left px-3 py-2">Reference #</th>
-              <th className="text-left px-3 py-2">File</th>
-              <th className="text-left px-3 py-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-muted">Loading…</td></tr>
-            )}
-            {!loading && (list?.submissions?.length ?? 0) === 0 && (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-muted">
-                No submissions match the current filters. Generating a CPF or IR8A file from the Payroll page will
-                auto-create a DRAFT row here.
-              </td></tr>
-            )}
-            {list?.submissions?.map(s => (
-              <tr key={s.id} className="border-t border-rule hover:bg-page">
-                <td className="px-3 py-2 text-ink font-medium">{KIND_LABELS[s.kind]}</td>
-                <td className="px-3 py-2 text-ink font-mono text-xs">{fmtScope(s)}</td>
-                <td className="px-3 py-2">
-                  <span className={`px-2 py-0.5  text-xs ring-1 ${STATUS_STYLES[s.status]}`}>
-                    {s.status}
-                  </span>
-                </td>
-                <td className="px-3 py-2 text-ink text-xs">
-                  <span className="tabular-nums">{fmtDate(s.deadline)}</span>
-                  <span className="block mt-0.5"><Seal cite={KIND_CITATIONS[s.kind]} /></span>
-                </td>
-                <td className="px-3 py-2">
-                  <span className={`px-2 py-0.5  text-xs font-medium ${URGENCY_STYLES[s.urgency] ?? ''}`}>
-                    {s.urgency}{s.daysUntilDeadline != null ? ` (${s.daysUntilDeadline}d)` : ''}
-                  </span>
-                </td>
-                <td className="px-3 py-2 font-mono text-xs text-ink">{s.referenceNumber ?? '—'}</td>
-                <td className="px-3 py-2 text-xs text-ink">
-                  {s.fileName ? (
-                    <div>
-                      <div>{s.fileName}</div>
-                      <div className="text-muted">{fmtBytes(s.fileSize)} · {s.fileHash ? `${s.fileHash.slice(0, 8)}…` : 'no hash'}</div>
-                    </div>
-                  ) : '—'}
-                </td>
-                <td className="px-3 py-2 text-right">
-                  {isAdmin && s.status !== 'ACKNOWLEDGED' && (
-                    <button
-                      type="button"
-                      onClick={() => setEditing(s)}
-                      className="text-accent hover:text-accent text-xs font-medium"
-                    >
-                      Manage
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* ── Modals ─────────────────────────────────────────────────────── */}
-      {editing && (
-        <ManageSubmissionModal
-          submission={editing}
-          onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); reload(); }}
+      {/* Submissions */}
+      {loading ? (
+        <div className="py-16 text-center text-sm text-muted">Loading…</div>
+      ) : (list?.submissions?.length ?? 0) === 0 ? (
+        <EmptyState
+          icon="receipt"
+          title="No submissions match the current filters"
+          description="Generating a CPF or IR8A file from the Payroll page auto-creates a draft row here."
         />
+      ) : (
+        <DataTable<Submission>
+          aria-label="IRAS submissions"
+          columns={[
+            { key: 'kind', label: 'Kind', width: 'minmax(0, 1.6fr)', render: (s) => <span className="font-semibold text-ink">{KIND_LABELS[s.kind]}</span> },
+            { key: 'scope', label: 'Scope', render: (s) => <span className="tabular-nums">{fmtScope(s)}</span> },
+            { key: 'status', label: 'Status', width: '132px', render: (s) => <Chip label={sentence(s.status)} cls={STATUS_TONE[s.status]} /> },
+            { key: 'deadline', label: 'Deadline', width: 'minmax(0, 1.4fr)', render: (s) => (
+              <span className="flex flex-col gap-0.5">
+                <span className="tabular-nums">{fmtDate(s.deadline)}</span>
+                <Seal cite={KIND_CITATIONS[s.kind]} />
+              </span>
+            ) },
+            { key: 'urgency', label: 'Urgency', width: '150px', render: (s) => (
+              <Chip label={`${URGENCY_LABEL[s.urgency] ?? sentence(String(s.urgency))}${s.daysUntilDeadline != null ? ` · ${s.daysUntilDeadline}d` : ''}`} cls={URGENCY_TONE[s.urgency] ?? 'bg-pill text-muted'} />
+            ) },
+            { key: 'ref', label: 'Reference', render: (s) => <span className="tabular-nums">{s.referenceNumber ?? '—'}</span> },
+            { key: 'file', label: 'File', render: (s) => s.fileName
+              ? <span className="flex flex-col gap-0.5"><span className="truncate">{s.fileName}</span><span className="text-[12.5px] text-muted tabular-nums">{fmtBytes(s.fileSize)}{s.fileHash ? ` · ${s.fileHash.slice(0, 8)}…` : ''}</span></span>
+              : '—' },
+            { key: 'action', label: '', width: '104px', align: 'right', render: (s) => (
+              isAdmin && s.status !== 'ACKNOWLEDGED'
+                ? <Button variant="ghost" size="sm" onClick={() => setEditing(s)}>Manage</Button>
+                : null
+            ) },
+          ]}
+          rows={list!.submissions}
+          rowKey={(s) => s.id}
+          mobileCard={(s) => (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-ink">{KIND_LABELS[s.kind]}</span>
+                <Chip label={sentence(s.status)} cls={STATUS_TONE[s.status]} />
+              </div>
+              <div className="flex items-center gap-2 text-[13px] text-muted">
+                <span className="tabular-nums">{fmtScope(s)}</span>
+                <Chip label={URGENCY_LABEL[s.urgency] ?? sentence(String(s.urgency))} cls={URGENCY_TONE[s.urgency] ?? 'bg-pill text-muted'} />
+              </div>
+              <div className="flex items-center gap-1.5 text-[13px] text-muted">
+                <span className="tabular-nums">{fmtDate(s.deadline)}</span><Seal cite={KIND_CITATIONS[s.kind]} />
+              </div>
+              {isAdmin && s.status !== 'ACKNOWLEDGED' && <Button variant="secondary" size="sm" className="mt-1 w-fit" onClick={() => setEditing(s)}>Manage</Button>}
+            </div>
+          )}
+        />
+      )}
+
+      {editing && (
+        <ManageSubmissionModal submission={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />
       )}
       {creating && (
-        <CreateSubmissionModal
-          onClose={() => setCreating(false)}
-          onCreated={() => { setCreating(false); reload(); }}
-        />
+        <CreateSubmissionModal onClose={() => setCreating(false)} onCreated={() => { setCreating(false); reload(); }} />
       )}
     </div>
   );
@@ -375,13 +307,7 @@ export default function IrasSubmissionsPage() {
 
 // ─── Manage modal ────────────────────────────────────────────────────────────
 
-interface ManageProps {
-  submission: Submission;
-  onClose: () => void;
-  onSaved: () => void;
-}
-
-function ManageSubmissionModal({ submission, onClose, onSaved }: ManageProps) {
+function ManageSubmissionModal({ submission, onClose, onSaved }: { submission: Submission; onClose: () => void; onSaved: () => void }) {
   const allowed: Status[] = (() => {
     if (submission.status === 'DRAFT')     return ['SUBMITTED', 'REJECTED'];
     if (submission.status === 'SUBMITTED') return ['ACKNOWLEDGED', 'REJECTED'];
@@ -420,136 +346,73 @@ function ManageSubmissionModal({ submission, onClose, onSaved }: ManageProps) {
     }
   }
 
+  const disabled = saving || (requiresRef && !referenceNumber.trim()) || (requiresReason && !rejectedReason.trim());
+
   return (
-    <div className="fixed inset-0 bg-shadow flex items-center justify-center z-50 p-4">
-      <div className="bg-paper max-w-lg w-full">
-        <div className="px-5 py-4 border-b border-rule flex items-start justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-ink">Manage submission</h2>
-            <div className="text-xs text-muted mt-0.5">
-              {KIND_LABELS[submission.kind]} · {fmtScope(submission)} · currently {submission.status}
-            </div>
-          </div>
-          <button onClick={onClose} className="text-muted hover:text-ink text-lg">×</button>
-        </div>
-        <div className="px-5 py-4 space-y-4">
-          {error && (
-            <div className="bg-page border border-ink text-ink px-3 py-2 text-sm">
-              {error}
-            </div>
-          )}
-
-          {/* Status transition */}
-          <div>
-            <label className="block text-xs font-medium text-ink mb-1">Transition to</label>
-            <select
-              value={targetStatus}
-              onChange={(e) => setTargetStatus(e.target.value as Status | '')}
-              className="border border-rule px-2 py-1 text-sm w-full"
-            >
-              <option value="">(no status change)</option>
-              {allowed.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            {allowed.length === 0 && (
-              <p className="text-xs text-muted mt-1">
-                {submission.status === 'ACKNOWLEDGED'
-                  ? 'ACKNOWLEDGED is terminal — no further transitions allowed.'
-                  : 'No transitions available from this status.'}
-              </p>
-            )}
-          </div>
-
-          {/* Reference number (always editable) */}
-          <div>
-            <label className="block text-xs font-medium text-ink mb-1">
-              IRAS / CPF reference number {requiresRef && <span className="text-ink">*</span>}
-            </label>
-            <input
-              type="text"
-              value={referenceNumber}
-              onChange={(e) => setReferenceNumber(e.target.value)}
-              placeholder="e.g. CPF-2026-12345"
-              className="border border-rule px-2 py-1 text-sm w-full font-mono"
-            />
-            {requiresRef && <p className="text-xs text-muted mt-1">Required when marking SUBMITTED.</p>}
-          </div>
-
-          {/* Rejection reason */}
-          {requiresReason && (
-            <div>
-              <label className="block text-xs font-medium text-ink mb-1">
-                Rejection reason <span className="text-ink">*</span>
-              </label>
-              <textarea
-                rows={3}
-                value={rejectedReason}
-                onChange={(e) => setRejectedReason(e.target.value)}
-                placeholder="Why did IRAS / CPF reject the filing?"
-                className="border border-rule px-2 py-1 text-sm w-full"
-              />
-            </div>
-          )}
-
-          {/* Notes */}
-          <div>
-            <label className="block text-xs font-medium text-ink mb-1">Notes</label>
-            <textarea
-              rows={2}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="border border-rule px-2 py-1 text-sm w-full"
-            />
-          </div>
-
-          {/* Submission metadata */}
-          <details className="bg-page px-3 py-2 text-xs text-ink">
-            <summary className="cursor-pointer text-ink font-medium">Submission metadata</summary>
-            <dl className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2">
-              <dt>Deadline</dt><dd className="font-mono">{fmtDate(submission.deadline)}</dd>
-              <dt>Submitted</dt><dd className="font-mono">{fmtDate(submission.submittedAt)}</dd>
-              <dt>Acknowledged</dt><dd className="font-mono">{fmtDate(submission.acknowledgedAt)}</dd>
-              {submission.rejectedAt && (
-                <>
-                  <dt>Rejected</dt><dd className="font-mono">{fmtDate(submission.rejectedAt)}</dd>
-                  <dt>Reason</dt><dd>{submission.rejectedReason ?? '—'}</dd>
-                </>
-              )}
-              {submission.fileHash && (
-                <>
-                  <dt>File hash</dt><dd className="font-mono break-all">{submission.fileHash}</dd>
-                </>
-              )}
-            </dl>
-          </details>
-        </div>
-        <div className="px-5 py-3 border-t border-rule flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="px-3 py-1.5 text-sm text-ink hover:bg-page"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || (requiresRef && !referenceNumber.trim()) || (requiresReason && !rejectedReason.trim())}
-            className="px-3 py-1.5 text-sm bg-accent text-paper hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+    <Modal
+      open
+      onClose={onClose}
+      title="Manage submission"
+      caption={`${KIND_LABELS[submission.kind]} · ${fmtScope(submission)} · currently ${sentence(submission.status)}`}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleSave} disabled={disabled}
+            reason={disabled && !saving ? (requiresRef ? 'Reference number required to mark submitted' : requiresReason ? 'Rejection reason required' : undefined) : undefined}>
             {saving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {error && <p className="text-sm text-danger font-semibold">{error}</p>}
+
+        <Field label="Transition to" help={allowed.length === 0 ? (submission.status === 'ACKNOWLEDGED' ? 'Acknowledged is terminal — no further transitions.' : 'No transitions available from this status.') : undefined}>
+          <Select value={targetStatus} onChange={(e) => setTargetStatus(e.target.value as Status | '')} disabled={allowed.length === 0}>
+            <option value="">No status change</option>
+            {allowed.map(s => <option key={s} value={s}>{sentence(s)}</option>)}
+          </Select>
+        </Field>
+
+        <Field label="IRAS / CPF reference number" required={requiresRef} help={requiresRef ? 'Required when marking submitted.' : undefined}>
+          <Input type="text" value={referenceNumber} onChange={(e) => setReferenceNumber(e.target.value)} placeholder="e.g. CPF-2026-12345" />
+        </Field>
+
+        {requiresReason && (
+          <Field label="Rejection reason" required>
+            <Textarea rows={3} value={rejectedReason} onChange={(e) => setRejectedReason(e.target.value)} placeholder="Why did IRAS / CPF reject the filing?" />
+          </Field>
+        )}
+
+        <Field label="Notes">
+          <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </Field>
+
+        <details className="rounded-control bg-page border border-rule px-3 py-2 text-[13px] text-ink">
+          <summary className="cursor-pointer font-semibold">Submission metadata</summary>
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2">
+            <dt className="text-muted">Deadline</dt><dd className="tabular-nums">{fmtDate(submission.deadline)}</dd>
+            <dt className="text-muted">Submitted</dt><dd className="tabular-nums">{fmtDate(submission.submittedAt)}</dd>
+            <dt className="text-muted">Acknowledged</dt><dd className="tabular-nums">{fmtDate(submission.acknowledgedAt)}</dd>
+            {submission.rejectedAt && (
+              <>
+                <dt className="text-muted">Rejected</dt><dd className="tabular-nums">{fmtDate(submission.rejectedAt)}</dd>
+                <dt className="text-muted">Reason</dt><dd>{submission.rejectedReason ?? '—'}</dd>
+              </>
+            )}
+            {submission.fileHash && (
+              <><dt className="text-muted">File hash</dt><dd className="tabular-nums break-all">{submission.fileHash}</dd></>
+            )}
+          </dl>
+        </details>
       </div>
-    </div>
+    </Modal>
   );
 }
 
 // ─── Create modal ────────────────────────────────────────────────────────────
 
-interface CreateProps {
-  onClose: () => void;
-  onCreated: () => void;
-}
-
-function CreateSubmissionModal({ onClose, onCreated }: CreateProps) {
+function CreateSubmissionModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [kind, setKind] = useState<Kind>('CPF_E_SUBMIT');
   const [period, setPeriod] = useState<string>('');
   const [year, setYear]     = useState<string>(String(new Date().getUTCFullYear()));
@@ -584,102 +447,56 @@ function CreateSubmissionModal({ onClose, onCreated }: CreateProps) {
     }
   }
 
+  const disabled = saving || (needsPeriod && !period) || (needsYear && !year) || (needsEmployee && !employeeId);
+
   return (
-    <div className="fixed inset-0 bg-shadow flex items-center justify-center z-50 p-4">
-      <div className="bg-paper max-w-lg w-full">
-        <div className="px-5 py-4 border-b border-rule flex items-start justify-between">
-          <h2 className="text-lg font-semibold text-ink">New IRAS / CPF submission</h2>
-          <button onClick={onClose} className="text-muted hover:text-ink text-lg">×</button>
-        </div>
-        <div className="px-5 py-4 space-y-4">
-          {error && (
-            <div className="bg-page border border-ink text-ink px-3 py-2 text-sm">
-              {error}
-            </div>
-          )}
+    <Modal
+      open
+      onClose={onClose}
+      title="New IRAS / CPF submission"
+      caption="Most rows are auto-created when you generate a CPF or IR8A file from the Payroll page; use this for manual entries such as amendments."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleCreate} disabled={disabled}
+            reason={disabled && !saving ? 'Fill in the required scope field' : undefined}>
+            {saving ? 'Creating…' : 'Create draft'}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {error && <p className="text-sm text-danger font-semibold">{error}</p>}
 
-          <div>
-            <label className="block text-xs font-medium text-ink mb-1">Kind</label>
-            <select
-              value={kind}
-              onChange={(e) => setKind(e.target.value as Kind)}
-              className="border border-rule px-2 py-1 text-sm w-full"
-            >
-              {KINDS.map(k => <option key={k} value={k}>{KIND_LABELS[k]}</option>)}
-            </select>
-          </div>
+        <Field label="Kind">
+          <Select value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
+            {KINDS.map(k => <option key={k} value={k}>{KIND_LABELS[k]}</option>)}
+          </Select>
+        </Field>
 
-          {needsPeriod && (
-            <div>
-              <label className="block text-xs font-medium text-ink mb-1">Period (YYYY-MM) <span className="text-ink">*</span></label>
-              <input
-                type="text" placeholder="2026-05"
-                value={period}
-                onChange={(e) => setPeriod(e.target.value)}
-                className="border border-rule px-2 py-1 text-sm w-full"
-              />
-            </div>
-          )}
-          {needsYear && (
-            <div>
-              <label className="block text-xs font-medium text-ink mb-1">Income year <span className="text-ink">*</span></label>
-              <input
-                type="number"
-                value={year}
-                onChange={(e) => setYear(e.target.value)}
-                className="border border-rule px-2 py-1 text-sm w-full"
-              />
-            </div>
-          )}
-          {needsEmployee && (
-            <div>
-              <label className="block text-xs font-medium text-ink mb-1">Employee ID <span className="text-ink">*</span></label>
-              <input
-                type="text"
-                value={employeeId}
-                onChange={(e) => setEmployeeId(e.target.value)}
-                className="border border-rule px-2 py-1 text-sm w-full font-mono"
-              />
-            </div>
-          )}
+        {needsPeriod && (
+          <Field label="Period (YYYY-MM)" required>
+            <Input type="text" placeholder="2026-05" value={period} onChange={(e) => setPeriod(e.target.value)} />
+          </Field>
+        )}
+        {needsYear && (
+          <Field label="Income year" required>
+            <Input type="number" value={year} onChange={(e) => setYear(e.target.value)} />
+          </Field>
+        )}
+        {needsEmployee && (
+          <Field label="Employee ID" required>
+            <Input type="text" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} />
+          </Field>
+        )}
 
-          <div>
-            <label className="block text-xs font-medium text-ink mb-1">File name (optional)</label>
-            <input
-              type="text"
-              value={fileName}
-              onChange={(e) => setFileName(e.target.value)}
-              className="border border-rule px-2 py-1 text-sm w-full"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-ink mb-1">Notes</label>
-            <textarea
-              rows={2}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="border border-rule px-2 py-1 text-sm w-full"
-            />
-          </div>
-
-          <p className="text-xs text-muted">
-            Tip: generating a CPF or IR8A file from the Payroll page auto-creates a DRAFT row here —
-            you only need this dialog for manual entries (e.g. amendments).
-          </p>
-        </div>
-        <div className="px-5 py-3 border-t border-rule flex justify-end gap-2">
-          <button onClick={onClose} className="px-3 py-1.5 text-sm text-ink hover:bg-page">
-            Cancel
-          </button>
-          <button
-            onClick={handleCreate}
-            disabled={saving || (needsPeriod && !period) || (needsYear && !year) || (needsEmployee && !employeeId)}
-            className="px-3 py-1.5 text-sm bg-accent text-paper hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saving ? 'Creating…' : 'Create DRAFT'}
-          </button>
-        </div>
+        <Field label="File name (optional)">
+          <Input type="text" value={fileName} onChange={(e) => setFileName(e.target.value)} />
+        </Field>
+        <Field label="Notes">
+          <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </Field>
       </div>
-    </div>
+    </Modal>
   );
 }
