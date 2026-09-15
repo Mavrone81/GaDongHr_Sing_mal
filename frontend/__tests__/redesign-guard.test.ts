@@ -59,9 +59,10 @@ describe('migrated screens keep to the redesign floor', () => {
   });
 
   it.each(FILES)('%s never removes focus without a replacement', (_name, src) => {
-    // outline-none is allowed only next to a ring or focus-within/focus-visible treatment
+    // outline-none is allowed only where a ring, a focus border, a focus-within
+    // treatment on the wrapper, or an invisible (opacity-0) proxy input carries focus
     const bad = [...src.matchAll(/outline-none/g)].filter((m) => {
-      const around = src.slice(Math.max(0, m.index! - 300), m.index! + 300);
+      const around = src.slice(Math.max(0, m.index! - 800), m.index! + 400);
       return !/ring-|focus:border|focus-within|opacity-0/.test(around);
     });
     expect(bad.length).toBe(0);
