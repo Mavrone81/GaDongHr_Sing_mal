@@ -462,7 +462,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const openDrawer = (opener: HTMLElement) => { drawerOpener.current = opener; setSidebarOpen(true); };
   useEffect(() => {
     if (sidebarOpen) {
+      // Visibility switches instantly on open (only the close is transitioned), so
+      // focus can land now; the rAF retry covers a frame where it has not applied yet.
       drawerCloseRef.current?.focus();
+      requestAnimationFrame(() => { if (document.activeElement !== drawerCloseRef.current) drawerCloseRef.current?.focus(); });
     } else if (drawerWasOpen.current) {
       const a = document.activeElement;
       if (!a || a === document.body || drawerRef.current?.contains(a)) drawerOpener.current?.focus();
@@ -620,8 +623,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         role="dialog"
         aria-modal="true"
         aria-label="Navigation"
-        className={`w-60 bg-paper border-r border-rule flex flex-col z-50 shrink-0 fixed inset-y-0 left-0 px-3 pt-[18px] pb-3.5 transition-[transform,visibility] duration-200 lg:hidden ${
-          sidebarOpen ? 'translate-x-0 visible' : '-translate-x-full invisible'
+        className={`w-60 bg-paper border-r border-rule flex flex-col z-50 shrink-0 fixed inset-y-0 left-0 px-3 pt-[18px] pb-3.5 duration-200 lg:hidden ${
+          sidebarOpen ? 'translate-x-0 visible transition-transform' : '-translate-x-full invisible transition-[transform,visibility]'
         }`}
       >
         <button
