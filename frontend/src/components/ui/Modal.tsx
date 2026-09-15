@@ -85,7 +85,9 @@ export function Modal({ open, onClose, title, caption, footer, size = 'md', chil
   const close = () => onCloseRef.current();
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-ink/40 sm:p-4" onMouseDown={close}>
+    // preventDefault: a mousedown's default focus change would otherwise run
+    // after the close cleanup returned focus to the opener, leaving it on <body>.
+    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-ink/40 sm:p-4" onMouseDown={(e) => { e.preventDefault(); close(); }}>
       <div
         ref={panelRef}
         role="dialog"
