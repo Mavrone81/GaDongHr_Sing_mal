@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { apiFetchRaw } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { Card, CardHeader, Badge, Button, Modal, Field, Input, Textarea, EmptyState, Icon } from '@/components/ui';
+import type { BadgeTone } from '@/components/ui';
 
 interface SignRequest {
   id: string;
@@ -27,6 +29,40 @@ interface SignRequest {
     version: string;
   };
 }
+
+/** Four request states, four appearances. */
+const SIGN_STATUS_TONE: Record<SignRequest['status'], BadgeTone> = {
+  PENDING:  'warn',
+  SIGNED:   'ok',
+  DECLINED: 'danger',
+  EXPIRED:  'neutral',
+};
+
+const SIGN_STATUS_LABEL: Record<SignRequest['status'], string> = {
+  PENDING: 'Awaiting signature', SIGNED: 'Signed', DECLINED: 'Declined', EXPIRED: 'Expired',
+};
+
+/**
+ * The document body is HR-authored HTML. There is no typography plugin in
+ * this build and preflight strips heading sizes and paragraph margins, so
+ * without these rules a contract's headings render the same as its body text.
+ * Scoped to the viewer; the serif face is deliberate — it reads as the
+ * document, not as the app around it.
+ */
+const DOC_BODY = [
+  'text-[15px] leading-7 text-ink',
+  '[&_h1]:text-2xl [&_h1]:font-bold [&_h1]:leading-tight [&_h1]:mb-4',
+  '[&_h2]:text-xl [&_h2]:font-bold [&_h2]:mt-6 [&_h2]:mb-3',
+  '[&_h3]:text-base [&_h3]:font-bold [&_h3]:mt-5 [&_h3]:mb-2',
+  '[&_p]:mb-3 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-6 [&_ol]:pl-6 [&_ul]:mb-3 [&_ol]:mb-3 [&_li]:mb-1',
+  '[&_strong]:font-bold [&_a]:text-accent [&_a]:underline',
+  '[&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-rule [&_td]:p-2 [&_th]:border [&_th]:border-rule [&_th]:p-2 [&_th]:bg-page',
+].join(' ');
+
+const LINK_BUTTON = 'inline-flex items-center justify-center gap-2 h-10 px-4 rounded-control border border-rule bg-paper text-sm font-semibold text-ink whitespace-nowrap hover:bg-pill';
+
+const fmtDateTime = (iso: string, month: 'short' | 'long' = 'short') =>
+  new Date(iso).toLocaleString('en-SG', { day: 'numeric', month, year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 export default function SignDocumentPage() {
   const { id } = useParams<{ id: string }>();
@@ -125,26 +161,21 @@ export default function SignDocumentPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-4 border-accent border-t-accent animate-spin rounded-full" />
-          <p className="text-xs font-bold text-muted uppercase tracking-widest">Loading document…</p>
-        </div>
+        <div className="w-9 h-9 border-2 border-rule border-t-accent animate-spin rounded-full" role="status" aria-label="Loading document" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="max-w-2xl mx-auto mt-16 text-center">
-        <div className="w-16 h-16 bg-page flex items-center justify-center mx-auto mb-4">
-          <span className="text-2xl">◈</span>
-        </div>
-        <h2 className="text-lg font-black text-ink mb-2">Document Not Found</h2>
-        <p className="text-sm text-muted mb-6">{error}</p>
-        <Link href="/documents" className="inline-flex items-center gap-2 text-xs font-bold text-accent hover:text-accent border border-accent px-4 py-2 hover:bg-page transition-all">
-          ← Back to Documents
-        </Link>
-      </div>
+      <Card padding="p-0" className="max-w-2xl mx-auto mt-10">
+        <EmptyState
+          icon="alert"
+          title="Document not found"
+          description={error}
+          action={<Link href="/documents" className={LINK_BUTTON}>Back to documents</Link>}
+        />
+      </Card>
     );
   }
 
@@ -158,176 +189,155 @@ export default function SignDocumentPage() {
   const canSign = isPending;
   const isOverdue = isPending && request.dueDate && new Date(request.dueDate) < new Date();
 
-  const statusConfig: Record<string, { label: string; color: string; bg: string; icon: string }> = {
-    PENDING:  { label: 'Awaiting Signature', color: 'text-ink',  bg: 'bg-page border-highlight',  icon: '◌' },
-    SIGNED:   { label: 'Signed',             color: 'text-accent',bg: 'bg-page border-accent', icon: '◉' },
-    DECLINED: { label: 'Declined',           color: 'text-ink',    bg: 'bg-page border-ink',       icon: '◎' },
-    EXPIRED:  { label: 'Expired',            color: 'text-ink',  bg: 'bg-page border-rule',  icon: '◯' },
-  };
-  const statusInfo = statusConfig[request.status] || statusConfig.PENDING;
+  // Why the Sign button is off, in the order the person has to fix it.
+  const signBlockedReason =
+    !hasScrolled ? 'Read the document to the end first'
+    : !signatoryName.trim() ? 'Type your full name'
+    : !agreed ? 'Tick the agreement to continue'
+    : undefined;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <Link
-          href="/documents"
-          className="inline-flex items-center gap-2 text-xs font-bold text-muted hover:text-accent transition-colors"
-        >
-          ← My Documents
-        </Link>
-        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-black uppercase tracking-widest  border ${statusInfo.bg} ${statusInfo.color}`}>
-          <span>{statusInfo.icon}</span> {statusInfo.label}
-        </span>
-      </div>
+    <div className="flex flex-col gap-5 max-w-4xl mx-auto w-full pb-10">
+      <Link href="/documents" className="self-start inline-flex items-center gap-1.5 h-8 -ml-1 px-1 rounded-control text-[13px] font-semibold text-muted hover:text-accent">
+        <Icon name="chevronRight" size={16} className="rotate-180" /> My documents
+      </Link>
 
-      {/* Document meta card */}
-      <div className="bg-paper border border-rule p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 bg-page flex items-center justify-center shrink-0">
-              <span className="text-xl text-accent">◈</span>
-            </div>
-            <div>
-              <h1 className="text-lg font-black text-ink">{request.documentTitle}</h1>
-              <p className="text-xs text-muted mt-0.5 uppercase tracking-wider font-bold">
-                {request.documentType?.replace(/_/g, ' ')}
-                {request.document?.version && <span className="ml-2 text-muted">v{request.document.version}</span>}
-              </p>
-              {request.senderMessage && (
-                <p className="text-sm text-ink mt-3 p-3 bg-page border border-rule italic">
-                  "{request.senderMessage}"
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="text-right shrink-0">
-            {request.dueDate && (
-              <div className={`text-xs font-bold ${isOverdue ? 'text-ink' : 'text-muted'}`}>
-                {isOverdue ? '⚠ Overdue' : 'Due by'}
-                <p className={`text-sm font-black mt-0.5 ${isOverdue ? 'text-ink' : 'text-ink'}`}>
-                  {new Date(request.dueDate).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}
-                </p>
+      {/* Document identity */}
+      <Card padding="p-5 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-4 min-w-0">
+            <span className="flex items-center justify-center w-12 h-12 rounded-control bg-tint text-accent shrink-0" aria-hidden="true">
+              <Icon name="file" size={22} />
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                <Badge tone={SIGN_STATUS_TONE[request.status] ?? 'warn'}>{SIGN_STATUS_LABEL[request.status] ?? request.status}</Badge>
+                {isOverdue && <Badge tone="danger">Overdue</Badge>}
               </div>
-            )}
+              <h1 className="text-[22px] sm:text-[26px] font-extrabold tracking-[-0.02em] leading-[1.15] text-ink">{request.documentTitle}</h1>
+              <p className="text-[13px] text-muted mt-1">
+                {request.documentType?.replace(/_/g, ' ').toLowerCase().replace(/^\w/, ch => ch.toUpperCase())}
+                {request.document?.version && <span className="tabular-nums"> · Version {request.document.version}</span>}
+              </p>
+            </div>
           </div>
+          {request.dueDate && (
+            <div className="sm:text-right shrink-0">
+              <p className={`text-[12.5px] font-semibold ${isOverdue ? 'text-danger' : 'text-muted'}`}>{isOverdue ? 'Was due' : 'Due by'}</p>
+              <p className="text-sm font-bold text-ink tabular-nums mt-0.5">
+                {new Date(request.dueDate).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </p>
+            </div>
+          )}
         </div>
 
-        {/* Timeline for completed requests */}
+        {request.senderMessage && (
+          <blockquote className="mt-4 px-4 py-3 rounded-control bg-page border border-rule text-sm text-ink">
+            <p className="text-[12.5px] font-semibold text-muted mb-1">Message from HR</p>
+            {request.senderMessage}
+          </blockquote>
+        )}
+
         {(isSigned || isDeclined) && (
-          <div className="mt-4 pt-4 border-t border-rule flex flex-wrap gap-6 text-xs">
+          <dl className="mt-5 pt-5 border-t border-rule grid grid-cols-1 sm:grid-cols-3 gap-4">
             {request.viewedAt && (
               <div>
-                <span className="text-muted font-bold uppercase tracking-wider">Viewed</span>
-                <p className="text-ink font-bold mt-0.5">
-                  {new Date(request.viewedAt).toLocaleString('en-SG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                </p>
+                <dt className="text-[12.5px] font-semibold text-muted">Viewed</dt>
+                <dd className="text-sm font-semibold text-ink mt-0.5 tabular-nums">{fmtDateTime(request.viewedAt)}</dd>
               </div>
             )}
             {isSigned && request.signedAt && (
               <div>
-                <span className="text-accent font-bold uppercase tracking-wider">Signed</span>
-                <p className="text-ink font-bold mt-0.5">
-                  {new Date(request.signedAt).toLocaleString('en-SG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                </p>
+                <dt className="text-[12.5px] font-semibold text-muted">Signed</dt>
+                <dd className="text-sm font-semibold text-ink mt-0.5 tabular-nums">{fmtDateTime(request.signedAt)}</dd>
               </div>
             )}
             {isDeclined && request.declinedAt && (
               <div>
-                <span className="text-ink font-bold uppercase tracking-wider">Declined</span>
-                <p className="text-ink font-bold mt-0.5">
-                  {new Date(request.declinedAt).toLocaleString('en-SG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                </p>
+                <dt className="text-[12.5px] font-semibold text-muted">Declined</dt>
+                <dd className="text-sm font-semibold text-ink mt-0.5 tabular-nums">{fmtDateTime(request.declinedAt)}</dd>
               </div>
             )}
             {isDeclined && request.declineReason && (
-              <div className="w-full">
-                <span className="text-ink font-bold uppercase tracking-wider">Reason</span>
-                <p className="text-ink mt-0.5">{request.declineReason}</p>
+              <div className="sm:col-span-3">
+                <dt className="text-[12.5px] font-semibold text-muted">Reason</dt>
+                <dd className="text-sm text-ink mt-0.5">{request.declineReason}</dd>
               </div>
             )}
-          </div>
+          </dl>
         )}
-      </div>
+      </Card>
 
-      {/* Document Viewer */}
-      <div className="bg-paper border border-rule overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-3 bg-page border-b border-rule">
-          <span className="text-xs font-black text-ink uppercase tracking-widest">Document Content</span>
+      {/* Document viewer */}
+      <Card padding="p-0" className="overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 border-b border-rule">
+          <span className="text-[15.5px] font-bold text-ink">Document</span>
           {canSign && !hasScrolled && (
-            <span className="text-xs font-bold text-ink animate-pulse">↓ Scroll to read the full document</span>
+            <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-warn">
+              <Icon name="chevronDown" size={15} /> Scroll to the end to continue
+            </span>
           )}
           {canSign && hasScrolled && (
-            <span className="text-xs font-bold text-accent">✓ Document read</span>
+            <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-ok">
+              <Icon name="check" size={15} strokeWidth={2.5} /> Read to the end
+            </span>
           )}
         </div>
         <div
           ref={docViewerRef}
           onScroll={handleDocScroll}
-          className="h-[480px] overflow-y-auto p-8 prose prose-slate max-w-none custom-scrollbar"
+          tabIndex={0}
+          aria-label="Document content"
+          className={`h-[480px] overflow-y-auto px-5 py-6 sm:px-8 custom-scrollbar ${DOC_BODY}`}
           style={{ fontFamily: 'Georgia, serif' }}
           dangerouslySetInnerHTML={{ __html: request.personalizedHtml }}
         />
-      </div>
+      </Card>
 
-      {/* Signature Block — only for PENDING */}
+      {/* Signature block — only for PENDING */}
       {canSign && (
-        <div className={`bg-paper  border-2  overflow-hidden transition-all ${hasScrolled ? 'border-accent' : 'border-rule opacity-70'}`}>
-          <div className="px-6 py-3 bg-page border-b border-accent flex items-center gap-2">
-            <span className="text-accent">◈</span>
-            <span className="text-xs font-black text-accent uppercase tracking-widest">Signature Block</span>
-            {!hasScrolled && <span className="ml-auto text-xs text-muted font-bold">Please read the document above first</span>}
+        <Card padding="p-0" className={`overflow-hidden ${hasScrolled ? 'border-accent' : ''}`}>
+          <div className="px-5 pt-5">
+            <CardHeader
+              title="Sign this document"
+              caption={!hasScrolled ? 'Read the document above to the end first. The fields unlock once you have.' : undefined}
+            />
           </div>
 
-          <div className="p-6 space-y-5">
+          <div className="px-5 pb-5">
             {signSuccess ? (
-              <div className="text-center py-8">
-                <div className="w-16 h-16 bg-page flex items-center justify-center mx-auto mb-4">
-                  <span className="text-3xl">◉</span>
-                </div>
-                <h3 className="text-lg font-black text-accent mb-1">Document Signed</h3>
-                <p className="text-sm text-muted mb-6">
-                  Your signature has been recorded on {new Date().toLocaleString('en-SG', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}.
+              <div className="flex flex-col items-center text-center py-6">
+                <span className="flex items-center justify-center w-12 h-12 rounded-full bg-ok-bg text-ok mb-3" aria-hidden="true">
+                  <Icon name="check" size={24} strokeWidth={2.5} />
+                </span>
+                <h3 className="text-lg font-bold text-ink">Document signed</h3>
+                <p className="text-sm text-muted mt-1 mb-5">
+                  Your signature was recorded on {fmtDateTime(new Date().toISOString(), 'long')}.
                 </p>
-                <Link
-                  href="/documents"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent transition-all"
-                >
-                  ← Back to My Documents
-                </Link>
+                <Link href="/documents" className={LINK_BUTTON}>Back to my documents</Link>
               </div>
             ) : (
-              <>
-                {/* Full name input */}
-                <div>
-                  <label className="block text-xs font-black text-ink uppercase tracking-wider mb-1.5">
-                    Full Legal Name <span className="text-ink">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={signatoryName}
-                    onChange={e => setSignatoryName(e.target.value)}
-                    disabled={!hasScrolled}
-                    placeholder="Type your full name exactly as it appears in your ID"
-                    className="w-full border border-rule px-4 py-3 text-sm font-medium text-ink placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent disabled:bg-page disabled:cursor-not-allowed transition-all"
-                  />
-                  <p className="text-xs text-muted mt-1 font-medium">
-                    Signing as: <span className="font-bold text-ink">{signatoryName || '—'}</span>
-                  </p>
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Full legal name" required help={<>Signing as <span className="font-semibold text-ink">{signatoryName || '—'}</span></>}>
+                    <Input
+                      type="text"
+                      value={signatoryName}
+                      onChange={e => setSignatoryName(e.target.value)}
+                      disabled={!hasScrolled}
+                      placeholder="Exactly as it appears on your ID"
+                    />
+                  </Field>
+                  <Field label="Date">
+                    <div className="flex items-center h-[42px] px-3 rounded-control bg-page border border-rule text-sm font-semibold text-ink">
+                      {new Date().toLocaleDateString('en-SG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                    </div>
+                  </Field>
                 </div>
 
-                {/* Date display */}
-                <div>
-                  <label className="block text-xs font-black text-ink uppercase tracking-wider mb-1.5">Date</label>
-                  <div className="px-4 py-3 bg-page border border-rule text-sm font-bold text-ink">
-                    {new Date().toLocaleDateString('en-SG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                  </div>
-                </div>
-
-                {/* Agreement checkbox */}
-                <label className={`flex items-start gap-3 cursor-pointer p-4  border-2 transition-all ${
-                  agreed ? 'border-accent bg-page' : 'border-rule bg-page hover:border-rule'
-                } ${!hasScrolled ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <label className={`flex items-start gap-3 p-4 rounded-control border transition-colors ${
+                  agreed ? 'border-accent bg-tint' : 'border-rule bg-page'
+                } ${!hasScrolled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                   <input
                     type="checkbox"
                     checked={agreed}
@@ -335,148 +345,115 @@ export default function SignDocumentPage() {
                     disabled={!hasScrolled}
                     className="mt-0.5 w-4 h-4 accent-accent shrink-0"
                   />
-                  <span className="text-sm text-ink font-medium leading-relaxed">
+                  <span className="text-sm text-ink leading-relaxed">
                     I have read and understood the above document in its entirety. By signing, I confirm my agreement to its terms and acknowledge that this constitutes a legally binding e-signature under Singapore's Electronic Transactions Act.
                   </span>
                 </label>
 
                 {signError && (
-                  <div className="flex items-center gap-2 p-3 bg-page border border-ink text-sm text-ink font-bold">
-                    <span>◎</span> {signError}
+                  <div role="alert" className="flex items-start gap-2.5 px-3.5 py-3 rounded-control bg-danger-bg text-[13px] text-danger">
+                    <Icon name="alert" size={16} className="mt-px" />{signError}
                   </div>
                 )}
 
-                {/* Action buttons */}
-                <div className="flex items-center gap-3 pt-1">
-                  <button
-                    onClick={handleSign}
-                    disabled={!hasScrolled || !signatoryName.trim() || !agreed || signing}
-                    className="flex-1 py-3 px-6 bg-accent text-paper text-xs font-black uppercase tracking-widest hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all "
-                  >
-                    {signing ? 'Signing…' : '◈ Sign Document'}
-                  </button>
-                  <button
+                <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 pt-1">
+                  <Button
+                    variant="danger"
                     onClick={() => { setShowDeclineModal(true); setDeclineError(''); setDeclineReason(''); }}
                     disabled={!hasScrolled || signing}
-                    className="py-3 px-5 border-2 border-ink text-ink text-xs font-black uppercase tracking-widest hover:bg-page hover:border-ink disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all"
+                    reason={!hasScrolled ? 'Read the document first' : undefined}
                   >
                     Decline
-                  </button>
+                  </Button>
+                  <Button
+                    icon="check"
+                    onClick={handleSign}
+                    disabled={!hasScrolled || !signatoryName.trim() || !agreed || signing}
+                    reason={!signing ? signBlockedReason : undefined}
+                  >
+                    {signing ? 'Signing…' : 'Sign document'}
+                  </Button>
                 </div>
-              </>
+              </div>
             )}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Read-only status for signed/declined/expired */}
       {!canSign && !signSuccess && !declineSuccess && (
-        <div className={` border-2 p-6 ${
-          isSigned   ? 'bg-page border-accent' :
-          isDeclined ? 'bg-page border-ink' :
-                       'bg-page border-rule'
-        }`}>
+        <Card>
           <div className="flex items-start gap-4">
-            <div className={`w-12 h-12  flex items-center justify-center shrink-0 ${
-              isSigned   ? 'bg-page text-accent' :
-              isDeclined ? 'bg-page text-ink' :
-                           'bg-rule text-muted'
-            }`}>
-              <span className="text-xl">{isSigned ? '◉' : isDeclined ? '◎' : '◯'}</span>
-            </div>
-            <div className="flex-1">
-              <h3 className={`text-sm font-black uppercase tracking-wider ${
-                isSigned ? 'text-accent' : isDeclined ? 'text-ink' : 'text-ink'
-              }`}>
-                {isSigned ? 'Document Signed' : isDeclined ? 'Document Declined' : 'Request Expired'}
+            <span className={`flex items-center justify-center w-11 h-11 rounded-full shrink-0 ${
+              isSigned ? 'bg-ok-bg text-ok' : isDeclined ? 'bg-danger-bg text-danger' : 'bg-pill text-muted'
+            }`} aria-hidden="true">
+              <Icon name={isSigned ? 'check' : isDeclined ? 'x' : 'clock'} size={20} strokeWidth={2.25} />
+            </span>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-[15.5px] font-bold text-ink">
+                {isSigned ? 'Document signed' : isDeclined ? 'Document declined' : 'Request expired'}
               </h3>
               <p className="text-sm text-ink mt-1">
-                {isSigned && `Signed by ${request.signatoryName} on ${request.signedAt ? new Date(request.signedAt).toLocaleString('en-SG', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}.`}
+                {isSigned && `Signed by ${request.signatoryName} on ${request.signedAt ? fmtDateTime(request.signedAt, 'long') : '—'}.`}
                 {isDeclined && `Declined on ${request.declinedAt ? new Date(request.declinedAt).toLocaleString('en-SG', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}. ${request.declineReason ? `Reason: ${request.declineReason}` : ''}`}
                 {isExpired && 'This signing request has expired. Contact HR if you still need to sign this document.'}
               </p>
               {isSigned && request.signedDocHash && (
                 <p className="text-xs text-muted mt-2 font-mono">
-                  Document hash: {request.signedDocHash.substring(0, 16)}…
+                  Document hash {request.signedDocHash.substring(0, 16)}…
                 </p>
               )}
+              <div className="mt-4">
+                <Link href="/documents" className={LINK_BUTTON}>Back to documents</Link>
+              </div>
             </div>
           </div>
-          <div className="mt-4">
-            <Link
-              href="/documents"
-              className="inline-flex items-center gap-2 text-xs font-bold text-muted hover:text-accent border border-rule px-4 py-2 hover:bg-paper transition-all"
-            >
-              ← Back to Documents
-            </Link>
-          </div>
-        </div>
+        </Card>
       )}
 
       {declineSuccess && (
-        <div className="bg-page border-2 border-rule p-6 text-center">
-          <div className="w-12 h-12 bg-rule flex items-center justify-center mx-auto mb-3">
-            <span className="text-xl text-muted">◎</span>
-          </div>
-          <h3 className="text-sm font-black text-ink mb-1">Decline Recorded</h3>
-          <p className="text-sm text-muted mb-4">Your response has been submitted. HR will be notified.</p>
-          <Link
-            href="/documents"
-            className="inline-flex items-center gap-2 text-xs font-bold text-muted hover:text-accent border border-rule px-4 py-2 hover:bg-paper transition-all"
-          >
-            ← Back to Documents
-          </Link>
-        </div>
+        <Card padding="p-0">
+          <EmptyState
+            icon="check"
+            title="Your decline has been recorded"
+            description="Your response has been submitted. HR will be notified."
+            action={<Link href="/documents" className={LINK_BUTTON}>Back to documents</Link>}
+          />
+        </Card>
       )}
 
-      {/* Decline Modal */}
-      {showDeclineModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow/40 backdrop- p-4">
-          <div className="bg-paper w-full max-w-md border border-rule">
-            <div className="px-6 py-4 border-b border-rule flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-black text-ink">Decline Document</h3>
-                <p className="text-xs text-muted mt-0.5">Please provide a reason for declining</p>
-              </div>
-              <button onClick={() => setShowDeclineModal(false)} className="w-8 h-8 flex items-center justify-center hover:bg-page text-muted hover:text-ink transition-all text-lg">×</button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-black text-ink uppercase tracking-wider mb-1.5">
-                  Reason for Declining <span className="text-ink">*</span>
-                </label>
-                <textarea
-                  rows={4}
-                  value={declineReason}
-                  onChange={e => setDeclineReason(e.target.value)}
-                  placeholder="Explain why you are declining this document…"
-                  className="w-full border border-rule px-4 py-3 text-sm text-ink placeholder-muted focus:outline-none focus:ring-2 focus:ring-ink focus:border-transparent resize-none"
-                />
-              </div>
-              {declineError && (
-                <div className="p-3 bg-page border border-ink text-sm text-ink font-bold">
-                  {declineError}
-                </div>
-              )}
-              <div className="flex gap-3 pt-1">
-                <button
-                  onClick={handleDecline}
-                  disabled={declining || !declineReason.trim()}
-                  className="flex-1 py-2.5 bg-ink text-paper text-xs font-black uppercase tracking-widest hover:bg-ink disabled:opacity-40 transition-all"
-                >
-                  {declining ? 'Submitting…' : 'Confirm Decline'}
-                </button>
-                <button
-                  onClick={() => setShowDeclineModal(false)}
-                  className="px-5 py-2.5 border border-rule text-ink text-xs font-black uppercase tracking-widest hover:bg-page transition-all"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
+      {/* Decline modal */}
+      <Modal
+        open={showDeclineModal}
+        onClose={() => setShowDeclineModal(false)}
+        title="Decline this document"
+        caption="HR will see your reason."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowDeclineModal(false)}>Cancel</Button>
+            <Button
+              variant="danger"
+              onClick={handleDecline}
+              disabled={declining || !declineReason.trim()}
+              reason={!declining && !declineReason.trim() ? 'Give a reason first' : undefined}
+            >
+              {declining ? 'Submitting…' : 'Confirm decline'}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <Field label="Reason for declining" required error={declineError || undefined}>
+            <Textarea
+              rows={4}
+              value={declineReason}
+              onChange={e => setDeclineReason(e.target.value)}
+              placeholder="Explain why you are declining this document…"
+              invalid={!!declineError}
+            />
+          </Field>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }
