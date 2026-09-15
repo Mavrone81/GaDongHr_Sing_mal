@@ -45,6 +45,22 @@ describe('Official Record tokens', () => {
    * Record colours under a false name — a lie in the config that makes every
    * subsequent reader distrust it.
    */
+  /**
+   * State tones must differ in the pixels, not just the names. Form2 found
+   * ok and accent chips pixel-identical in dark (same fg, same ground) and
+   * sharing a ground in light, so every map pairing them passed the
+   * state-map guard while showing two states as one chip.
+   */
+  it('keeps the ok and accent tones visually distinct in both themes', () => {
+    const val = (block: string, name: string) => block.match(new RegExp(`${name}\\s*:\\s*(#[0-9A-Fa-f]{6})`))?.[1]?.toUpperCase();
+    const root = CSS.slice(CSS.indexOf(':root {'), CSS.indexOf('}', CSS.indexOf(':root {')));
+    const dark = CSS.slice(CSS.indexOf('[data-theme="dark"]'), CSS.indexOf('}', CSS.indexOf('[data-theme="dark"]')));
+    for (const block of [root, dark]) {
+      expect(val(block, '--ok-bg')).not.toBe(val(block, '--tint'));
+      expect(val(block, '--ok')).not.toBe(val(block, '--accent') ?? '#1B4A3C');
+    }
+  });
+
   it('no longer defines indigo aliases', () => {
     expect(CSS).not.toMatch(/--indigo-/);
   });
