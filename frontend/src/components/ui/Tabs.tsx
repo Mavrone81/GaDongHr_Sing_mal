@@ -1,11 +1,23 @@
-/** Underline tabs: 14px semibold, accent underline on the active one. Arrow keys move between tabs. */
+'use client';
+
+import { useRef } from 'react';
+
+/**
+ * Underline tabs: 14px semibold, accent underline on the active one.
+ * Arrow keys move selection AND focus to the neighbouring tab (roving
+ * tabindex), so a screen reader announces the new tab on every arrow.
+ */
 export function Tabs<T extends string>({ items, active, onChange, className = '' }: { items: { id: T; label: string; count?: number }[]; active: T; onChange: (id: T) => void; className?: string }) {
+  const listRef = useRef<HTMLDivElement>(null);
   const move = (from: number, delta: number) => {
-    const next = items[(from + delta + items.length) % items.length];
-    if (next) onChange(next.id);
+    const idx = (from + delta + items.length) % items.length;
+    const next = items[idx];
+    if (!next) return;
+    onChange(next.id);
+    listRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[idx]?.focus();
   };
   return (
-    <div role="tablist" className={`flex gap-1 border-b border-rule overflow-x-auto px-0.5 pt-0.5 ${className}`}>
+    <div ref={listRef} role="tablist" className={`flex gap-1 border-b border-rule overflow-x-auto px-0.5 pt-0.5 ${className}`}>
       {items.map((it, i) => {
         const on = it.id === active;
         return (
