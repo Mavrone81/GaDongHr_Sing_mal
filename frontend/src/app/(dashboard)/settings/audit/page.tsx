@@ -93,7 +93,7 @@ function ExpandCue({ expanded, children }: { expanded: boolean; children: ReactN
     <button
       type="button"
       aria-expanded={expanded}
-      className="inline-flex items-center gap-1.5 rounded-control px-1.5 py-1 text-[13px] font-semibold text-accent hover:bg-tint focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      className="inline-flex items-center gap-1.5 rounded-control px-1.5 py-1 text-[13px] font-semibold text-accent hover:bg-tint"
     >
       {children}
       <Icon name="chevronDown" size={14} strokeWidth={2} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
@@ -557,7 +557,7 @@ export default function AuditPage() {
                     if (pg < 1 || pg > pages) return null;
                     return (
                       <button key={pg} type="button" onClick={() => setPage(pg)} aria-current={pg === page ? 'page' : undefined}
-                        className={`h-8 min-w-[2rem] rounded-control px-2 text-[13px] font-semibold tabular-nums transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${pg === page ? 'bg-accent text-on-accent' :'text-muted hover:bg-pill hover:text-ink'}`}>
+                        className={`h-8 min-w-[2rem] rounded-control px-2 text-[13px] font-semibold tabular-nums transition-colors ${pg === page ? 'bg-accent text-on-accent' :'text-muted hover:bg-pill hover:text-ink'}`}>
                         {pg}
                       </button>
                     );

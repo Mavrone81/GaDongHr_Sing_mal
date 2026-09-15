@@ -518,7 +518,7 @@ function WebhooksTab() {
                     const on = newEvents.includes(ev.id);
                     return (
                       <label key={ev.id}
-                        className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-semibold transition-colors focus-within:ring-2 focus-within:ring-accent/40
+                        className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-semibold transition-colors focus-within:ring-2 focus-within:ring-accent
                           ${on ? 'border-accent bg-tint text-accent' : 'border-rule bg-paper text-ink hover:bg-page'}`}>
                         <input type="checkbox" className="sr-only" checked={on}
                           onChange={e => setNewEvents(e.target.checked ? [...newEvents, ev.id] : newEvents.filter(x => x !== ev.id))} />
