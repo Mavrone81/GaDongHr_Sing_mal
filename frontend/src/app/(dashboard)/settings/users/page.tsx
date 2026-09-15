@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { pwStrength } from '@/lib/passwordReset';
@@ -123,6 +123,20 @@ function AdjustPanel({
     setMfaLoading(false);
   };
 
+  // The reset button and its confirm row swap in place; move focus with the swap
+  // (onto Cancel when the confirm appears, back to the button when it goes) so
+  // keyboard focus never falls to <body>. Only a real change moves focus (so the
+  // open render — and Strict Mode's doubled effect — leave the Modal's focus alone).
+  const resetRowRef = useRef<HTMLDivElement>(null);
+  const confirmRowRef = useRef<HTMLDivElement>(null);
+  const prevConfirm = useRef(mfaConfirm);
+  useEffect(() => {
+    if (prevConfirm.current === mfaConfirm) return;
+    prevConfirm.current = mfaConfirm;
+    const row = mfaConfirm ? confirmRowRef.current : resetRowRef.current;
+    row?.querySelector<HTMLButtonElement>('button')?.focus();
+  }, [mfaConfirm]);
+
   const strength = pwStrength(pw);
   const mismatch = !!pwConfirm && pw !== pwConfirm;
 
@@ -134,35 +148,15 @@ function AdjustPanel({
 
   const spinner = <svg className="w-4 h-4 animate-spin rounded-full" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>;
 
+  // The dialog chrome (focus-in, Tab trap, Escape, focus return) is the kit Modal
+  // the page wraps this in; `onClose` is kept for parity with the old drawer API.
+  void onClose;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-stretch justify-end bg-ink/40" onClick={onClose}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Manage access for ${user.name}`}
-        className="relative flex h-full w-full max-w-lg flex-col border-l border-rule bg-paper shadow-card animate-in slide-in-from-right duration-300"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Identity band */}
-        <div className="flex shrink-0 items-center gap-4 border-b border-rule px-6 py-5">
-          <Avatar name={user.name} size={48} tone="soft" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[15.5px] font-bold text-ink">{user.name}</p>
-            <p className="truncate text-[13px] text-muted">{user.email}</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="flex h-9 w-9 items-center justify-center rounded-control text-muted hover:bg-pill hover:text-ink"
-          >
-            <Icon name="x" size={18} />
-          </button>
-        </div>
+    <div className="-mx-5 flex flex-col">
+        <Tabs items={TABS} active={tab} onChange={setTab} className="px-3" />
 
-        <Tabs items={TABS} active={tab} onChange={setTab} className="shrink-0 px-4" />
-
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="px-5 pt-5">
 
           {/* ── Access and role ─────────────────────────────────────────── */}
           {tab === 'role' && (
@@ -253,7 +247,7 @@ function AdjustPanel({
                       <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${i <= strength.score ? STRENGTH_BAR[strength.score] : 'bg-rule'}`} />
                     ))}
                   </div>
-                  <p className={`text-xs font-semibold ${strength.score >= 3 ? 'text-ok' : 'text-muted'}`}>
+                  <p aria-live="polite" className={`text-xs font-semibold ${strength.score >= 3 ? 'text-ok' : 'text-muted'}`}>
                     Strength: {strength.label.toLowerCase()}
                   </p>
                 </div>
@@ -314,11 +308,13 @@ function AdjustPanel({
                   </Notice>
 
                   {!mfaConfirm ? (
-                    <Button variant="danger" className="w-full" onClick={() => setMfaConfirm(true)}>
-                      Reset MFA for {user.name}
-                    </Button>
+                    <div ref={resetRowRef}>
+                      <Button variant="danger" className="w-full" onClick={() => setMfaConfirm(true)}>
+                        Reset MFA for {user.name}
+                      </Button>
+                    </div>
                   ) : (
-                    <div className="flex flex-col gap-3 rounded-control border border-danger bg-paper p-4">
+                    <div ref={confirmRowRef} role="group" aria-label={`Confirm MFA reset for ${user.name}`} className="flex flex-col gap-3 rounded-control border border-danger bg-paper p-4">
                       <p className="text-sm font-bold text-ink">Reset MFA for {user.name}?</p>
                       <p className="text-[13px] text-muted">This cannot be undone. The user is signed out immediately.</p>
                       <div className="flex gap-3">
@@ -358,7 +354,6 @@ function AdjustPanel({
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 }
@@ -538,15 +533,24 @@ export default function UserManagementPage() {
         )}
       />
 
-      {/* Manage-access drawer */}
-      {selectedUser && (
-        <AdjustPanel
-          user={selectedUser}
-          roles={roles}
-          onClose={() => setSelectedUser(null)}
-          onRefresh={() => { fetchData(); setSelectedUser(null); }}
-        />
-      )}
+      {/* Manage access — the kit Modal stays mounted so closing returns focus to the row's Manage button */}
+      <Modal
+        open={!!selectedUser}
+        onClose={() => setSelectedUser(null)}
+        size="lg"
+        title={selectedUser ? `Manage access — ${selectedUser.name}` : 'Manage access'}
+        caption={selectedUser?.email}
+      >
+        {selectedUser && (
+          <AdjustPanel
+            key={selectedUser.id}
+            user={selectedUser}
+            roles={roles}
+            onClose={() => setSelectedUser(null)}
+            onRefresh={() => { fetchData(); setSelectedUser(null); }}
+          />
+        )}
+      </Modal>
 
       {/* Create user */}
       <Modal
