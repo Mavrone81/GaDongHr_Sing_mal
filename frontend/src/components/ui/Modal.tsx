@@ -5,20 +5,36 @@ import { Icon } from './Icon';
 
 /**
  * Dialog on a paper card (full-width sheet below 640px). Esc and backdrop
- * close it; focus moves to the close button on open and returns on close.
- * `footer` is where the actions go (secondary left, primary right).
+ * close it; focus moves into the dialog on open and returns to the opener on
+ * close. `footer` is where the actions go (secondary left, primary right).
+ *
+ * - `onClose` is read through a ref, so an inline arrow is fine: the open
+ *   effect depends on `open` only and never re-runs on a keystroke.
+ * - The opener is captured during the render that opens the dialog, before
+ *   any child mounts, so a field with `autoFocus` inside the dialog still
+ *   returns focus to the opener on close. If a child already holds focus on
+ *   open, the dialog leaves it there instead of moving it to the close button.
  */
 export function Modal({ open, onClose, title, caption, footer, size = 'md', children }: {
   open: boolean; onClose: () => void; title: ReactNode; caption?: ReactNode; footer?: ReactNode; size?: 'md' | 'lg'; children: ReactNode;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const returnTo = useRef<HTMLElement | null>(null);
+  const wasOpen = useRef(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Render-time capture: runs before children commit (and before their autoFocus).
+  if (open && !wasOpen.current && typeof document !== 'undefined') {
+    returnTo.current = document.activeElement as HTMLElement | null;
+  }
+  wasOpen.current = open;
 
   useEffect(() => {
     if (!open) return;
-    returnTo.current = document.activeElement as HTMLElement | null;
-    closeRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    if (!panelRef.current?.contains(document.activeElement)) closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseRef.current(); };
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -27,13 +43,16 @@ export function Modal({ open, onClose, title, caption, footer, size = 'md', chil
       document.body.style.overflow = prevOverflow;
       returnTo.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
+  const close = () => onCloseRef.current();
+
   return (
-    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-ink/40 sm:p-4" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-ink/40 sm:p-4" onMouseDown={close}>
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
@@ -45,7 +64,7 @@ export function Modal({ open, onClose, title, caption, footer, size = 'md', chil
             <h2 id="modal-title" className="text-[17px] font-bold text-ink leading-tight">{title}</h2>
             {caption && <p className="mt-1 text-[13px] text-muted">{caption}</p>}
           </div>
-          <button ref={closeRef} type="button" onClick={onClose} aria-label="Close" className="-mr-2 -mt-1 w-9 h-9 flex items-center justify-center rounded-control text-muted hover:bg-page hover:text-ink">
+          <button ref={closeRef} type="button" onClick={close} aria-label="Close" className="-mr-2 -mt-1 w-9 h-9 flex items-center justify-center rounded-control text-muted hover:bg-page hover:text-ink">
             <Icon name="x" size={18} />
           </button>
         </div>
