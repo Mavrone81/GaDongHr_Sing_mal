@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -90,6 +90,13 @@ function fmtDuration(mins?: number) {
 function fmtDate(d?: string) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/** Focus an element and bring it into view — used when an in-page view swaps in or out. */
+function focusInto(el: HTMLElement | null | undefined) {
+  if (!el) return;
+  el.focus({ preventScroll: true });
+  el.scrollIntoView({ block: 'start', behavior: 'auto' });
 }
 
 function ProgressBar({ pct, color = 'bg-accent', label }: { pct: number; color?: string; label?: string }) {
@@ -953,6 +960,11 @@ function CoursePlayer({
   );
   const blank = (text: string) => <p className="p-6 rounded-control bg-page text-sm text-muted text-center">{text}</p>;
 
+  // The player replaces the list in place: take focus to the course title so a
+  // keyboard or screen-reader user lands on what they just opened.
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { focusInto(headingRef.current); }, []);
+
   return (
     <div className="flex flex-col gap-5">
       <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-accent hover:underline self-start">
@@ -962,7 +974,7 @@ function CoursePlayer({
       {/* Identity band */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-2 min-w-0">
-          <h2 className="text-2xl font-extrabold tracking-[-0.02em] text-ink">{enrollment.program?.title}</h2>
+          <h2 ref={headingRef} tabIndex={-1} className="text-2xl font-extrabold tracking-[-0.02em] text-ink">{enrollment.program?.title}</h2>
           <div className="flex flex-wrap items-center gap-2">
             {enrollment.program && <Badge>{CATEGORY_LABELS[enrollment.program.category]}</Badge>}
             {enrollment.program?.isMandatory && <Badge tone="danger">Required</Badge>}
@@ -1218,6 +1230,34 @@ function MyTrainingTab() {
     setActiveEnrollment(updated);
   }
 
+  // Focus on the way back from the player: the list stays mounted (hidden), and
+  // the card that opened the course is found again by enrolment id — Back
+  // reloads the list, and a finished lesson can move the card to another section.
+  const listRef = useRef<HTMLDivElement>(null);
+  const openedId = useRef<string | null>(null);
+  const playerWasOpen = useRef(false);
+  const refindAfterReload = useRef(false);
+  const openEnrollment = (e: EnrollmentWithProgress) => { openedId.current = e.id; setActiveEnrollment(e); };
+  const restoreFocus = () => {
+    const id = openedId.current;
+    const card = id ? listRef.current?.querySelector<HTMLElement>(`[data-open-enrollment="${id}"]`) : null;
+    focusInto(card ?? listRef.current);
+  };
+  useEffect(() => {
+    if (activeEnrollment) { playerWasOpen.current = true; return; }
+    if (!playerWasOpen.current) return;
+    playerWasOpen.current = false;
+    refindAfterReload.current = true;
+    restoreFocus();
+  }, [activeEnrollment]);
+  useEffect(() => {
+    if (!refindAfterReload.current || activeEnrollment) return;
+    refindAfterReload.current = false;
+    // Only step in if the reload took the focused card away (focus fell to <body>).
+    if (document.activeElement && document.activeElement !== document.body) return;
+    restoreFocus();
+  }, [enrollments]);
+
   if (loading) return (
     <div className="flex flex-col gap-3">
       {[1, 2, 3].map(i => <Skeleton key={i} />)}
@@ -1226,17 +1266,6 @@ function MyTrainingTab() {
 
   if (error) return <ErrorPanel title="Could not load your training" message={error} onRetry={load} />;
 
-  // Course player view
-  if (activeEnrollment) {
-    return (
-      <CoursePlayer
-        enrollment={activeEnrollment}
-        onBack={() => { setActiveEnrollment(null); load(); }}
-        onProgressUpdate={handleProgressUpdate}
-      />
-    );
-  }
-
   // My learning hub list view
   const inProgress  = enrollments.filter(e => e.status === 'IN_PROGRESS');
   const notStarted  = enrollments.filter(e => e.status === 'ENROLLED');
@@ -1244,16 +1273,21 @@ function MyTrainingTab() {
   const overdue     = enrollments.filter(e => e.dueDate && new Date(e.dueDate) < new Date() && e.status !== 'COMPLETED');
   const mandatory   = enrollments.filter(e => e.program?.isMandatory && e.status !== 'COMPLETED');
 
-  if (enrollments.length === 0) {
-    return (
+  return (
+    <>
+    {activeEnrollment && (
+      <CoursePlayer
+        enrollment={activeEnrollment}
+        onBack={() => { setActiveEnrollment(null); load(); }}
+        onProgressUpdate={handleProgressUpdate}
+      />
+    )}
+    <div ref={listRef} tabIndex={-1} aria-label="My training" className={activeEnrollment ? 'hidden' : 'flex flex-col gap-6'}>
+      {enrollments.length === 0 ? (
       <Card>
         <EmptyState icon="book" title="No training assigned yet" description="Browse the available programmes to enrol in one." />
       </Card>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-6">
+      ) : (<>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Stat label="In progress" value={inProgress.length} />
         <Stat label="Completed" value={completed.length} />
@@ -1275,7 +1309,7 @@ function MyTrainingTab() {
         <section className="flex flex-col gap-3">
           <h2 className="text-[15.5px] font-bold text-ink">Continue learning</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-            {inProgress.map(e => <EnrollmentCard key={e.id} e={e} onOpen={() => setActiveEnrollment(e)} />)}
+            {inProgress.map(e => <EnrollmentCard key={e.id} e={e} onOpen={() => openEnrollment(e)} />)}
           </div>
         </section>
       )}
@@ -1284,7 +1318,7 @@ function MyTrainingTab() {
         <section className="flex flex-col gap-3">
           <h2 className="text-[15.5px] font-bold text-ink">Start learning</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-            {notStarted.map(e => <EnrollmentCard key={e.id} e={e} onOpen={() => setActiveEnrollment(e)} />)}
+            {notStarted.map(e => <EnrollmentCard key={e.id} e={e} onOpen={() => openEnrollment(e)} />)}
           </div>
         </section>
       )}
@@ -1303,13 +1337,15 @@ function MyTrainingTab() {
                     {e.score !== null && e.score !== undefined && ` · score ${e.score}%`}
                   </span>
                 </div>
-                <Button size="sm" variant="secondary" onClick={() => setActiveEnrollment(e)}>Review</Button>
+                <Button size="sm" variant="secondary" data-open-enrollment={e.id} onClick={() => openEnrollment(e)}>Review</Button>
               </div>
             ))}
           </Card>
         </section>
       )}
+      </>)}
     </div>
+    </>
   );
 }
 
@@ -1339,7 +1375,7 @@ function EnrollmentCard({ e, onOpen }: { e: EnrollmentWithProgress; onOpen: () =
         <ProgressBar pct={e.progress} color={isOverdue ? 'bg-danger' : 'bg-accent'} label={`${e.program?.title ?? 'Course'} progress`} />
       </div>
 
-      <Button onClick={onOpen} className="w-full mt-auto" icon={e.status === 'COMPLETED' ? 'check' : 'arrowRight'} variant={e.status === 'COMPLETED' ? 'secondary' : 'primary'}>
+      <Button onClick={onOpen} data-open-enrollment={e.id} className="w-full mt-auto" icon={e.status === 'COMPLETED' ? 'check' : 'arrowRight'} variant={e.status === 'COMPLETED' ? 'secondary' : 'primary'}>
         {isNew ? 'Start course' : e.status === 'COMPLETED' ? 'Review course' : 'Continue'}
       </Button>
     </Card>
@@ -1352,6 +1388,7 @@ function BrowseProgramsTab({ onGoToMyTraining }: { onGoToMyTraining?: () => void
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [category, setCategory] = useState<ProgramCategory | ''>('');
+  const { toast } = useToast();
 
   const load = useCallback(() => {
     setError('');
@@ -1366,9 +1403,10 @@ function BrowseProgramsTab({ onGoToMyTraining }: { onGoToMyTraining?: () => void
   async function handleEnroll(programId: string) {
     try {
       await apiFetch(`/training/programs/${programId}/self-enroll`, { method: 'POST' });
+      toast('Enrolled. The course is now in My training.');
       load();
       onGoToMyTraining?.();
-    } catch { /* swallow */ }
+    } catch { toast('Could not enrol you in this programme. Try again.', 'danger'); }
   }
 
   if (error) return <ErrorPanel title="Could not load programmes" message={error} onRetry={load} />;
@@ -1609,6 +1647,12 @@ export default function TrainingPage() {
     if (new URLSearchParams(window.location.search).get('view') === 'me') setAdminTab('My Training');
   }, []);
 
+  // Enrolling (or Continue) on Browse switches to My training and unmounts the
+  // button that was pressed, so focus is handed to the tab's content instead of
+  // falling to <body>.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const showMyTraining = (switchTab: () => void) => { switchTab(); requestAnimationFrame(() => focusInto(panelRef.current)); };
+
   if (authLoading) {
     return <div className="max-w-[1400px] mx-auto"><Skeleton h="h-40" /></div>;
   }
@@ -1619,9 +1663,9 @@ export default function TrainingPage() {
       <div className="flex flex-col gap-6 max-w-[1400px] mx-auto pb-24 lg:pb-10">
         <PageHeader title="My training" subtitle={`${firstName}, here are your enrolled courses and the programmes you can join.`} />
         <Tabs items={empTabs.map(t => ({ id: t, label: TAB_LABEL[t] }))} active={empTab} onChange={setEmpTab} />
-        <div>
+        <div ref={panelRef} tabIndex={-1} role="region" aria-label={TAB_LABEL[empTab]}>
           {empTab === 'My Training'     && <MyTrainingTab />}
-          {empTab === 'Browse Programs' && <BrowseProgramsTab onGoToMyTraining={() => setEmpTab('My Training')} />}
+          {empTab === 'Browse Programs' && <BrowseProgramsTab onGoToMyTraining={() => showMyTraining(() => setEmpTab('My Training'))} />}
         </div>
       </div>
     );
@@ -1635,13 +1679,13 @@ export default function TrainingPage() {
         subtitle={stats ? `${stats.published} published · ${stats.mandatory} mandatory · ${stats.completionRate}% completion` : 'Programmes, lessons, enrolments and certifications.'}
       />
       <Tabs items={adminTabs.map(t => ({ id: t, label: TAB_LABEL[t] }))} active={adminTab} onChange={setAdminTab} />
-      <div>
+      <div ref={panelRef} tabIndex={-1} role="region" aria-label={TAB_LABEL[adminTab]}>
         {adminTab === 'Programs'        && <AdminProgramsTab onRefreshStats={loadStats} />}
         {adminTab === 'Enrollments'     && <AdminEnrollmentsTab />}
         {adminTab === 'Certifications'  && <CertificationsTab />}
         {adminTab === 'Stats'           && <StatsTab stats={stats} />}
         {adminTab === 'My Training'     && <MyTrainingTab />}
-        {adminTab === 'Browse Programs' && <BrowseProgramsTab onGoToMyTraining={() => setAdminTab('My Training')} />}
+        {adminTab === 'Browse Programs' && <BrowseProgramsTab onGoToMyTraining={() => showMyTraining(() => setAdminTab('My Training'))} />}
       </div>
     </div>
   );

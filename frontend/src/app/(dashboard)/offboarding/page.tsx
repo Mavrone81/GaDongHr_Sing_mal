@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { apiFetchRaw } from '@/lib/api';
 import { Seal } from '@/components/official';
@@ -64,6 +64,16 @@ const REASON_LABELS: Record<string, string> = {
   REDUNDANCY: 'Redundancy',
   CONTRACT_END: 'Contract end',
 };
+
+/** Known reasons read from the map; anything else the API sends is sentence-cased, never shown raw. */
+const reasonLabel = (r: string) => REASON_LABELS[r] || (r ? r.charAt(0) + r.slice(1).toLowerCase().replace(/_/g, ' ') : '—');
+
+/** Focus an element and bring it into view — used when an in-page view swaps in or out. */
+function focusInto(el: HTMLElement | null | undefined) {
+  if (!el) return;
+  el.focus({ preventScroll: true });
+  el.scrollIntoView({ block: 'start', behavior: 'auto' });
+}
 
 /**
  * Offboarding is a pipeline, so each stage gets its own appearance: grey at the
@@ -339,8 +349,17 @@ function CaseProcess({ caseId, onClose, onUpdate }: { caseId: string; onClose: (
     finally { setReturningAsset(null); }
   }
 
+  // The case replaces the list in place, so focus has to move with it: to Back
+  // while the case loads, then to the name heading once it is there. (The list
+  // restores focus to the row that opened the case on the way back.)
+  const backRef = useRef<HTMLButtonElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { focusInto(backRef.current); }, []);
+  const loadedId = offCase?.id;
+  useEffect(() => { if (loadedId) focusInto(headingRef.current); }, [loadedId]);
+
   const back = (
-    <button type="button" onClick={onClose} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-accent hover:underline self-start">
+    <button ref={backRef} type="button" onClick={onClose} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-accent hover:underline self-start">
       <Icon name="chevronRight" size={15} strokeWidth={2} className="rotate-180" />All cases
     </button>
   );
@@ -387,11 +406,11 @@ function CaseProcess({ caseId, onClose, onUpdate }: { caseId: string; onClose: (
           <Avatar name={name} size={56} tone="soft" />
           <div className="flex flex-col gap-1.5 min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-2xl font-extrabold tracking-[-0.02em] text-ink truncate">{name}</h1>
+              <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-extrabold tracking-[-0.02em] text-ink truncate">{name}</h1>
               <Badge tone={STATUS_TONE[offCase.status] || 'neutral'}>{STATUS_LABEL[offCase.status] || offCase.status}</Badge>
             </div>
             <p className="text-sm text-muted">
-              {REASON_LABELS[offCase.reason] || offCase.reason} · last day <span className="tabular-nums">{fmtDate(offCase.lastWorkingDate)}</span>{offCase.department ? ` · ${offCase.department}` : ''}
+              {reasonLabel(offCase.reason)} · last day <span className="tabular-nums">{fmtDate(offCase.lastWorkingDate)}</span>{offCase.department ? ` · ${offCase.department}` : ''}
             </p>
           </div>
         </div>
@@ -605,7 +624,7 @@ function CaseProcess({ caseId, onClose, onUpdate }: { caseId: string; onClose: (
             <CardHeader title="Case" />
             <dl className="flex flex-col text-sm">
               {[
-                ['Reason', REASON_LABELS[offCase.reason] || offCase.reason],
+                ['Reason', reasonLabel(offCase.reason)],
                 ['Notice given', offCase.noticeGivenDate ? fmtDate(offCase.noticeGivenDate) : 'Not recorded'],
                 ['Last working day', fmtDate(offCase.lastWorkingDate)],
                 ['Opened', fmtDate(offCase.createdAt)],
@@ -686,13 +705,20 @@ export default function OffboardingPage() {
     </button>
   );
 
-  if (selectedCaseId) {
-    return (
-      <div className="max-w-[1400px] mx-auto pb-24 lg:pb-10">
-        <CaseProcess caseId={selectedCaseId} onClose={() => setSelectedCaseId(null)} onUpdate={loadCases} />
-      </div>
-    );
-  }
+  // The list stays mounted (hidden) while a case is open, so the row that opened
+  // it still exists on the way back and gets focus again; if it has gone (the
+  // case moved or was removed), focus falls back to the list itself.
+  const listRef = useRef<HTMLDivElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  const caseWasOpen = useRef(false);
+  const openCase = (id: string) => { openerRef.current = document.activeElement as HTMLElement | null; setSelectedCaseId(id); };
+  useEffect(() => {
+    if (selectedCaseId) { caseWasOpen.current = true; return; }
+    if (!caseWasOpen.current) return;
+    caseWasOpen.current = false;
+    const opener = openerRef.current;
+    focusInto(opener && opener.isConnected && listRef.current?.contains(opener) ? opener : listRef.current);
+  }, [selectedCaseId]);
 
   const columns: Column<OffboardingCase>[] = [
     {
@@ -707,7 +733,7 @@ export default function OffboardingPage() {
         </div>
       ),
     },
-    { key: 'type', label: sortHead('type', 'Reason'), render: c => REASON_LABELS[c.reason] || c.reason },
+    { key: 'type', label: sortHead('type', 'Reason'), render: c => reasonLabel(c.reason) },
     { key: 'lastDay', label: sortHead('lastDay', 'Last day'), width: '120px', numeric: true, render: c => fmtDate(c.lastWorkingDate) },
     { key: 'progress', label: sortHead('progress', 'Clearance'), width: '160px', render: c => <ProgressBar value={calcProgress(c.clearanceItems)} /> },
     { key: 'status', label: sortHead('status', 'Status'), width: '150px', render: c => <Badge tone={STATUS_TONE[c.status] || 'neutral'}>{STATUS_LABEL[c.status] || c.status}</Badge> },
@@ -725,7 +751,10 @@ export default function OffboardingPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6 max-w-[1400px] mx-auto pb-24 lg:pb-10">
+    <div className="max-w-[1400px] mx-auto pb-24 lg:pb-10">
+      {selectedCaseId && <CaseProcess caseId={selectedCaseId} onClose={() => setSelectedCaseId(null)} onUpdate={loadCases} />}
+
+      <div ref={listRef} tabIndex={-1} aria-label="Offboarding cases" className={selectedCaseId ? 'hidden' : 'flex flex-col gap-6'}>
       <PageHeader
         title="Offboarding"
         subtitle={loading ? 'Loading cases…' : `${activeCases.length} in progress · ${completedMTD} completed this month`}
@@ -749,7 +778,7 @@ export default function OffboardingPage() {
           columns={columns}
           rows={sortedCases}
           rowKey={c => c.id}
-          onRowClick={c => setSelectedCaseId(c.id)}
+          onRowClick={c => openCase(c.id)}
           empty={empty}
           mobileCard={c => (
             <div className="flex flex-col gap-3">
@@ -758,7 +787,7 @@ export default function OffboardingPage() {
                   <Avatar name={c.employeeName || c.employeeId} size={32} tone="soft" />
                   <div className="flex flex-col min-w-0">
                     <span className="font-semibold text-ink truncate">{c.employeeName || 'Unknown'}</span>
-                    <span className="text-xs text-muted truncate">{REASON_LABELS[c.reason] || c.reason} · last day <span className="tabular-nums">{fmtDate(c.lastWorkingDate)}</span></span>
+                    <span className="text-xs text-muted truncate">{reasonLabel(c.reason)} · last day <span className="tabular-nums">{fmtDate(c.lastWorkingDate)}</span></span>
                   </div>
                 </div>
                 <Badge tone={STATUS_TONE[c.status] || 'neutral'}>{STATUS_LABEL[c.status] || c.status}</Badge>
@@ -769,6 +798,7 @@ export default function OffboardingPage() {
           footer={cases.length > 0 ? <span className="tabular-nums">{cases.length} case{cases.length === 1 ? '' : 's'}</span> : undefined}
         />
       )}
+      </div>
 
       {showInitiate && (
         <InitiateModal
