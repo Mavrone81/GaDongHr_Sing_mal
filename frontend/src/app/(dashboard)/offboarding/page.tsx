@@ -355,8 +355,16 @@ function CaseProcess({ caseId, onClose, onUpdate }: { caseId: string; onClose: (
   const backRef = useRef<HTMLButtonElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => { focusInto(backRef.current); }, []);
+  // The case and its assets load in two requests: offCase is set while the
+  // skeleton is still showing, so wait for loading to end before looking for
+  // the heading. Only take focus if it is still on Back (or fell to <body>) —
+  // never pull it away from a user who has already moved on.
   const loadedId = offCase?.id;
-  useEffect(() => { if (loadedId) focusInto(headingRef.current); }, [loadedId]);
+  useEffect(() => {
+    if (loading || !loadedId) return;
+    const active = document.activeElement;
+    if (active === backRef.current || active === document.body || active === null) focusInto(headingRef.current);
+  }, [loading, loadedId]);
 
   const back = (
     <button ref={backRef} type="button" onClick={onClose} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-accent hover:underline self-start">
