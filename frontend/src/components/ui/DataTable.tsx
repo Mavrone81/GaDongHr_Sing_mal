@@ -1,3 +1,4 @@
+import type React from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 
 export type Column<Row> = {
@@ -17,8 +18,9 @@ export type Column<Row> = {
  * and `empty` for the zero-rows state (never leave a bare header).
  *
  * Clickable rows (`onRowClick`) are keyboard-reachable: role=button, Tab,
- * Enter/Space. Give `mobileCard` to render each row as a card below 768px
- * (the spec's phone rule) instead of a horizontally scrolling grid.
+ * Enter/Space. Controls nested in a clickable row keep their own keys and
+ * clicks (the row ignores events aimed at them). Give `mobileCard` to render
+ * each row as a card below 768px instead of a horizontally scrolling grid.
  */
 export function DataTable<Row>({ columns, rows, rowKey, onRowClick, mobileCard, footer, empty, rowHeight = 52, className = '', 'aria-label': ariaLabel }: {
   columns: Column<Row>[]; rows: Row[]; rowKey: (row: Row) => string | number; onRowClick?: (row: Row) => void;
@@ -27,8 +29,18 @@ export function DataTable<Row>({ columns, rows, rowKey, onRowClick, mobileCard, 
   const grid = columns.map((c) => c.width || 'minmax(0, 1fr)').join(' ');
   const align = (c: Column<Row>) => (c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left');
   const clickable = Boolean(onRowClick);
+  // Only the row itself activates on Enter/Space. Keys aimed at a control
+  // nested inside the row (a button, an input) belong to that control.
   const rowKeyHandler = (row: Row) => (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick?.(row); }
+  };
+  // Clicks on a nested interactive control must not also open the row.
+  const rowClick = (row: Row) => (e: React.MouseEvent<HTMLDivElement>) => {
+    const t = e.target as HTMLElement;
+    const interactive = t.closest('button, a, input, select, textarea, label, [role="button"], [role="switch"], [role="checkbox"]');
+    if (interactive && interactive !== e.currentTarget) return;
+    onRowClick?.(row);
   };
   const emptyState = <div className="px-5 py-10 text-sm text-muted text-center">{empty ?? 'Nothing here yet.'}</div>;
 
@@ -39,7 +51,9 @@ export function DataTable<Row>({ columns, rows, rowKey, onRowClick, mobileCard, 
         <div className="md:hidden flex flex-col divide-y divide-rule" role="list" aria-label={ariaLabel}>
           {rows.length === 0 && emptyState}
           {rows.map((row) => clickable ? (
-            <button key={rowKey(row)} type="button" onClick={() => onRowClick?.(row)} className="text-left px-4 py-3 hover:bg-page" role="listitem">{mobileCard(row)}</button>
+            <div key={rowKey(row)} role="listitem" className="px-4 py-3">
+              <div role="button" tabIndex={0} onClick={rowClick(row)} onKeyDown={rowKeyHandler(row)} className="text-left -mx-2 px-2 py-1 rounded-control cursor-pointer hover:bg-page focus-visible:bg-page">{mobileCard(row)}</div>
+            </div>
           ) : (
             <div key={rowKey(row)} className="px-4 py-3" role="listitem">{mobileCard(row)}</div>
           ))}
@@ -60,7 +74,7 @@ export function DataTable<Row>({ columns, rows, rowKey, onRowClick, mobileCard, 
               tabIndex={clickable ? 0 : undefined}
               className={`grid items-center gap-4 px-5 border-b border-rule text-sm text-ink ${clickable ? 'cursor-pointer hover:bg-page focus-visible:bg-page' : ''}`}
               style={{ gridTemplateColumns: grid, height: rowHeight }}
-              onClick={clickable ? () => onRowClick?.(row) : undefined}
+              onClick={clickable ? rowClick(row) : undefined}
               onKeyDown={clickable ? rowKeyHandler(row) : undefined}
             >
               {columns.map((c) => (
