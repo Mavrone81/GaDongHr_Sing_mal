@@ -1,53 +1,52 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 
-// Six single-digit cells for an authenticator code. Typing advances, Backspace
-// retreats, and a pasted 6-digit code fills every cell. `value` is the joined string.
-export function CodeInput({ value, onChange, autoFocus }: { value: string; onChange: (code: string) => void; autoFocus?: boolean }) {
-  const cells = useRef<(HTMLInputElement | null)[]>([]);
-  const digits = Array.from({ length: 6 }, (_, i) => value[i] ?? '');
-
-  const set = (next: string[]) => onChange(next.join(''));
-  const focus = (i: number) => cells.current[Math.max(0, Math.min(5, i))]?.focus();
+// Six-box authenticator code, same approach as components/auth/CodeInput on the
+// shell branch: ONE real <input> drawn as six boxes. The browser appends every
+// keystroke to that input's own value, so fast typing and password managers
+// cannot drop digits, and paste / one-time-code autofill work natively.
+// The input is invisible; the box it will fill next carries the 2px focus ring.
+export function CodeInput({ value, onChange, autoFocus, label = '6-digit authenticator code' }: {
+  value: string; onChange: (code: string) => void; autoFocus?: boolean; label?: string;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const [focused, setFocused] = useState(false);
+  const cells = Array.from({ length: 6 }, (_, i) => value[i] ?? '');
+  const activeIndex = Math.min(value.length, 5);
 
   return (
-    <div className="flex justify-between gap-2" role="group" aria-label="6-digit authenticator code">
-      {digits.map((d, i) => (
-        <input
-          key={i}
-          ref={(el) => { cells.current[i] = el; }}
-          value={d}
-          inputMode="numeric"
-          autoComplete={i === 0 ? 'one-time-code' : 'off'}
-          maxLength={1}
-          aria-label={`Digit ${i + 1}`}
-          autoFocus={autoFocus && i === 0}
-          className="h-12 w-full min-w-0 rounded-control border border-rule bg-paper text-center font-mono text-xl text-ink transition-colors focus:border-accent"
-          onChange={(e) => {
-            const v = e.target.value.replace(/\D/g, '');
-            if (!v) { const n = [...digits]; n[i] = ''; set(n); return; }
-            const n = [...digits];
-            v.split('').slice(0, 6 - i).forEach((ch, k) => { n[i + k] = ch; });
-            set(n);
-            focus(i + v.length);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Backspace' && !digits[i] && i > 0) { e.preventDefault(); const n = [...digits]; n[i - 1] = ''; set(n); focus(i - 1); }
-            if (e.key === 'ArrowLeft') focus(i - 1);
-            if (e.key === 'ArrowRight') focus(i + 1);
-          }}
-          onPaste={(e) => {
-            const text = e.clipboardData.getData('text').replace(/\D/g, '');
-            if (!text) return;
-            e.preventDefault();
-            const n = [...digits];
-            text.split('').slice(0, 6 - i).forEach((ch, k) => { n[i + k] = ch; });
-            set(n);
-            focus(i + text.length);
-          }}
-        />
-      ))}
+    <div className="relative" onClick={() => ref.current?.focus()}>
+      <input
+        ref={ref}
+        type="text"
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        pattern="[0-9]{6}"
+        maxLength={6}
+        value={value}
+        onChange={(e) => onChange(e.target.value.replace(/\D/g, '').slice(0, 6))}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        autoFocus={autoFocus}
+        aria-label={label}
+        className="absolute inset-0 h-full w-full cursor-default opacity-0"
+      />
+      <div className="flex justify-between gap-2" aria-hidden="true">
+        {cells.map((d, i) => {
+          const active = focused && i === activeIndex;
+          return (
+            <div
+              key={i}
+              className={`flex h-12 w-full min-w-0 items-center justify-center rounded-control border bg-paper font-mono text-xl text-ink transition-colors ${
+                d || active ? 'border-accent' : 'border-rule'
+              } ${active ? 'ring-2 ring-accent ring-offset-2 ring-offset-page' : ''}`}
+            >
+              {d}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
