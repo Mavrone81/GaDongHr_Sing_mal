@@ -82,8 +82,12 @@ describe('colour does not sneak in as a raw literal', () => {
  * chip. No type error, no failing test, just a screen that stopped telling
  * the user things apart.
  */
+// Two shapes: a one-line map `= { A: 'x', B: 'y' };` (first branch, cannot
+// cross a newline) and a multi-line map closed by `\n};`. Without the first
+// branch a one-line map swallowed everything up to the next multi-line close
+// and could false-fail (IMs hit it on training).
 const STATE_MAP =
-  /const\s+(\w*(?:STATUS|STATE|STAGE|SEVERITY|PRIORITY|URGENCY|TONE)\w*)\s*(?::[^=]*)?=\s*\{([\s\S]*?)\n\};/g;
+  /const\s+(\w*(?:STATUS|STATE|STAGE|SEVERITY|PRIORITY|URGENCY|TONE)\w*)\s*(?::[^=\n]*)?=\s*\{(?:([^\n]*?)\};|([\s\S]*?)\n\};)/g;
 
 describe('state maps keep their states distinguishable', () => {
   /**
@@ -100,7 +104,8 @@ describe('state maps keep their states distinguishable', () => {
    */
   it.each(FILES)('%s has no map dominated by one appearance', (_name, src) => {
     const offenders: string[] = [];
-    for (const [, mapName, body] of src.matchAll(STATE_MAP)) {
+    for (const [, mapName, oneLine, multiLine] of src.matchAll(STATE_MAP)) {
+      const body = oneLine ?? multiLine ?? '';
       const values = [...body.matchAll(/:\s*(?:'([^']*)'|TONES\.(\w+))/g)]
         .map((m) => m[1] ?? m[2])
         .filter((v) => /bg-|text-|border-|^\w+$/.test(v));
