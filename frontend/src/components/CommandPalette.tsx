@@ -63,7 +63,8 @@ export default function CommandPalette({ open, onClose, items }: { open: boolean
               >
                 <Icon name={it.icon} size={17} className={i === cursor ? 'text-accent' : 'text-muted'} />
                 <span className="flex-1 font-semibold">{it.name}</span>
-                <span className="text-xs text-faint">{it.group}</span>
+                <span className="sr-only">, </span>
+                <span className="text-xs text-muted">{it.group}</span>
               </button>
             </li>
           ))}
