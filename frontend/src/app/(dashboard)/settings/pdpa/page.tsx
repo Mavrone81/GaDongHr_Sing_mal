@@ -3,7 +3,7 @@
 import { Fragment, useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { Badge, Button, Card, CardHeader, Icon, Select, Tabs, useToast, type IconName } from '@/components/ui';
+import { Badge, Button, Card, CardHeader, Icon, Modal, Select, Tabs, useToast, type IconName } from '@/components/ui';
 import { SectionHeader } from '../_components/SectionHeader';
 import { Notice } from '../_components/Notice';
 import { Toggle } from '../_components/Toggle';
@@ -98,14 +98,14 @@ function defaultAccessMap(): AccessMap {
 }
 
 /** One view/export permission cell: a real checkbox control, with the reason when it can't be changed. */
-function CheckCell({ on, onChange, disabled, label, reason }: { on: boolean; onChange: () => void; disabled?: boolean; label: string; reason?: string }) {
+function CheckCell({ on, onChange, disabled, label, reasonId }: { on: boolean; onChange: () => void; disabled?: boolean; label: string; reasonId?: string }) {
   return (
     <button
       type="button"
       role="checkbox"
       aria-checked={on}
       aria-label={label}
-      title={disabled ? reason : undefined}
+      aria-describedby={disabled ? reasonId : undefined}
       onClick={onChange}
       disabled={disabled}
       className={`inline-flex h-5 w-5 items-center justify-center rounded border-2 transition-colors ${
@@ -128,6 +128,7 @@ export default function PdpaPage() {
   const [purgeScheduleEnabled, setPurgeScheduleEnabled] = useState(false);
   const [nextScheduledRun, setNextScheduledRun] = useState<string | null>(null);
   const [purgeRunning, setPurgeRunning] = useState(false);
+  const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [encryptionStatus, setEncryptionStatus] = useState<'checking' | 'ok' | 'partial'>('checking');
@@ -205,8 +206,12 @@ export default function PdpaPage() {
     showToast('PDPA settings saved');
   };
 
-  const handleRunPurgeNow = async () => {
-    if (!window.confirm('This will permanently and irrecoverably delete all records that have exceeded their retention period. This cannot be undone. Continue?')) return;
+  // Run purge asks first in a kit Modal (it used window.confirm()); the request
+  // itself is unchanged and runs only from the Modal's confirm button.
+  const handleRunPurgeNow = () => setPurgeConfirmOpen(true);
+
+  const confirmRunPurge = async () => {
+    setPurgeConfirmOpen(false);
     setPurgeRunning(true);
     try {
       const result = await apiFetch('/auth/purge/run', { method: 'POST' });
@@ -230,10 +235,11 @@ export default function PdpaPage() {
     { id: 'retention' as const,  label: 'Retention' },
   ];
 
+  // Why a cell is locked — points at one of the visible reasons under the legend.
   const cellReason = (roleId: string, type: 'view' | 'export', catId: string) =>
-    !canEdit ? 'Only a Super Admin can change this.'
-      : roleId === 'SUPER_ADMIN' ? 'Super Admin always has full access.'
-      : type === 'export' && !access[catId]?.view.includes(roleId) ? 'Grant view first; export requires view.'
+    !canEdit ? 'pdpa-lock-readonly'
+      : roleId === 'SUPER_ADMIN' ? 'pdpa-lock-superadmin'
+      : type === 'export' && !access[catId]?.view.includes(roleId) ? 'pdpa-lock-needs-view'
       : undefined;
   const cellDisabled = (roleId: string, type: 'view' | 'export', catId: string) =>
     type === 'view'
@@ -276,6 +282,14 @@ export default function PdpaPage() {
             </div>
           </div>
 
+          {/* Visible reasons for locked (faded) cells; each locked cell is aria-describedby one of these. */}
+          <div className="mx-5 mt-3 flex flex-col gap-1 rounded-control bg-page px-3.5 py-2.5 text-[13px] text-muted">
+            <span className="font-semibold text-ink">Faded cells are locked:</span>
+            {!canEdit && <span id="pdpa-lock-readonly">Only a Super Admin can change these settings.</span>}
+            <span id="pdpa-lock-superadmin">Super Admin always has full access and can&apos;t be restricted.</span>
+            <span id="pdpa-lock-needs-view">Export needs view — grant view first to unlock export.</span>
+          </div>
+
           {/* Desktop matrix */}
           <div className="mt-3 hidden overflow-x-auto md:block">
             <table className="w-full min-w-[980px]">
@@ -309,7 +323,7 @@ export default function PdpaPage() {
                             on={access[cat.id]?.view.includes(r.id) ?? false}
                             onChange={() => toggleAccess(cat.id, 'view', r.id)}
                             disabled={cellDisabled(r.id, 'view', cat.id)}
-                            reason={cellReason(r.id, 'view', cat.id)}
+                            reasonId={cellReason(r.id, 'view', cat.id)}
                           />
                         </td>
                       ))}
@@ -323,7 +337,7 @@ export default function PdpaPage() {
                             on={access[cat.id]?.export.includes(r.id) ?? false}
                             onChange={() => toggleAccess(cat.id, 'export', r.id)}
                             disabled={cellDisabled(r.id, 'export', cat.id)}
-                            reason={cellReason(r.id, 'export', cat.id)}
+                            reasonId={cellReason(r.id, 'export', cat.id)}
                           />
                         </td>
                       ))}
@@ -353,10 +367,10 @@ export default function PdpaPage() {
                     <Fragment key={r.id}>
                       <span className="text-ink">{r.label}</span>
                       <span className="text-center">
-                        <CheckCell label={`${r.label} can view ${cat.label.toLowerCase()}`} on={access[cat.id]?.view.includes(r.id) ?? false} onChange={() => toggleAccess(cat.id, 'view', r.id)} disabled={cellDisabled(r.id, 'view', cat.id)} reason={cellReason(r.id, 'view', cat.id)} />
+                        <CheckCell label={`${r.label} can view ${cat.label.toLowerCase()}`} on={access[cat.id]?.view.includes(r.id) ?? false} onChange={() => toggleAccess(cat.id, 'view', r.id)} disabled={cellDisabled(r.id, 'view', cat.id)} reasonId={cellReason(r.id, 'view', cat.id)} />
                       </span>
                       <span className="text-center">
-                        <CheckCell label={`${r.label} can export ${cat.label.toLowerCase()}`} on={access[cat.id]?.export.includes(r.id) ?? false} onChange={() => toggleAccess(cat.id, 'export', r.id)} disabled={cellDisabled(r.id, 'export', cat.id)} reason={cellReason(r.id, 'export', cat.id)} />
+                        <CheckCell label={`${r.label} can export ${cat.label.toLowerCase()}`} on={access[cat.id]?.export.includes(r.id) ?? false} onChange={() => toggleAccess(cat.id, 'export', r.id)} disabled={cellDisabled(r.id, 'export', cat.id)} reasonId={cellReason(r.id, 'export', cat.id)} />
                       </span>
                     </Fragment>
                   ))}
@@ -579,6 +593,23 @@ export default function PdpaPage() {
           )}
         </div>
       )}
+
+      <Modal
+        open={purgeConfirmOpen}
+        onClose={() => setPurgeConfirmOpen(false)}
+        title="Run a purge now?"
+        caption="This cannot be undone."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setPurgeConfirmOpen(false)}>Cancel</Button>
+            <Button variant="danger" onClick={confirmRunPurge}>Permanently delete records</Button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink">
+          Every record that has passed its retention period will be permanently and irrecoverably deleted.
+        </p>
+      </Modal>
     </>
   );
 }

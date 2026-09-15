@@ -87,12 +87,13 @@ function Actor({ email, role }: { email: string | null; role: string | null }) {
   );
 }
 
-function ExpandCue({ expanded, children }: { expanded: boolean; children: ReactNode }) {
+function ExpandCue({ expanded, controls, children }: { expanded: boolean; controls: string; children: ReactNode }) {
   // No onClick of its own: the row/card owns the toggle, this is its keyboard target.
   return (
     <button
       type="button"
       aria-expanded={expanded}
+      aria-controls={controls}
       className="inline-flex items-center gap-1.5 rounded-control px-1.5 py-1 text-[13px] font-semibold text-accent hover:bg-tint"
     >
       {children}
@@ -132,9 +133,9 @@ function FieldDiff({ field, change }: { field: string; change: { from?: unknown;
   );
 }
 
-function DetailPanel({ title, children }: { title: string; children: ReactNode }) {
+function DetailPanel({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
-    <div className="max-w-3xl rounded-control border border-rule bg-paper px-4 py-3">
+    <div id={id} className="max-w-3xl rounded-control border border-rule bg-paper px-4 py-3">
       <p className="mb-1.5 text-[13px] font-bold text-ink">{title}</p>
       {children}
     </div>
@@ -147,6 +148,8 @@ function EmpLogRow({ log, layout }: { log: EmpAuditLog; layout: 'row' | 'card' }
   const meta = EMP_ACTION_META[log.action] ?? EMP_ACTION_META.UPDATE;
   const fieldCount = log.changedFields ? Object.keys(log.changedFields).length : 0;
   const toggle = () => fieldCount > 0 && setExpanded(e => !e);
+  // Row and card instances are both mounted (one hidden by breakpoint), so the layout is part of the id.
+  const panelId = `audit-emp-${log.id}-${layout}`;
 
   const entity = (
     <div className="flex min-w-0 flex-col">
@@ -160,10 +163,10 @@ function EmpLogRow({ log, layout }: { log: EmpAuditLog; layout: 'row' | 'card' }
     </div>
   );
   const changes = fieldCount > 0
-    ? <ExpandCue expanded={expanded}><span className="tabular-nums">{fieldCount}</span> field{fieldCount > 1 ? 's' : ''}</ExpandCue>
+    ? <ExpandCue expanded={expanded} controls={panelId}><span className="tabular-nums">{fieldCount}</span> field{fieldCount > 1 ? 's' : ''}</ExpandCue>
     : <span className="text-[13px] text-faint">—</span>;
   const diff = expanded && log.changedFields && (
-    <DetailPanel title="Field changes">
+    <DetailPanel id={panelId} title="Field changes">
       {Object.entries(log.changedFields).map(([field, change]) => <FieldDiff key={field} field={field} change={change} />)}
     </DetailPanel>
   );
@@ -214,6 +217,7 @@ function PayrollLogRow({ log, layout }: { log: PayrollAuditLog; layout: 'row' | 
   const meta = getPayrollMeta(log.action);
   const hasDetails = log.details && Object.keys(log.details).length > 0;
   const toggle = () => hasDetails && setExpanded(e => !e);
+  const panelId = `audit-payroll-${log.id}-${layout}`;
 
   const entity = (
     <div className="flex flex-col">
@@ -233,9 +237,9 @@ function PayrollLogRow({ log, layout }: { log: PayrollAuditLog; layout: 'row' | 
       )}
     </div>
   ) : <span className="text-[13px] text-faint">—</span>;
-  const cue = hasDetails ? <ExpandCue expanded={expanded}>Details</ExpandCue> : <span className="text-[13px] text-faint">—</span>;
+  const cue = hasDetails ? <ExpandCue expanded={expanded} controls={panelId}>Details</ExpandCue> : <span className="text-[13px] text-faint">—</span>;
   const detail = expanded && log.details && (
-    <DetailPanel title="Payroll error or warning details">
+    <DetailPanel id={panelId} title="Payroll error or warning details">
       {Object.entries(log.details).map(([k, v]) => (
         <div key={k} className="flex flex-col gap-1 border-b border-rule py-2 last:border-0 sm:flex-row sm:items-start sm:gap-3">
           <span className="w-40 shrink-0 text-[13px] font-semibold text-muted">{humanKey(k)}</span>
