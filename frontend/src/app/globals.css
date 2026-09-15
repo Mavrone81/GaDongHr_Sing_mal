@@ -94,6 +94,8 @@
 
   /* ── TYPOGRAPHY ─────────────────────────────────────────────────── */
   --font-manrope: 'Manrope';   /* fallback; next/font overrides it on <body> */
+  --font-plex-sans: 'IBM Plex Sans';   /* fallbacks; next/font overrides them on the /platform wrapper */
+  --font-plex-mono: 'IBM Plex Mono';
   --font-sans: var(--font-manrope), 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;  /* ids, amounts on /platform */
   --font-feature-settings: "tnum";
@@ -352,3 +354,13 @@
   }
 }
 
+
+/* Operator console (/platform): IBM Plex Sans for text, Plex Mono for ids and numbers.
+   next/font (src/app/platform/layout.tsx) supplies the two variables; the hashed family
+   names it generates are why --font-mono is re-pointed here rather than relying on the
+   plain 'IBM Plex Mono' entry in :root. */
+.platform-console {
+  font-family: var(--font-plex-sans), 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
