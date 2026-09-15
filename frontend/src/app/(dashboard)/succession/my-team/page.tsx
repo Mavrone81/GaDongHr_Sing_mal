@@ -47,8 +47,8 @@ export default function MyTeamSuccessionPage() {
         </Card>
       ) : (
         <div className="flex flex-col gap-4">
-          {data.teamMembers.map((member: any) => (
-            <Card key={member.employeeId}>
+          {data.teamMembers.map((member: any, i: number) => (
+            <Card key={member.employeeId ?? `member-${i}`}>
               <div className="mb-3 flex items-center gap-3">
                 <PersonAvatar name={empName(member._employee)} size={36} />
                 <div className="min-w-0">
@@ -57,8 +57,8 @@ export default function MyTeamSuccessionPage() {
                 </div>
               </div>
               <div className="flex flex-col">
-                {member.nominations.map((nom: any) => (
-                  <div key={nom.nomineeId} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-rule py-2.5">
+                {member.nominations.map((nom: any, j: number) => (
+                  <div key={nom.nomineeId ?? `${nom.jobTitle}-${j}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-rule py-2.5">
                     <p className="min-w-0 flex-1 text-sm font-semibold text-ink">{nom.jobTitle}</p>
                     {nom.department && <p className="text-[13px] text-muted">{nom.department}</p>}
                     <Badge tone={READINESS_TONE[nom.readiness] ?? 'neutral'}>{READINESS_LABEL[nom.readiness] ?? nom.readiness}</Badge>
