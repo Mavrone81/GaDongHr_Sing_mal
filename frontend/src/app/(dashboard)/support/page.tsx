@@ -97,7 +97,7 @@ function TicketThread({ ticket, onBack, onUpdated }: { ticket: Ticket; onBack: (
       </div>
 
       <ol className="flex flex-col gap-3" aria-label="Messages">
-        {ticket.messages.map(msg => {
+        {(ticket.messages ?? []).map(msg => {
           const isHR = ['SUPER_ADMIN', 'HR_ADMIN'].includes(msg.authorRole);
           return (
             <li key={msg.id} className={`flex ${isHR ? 'justify-start' : 'justify-end'}`}>
@@ -273,7 +273,7 @@ export default function SupportPage() {
                       </div>
                       <Badge tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Badge>
                     </div>
-                    {t.messages[0]?.body && <p className="text-[13px] text-muted mt-2 line-clamp-1">{t.messages[0].body}</p>}
+                    {t.messages?.[0]?.body && <p className="text-[13px] text-muted mt-2 line-clamp-1">{t.messages[0].body}</p>}
                   </button>
                 </li>
               ))}

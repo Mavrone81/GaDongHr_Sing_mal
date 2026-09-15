@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiFetch } from '@/lib/api';
 import { PageHeader, Card, CardHeader, Badge, Button, Field, Select, Textarea, Stat, EmptyState, SplitPane } from '@/components/ui';
 import type { BadgeTone } from '@/components/ui';
@@ -84,6 +84,14 @@ function AdminThread({ ticket: initial, onUpdated }: { ticket: Ticket; onUpdated
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState('');
 
+  // The select is disabled while a change saves, which drops keyboard focus to
+  // <body>. Remember which one the person used and give focus back once it is
+  // enabled again (after the re-render, hence an effect rather than .then()).
+  const refocus = useRef<HTMLSelectElement | null>(null);
+  useEffect(() => {
+    if (!updating && refocus.current) { refocus.current.focus(); refocus.current = null; }
+  }, [updating]);
+
   async function sendReply() {
     if (!reply.trim()) return;
     setSending(true); setError('');
@@ -124,7 +132,7 @@ function AdminThread({ ticket: initial, onUpdated }: { ticket: Ticket; onUpdated
             <Field label="Status" help={updating ? 'Saving…' : undefined}>
               <Select
                 value={ticket.status}
-                onChange={e => updateField({ status: e.target.value as TicketStatus })}
+                onChange={e => { refocus.current = e.currentTarget; updateField({ status: e.target.value as TicketStatus }); }}
                 disabled={updating}
               >
                 {STATUSES.map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
@@ -133,7 +141,7 @@ function AdminThread({ ticket: initial, onUpdated }: { ticket: Ticket; onUpdated
             <Field label="Priority">
               <Select
                 value={ticket.priority}
-                onChange={e => updateField({ priority: e.target.value as TicketPriority })}
+                onChange={e => { refocus.current = e.currentTarget; updateField({ priority: e.target.value as TicketPriority }); }}
                 disabled={updating}
               >
                 {PRIORITIES.map(p => <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>)}
@@ -144,7 +152,7 @@ function AdminThread({ ticket: initial, onUpdated }: { ticket: Ticket; onUpdated
       </Card>
 
       <ol className="flex flex-col gap-3" aria-label="Messages">
-        {ticket.messages.map(msg => {
+        {(ticket.messages ?? []).map(msg => {
           const isHR = ['SUPER_ADMIN', 'HR_ADMIN'].includes(msg.authorRole);
           return (
             <li key={msg.id} className={`flex ${isHR ? 'justify-end' : 'justify-start'}`}>
@@ -264,7 +272,7 @@ export default function SupportAdminPage() {
                     <Badge tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Badge>
                     <Badge tone={PRIORITY_TONE[t.priority]}>{PRIORITY_LABEL[t.priority]}</Badge>
                     <span className="text-[13px] text-muted">
-                      {CATEGORY_LABELS[t.category]} · {t.messages.length} message{t.messages.length !== 1 ? 's' : ''}
+                      {CATEGORY_LABELS[t.category]} · {t.messages?.length ?? 0} message{(t.messages?.length ?? 0) !== 1 ? 's' : ''}
                     </span>
                   </div>
                 </button>
