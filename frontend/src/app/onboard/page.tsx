@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { HTMLAttributes, ReactNode } from 'react';
 import GaDongLogo from '@/components/GaDongLogo';
 import { Button, Card, EmptyState, Field, Icon, Input, Select, Stepper, Textarea } from '@/components/ui';
@@ -79,6 +79,15 @@ export default function OnboardPage() {
   const [submitting, setSubmitting] = useState(false);
   const [step, setStep] = useState(1);
   const [errors, setErrors] = useState<Partial<FormData>>({});
+
+  // Presentation: after Continue / Back / Edit, move focus to the new step's
+  // heading so keyboard and screen-reader users land on (and hear) the step.
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null);
+  const firstStepRender = useRef(true);
+  useEffect(() => {
+    if (firstStepRender.current) { firstStepRender.current = false; return; }
+    stepHeadingRef.current?.focus();
+  }, [step]);
 
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('token') || '';
@@ -275,7 +284,7 @@ export default function OnboardPage() {
 
         {/* Step body */}
         <div className="flex flex-col gap-4 px-5 py-6 sm:px-7">
-          <p className="text-[13px] font-semibold text-muted tabular-nums">Step {step} of {LAST} · {STEP_LABELS[step - 1]}</p>
+          <h2 ref={stepHeadingRef} tabIndex={-1} className="text-[13px] font-semibold text-muted tabular-nums rounded-control focus-visible:ring-2 focus-visible:ring-accent">Step {step} of {LAST} · {STEP_LABELS[step - 1]}</h2>
 
           {step === 1 && (
             <>

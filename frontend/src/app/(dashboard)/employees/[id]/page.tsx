@@ -422,7 +422,6 @@ export default function EmployeeDetail({ params }: { params: { id: string } }) {
             </div>
             <p className="mt-1 text-sm text-muted">
               {[emp.designation, emp.department, emp.employeeCode].filter(Boolean).join(' · ')}
-              {emp.reportingManager ? ` · reports to ${emp.reportingManager}` : ''}
             </p>
           </div>
         </div>
