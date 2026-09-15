@@ -59,12 +59,18 @@ describe('migrated screens keep to the redesign floor', () => {
   });
 
   it.each(FILES)('%s never removes focus without a replacement', (_name, src) => {
-    // outline-none is allowed only where a ring, a focus border, a focus-within
-    // treatment on the wrapper, or an invisible (opacity-0) proxy input carries focus
+    // outline-none is allowed only where a SOLID focus ring, a focus border, a
+    // focus-within treatment on the wrapper, or an invisible (opacity-0) proxy
+    // input carries focus. A low-alpha ring does not count (QA measured
+    // ring-accent/40 at ~2:1 on white, below the 3:1 focus-indicator floor).
     const bad = [...src.matchAll(/outline-none/g)].filter((m) => {
       const around = src.slice(Math.max(0, m.index! - 800), m.index! + 400);
-      return !/ring-|focus:border|focus-within|opacity-0/.test(around);
+      return !/(?:focus|focus-visible):ring-(?:accent|ink|danger|ok|warn|on-accent)(?![\/\w-])|focus:border|focus-within|opacity-0/.test(around);
     });
     expect(bad.length).toBe(0);
+  });
+
+  it.each(FILES)('%s uses no translucent focus ring', (_name, src) => {
+    expect(src.match(/(?:focus|focus-visible|focus-within):ring-[a-z-]+\/\d+/)?.[0] ?? null).toBeNull();
   });
 });
