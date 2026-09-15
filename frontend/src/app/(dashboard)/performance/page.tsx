@@ -214,9 +214,11 @@ function OverviewTab({ notify }: { notify: Notify }) {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [cycles, setCycles] = useState<ReviewCycle[]>([]);
   const [cycSort, setCycSort] = useState<{ col: 'name' | 'type' | 'period' | 'phase' | 'enrolled'; dir: 'asc' | 'desc' }>({ col: 'period', dir: 'desc' });
+  // Without this a failed summary left the four tiles as skeletons forever.
+  const [summaryFailed, setSummaryFailed] = useState(false);
 
   useEffect(() => {
-    apiFetch('/performance/summary').then(setSummary).catch(() => {});
+    apiFetch('/performance/summary').then(setSummary).catch(() => setSummaryFailed(true));
     apiFetch('/performance/cycles?status=ACTIVE').then(setCycles).catch(() => {});
   }, []);
 
@@ -272,8 +274,20 @@ function OverviewTab({ notify }: { notify: Notify }) {
             <Stat label="Completion rate" value={`${summary.completionRate}%`} note="Self-assessments in" />
             <Stat label="Active improvement plans" value={summary.activePips} note="Employees" />
           </>
+        ) : summaryFailed ? (
+          <>
+            <Stat label="Active cycles" value="—" note="Not available" />
+            <Stat label="Average score" value="—" note="Not available" />
+            <Stat label="Completion rate" value="—" note="Not available" />
+            <Stat label="Active improvement plans" value="—" note="Not available" />
+          </>
         ) : Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} h="h-[118px]" />)}
       </div>
+      {summaryFailed && (
+        <p role="alert" className="-mt-3 inline-flex items-center gap-2 text-[13px] text-danger">
+          <Icon name="alert" size={15} />The performance summary did not load. Reload the page to try again.
+        </p>
+      )}
 
       <div className="flex flex-col gap-3">
         <h2 className="text-[15.5px] font-bold text-ink">Active appraisal cycles</h2>
