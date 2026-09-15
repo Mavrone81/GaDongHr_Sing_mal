@@ -6,6 +6,7 @@ import { apiFetch } from '@/lib/api';
 import { getMondayOf, getPeriodBounds, buildPeriodLog } from '@/lib/attendanceUtils';
 import type { ViewMode, AttendanceRecord, ApiRecord } from '@/lib/attendanceUtils';
 import { todayISO, toISODate } from '@/lib/timezone';
+import { PageHeader, Card, CardHeader, Tabs, Badge, Button, Icon } from '@/components/ui';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,8 +24,20 @@ function LiveClock() {
   const dateStr = now.toLocaleDateString('en-SG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   return (
     <div className="text-center">
-      <p className="text-6xl font-black text-paper tracking-tighter tabular-nums">{timeStr}</p>
-      <p className="text-sm font-bold text-muted mt-2 uppercase tracking-widest">{dateStr}</p>
+      <p className="text-[44px] sm:text-[56px] font-extrabold tracking-[-0.03em] leading-none text-ink tabular-nums">{timeStr}</p>
+      <p className="text-sm text-muted mt-3">{dateStr}</p>
+    </div>
+  );
+}
+
+/** The dimmed mask around the face guide — ink at half strength, not a legacy navy. */
+const FACE_MASK = '0 0 0 9999px rgba(26,26,24,0.55)';
+
+/** Framed photo/video box used by every camera state. */
+function Frame({ size, children, className = '' }: { size: number; children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`relative overflow-hidden rounded-card border border-rule bg-ink ${className}`} style={{ width: size, height: size, maxWidth: '100%' }}>
+      {children}
     </div>
   );
 }
@@ -329,52 +342,44 @@ function EmployeeAttendanceView() {
     setClockState('idle');
   };
 
+  const openUpload = () => { setUploadPreview(null); setUploadError(null); setPhotoSource('file'); setClockState('upload_photo'); };
+
+  const clockedInLabel = clockInTime?.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', hour12: true });
 
   return (
     <>
-    <div className="flex flex-col gap-6 max-w-[1100px] mx-auto pb-20 animate-in fade-in duration-700">
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Attendance"
+        subtitle={user?.name ? `Welcome back, ${user.name.split(' ')[0]}. Clock in and out with Face ID.` : 'Clock in and out with Face ID.'}
+        actions={
+          isClockedIn
+            ? <Badge tone="ok"><span className="w-1.5 h-1.5 rounded-full bg-ok mr-1.5 animate-pulse" aria-hidden="true" />Clocked in{clockedInLabel ? ` · ${clockedInLabel}` : ''}</Badge>
+            : <Badge tone="neutral">Not clocked in</Badge>
+        }
+      />
 
-      {/* ── Main Clock-in Card ──────────────────────────────────────────────── */}
-      <div className="bg-[#0a0f1e] overflow-hidden border border-paper/5">
-
-        {/* Top: clock + status */}
-        <div className="relative px-10 pt-10 pb-8 text-center border-b border-rule/20">
-          <div className="relative z-10">
-            <p className="text-[9px] font-black text-accent uppercase tracking-[0.4em] mb-5">
-              {user?.name ? `Welcome, ${user.name.split(' ')[0]}` : 'Employee Self-Service'} · Attendance
-            </p>
-            <LiveClock />
-            <div className="mt-6 flex items-center justify-center">
-              {isClockedIn ? (
-                <span className="flex items-center gap-2 text-accent border-accent bg-accent px-4 py-1.5 border text-[10px] font-black uppercase tracking-widest">
-                  <span className="w-2 h-2 bg-accent animate-pulse" />
-                  Clocked In · {clockInTime?.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', hour12: true })}
-                </span>
-              ) : (
-                <span className="flex items-center gap-2 text-muted border-shadow bg-shadow px-4 py-1.5 border text-[10px] font-black uppercase tracking-widest">
-                  <span className="w-2 h-2 bg-muted" />
-                  Not clocked in
-                </span>
-              )}
-            </div>
-          </div>
+      {/* ── Main clock-in card ─────────────────────────────────────────────── */}
+      <Card padding="p-0" className="overflow-hidden">
+        <div className="px-5 py-8 sm:py-10 border-b border-rule">
+          <LiveClock />
         </div>
 
         {/* Camera / verification panel */}
-        <div className="px-10 py-8">
+        <div className="px-5 py-8 sm:px-8">
 
           {/* IDLE state */}
           {clockState === 'idle' && (
             <div className="flex flex-col items-center gap-6">
               {cameraError && (
-                <div className="w-full max-w-md px-5 py-4 bg-ink border border-ink text-[11px] font-bold text-ink text-center">
-                  {cameraError}
+                <div className="flex items-start gap-2.5 w-full max-w-md px-3.5 py-3 rounded-control bg-danger-bg text-sm text-danger">
+                  <Icon name="alert" size={16} className="mt-0.5 shrink-0" />{cameraError}
                 </div>
               )}
               {photoLoading ? (
-                <div className="flex flex-col items-center gap-3">
-                  <div className="w-10 h-10 border-4 border-t-accent border-accent animate-spin rounded-full" />
-                  <p className="text-[10px] font-black text-muted uppercase tracking-widest">Loading profile…</p>
+                <div className="flex flex-col items-center gap-3 py-4">
+                  <div className="w-8 h-8 border-4 border-accent border-t-accent animate-spin rounded-full" />
+                  <p className="text-sm text-muted">Loading your profile…</p>
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-5">
@@ -382,47 +387,32 @@ function EmployeeAttendanceView() {
                   <div className="flex flex-col items-center gap-2">
                     {profilePhoto ? (
                       <div className="relative">
-                        <img src={profilePhoto} className="w-20 h-20 object-cover border-2 border-accent" alt="Profile" />
-                        <div className="absolute -bottom-1.5 -right-1.5 w-6 h-6 bg-accent flex items-center justify-center">
-                          <svg className="w-3 h-3 text-paper" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
-                        </div>
+                        <img src={profilePhoto} className="w-20 h-20 object-cover rounded-full border-2 border-accent" alt="Profile" />
+                        <span className="absolute -bottom-0.5 -right-0.5 flex items-center justify-center w-6 h-6 rounded-full bg-accent text-on-accent border-2 border-paper">
+                          <Icon name="check" size={12} strokeWidth={3} />
+                        </span>
                       </div>
                     ) : (
-                      <div className="w-20 h-20 bg-paper/5 border border-paper/8 flex items-center justify-center">
-                        <svg className="w-9 h-9 text-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
-                        </svg>
+                      <div className="flex items-center justify-center w-20 h-20 rounded-full bg-pill text-faint">
+                        <Icon name="user" size={34} strokeWidth={1.5} />
                       </div>
                     )}
-                    <p className="text-[9px] font-black text-muted uppercase tracking-widest">
-                      {profilePhoto ? 'Face ID ready' : 'No profile photo'}
-                    </p>
+                    <p className="text-xs font-semibold text-muted">{profilePhoto ? 'Face ID ready' : 'No profile photo'}</p>
                   </div>
 
                   <div className="flex flex-col items-center gap-3">
-                    <button
+                    <Button
+                      variant="primary"
+                      icon="camera"
                       onClick={startCamera}
                       disabled={false}
-                      className={`flex items-center gap-3 px-10 py-5  text-[11px] font-black uppercase tracking-widest transition-all active:scale-95  disabled:opacity-40 disabled:cursor-not-allowed ${
-                        isClockedIn
-                          ? 'bg-ink text-paper hover:bg-ink'
-                          : 'bg-accent text-paper hover:bg-accent'
-                      }`}
+                      className="h-12 px-8 text-[15px]"
                     >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
-                      </svg>
-                      {isClockedIn ? 'Clock Out via Face ID' : 'Clock In via Face ID'}
-                    </button>
-
-                    {/* Update photo link */}
-                    <button
-                      onClick={() => { setUploadPreview(null); setUploadError(null); setPhotoSource('file'); setClockState('upload_photo'); }}
-                      className="text-[9px] font-black text-ink hover:text-accent uppercase tracking-widest transition-all"
-                    >
-                      {profilePhoto ? 'Update Profile Photo' : '+ Add Profile Photo'}
-                    </button>
+                      {isClockedIn ? 'Clock out with Face ID' : 'Clock in with Face ID'}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={openUpload}>
+                      {profilePhoto ? 'Update profile photo' : 'Add profile photo'}
+                    </Button>
                   </div>
                 </div>
               )}
@@ -431,75 +421,67 @@ function EmployeeAttendanceView() {
 
           {/* NO PHOTO prompt */}
           {clockState === 'no_photo' && (
-            <div className="flex flex-col items-center gap-6 py-4">
-              <div className="w-20 h-20 bg-highlight border border-highlight flex items-center justify-center">
-                <svg className="w-10 h-10 text-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
-                </svg>
+            <div className="flex flex-col items-center gap-5 py-2">
+              <div className="flex items-center justify-center w-14 h-14 rounded-control bg-warn-bg text-warn">
+                <Icon name="user" size={28} strokeWidth={1.5} />
               </div>
-              <div className="text-center max-w-xs">
-                <p className="text-lg font-black text-ink uppercase tracking-widest">Profile Photo Required</p>
-                <p className="text-[11px] font-bold text-muted mt-2 leading-relaxed">
-                  Face ID clock-in requires a profile photo on file. Please upload a clear, front-facing photo of yourself.
+              <div className="text-center max-w-sm">
+                <p className="text-[17px] font-bold text-ink">Profile photo needed</p>
+                <p className="text-sm text-muted mt-1.5 leading-relaxed">
+                  Face ID clock-in compares you against a profile photo on file. Add a clear, front-facing photo of yourself to continue.
                 </p>
               </div>
-              <div className="flex gap-4">
-                <button
-                  onClick={() => { setUploadPreview(null); setUploadError(null); setPhotoSource('file'); setClockState('upload_photo'); }}
-                  className="px-4 sm:px-6 lg:px-8 py-4 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95"
-                >
-                  Add Profile Photo
-                </button>
-                <button onClick={() => setClockState('idle')} className="px-4 sm:px-6 lg:px-8 py-4 bg-paper/5 border border-paper/10 text-muted text-[10px] font-black uppercase tracking-widest hover:bg-paper/8 transition-all">
-                  Cancel
-                </button>
+              <div className="flex flex-wrap justify-center gap-2.5">
+                <Button variant="secondary" onClick={() => setClockState('idle')}>Cancel</Button>
+                <Button variant="primary" icon="upload" onClick={openUpload}>Add profile photo</Button>
               </div>
             </div>
           )}
 
           {/* UPLOAD PHOTO state */}
           {clockState === 'upload_photo' && (
-            <div className="flex flex-col items-center gap-6 py-4 max-w-sm mx-auto">
-              <p className="label-form">
-                {profilePhoto ? 'Update Profile Photo' : 'Add Profile Photo'}
-              </p>
+            <div className="flex flex-col items-center gap-5 py-2 w-full max-w-sm mx-auto">
+              <p className="text-[17px] font-bold text-ink">{profilePhoto ? 'Update profile photo' : 'Add profile photo'}</p>
 
-              {/* Source tabs */}
-              <div className="flex bg-paper/5 border border-paper/10 p-0.5 gap-0.5 w-full">
-                <button
-                  onClick={() => { stopUploadCamera(); setUploadPreview(null); setPhotoSource('file'); }}
-                  className={`flex-1 py-2 text-[9px] font-black uppercase tracking-widest  transition-all ${photoSource === 'file' ? 'bg-accent text-paper' : 'text-muted hover:text-muted'}`}
-                >
-                  Upload File
-                </button>
-                <button
-                  onClick={() => { setUploadPreview(null); setPhotoSource('camera'); }}
-                  className={`flex-1 py-2 text-[9px] font-black uppercase tracking-widest  transition-all ${photoSource === 'camera' ? 'bg-accent text-paper' : 'text-muted hover:text-muted'}`}
-                >
-                  Use Camera
-                </button>
+              {/* Source toggle */}
+              <div className="flex w-full p-1 rounded-full bg-pill" role="radiogroup" aria-label="Photo source">
+                {([['file', 'Upload a file'], ['camera', 'Use camera']] as const).map(([src, label]) => (
+                  <button
+                    key={src}
+                    type="button"
+                    role="radio"
+                    aria-checked={photoSource === src}
+                    onClick={() => { if (src === 'file') { stopUploadCamera(); } setUploadPreview(null); setPhotoSource(src); }}
+                    className={`flex-1 h-8 rounded-full text-[13px] font-semibold transition-colors ${photoSource === src ? 'bg-paper text-ink shadow-card' : 'text-muted hover:text-ink'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
 
               {/* File upload mode */}
               {photoSource === 'file' && (
                 <div
-                  className="relative w-52 h-52 border-2 border-dashed border-paper/15 bg-paper/3 flex items-center justify-center cursor-pointer hover:border-accent hover:bg-accent transition-all overflow-hidden"
+                  role="button"
+                  tabIndex={0}
+                  className="relative w-52 h-52 max-w-full rounded-card border-2 border-dashed border-rule bg-page flex items-center justify-center cursor-pointer hover:border-accent transition-colors overflow-hidden"
                   onClick={() => uploadInputRef.current?.click()}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') uploadInputRef.current?.click(); }}
                 >
                   {uploadPreview ? (
                     <img src={uploadPreview} className="w-full h-full object-cover" alt="Preview" />
                   ) : profilePhoto ? (
                     <>
                       <img src={profilePhoto} className="w-full h-full object-cover opacity-40" alt="Current" />
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <svg className="w-8 h-8 text-paper/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" /></svg>
-                        <p className="text-[9px] font-black text-paper/60 mt-1 uppercase tracking-wider">Replace</p>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-ink">
+                        <Icon name="upload" size={26} />
+                        <p className="text-xs font-semibold">Replace photo</p>
                       </div>
                     </>
                   ) : (
-                    <div className="flex flex-col items-center gap-2 text-ink">
-                      <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" /></svg>
-                      <p className="text-[9px] font-black uppercase tracking-wider text-center px-4">Click to select photo</p>
+                    <div className="flex flex-col items-center gap-2 text-muted">
+                      <Icon name="upload" size={30} strokeWidth={1.5} />
+                      <p className="text-xs font-semibold text-center px-4">Click to choose a photo</p>
                     </div>
                   )}
                 </div>
@@ -508,7 +490,7 @@ function EmployeeAttendanceView() {
               {/* Camera capture mode */}
               {photoSource === 'camera' && (
                 <div className="flex flex-col items-center gap-3">
-                  <div className="relative w-52 h-52 overflow-hidden border border-paper/10 bg-shadow">
+                  <Frame size={208}>
                     <video
                       ref={uploadVideoRef}
                       className="w-full h-full object-cover"
@@ -522,34 +504,21 @@ function EmployeeAttendanceView() {
                     {!uploadPreview && (
                       <>
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="w-32 h-40 border-2 border-accent" style={{ boxShadow: '0 0 0 9999px rgba(10,15,30,0.5)' }} />
+                          <div className="w-32 h-40 rounded-full border-2 border-accent" style={{ boxShadow: FACE_MASK }} />
                         </div>
                         <div className="absolute bottom-3 left-0 right-0 flex justify-center">
-                          <span className="text-[9px] font-black text-accent uppercase tracking-widest bg-accent px-3 py-1 backdrop-">
-                            Position face in oval
-                          </span>
+                          <span className="px-2.5 h-6 inline-flex items-center rounded-full bg-paper text-xs font-semibold text-ink">Centre your face in the oval</span>
                         </div>
                       </>
                     )}
                     {uploadPreview && (
                       <div className="absolute inset-0 flex items-end justify-center pb-3">
-                        <button
-                          onClick={() => { setUploadPreview(null); setRetakeKey(k => k + 1); }}
-                          className="px-4 py-1.5 bg-shadow/60 text-paper text-[9px] font-black uppercase tracking-wider backdrop-"
-                        >
-                          Retake
-                        </button>
+                        <Button size="sm" variant="secondary" icon="refresh" onClick={() => { setUploadPreview(null); setRetakeKey(k => k + 1); }}>Retake</Button>
                       </div>
                     )}
-                  </div>
+                  </Frame>
                   {!uploadPreview && (
-                    <button
-                      onClick={captureUploadPhoto}
-                      className="px-4 sm:px-6 lg:px-8 py-3 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95 flex items-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" /><path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm0 18a8 8 0 110-16 8 8 0 010 16z" /></svg>
-                      Capture
-                    </button>
+                    <Button variant="primary" icon="camera" onClick={captureUploadPhoto}>Capture</Button>
                   )}
                 </div>
               )}
@@ -557,151 +526,126 @@ function EmployeeAttendanceView() {
               <input ref={uploadInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoFileChange} />
 
               {uploadError && (
-                <p className="text-[10px] font-bold text-ink text-center">{uploadError}</p>
+                <div className="flex items-start gap-2.5 w-full px-3.5 py-3 rounded-control bg-danger-bg text-sm text-danger">
+                  <Icon name="alert" size={16} className="mt-0.5 shrink-0" />{uploadError}
+                </div>
               )}
 
-              <p className="text-[9px] font-bold text-muted text-center leading-relaxed px-4">
-                Use a clear, front-facing photo with good lighting. This will be used for face verification during clock-in.
+              <p className="text-xs text-muted text-center leading-relaxed">
+                Use a clear, front-facing photo with good lighting. It is only used to verify you at clock-in.
               </p>
 
-              <div className="flex gap-3 w-full">
-                <button
-                  onClick={saveProfilePhoto}
-                  disabled={!uploadPreview || uploadSaving}
-                  className="flex-1 py-4 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {uploadSaving ? 'Saving…' : 'Save Photo'}
-                </button>
-                <button
-                  onClick={() => { stopUploadCamera(); setPhotoSource('file'); setClockState('idle'); }}
-                  className="flex-1 py-4 bg-paper/5 border border-paper/10 text-muted text-[10px] font-black uppercase tracking-widest hover:bg-paper/8 transition-all"
-                >
-                  Cancel
-                </button>
+              <div className="flex gap-2.5 w-full">
+                <Button variant="secondary" className="flex-1" onClick={() => { stopUploadCamera(); setPhotoSource('file'); setClockState('idle'); }}>Cancel</Button>
+                <Button variant="primary" className="flex-1" onClick={saveProfilePhoto} disabled={!uploadPreview || uploadSaving}>
+                  {uploadSaving ? 'Saving…' : 'Save photo'}
+                </Button>
               </div>
             </div>
           )}
 
           {/* CAMERA state */}
           {clockState === 'camera' && (
-            <div className="flex flex-col lg:flex-row gap-6 items-center justify-center">
+            <div className="flex flex-col lg:flex-row gap-6 lg:gap-10 items-center justify-center">
               {/* Live camera */}
               <div className="flex flex-col items-center gap-3">
-                <p className="text-[9px] font-black text-muted uppercase tracking-widest">Live Camera</p>
-                <div className="relative overflow-hidden border border-paper/10 bg-shadow" style={{ width: 280, height: 280 }}>
+                <p className="text-xs font-semibold text-muted">Live camera</p>
+                <Frame size={280}>
                   <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-44 h-52 border-2 border-accent" style={{ boxShadow: '0 0 0 9999px rgba(10,15,30,0.5)' }} />
+                    <div className="w-44 h-52 rounded-full border-2 border-accent" style={{ boxShadow: FACE_MASK }} />
                   </div>
                   <div className="absolute bottom-3 left-0 right-0 flex justify-center">
-                    <span className="text-[9px] font-black text-accent uppercase tracking-widest bg-accent px-3 py-1 backdrop-">
-                      Position face in oval
-                    </span>
+                    <span className="px-2.5 h-6 inline-flex items-center rounded-full bg-paper text-xs font-semibold text-ink">Centre your face in the oval</span>
                   </div>
-                </div>
-                <button
-                  onClick={captureAndVerify}
-                  className="mt-1 px-10 py-4 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95 flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" /><path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm0 18a8 8 0 110-16 8 8 0 010 16z" /></svg>
-                  Capture & Verify
-                </button>
+                </Frame>
+                <Button variant="primary" icon="camera" onClick={captureAndVerify} className="mt-1">Capture and verify</Button>
               </div>
 
-              {/* VS divider */}
-              <div className="flex lg:flex-col items-center gap-2">
-                <div className="w-16 h-px lg:w-px lg:h-16 bg-paper/10" />
-                <span className="text-[9px] font-black text-ink uppercase">vs</span>
-                <div className="w-16 h-px lg:w-px lg:h-16 bg-paper/10" />
+              {/* Divider */}
+              <div className="flex lg:flex-col items-center gap-2 text-faint">
+                <div className="w-12 h-px lg:w-px lg:h-12 bg-rule" />
+                <span className="text-xs font-semibold">vs</span>
+                <div className="w-12 h-px lg:w-px lg:h-12 bg-rule" />
               </div>
 
               {/* Profile photo */}
               <div className="flex flex-col items-center gap-3">
-                <p className="text-[9px] font-black text-muted uppercase tracking-widest">Profile Photo</p>
-                <div className="relative overflow-hidden border border-paper/10 bg-shadow" style={{ width: 280, height: 280 }}>
+                <p className="text-xs font-semibold text-muted">Profile photo</p>
+                <Frame size={280}>
                   {profilePhoto ? (
                     <img src={profilePhoto} className="w-full h-full object-cover" alt="Profile" />
                   ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-ink gap-3">
-                      <svg className="w-16 h-16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" /></svg>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-center px-4 leading-relaxed">No profile photo</span>
+                    <div className="flex flex-col items-center justify-center h-full gap-2 text-faint">
+                      <Icon name="user" size={48} strokeWidth={1} />
+                      <span className="text-xs font-semibold">No profile photo</span>
                     </div>
                   )}
-                </div>
-                <button onClick={() => { stopCamera(); setClockState('idle'); }} className="text-[9px] font-black text-muted hover:text-ink uppercase tracking-widest transition-all">
-                  Cancel
-                </button>
+                </Frame>
+                <Button variant="ghost" size="sm" onClick={() => { stopCamera(); setClockState('idle'); }}>Cancel</Button>
               </div>
             </div>
           )}
 
           {/* CAPTURING / VERIFYING state */}
           {(clockState === 'verifying' || clockState === 'capturing') && (
-            <div className="flex flex-col items-center gap-8 py-4">
-              <div className="flex gap-8 items-center">
+            <div className="flex flex-col items-center gap-6 py-2">
+              <div className="flex flex-wrap justify-center gap-6 sm:gap-8 items-center">
                 {/* Captured frame */}
                 <div className="flex flex-col items-center gap-2">
-                  <p className="text-[9px] font-black text-muted uppercase tracking-widest">Captured</p>
-                  <div className="overflow-hidden border border-paper/10" style={{ width: 160, height: 160 }}>
+                  <p className="text-xs font-semibold text-muted">Captured</p>
+                  <Frame size={140}>
                     {capturedImg
                       ? <img src={capturedImg} className="w-full h-full object-cover" alt="Captured" />
-                      : <div className="w-full h-full bg-shadow animate-pulse" />
+                      : <div className="w-full h-full bg-pill animate-pulse" />
                     }
-                  </div>
+                  </Frame>
                 </div>
 
                 {/* Spinner */}
                 <div className="flex flex-col items-center gap-4">
-                  <div className="relative w-20 h-20">
-                    <div className="absolute inset-0 border-4 border-t-accent border-accent animate-spin rounded-full" />
-                    <div className="absolute inset-3 border-4 border-t-shadow border-accent animate-spin [animation-direction:reverse] [animation-duration:0.7s] rounded-full" />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <svg className="w-7 h-7 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7.864 4.243A7.5 7.5 0 0119.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 004.5 10.5a7.464 7.464 0 01-1.15 3.993m1.989 3.559A11.209 11.209 0 008.25 10.5a3.75 3.75 0 117.5 0c0 .527-.021 1.049-.064 1.565" /></svg>
+                  <div className="relative w-16 h-16">
+                    <div className="absolute inset-0 border-4 border-tint border-t-accent animate-spin rounded-full" />
+                    <div className="absolute inset-0 flex items-center justify-center text-accent">
+                      <Icon name="user" size={24} strokeWidth={1.5} />
                     </div>
                   </div>
                   <div className="text-center">
-                    <p className="text-sm font-black text-paper uppercase tracking-widest">Analysing face…</p>
-                    <p className="text-[10px] font-bold text-muted uppercase tracking-widest mt-1">Comparing against profile record</p>
+                    <p className="text-[15.5px] font-bold text-ink">Checking your face…</p>
+                    <p className="text-[13px] text-muted mt-0.5">Comparing against your profile photo</p>
                   </div>
                 </div>
 
                 {/* Profile photo reference */}
                 <div className="flex flex-col items-center gap-2">
-                  <p className="text-[9px] font-black text-muted uppercase tracking-widest">Profile</p>
-                  <div className="overflow-hidden border border-paper/10 bg-shadow" style={{ width: 160, height: 160 }}>
+                  <p className="text-xs font-semibold text-muted">Profile</p>
+                  <Frame size={140}>
                     {profilePhoto
                       ? <img src={profilePhoto} className="w-full h-full object-cover" alt="Profile reference" />
-                      : <div className="w-full h-full bg-shadow" />
+                      : <div className="w-full h-full bg-pill" />
                     }
-                  </div>
+                  </Frame>
                 </div>
-              </div>
-
-              {/* Scanning bars */}
-              <div className="flex items-end gap-1 h-8">
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <div key={i} className="w-1.5 bg-accent animate-pulse" style={{ height: `${20 + Math.sin(i) * 16}px`, animationDelay: `${i * 80}ms` }} />
-                ))}
               </div>
             </div>
           )}
 
           {/* SUCCESS state */}
           {clockState === 'success' && (
-            <div className="flex flex-col items-center gap-6 py-4">
-              <div className="flex gap-8 items-center">
+            <div className="flex flex-col items-center gap-6 py-2">
+              <div className="flex flex-col sm:flex-row gap-6 items-center">
                 {capturedImg && (
                   <div className="relative">
-                    <img src={capturedImg} className="w-28 h-28 object-cover border-2 border-accent" alt="Verified" />
-                    <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-accent flex items-center justify-center">
-                      <svg className="w-4 h-4 text-paper" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
-                    </div>
+                    <img src={capturedImg} className="w-28 h-28 object-cover rounded-card border-2 border-ok" alt="Verified" />
+                    <span className="absolute -bottom-2 -right-2 flex items-center justify-center w-8 h-8 rounded-full bg-ok text-on-accent border-2 border-paper">
+                      <Icon name="check" size={16} strokeWidth={3} />
+                    </span>
                   </div>
                 )}
-                <div className="text-center">
-                  <p className="text-2xl font-black text-accent uppercase tracking-widest">Identity Verified</p>
-                  <p className="text-[11px] font-bold text-muted uppercase tracking-widest mt-2">
-                    Match score: {confidence}% · {isClockedIn ? 'Clock-out' : 'Clock-in'} recorded
+                <div className="text-center sm:text-left">
+                  <p className="text-[22px] font-extrabold tracking-[-0.02em] text-ok">Identity verified</p>
+                  <p className="text-sm text-muted mt-1 tabular-nums">
+                    Match score {confidence}% · {isClockedIn ? 'Clock-out' : 'Clock-in'} recorded
                   </p>
                 </div>
               </div>
@@ -710,33 +654,28 @@ function EmployeeAttendanceView() {
 
           {/* FAILED state */}
           {clockState === 'failed' && (
-            <div className="flex flex-col items-center gap-6 py-4">
-              <div className="flex gap-8 items-center">
+            <div className="flex flex-col items-center gap-6 py-2">
+              <div className="flex flex-col sm:flex-row gap-6 items-center">
                 {capturedImg && (
                   <div className="relative">
-                    <img src={capturedImg} className="w-28 h-28 object-cover border-2 border-ink" alt="Unverified" />
-                    <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-ink flex items-center justify-center">
-                      <svg className="w-4 h-4 text-paper" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                    </div>
+                    <img src={capturedImg} className="w-28 h-28 object-cover rounded-card border-2 border-danger" alt="Unverified" />
+                    <span className="absolute -bottom-2 -right-2 flex items-center justify-center w-8 h-8 rounded-full bg-danger text-on-accent border-2 border-paper">
+                      <Icon name="x" size={16} strokeWidth={2.5} />
+                    </span>
                   </div>
                 )}
-                <div className="text-center">
-                  <p className="text-2xl font-black text-ink uppercase tracking-widest">Verification Failed</p>
-                  <p className="text-[11px] font-bold text-muted uppercase tracking-widest mt-2">
+                <div className="text-center sm:text-left max-w-sm">
+                  <p className="text-[22px] font-extrabold tracking-[-0.02em] text-danger">Verification failed</p>
+                  <p className="text-sm text-muted mt-1">
                     {verifyError ?? `Match score ${confidence}% — face not recognised. Please try again.`}
                   </p>
                 </div>
               </div>
-              <div className="flex gap-4 mt-2">
-                <button onClick={retry} className="px-4 sm:px-6 lg:px-8 py-4 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95">
-                  Try Again
-                </button>
-                <button
-                  onClick={() => { retry(); setPhotoSource('file'); setClockState('upload_photo'); setUploadPreview(null); setUploadError(null); }}
-                  className="px-4 sm:px-6 lg:px-8 py-4 bg-paper/5 border border-paper/10 text-muted text-[10px] font-black uppercase tracking-widest hover:bg-paper/8 transition-all"
-                >
-                  Update Photo
-                </button>
+              <div className="flex flex-wrap justify-center gap-2.5">
+                <Button variant="secondary" icon="upload" onClick={() => { retry(); setPhotoSource('file'); setClockState('upload_photo'); setUploadPreview(null); setUploadError(null); }}>
+                  Update photo
+                </Button>
+                <Button variant="primary" icon="refresh" onClick={retry}>Try again</Button>
               </div>
             </div>
           )}
@@ -745,38 +684,57 @@ function EmployeeAttendanceView() {
           <canvas ref={canvasRef} style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: 0, height: 0 }} />
           <canvas ref={uploadCanvasRef} style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: 0, height: 0 }} />
         </div>
-      </div>
+      </Card>
 
-      {/* ── Attendance Log ───────────────────────────────────────────────────── */}
+      {/* ── Attendance log ─────────────────────────────────────────────────── */}
       {(() => {
         const { label } = getPeriodBounds(viewMode, periodOffset);
         const workDays  = weekLog.filter(r => r.status !== 'weekend');
         const presentCount = weekLog.filter(r => r.status === 'present' || r.status === 'half').length;
         const expectedDays = workDays.length;
 
-        const VIEW_TABS: { key: ViewMode; label: string }[] = [
-          { key: 'work-week', label: 'Work Week' },
-          { key: 'week',      label: 'Week' },
-          { key: 'bi-weekly', label: 'Bi-weekly' },
-          { key: 'month',     label: 'Month' },
+        const VIEW_TABS: { id: ViewMode; label: string }[] = [
+          { id: 'work-week', label: 'Work week' },
+          { id: 'week',      label: 'Week' },
+          { id: 'bi-weekly', label: 'Bi-weekly' },
+          { id: 'month',     label: 'Month' },
         ];
 
         /**
-         * Ordered by how much attention the state deserves, since the palette
-         * has no five-way hue vocabulary: unexplained absence is filled ink and
-         * therefore heaviest, authorised leave is filled accent, an ordinary
-         * present day is a quiet outline, and the weekend recedes entirely.
+         * One tone per state, and a WORD on every pill: an unexplained absence
+         * is the only red on the screen, a half day is a warning, authorised
+         * leave is the accent, an ordinary present day is the quiet ok, and the
+         * weekend recedes to neutral.
          *
          * Straight token mapping had rendered 'present' and 'leave' identically
          * — the two most common states on the calendar.
          */
-        const statusBadge = (s: AttendanceRecord['status']) => {
-          if (s === 'present')  return { cls: 'bg-paper text-accent border-accent',     txt: 'Present'  };
-          if (s === 'half')     return { cls: 'bg-paper text-ink border-highlight',     txt: 'Half Day' };
-          if (s === 'leave')    return { cls: 'bg-accent text-paper border-accent',     txt: 'On Leave' };
-          if (s === 'weekend')  return { cls: 'bg-page text-muted border-rule',         txt: 'Weekend'  };
-          return                       { cls: 'bg-ink text-paper border-ink',           txt: 'Absent'   };
+        const statusBadge = (s: AttendanceRecord['status']): { tone: 'ok' | 'warn' | 'accent' | 'neutral' | 'danger'; txt: string } => {
+          if (s === 'present')  return { tone: 'ok',      txt: 'Present'  };
+          if (s === 'half')     return { tone: 'warn',    txt: 'Half day' };
+          if (s === 'leave')    return { tone: 'accent',  txt: 'On leave' };
+          if (s === 'weekend')  return { tone: 'neutral', txt: 'Weekend'  };
+          return                       { tone: 'danger',  txt: 'Absent'   };
         };
+
+        const toolbar = (
+          <div className="flex flex-col gap-3 px-5 pt-4 sm:px-6">
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+              <CardHeader title="Attendance log" caption={label} className="mb-0" />
+              <div className="flex items-center gap-2 shrink-0">
+                {!weekLoading && <Badge tone="accent" className="mr-1 tabular-nums">{presentCount} / {expectedDays} days</Badge>}
+                <Button variant="secondary" aria-label="Previous period" onClick={() => setPeriodOffset(p => p - 1)}>
+                  <Icon name="chevronRight" size={16} className="rotate-180" />
+                </Button>
+                <Button variant="secondary" onClick={() => setPeriodOffset(0)} disabled={periodOffset === 0}>Current</Button>
+                <Button variant="secondary" aria-label="Next period" onClick={() => setPeriodOffset(p => p + 1)} disabled={periodOffset >= 0}>
+                  <Icon name="chevronRight" size={16} />
+                </Button>
+              </div>
+            </div>
+            <Tabs items={VIEW_TABS} active={viewMode} onChange={(m) => { setViewMode(m); setPeriodOffset(0); }} />
+          </div>
+        );
 
         // ── Month: calendar grid ──────────────────────────────────────────────
         if (viewMode === 'month') {
@@ -813,80 +771,56 @@ function EmployeeAttendanceView() {
           // are the two states a reader is actually comparing.
           const cellColor = (s: AttendanceRecord['status'] | undefined) => {
             if (!s)              return 'bg-page border-transparent';
-            if (s === 'present') return 'bg-paper border-accent';
-            if (s === 'half')    return 'bg-paper border-highlight';
-            if (s === 'leave')   return 'bg-page border-accent border-dashed';
+            if (s === 'present') return 'bg-paper border-ok';
+            if (s === 'half')    return 'bg-paper border-warn';
+            if (s === 'leave')   return 'bg-tint border-accent border-dashed';
             if (s === 'weekend') return 'bg-page border-rule';
-            return 'bg-page border-ink';
+            return 'bg-page border-danger/50';
           };
           const dotColor = (s: AttendanceRecord['status'] | undefined) => {
-            if (s === 'present') return 'bg-accent';
-            if (s === 'half')    return 'bg-highlight';
+            if (s === 'present') return 'bg-ok';
+            if (s === 'half')    return 'bg-warn';
             if (s === 'leave')   return 'bg-paper border border-accent';
             return 'bg-transparent';
           };
+          const cellText = (r: AttendanceRecord) =>
+            r.status === 'present' ? r.duration ?? 'Present' : r.status === 'half' ? 'Half day' : r.status === 'leave' ? 'Leave' : r.status === 'weekend' ? '' : 'Absent';
 
           return (
-            <div className="bg-paper border border-rule overflow-hidden">
-              {/* Header */}
-              <div className="px-4 sm:px-6 lg:px-8 py-5 border-b border-rule bg-page">
-                <div className="flex flex-wrap items-center gap-4">
-                  {/* View tabs */}
-                  <div className="flex bg-page p-0.5 gap-0.5">
-                    {VIEW_TABS.map(t => (
-                      <button key={t.key} onClick={() => { setViewMode(t.key); setPeriodOffset(0); }}
-                        className={`px-3 py-1.5 text-[9px] font-black uppercase tracking-widest  transition-all ${viewMode === t.key ? 'bg-paper text-ink' : 'text-muted hover:text-ink'}`}>
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
-                  {/* Nav */}
-                  <div className="flex items-center gap-2 ml-auto">
-                    <button onClick={() => setPeriodOffset(p => p - 1)}
-                      className="w-8 h-8 flex items-center justify-center bg-page hover:bg-rule transition-all text-ink">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
-                    </button>
-                    <span className="text-[10px] font-black text-ink uppercase tracking-widest min-w-[140px] text-center">{label}</span>
-                    <button onClick={() => setPeriodOffset(p => p + 1)} disabled={periodOffset >= 0}
-                      className="w-8 h-8 flex items-center justify-center bg-page hover:bg-rule transition-all text-ink disabled:opacity-30 disabled:cursor-not-allowed">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
-                    </button>
-                  </div>
-                  {!weekLoading && (
-                    <div className="px-3 py-1.5 bg-page border border-accent">
-                      <p className="text-[9px] font-black text-accent uppercase tracking-widest">{presentCount} / {expectedDays} days</p>
-                    </div>
-                  )}
-                </div>
-              </div>
+            <Card padding="p-0" className="overflow-hidden">
+              {toolbar}
               {/* Calendar grid */}
               <div className="p-4 sm:p-6">
                 <div className="grid grid-cols-7 gap-1.5 mb-1.5">
                   {dayHeaders.map(d => (
-                    <div key={d} className="text-center label-form py-1">{d}</div>
+                    <div key={d} className="text-center text-xs font-bold text-muted py-1">{d}</div>
                   ))}
                 </div>
                 {weekLoading ? (
                   <div className="grid grid-cols-7 gap-1.5">
-                    {Array.from({ length: 35 }).map((_, i) => <div key={i} className="h-14 bg-page animate-pulse" />)}
+                    {Array.from({ length: 35 }).map((_, i) => <div key={i} className="h-16 rounded-control bg-pill animate-pulse" />)}
                   </div>
                 ) : (
                   weeks.map((week, wi) => (
                     <div key={wi} className="grid grid-cols-7 gap-1.5 mb-1.5">
                       {week.map((rec, di) => {
-                        if (!rec) return <div key={di} className="h-14 bg-page" />;
+                        if (!rec) return <div key={di} className="h-16 rounded-control bg-page" />;
                         const dayNum = rec.isoDate.slice(8);
                         const isToday = rec.isoDate === todayISO();
                         return (
-                          <div key={di} className={`h-14  border px-2 py-1.5 flex flex-col justify-between transition-all ${cellColor(rec.status)} ${isToday ? 'ring-2 ring-accent ring-offset-1' : ''}`}>
+                          <div
+                            key={di}
+                            title={`${rec.date}${cellText(rec) ? ` · ${cellText(rec)}` : ''}`}
+                            className={`h-16 rounded-control border px-1.5 py-1.5 sm:px-2 flex flex-col justify-between transition-colors ${cellColor(rec.status)} ${isToday ? 'ring-2 ring-accent ring-offset-1' : ''}`}
+                          >
                             <div className="flex items-center justify-between">
-                              <span className={`text-[10px] font-black ${isToday ? 'text-accent' : 'text-ink'}`}>{dayNum}</span>
+                              <span className={`text-xs font-bold tabular-nums ${isToday ? 'text-accent' : 'text-ink'}`}>{dayNum}</span>
                               {rec.status !== 'absent' && rec.status !== 'weekend' && (
-                                <span className={`w-1.5 h-1.5  ${dotColor(rec.status)}`} />
+                                <span className={`w-2 h-2 rounded-full ${dotColor(rec.status)}`} aria-hidden="true" />
                               )}
                             </div>
-                            <span className="text-[8px] font-black uppercase tracking-wide text-muted leading-none">
-                              {rec.status === 'present' ? rec.duration ?? 'Present' : rec.status === 'half' ? 'Half Day' : rec.status === 'leave' ? 'Leave' : rec.status === 'weekend' ? '' : 'Absent'}
+                            <span className={`hidden sm:block text-xs leading-none truncate tabular-nums ${rec.status === 'absent' ? 'text-danger' : 'text-muted'}`}>
+                              {cellText(rec)}
                             </span>
                           </div>
                         );
@@ -894,98 +828,69 @@ function EmployeeAttendanceView() {
                     </div>
                   ))
                 )}
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-4 text-xs text-muted">
+                  <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-ok" />Present</span>
+                  <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-warn" />Half day</span>
+                  <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-paper border border-accent" />On leave</span>
+                  <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full border border-danger" />Absent</span>
+                </div>
               </div>
-            </div>
+            </Card>
           );
         }
 
         // ── List view (work-week / week / bi-weekly) ───────────────────────────
         const compact = viewMode === 'bi-weekly';
         return (
-          <div className="bg-paper border border-rule overflow-hidden">
-            {/* Header */}
-            <div className="px-4 sm:px-6 lg:px-8 py-5 border-b border-rule bg-page">
-              <div className="flex flex-wrap items-center gap-4">
-                {/* View tabs */}
-                <div className="flex bg-page p-0.5 gap-0.5">
-                  {VIEW_TABS.map(t => (
-                    <button key={t.key} onClick={() => { setViewMode(t.key); setPeriodOffset(0); }}
-                      className={`px-3 py-1.5 text-[9px] font-black uppercase tracking-widest  transition-all ${viewMode === t.key ? 'bg-paper text-ink' : 'text-muted hover:text-ink'}`}>
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-                {/* Nav */}
-                <div className="flex items-center gap-2 ml-auto">
-                  <button onClick={() => setPeriodOffset(p => p - 1)}
-                    className="w-8 h-8 flex items-center justify-center bg-page hover:bg-rule transition-all text-ink">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
-                  </button>
-                  <span className="text-[10px] font-black text-ink uppercase tracking-widest min-w-[160px] text-center">{label}</span>
-                  <button onClick={() => setPeriodOffset(p => p + 1)} disabled={periodOffset >= 0}
-                    className="w-8 h-8 flex items-center justify-center bg-page hover:bg-rule transition-all text-ink disabled:opacity-30 disabled:cursor-not-allowed">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
-                  </button>
-                </div>
-                {!weekLoading && (
-                  <div className="px-3 py-1.5 bg-page border border-accent">
-                    <p className="text-[9px] font-black text-accent uppercase tracking-widest">{presentCount} / {expectedDays} days</p>
-                  </div>
-                )}
-              </div>
-            </div>
+          <Card padding="p-0" className="overflow-hidden">
+            {toolbar}
             {/* Rows */}
-            <div className="divide-y divide-rule">
+            <div className="flex flex-col divide-y divide-rule border-t border-rule mt-0">
               {weekLoading ? (
                 Array.from({ length: viewMode === 'work-week' ? 5 : 7 }).map((_, i) => (
-                  <div key={i} className="flex items-center px-4 sm:px-6 lg:px-8 py-4 animate-pulse">
-                    <div className="w-28 h-4 bg-page" />
-                    <div className="flex-1 ml-6 h-4 bg-page" />
+                  <div key={i} className="flex items-center gap-6 px-5 sm:px-6 py-4 animate-pulse">
+                    <div className="w-28 h-4 rounded-full bg-pill" />
+                    <div className="flex-1 h-4 rounded-full bg-pill" />
                   </div>
                 ))
+              ) : weekLog.length === 0 ? (
+                <p className="px-5 py-10 text-sm text-muted text-center">No days in this period.</p>
               ) : weekLog.map((rec) => {
                 const isToday = rec.isoDate === todayISO();
-                const badge = statusBadge(rec.status);
+                const state = statusBadge(rec.status);
                 const isWeekendRow = rec.status === 'weekend';
                 return (
-                  <div key={rec.isoDate} className={`flex items-center px-4 sm:px-6 lg:px-8 transition-all ${compact ? 'py-3' : 'py-4'} ${isToday ? 'bg-page' : 'hover:bg-page'} ${isWeekendRow ? 'opacity-50' : ''}`}>
-                    <div className={`${compact ? 'w-24' : 'w-32'} flex items-center gap-2`}>
-                      {isToday && <span className="w-1.5 h-1.5 bg-accent shrink-0" />}
-                      <p className={`font-black text-ink uppercase tracking-tight ${compact ? 'text-[10px]' : 'text-[11px]'}`}>{rec.date}</p>
+                  <div key={rec.isoDate} className={`flex items-center gap-3 sm:gap-6 px-5 sm:px-6 ${compact ? 'py-3' : 'py-3.5'} ${isToday ? 'bg-tint/40' : 'hover:bg-page'} ${isWeekendRow ? 'opacity-60' : ''} transition-colors`}>
+                    <div className="w-24 sm:w-32 shrink-0 flex items-center gap-2">
+                      {isToday && <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" aria-hidden="true" />}
+                      <p className={`text-sm font-semibold tabular-nums ${isToday ? 'text-accent' : 'text-ink'}`}>{rec.date}</p>
                     </div>
                     {isWeekendRow ? (
-                      <p className="flex-1 text-[9px] font-bold text-muted uppercase tracking-widest">Weekend</p>
-                    ) : compact ? (
-                      <div className="flex-1 flex items-center gap-4">
-                        <p className="text-[10px] font-black text-ink">{rec.clockIn ?? '—'}</p>
-                        <span className="text-muted text-[10px]">→</span>
-                        <p className="text-[10px] font-black text-ink">{rec.clockOut ?? '—'}</p>
-                        {rec.duration && <p className="text-[10px] font-bold text-accent ml-2">{rec.duration}</p>}
-                      </div>
+                      <p className="flex-1 text-[13px] text-faint">Weekend</p>
                     ) : (
-                      <div className="flex-1 flex items-center gap-6">
-                        <div className="flex flex-col">
-                          <p className="label-form">Clock In</p>
-                          <p className="text-xs font-black text-ink mt-0.5">{rec.clockIn ?? '—'}</p>
+                      <>
+                        {/* Labelled columns from 640px; a single "in → out · dur" line below that and in the bi-weekly view. */}
+                        <div className={`flex-1 min-w-0 ${compact ? 'flex' : 'flex sm:hidden'} items-center gap-2 text-sm tabular-nums`}>
+                          <span className="font-semibold text-ink">{rec.clockIn ?? '—'}</span>
+                          <Icon name="arrowRight" size={13} className="text-faint shrink-0" />
+                          <span className="font-semibold text-ink">{rec.clockOut ?? '—'}</span>
+                          {rec.duration && <span className="text-muted ml-1 truncate">· {rec.duration}</span>}
                         </div>
-                        <div className="flex flex-col">
-                          <p className="label-form">Clock Out</p>
-                          <p className="text-xs font-black text-ink mt-0.5">{rec.clockOut ?? '—'}</p>
-                        </div>
-                        <div className="flex flex-col">
-                          <p className="label-form">Duration</p>
-                          <p className="text-xs font-bold text-accent mt-0.5">{rec.duration ?? '—'}</p>
-                        </div>
-                      </div>
+                        {!compact && (
+                          <div className="hidden sm:grid flex-1 grid-cols-3 gap-4 tabular-nums">
+                            <div><p className="text-xs text-muted">Clock in</p><p className="text-sm font-semibold text-ink mt-0.5">{rec.clockIn ?? '—'}</p></div>
+                            <div><p className="text-xs text-muted">Clock out</p><p className="text-sm font-semibold text-ink mt-0.5">{rec.clockOut ?? '—'}</p></div>
+                            <div><p className="text-xs text-muted">Duration</p><p className="text-sm font-semibold text-accent mt-0.5">{rec.duration ?? '—'}</p></div>
+                          </div>
+                        )}
+                      </>
                     )}
-                    <span className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-1  border ${badge.cls}`}>
-                      {badge.txt}
-                    </span>
+                    <Badge tone={state.tone}>{state.txt}</Badge>
                   </div>
                 );
               })}
             </div>
-          </div>
+          </Card>
         );
       })()}
     </div>
