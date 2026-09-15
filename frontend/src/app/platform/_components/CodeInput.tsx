@@ -7,6 +7,8 @@ import { useRef, useState } from 'react';
 // keystroke to that input's own value, so fast typing and password managers
 // cannot drop digits, and paste / one-time-code autofill work natively.
 // The input is invisible; the box it will fill next carries the 2px focus ring.
+// No maxLength: it would cut a formatted paste ("123 456") before the digit
+// filter runs. onChange strips non-digits and keeps the first six instead.
 export function CodeInput({ value, onChange, autoFocus, label = '6-digit authenticator code' }: {
   value: string; onChange: (code: string) => void; autoFocus?: boolean; label?: string;
 }) {
@@ -23,7 +25,6 @@ export function CodeInput({ value, onChange, autoFocus, label = '6-digit authent
         inputMode="numeric"
         autoComplete="one-time-code"
         pattern="[0-9]{6}"
-        maxLength={6}
         value={value}
         onChange={(e) => onChange(e.target.value.replace(/\D/g, '').slice(0, 6))}
         onFocus={() => setFocused(true)}

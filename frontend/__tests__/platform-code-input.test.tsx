@@ -20,6 +20,17 @@ describe('platform CodeInput', () => {
     expect(input).toHaveAttribute('autocomplete', 'one-time-code');
   });
 
+  it('takes a formatted paste whole: no maxLength truncates it before the digit filter', () => {
+    const onCode = jest.fn();
+    render(<Harness onCode={onCode} />);
+    const input = screen.getByLabelText('6-digit authenticator code');
+    expect(input).not.toHaveAttribute('maxlength');
+    fireEvent.change(input, { target: { value: '123 456' } });
+    expect(onCode).toHaveBeenLastCalledWith('123456');
+    fireEvent.change(input, { target: { value: '12 34-56' } });
+    expect(onCode).toHaveBeenLastCalledWith('123456');
+  });
+
   it('builds the code from the input, not from the last render', () => {
     const onChange = jest.fn();
     render(<CodeInput value="" onChange={onChange} />);
