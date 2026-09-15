@@ -7,7 +7,7 @@ const TONE: Record<BadgeTone, string> = {
   ok: 'bg-ok-bg text-ok',
   warn: 'bg-warn-bg text-warn',
   danger: 'bg-danger-bg text-danger',
-  accent: 'bg-tint text-accent',
+  accent: 'bg-tint text-accent ring-1 ring-inset ring-accent/25', // outlined, so it never reads as ok
   brass: 'bg-brass-bg text-brass-fg', // trials / plans
 };
 
