@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { EmployeePayslipsView } from './EmployeePayslipsView';
 import { fmtSGD, fmtPeriod } from './format';
 import { Seal, Notice } from '@/components/official';
-import { apiFetch, apiFetchRaw } from '@/lib/api';
+import { usePayrollAdmin, generateGiroRef } from './usePayrollAdmin';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -20,441 +20,97 @@ function fmtRunStatus(s: string): string {
   return map[s] ?? s;
 }
 
-// ─── GIRO reference helpers ──────────────────────────────────────────────────
-
-function generateGiroRef(period: string): string {
-  if (typeof window === 'undefined') return `P${period.replace('-', '')}000000`;
-  const key = `giro_refs_${period}`;
-  const used: string[] = JSON.parse(localStorage.getItem(key) || '[]');
-  let ref = '';
-  let tries = 0;
-  do {
-    const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
-    ref = `P${period.replace('-', '')}${rand}`;
-    tries++;
-  } while (used.includes(ref) && tries < 100);
-  return ref;
-}
-
-function markGiroRefUsed(period: string, ref: string) {
-  if (typeof window === 'undefined' || !ref) return;
-  const key = `giro_refs_${period}`;
-  const used: string[] = JSON.parse(localStorage.getItem(key) || '[]');
-  if (!used.includes(ref)) { used.push(ref); localStorage.setItem(key, JSON.stringify(used)); }
-}
-
-// ─── Admin payroll dashboard (unchanged, Payroll/HR Admin only) ───────────────
+// ─── Admin payroll dashboard (Payroll/HR Admin only) ──────────────────────────
+// All state, data-loading and side-effecting handlers live in usePayrollAdmin;
+// this component is presentation only.
 
 function AdminPayrollDashboard() {
-  const [isRunModalOpen, setIsRunModalOpen] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const {
+    isRunModalOpen, setIsRunModalOpen,
+    isProcessing,
+    showSuccessToast,
+    reviewRunData, setReviewRunData,
+    payslipRunId, setPayslipRunId,
+    payslipRunPeriod,
+    payslipRows, setPayslipRows,
+    payslipLoading,
+    payslipSort,
+    reviewPayslips,
+    empNameMap,
+    dlProgress,
+    actionToast,
+    selectedEmployee, setSelectedEmployee,
+    searchQuery, setSearchQuery,
+    giroRunId, setGiroRunId,
+    giroDownloading,
+    giroBank, setGiroBank,
+    giroFields, gf,
+    runs,
+    runsLoading,
+    runSort,
+    selectedPeriod, setSelectedPeriod,
+    processingGroup, setProcessingGroup,
+    selectedRunType, setSelectedRunType,
+    confirmCancelRun, setConfirmCancelRun,
+    payComponents,
+    runPaycodes,
+    addingPaycodeFor, setAddingPaycodeFor,
+    newPcComponentId, setNewPcComponentId,
+    newPcAmount, setNewPcAmount,
+    newPcDesc, setNewPcDesc,
+    paycodesDirty,
+    reviewFullscreen, setReviewFullscreen,
+    periodConflictRuns, setPeriodConflictRuns,
+    conflictPayslips, setConflictPayslips,
+    conflictLoading,
+    conflictSalaryMap, setConflictSalaryMap,
+    variance,
+    varianceLoading,
+    drcLoaded,
+    cpfSubmissions,
+    cpfActionRun, setCpfActionRun,
+    cpfDownloading,
+    periodCfg,
+    periodCfgLoading,
+    periodCfgWorkDayType, setPeriodCfgWorkDayType,
+    periodCfgOverride, setPeriodCfgOverride,
+    periodCfgSaving,
+    reviewSort,
+    sortedRuns,
+    filteredEmployees,
+    sortedPayslipRows,
+    drcAlerts,
+    toggleRunSort,
+    toggleReviewSort,
+    togglePayslipSort,
+    savePeriodConfig,
+    downloadPayslipPdf,
+    handleActionToast,
+    downloadCpfFile,
+    downloadGiro,
+    openGiroModal,
+    consolidateRun,
+    actuallyCreateRun,
+    voidAndReplace,
+    handleExecute,
+    cancelRun,
+    voidRun,
+    recomputeRun,
+    advanceRun,
+    addPaycode,
+    deletePaycode,
+    bulkDownloadPayslips,
+  } = usePayrollAdmin();
 
-  const [reviewRunData, setReviewRunData] = useState<any | null>(null);
-  const [payslipRunId, setPayslipRunId] = useState<string | null>(null);
-  const [payslipRunPeriod, setPayslipRunPeriod] = useState<string>('');
-  const [payslipRows, setPayslipRows] = useState<any[]>([]);
-  const [payslipLoading, setPayslipLoading] = useState(false);
-  const [payslipSort, setPayslipSort] = useState<{ col: 'name' | 'gross' | 'net'; dir: 'asc' | 'desc' }>({ col: 'name', dir: 'asc' });
-  const [reviewPayslips, setReviewPayslips] = useState<any[]>([]);
-  const [empNameMap, setEmpNameMap] = useState<Map<string, string>>(new Map());
-  const [dlProgress, setDlProgress] = useState<string | null>(null);
-  const [actionToast, setActionToast] = useState<string | null>(null);
-  const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [giroRunId, setGiroRunId] = useState<string | null>(null);
-  const [giroDownloading, setGiroDownloading] = useState(false);
-  const todayIso = () => new Date().toISOString().slice(0, 10);
-  const [giroBank, setGiroBank] = useState<'uob' | 'ocbc' | 'dbs'>('uob');
-  const [giroFields, setGiroFields] = useState({
-    acct: '', companyName: 'GADONGHR PTE LTD', valueDate: todayIso(),
-    ref: '', batchNo: '001', payDesc: '',
-  });
-  const gf = (k: keyof typeof giroFields, v: string) => setGiroFields(f => ({ ...f, [k]: v }));
-
-  interface PayrollRun {
-    id: string;
-    period: string;
-    runType: string;
-    status: string;
-    initiatedBy: string;
-    approvedBy: string | null;
-    createdAt: string;
-    finalisedAt: string | null;
-  }
-
-  const [runs, setRuns] = useState<PayrollRun[]>([]);
-  const [runsLoading, setRunsLoading] = useState(true);
-  const [runSort, setRunSort] = useState<{ col: 'period' | 'status' | 'type'; dir: 'asc' | 'desc' }>({ col: 'period', dir: 'desc' });
-  const [selectedPeriod, setSelectedPeriod] = useState('2026-04');
-  const [processingGroup, setProcessingGroup] = useState('all');
-  const [selectedRunType, setSelectedRunType] = useState('MONTHLY');
-  const [confirmCancelRun, setConfirmCancelRun] = useState(false);
-  const [payComponents, setPayComponents] = useState<any[]>([]);
-  const [runPaycodes, setRunPaycodes] = useState<{ [empId: string]: any[] }>({});
-  const [addingPaycodeFor, setAddingPaycodeFor] = useState<string | null>(null);
-  const [newPcComponentId, setNewPcComponentId] = useState('');
-  const [newPcAmount, setNewPcAmount] = useState('');
-  const [newPcDesc, setNewPcDesc] = useState('');
-  const [paycodesDirty, setPaycodesDirty] = useState(false);
-  const [reviewFullscreen, setReviewFullscreen] = useState(false);
-  const [periodConflictRuns, setPeriodConflictRuns] = useState<PayrollRun[]>([]);
-  const [conflictPayslips, setConflictPayslips] = useState<any[]>([]); // existing payslips for the conflict period
-  const [conflictLoading, setConflictLoading] = useState(false);
-  const [conflictSalaryMap, setConflictSalaryMap] = useState<Record<string, number>>({}); // employeeId → current ow
-  const [variance, setVariance] = useState<any>(null);
-  const [varianceLoading, setVarianceLoading] = useState(false);
-
-  // ── DRC quota alert state ──────────────────────────────────────────────────
-  const [drcResults, setDrcResults] = useState<any[]>([]);
-  const [drcLoaded, setDrcLoaded] = useState(false);
-
-  // ── CPF Statutory Protocol Queue ──────────────────────────────────────────
-  const [cpfSubmissions, setCpfSubmissions] = useState<any[]>([]);
-  const [cpfActionRun, setCpfActionRun] = useState<{ runId: string; period: string; submissionStatus: string | null } | null>(null);
-  const [cpfDownloading, setCpfDownloading] = useState(false);
-
-  // ── Period working-day config ──────────────────────────────────────────────
-  const [periodCfg, setPeriodCfg] = useState<{
-    workDayType: string;
-    workingDays: number;
-    recommendedWorkingDays: number;
-    isOverridden: boolean;
-    publicHolidays: { id: string; date: string; name: string }[];
-  } | null>(null);
-  const [periodCfgLoading, setPeriodCfgLoading] = useState(false);
-  const [periodCfgWorkDayType, setPeriodCfgWorkDayType] = useState<'FIVE_DAY' | 'SIX_DAY'>('FIVE_DAY');
-  const [periodCfgOverride, setPeriodCfgOverride] = useState<string>('');
-  const [periodCfgSaving, setPeriodCfgSaving] = useState(false);
-
-  async function loadPeriodConfig(period: string) {
-    setPeriodCfgLoading(true);
-    try {
-      const data = await apiFetch(`/payroll/period-config/${period}`);
-      setPeriodCfg(data);
-      setPeriodCfgWorkDayType(data.workDayType);
-      setPeriodCfgOverride(data.isOverridden ? String(data.workingDays) : '');
-    } catch {
-      setPeriodCfg(null);
-    } finally {
-      setPeriodCfgLoading(false);
-    }
-  }
-
-  async function savePeriodConfig() {
-    setPeriodCfgSaving(true);
-    try {
-      const body: any = { workDayType: periodCfgWorkDayType };
-      if (periodCfgOverride.trim()) body.workingDays = parseInt(periodCfgOverride);
-      else body.workingDays = null;
-      await apiFetch(`/payroll/period-config/${selectedPeriod}`, { method: 'PUT', body: JSON.stringify(body) });
-      await loadPeriodConfig(selectedPeriod);
-      handleActionToast('Period config saved');
-    } catch (e: any) {
-      handleActionToast(e.message || 'Failed to save period config');
-    } finally {
-      setPeriodCfgSaving(false);
-    }
-  }
-
-  async function loadRuns() {
-    try {
-      setRunsLoading(true);
-      const data = await apiFetch('/payroll/runs?limit=20');
-      setRuns(data.runs ?? []);
-    } catch (e: any) {
-      console.error('[Payroll] loadRuns failed:', e.message);
-    } finally {
-      setRunsLoading(false);
-    }
-  }
-
-  async function loadCpfSubmissions() {
-    try {
-      const data = await apiFetch('/payroll/iras-submissions?kind=CPF_E_SUBMIT');
-      setCpfSubmissions(data.submissions ?? []);
-    } catch (e: any) {
-      console.error('[Payroll] loadCpfSubmissions failed:', (e as Error).message);
-    }
-  }
-
-  useEffect(() => {
-    loadRuns();
-    loadCpfSubmissions();
-    apiFetch('/payroll/drc-status').then((d: any) => {
-      setDrcResults(d.results ?? []);
-      setDrcLoaded(true);
-    }).catch(() => setDrcLoaded(true));
-  }, []);
-  useEffect(() => { if (isRunModalOpen && selectedPeriod) loadPeriodConfig(selectedPeriod); }, [isRunModalOpen, selectedPeriod]);
-
-  const sortedRuns = useMemo(() => {
-    const d = runSort.dir === 'asc' ? 1 : -1;
-    return [...runs].sort((a, b) => {
-      switch (runSort.col) {
-        case 'period': return d * a.period.localeCompare(b.period);
-        case 'status': return d * a.status.localeCompare(b.status);
-        case 'type':   return d * a.runType.localeCompare(b.runType);
-        default: return 0;
-      }
-    });
-  }, [runs, runSort]);
-  function toggleRunSort(col: typeof runSort.col) {
-    setRunSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
-  }
   function RunSortIcon({ col }: { col: typeof runSort.col }) {
     return <span className="text-[8px] ml-1">{runSort.col === col ? (runSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
-  }
-
-  const fetchPayslipsForRun = async (runId: string) => {
-    try {
-      const [psData, empData] = await Promise.allSettled([
-        apiFetch(`/payroll/runs/${runId}/payslips`),
-        apiFetch('/employees?limit=500&isActive=true'),
-      ]);
-      const nameMap = new Map<string, string>();
-      if (empData.status === 'fulfilled') {
-        for (const e of (empData.value.employees ?? [])) nameMap.set(e.id, e.fullName);
-      }
-      setEmpNameMap(nameMap);
-      if (psData.status === 'fulfilled') return { payslips: psData.value.payslips ?? [], period: psData.value.period ?? '' };
-    } catch {}
-    return { payslips: [], period: '' };
-  };
-
-  useEffect(() => {
-    if (!payslipRunId) return;
-    setPayslipLoading(true);
-    fetchPayslipsForRun(payslipRunId).then(({ payslips, period }) => {
-      setPayslipRows(payslips);
-      setPayslipRunPeriod(period);
-    }).finally(() => setPayslipLoading(false));
-  }, [payslipRunId]);
-
-  useEffect(() => {
-    if (!reviewRunData) { setReviewPayslips([]); setRunPaycodes({}); setAddingPaycodeFor(null); setPaycodesDirty(false); setVariance(null); return; }
-    fetchPayslipsForRun(reviewRunData.id).then(({ payslips }) => setReviewPayslips(payslips));
-    // Fetch variance for this run
-    setVarianceLoading(true);
-    apiFetch(`/payroll/runs/${reviewRunData.id}/variance`)
-      .then((v: any) => setVariance(v))
-      .catch(() => setVariance(null))
-      .finally(() => setVarianceLoading(false));
-    if (reviewRunData.status !== 'DRAFT') {
-      apiFetch(`/payroll/runs/${reviewRunData.id}/paycodes`).then((items: any[]) => {
-        const grouped: { [k: string]: any[] } = {};
-        for (const item of items) { if (!grouped[item.employeeId]) grouped[item.employeeId] = []; grouped[item.employeeId].push(item); }
-        setRunPaycodes(grouped);
-      }).catch(() => {});
-      if (payComponents.length === 0) {
-        apiFetch('/payroll/components').then((comps: any[]) => {
-          setPayComponents(comps);
-          if (comps.length > 0) setNewPcComponentId(comps[0].id);
-        }).catch(() => {});
-      }
-    }
-  }, [reviewRunData?.id]);
-
-  const [reviewSort, setReviewSort] = useState<{ col: 'name' | 'gross' | 'selfCpf' | 'firmCpf' | 'net'; dir: 'asc' | 'desc' }>({ col: 'name', dir: 'asc' });
-
-  const filteredEmployees = useMemo(() => {
-    const q = searchQuery.toLowerCase();
-    const base = reviewPayslips.filter(ps => !q || (empNameMap.get(ps.employeeId) ?? ps.employeeId).toLowerCase().includes(q));
-    const d = reviewSort.dir === 'asc' ? 1 : -1;
-    return [...base].sort((a, b) => {
-      switch (reviewSort.col) {
-        case 'name':    return d * (empNameMap.get(a.employeeId) ?? a.employeeId).localeCompare(empNameMap.get(b.employeeId) ?? b.employeeId);
-        case 'gross':   return d * ((a.grossPay ?? 0) - (b.grossPay ?? 0));
-        case 'selfCpf': return d * ((a.employeeCpf ?? 0) - (b.employeeCpf ?? 0));
-        case 'firmCpf': return d * ((a.employerCpf ?? 0) - (b.employerCpf ?? 0));
-        case 'net':     return d * ((a.netPay ?? 0) - (b.netPay ?? 0));
-        default: return 0;
-      }
-    });
-  }, [reviewPayslips, searchQuery, empNameMap, reviewSort]);
-
-  function toggleReviewSort(col: typeof reviewSort.col) {
-    setReviewSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
   }
   function ReviewSortIcon({ col }: { col: typeof reviewSort.col }) {
     return <span className="text-[8px] ml-1">{reviewSort.col === col ? (reviewSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
   }
-
-  const sortedPayslipRows = useMemo(() => {
-    const d = payslipSort.dir === 'asc' ? 1 : -1;
-    return [...payslipRows].sort((a, b) => {
-      switch (payslipSort.col) {
-        case 'name':  return d * (empNameMap.get(a.employeeId) ?? a.employeeId).localeCompare(empNameMap.get(b.employeeId) ?? b.employeeId);
-        case 'gross': return d * ((a.grossPay ?? 0) - (b.grossPay ?? 0));
-        case 'net':   return d * ((a.netPay ?? 0) - (b.netPay ?? 0));
-        default: return 0;
-      }
-    });
-  }, [payslipRows, payslipSort, empNameMap]);
-  function togglePayslipSort(col: typeof payslipSort.col) {
-    setPayslipSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
-  }
   function PayslipSortIcon({ col }: { col: typeof payslipSort.col }) {
     return <span className="text-[8px] ml-1">{payslipSort.col === col ? (payslipSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
   }
-
-  const downloadPayslipPdf = async (employeeId: string, period: string, name: string) => {
-    setDlProgress(`Downloading ${name}…`);
-    try {
-      const res = await apiFetchRaw(`/payroll/payslips/${employeeId}/${period}`);
-      if (!res.ok) throw new Error('PDF not available');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `payslip-${name.replace(/ /g, '_')}-${period}.pdf`; a.click();
-      URL.revokeObjectURL(url);
-    } catch (e: any) {
-      handleActionToast(e.message || 'Download failed');
-    } finally {
-      setDlProgress(null);
-    }
-  };
-
-  const handleActionToast = (message: string) => {
-    setActionToast(message);
-    setTimeout(() => setActionToast(null), 3000);
-  };
-
-  // PAY-007: download CPF e-Submit flat file for a finalised run. The backend
-  // auto-creates / refreshes a DRAFT IrasSubmission row as a side-effect — the
-  // toast points the user to /payroll/iras-submissions where they record the
-  // CPF Board reference number once they've uploaded the file via CPF EZPay.
-  const downloadCpfFile = async (runId: string, period: string, onSuccess?: () => void) => {
-    try {
-      setCpfDownloading(true);
-      const res = await apiFetchRaw(`/payroll/cpf-file/${runId}`);
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        throw new Error((e as { error?: string }).error ?? `HTTP ${res.status}`);
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const cd = res.headers.get('Content-Disposition') ?? '';
-      a.download = cd.split('filename=')[1]?.replace(/"/g, '') ?? `cpf-esubmit-${period}.txt`;
-      a.click();
-      URL.revokeObjectURL(url);
-      handleActionToast(`CPF e-Submit file downloaded — track upload at IRAS Submissions`);
-      loadCpfSubmissions();
-      onSuccess?.();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'CPF download failed';
-      handleActionToast(msg);
-    } finally {
-      setCpfDownloading(false);
-    }
-  };
-
-  const downloadGiro = async () => {
-    if (!giroRunId) return;
-    const run = runs.find(r => r.id === giroRunId);
-    setGiroDownloading(true);
-    try {
-      const params = new URLSearchParams({ bank: giroBank, ...Object.fromEntries(Object.entries(giroFields).filter(([, v]) => v)) });
-      const res = await apiFetchRaw(`/payroll/bank-giro/${giroRunId}?${params}`);
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${res.status}`); }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const cd = res.headers.get('Content-Disposition') ?? '';
-      a.download = cd.split('filename=')[1]?.replace(/"/g, '') ?? `giro-${giroBank}-${run?.period ?? ''}.txt`;
-      a.click();
-      URL.revokeObjectURL(url);
-      markGiroRefUsed(run?.period ?? '', giroFields.ref);
-      handleActionToast(`${giroBank.toUpperCase()} GIRO file downloaded`);
-      setGiroRunId(null);
-    } catch (e: any) {
-      handleActionToast(e.message || 'GIRO download failed');
-    } finally {
-      setGiroDownloading(false);
-    }
-  };
-
-  const actuallyCreateRun = async () => {
-    setIsProcessing(true);
-    setPeriodConflictRuns([]);
-    setConflictPayslips([]);
-    setConflictSalaryMap({});
-    try {
-      const newRun = await apiFetch('/payroll/runs', { method: 'POST', body: JSON.stringify({ period: selectedPeriod, runType: selectedRunType }) });
-      setIsRunModalOpen(false);
-      await loadRuns();
-      // Immediately open Review Protocol so the user can compute → approve → finalise
-      if (newRun?.id) setReviewRunData(newRun);
-    } catch (e: any) {
-      const msg = e.message || 'Failed to initiate payroll run';
-      // Re-show the conflict dialog with the error so it's not missed as a brief toast
-      if (msg.includes('already exists')) {
-        handleActionToast(`⛔ ${msg}`);
-      } else {
-        handleActionToast(msg);
-      }
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleExecute = async () => {
-    setIsProcessing(true);
-    try {
-      const data = await apiFetch(`/payroll/runs?period=${selectedPeriod}&limit=10`);
-      if (data.runs?.length > 0) {
-        setPeriodConflictRuns(data.runs);
-        setIsRunModalOpen(false);
-        setIsProcessing(false);
-        // Load existing payslips + current salary data for the conflict preview
-        setConflictLoading(true);
-        setConflictPayslips([]);
-        setConflictSalaryMap({});
-        try {
-          const [empData, payrollDataResult, ...runPayslipResults] = await Promise.allSettled([
-            apiFetch('/employees?limit=500&isActive=true'),
-            apiFetch('/employees/payroll-data'),
-            ...data.runs.map((r: PayrollRun) => apiFetch(`/payroll/runs/${r.id}/payslips`)),
-          ]);
-          const nameMap: Record<string, string> = {};
-          if (empData.status === 'fulfilled') {
-            for (const e of (empData.value.employees ?? [])) nameMap[e.id] = e.fullName;
-          }
-          // Build salary map from payroll-data (current profile OW)
-          if (payrollDataResult.status === 'fulfilled') {
-            const sm: Record<string, number> = {};
-            for (const e of (payrollDataResult.value ?? [])) sm[e.employeeId] = e.ow ?? 0;
-            setConflictSalaryMap(sm);
-          }
-          // Merge all payslips across runs, keyed by employeeId
-          const byEmp: Record<string, any> = {};
-          for (let i = 0; i < runPayslipResults.length; i++) {
-            const r = runPayslipResults[i];
-            if (r.status !== 'fulfilled') continue;
-            const run = data.runs[i];
-            for (const ps of (r.value.payslips ?? [])) {
-              const key = ps.employeeId;
-              if (!byEmp[key]) byEmp[key] = { employeeId: key, name: nameMap[key] ?? key, runs: [] };
-              byEmp[key].runs.push({ runId: run.id, runType: run.runType, status: run.status, ...ps });
-            }
-          }
-          setConflictPayslips(Object.values(byEmp));
-        } catch {}
-        setConflictLoading(false);
-        return;
-      }
-      await actuallyCreateRun();
-    } catch (e: any) {
-      handleActionToast(e.message || 'Failed to initiate payroll run');
-      setIsProcessing(false);
-    }
-  };
-
-  // ── DRC banner helpers ─────────────────────────────────────────────────────
-  const drcAlerts = drcResults.filter(r => r.status === 'EXCEEDED' || r.status === 'WARNING');
 
   return (
     <div className="flex flex-col gap-10 max-w-[1600px] mx-auto pb-20 animate-in fade-in duration-700">
@@ -646,16 +302,7 @@ function AdminPayrollDashboard() {
                 <button onClick={() => { setPeriodConflictRuns([]); setConflictPayslips([]); setConflictSalaryMap({}); }} className="px-6 py-3 bg-paper border border-rule text-muted text-[10px] font-black uppercase tracking-widest hover:bg-page transition-all">Cancel</button>
                 {conflictingRun ? (
                   <button
-                    onClick={async () => {
-                      setIsProcessing(true);
-                      try {
-                        await apiFetch(`/payroll/runs/${conflictingRun.id}/cancel`, { method: 'POST' });
-                        await actuallyCreateRun();
-                      } catch (e: any) {
-                        handleActionToast(e.message || 'Void & Replace failed');
-                        setIsProcessing(false);
-                      }
-                    }}
+                    onClick={() => voidAndReplace(conflictingRun)}
                     disabled={isProcessing}
                     className="px-8 py-3 bg-ink text-paper text-[10px] font-black uppercase tracking-widest hover:bg-ink transition-all disabled:opacity-60 flex items-center gap-2"
                   >
@@ -870,7 +517,7 @@ function AdminPayrollDashboard() {
                         <span className="text-[9px] font-black text-muted uppercase tracking-widest italic opacity-50">Locked for Archive</span>
                       ) : (
                         <div className="flex items-center gap-3">
-                          <button onClick={() => { const ref = generateGiroRef(run.period); setGiroRunId(run.id); setGiroBank('uob'); setGiroFields({ acct: '', companyName: 'GADONGHR PTE LTD', valueDate: new Date().toISOString().slice(0,10), ref, batchNo: '001', payDesc: `SALARY ${run.period}` }); }} className="px-4 py-2 bg-shadow text-paper text-[9px] font-black uppercase tracking-widest hover:bg-shadow transition-all">GIRO</button>
+                          <button onClick={() => openGiroModal(run)} className="px-4 py-2 bg-shadow text-paper text-[9px] font-black uppercase tracking-widest hover:bg-shadow transition-all">GIRO</button>
                           <button
                             onClick={() => downloadCpfFile(run.id, run.period)}
                             title="Download CPF e-Submit flat file (creates a tracked DRAFT submission)"
@@ -880,13 +527,7 @@ function AdminPayrollDashboard() {
                           </button>
                           <button onClick={() => { setPayslipRunId(run.id); setPayslipRows([]); }} className="px-4 py-2 bg-paper border border-rule label-form hover:text-accent hover:border-accent transition-all">Payslips</button>
                           {runs.filter(r => r.period === run.period && r.id !== run.id && r.status === 'FINALISED').length > 0 && (
-                            <button onClick={async () => {
-                              try {
-                                await apiFetch(`/payroll/runs/${run.id}/consolidate`, { method: 'POST' });
-                                handleActionToast(`Payslips consolidated for ${fmtPeriod(run.period)}.`);
-                                await loadRuns();
-                              } catch (e: any) { handleActionToast(e.message || 'Consolidation failed'); }
-                            }} className="px-4 py-2 bg-page border border-highlight text-[9px] font-black text-ink uppercase tracking-widest hover:bg-highlight hover:text-paper hover:border-highlight transition-all">Merge</button>
+                            <button onClick={() => consolidateRun(run)} className="px-4 py-2 bg-page border border-highlight text-[9px] font-black text-ink uppercase tracking-widest hover:bg-highlight hover:text-paper hover:border-highlight transition-all">Merge</button>
                           )}
                           <button onClick={() => { setConfirmCancelRun(false); setReviewRunData(run); }} className="px-4 py-2 bg-paper border border-ink text-[9px] font-black text-ink uppercase tracking-widest hover:bg-page hover:text-ink hover:border-ink transition-all">Void</button>
                         </div>
@@ -1392,7 +1033,7 @@ function AdminPayrollDashboard() {
                                           <div className="flex items-center gap-3">
                                             <span className={`text-[10px] font-black ${pc.amount >= 0 ? 'text-accent' : 'text-ink'}`}>{pc.amount >= 0 ? '+' : ''}SGD {fmtSGD(Math.abs(pc.amount))}</span>
                                             <span className="text-[9px] text-muted uppercase">{pc.wageType}</span>
-                                            {canEdit && <button onClick={async () => { await apiFetch(`/payroll/runs/${reviewRunData.id}/paycodes/${pc.id}`, { method: 'DELETE' }); setRunPaycodes(p => { const n = { ...p }; n[ps.employeeId] = (n[ps.employeeId] || []).filter((x: any) => x.id !== pc.id); return n; }); setPaycodesDirty(true); }} className="text-ink hover:text-ink text-xs font-black">×</button>}
+                                            {canEdit && <button onClick={() => deletePaycode(ps.employeeId, pc.id)} className="text-ink hover:text-ink text-xs font-black">×</button>}
                                           </div>
                                         </div>
                                       ))}
@@ -1402,13 +1043,7 @@ function AdminPayrollDashboard() {
                                             {payComponents.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                                           </select>
                                           <input type="number" placeholder="Amount (neg = deduction)" value={newPcAmount} onChange={e => setNewPcAmount(e.target.value)} className="bg-page border border-rule px-3 py-1.5 text-[10px] font-black text-ink outline-none focus:border-accent w-44" />
-                                          <button onClick={async () => {
-                                            if (!newPcAmount) return;
-                                            const comp = payComponents.find((c: any) => c.id === newPcComponentId);
-                                            const item = await apiFetch(`/payroll/runs/${reviewRunData.id}/paycodes`, { method: 'POST', body: JSON.stringify({ employeeId: ps.employeeId, componentId: newPcComponentId, description: newPcDesc || comp?.name, amount: parseFloat(newPcAmount) }) });
-                                            setRunPaycodes(p => { const n = { ...p }; n[ps.employeeId] = [...(n[ps.employeeId] || []), item]; return n; });
-                                            setAddingPaycodeFor(null); setNewPcAmount(''); setNewPcDesc(''); setPaycodesDirty(true);
-                                          }} className="px-4 py-1.5 bg-accent text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent transition-all whitespace-nowrap">Add</button>
+                                          <button onClick={() => addPaycode(ps)} className="px-4 py-1.5 bg-accent text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent transition-all whitespace-nowrap">Add</button>
                                           <button onClick={() => setAddingPaycodeFor(null)} className="text-muted hover:text-ink text-xs font-black">×</button>
                                         </div>
                                       )}
@@ -1431,11 +1066,7 @@ function AdminPayrollDashboard() {
                  {!confirmCancelRun ? (
                    <button onClick={() => {
                      if (reviewRunData?.status === 'FINALISED') { setConfirmCancelRun(true); } else {
-                       const id = reviewRunData.id; const period = reviewRunData.period;
-                       setReviewRunData(null);
-                       apiFetch(`/payroll/runs/${id}/cancel`, { method: 'POST' })
-                         .then(() => { handleActionToast(`Payroll run for ${period} cancelled.`); loadRuns(); })
-                         .catch((e: any) => handleActionToast(e.message || 'Failed to cancel run'));
+                       cancelRun(reviewRunData.id, reviewRunData.period);
                      }
                    }} className="px-10 py-5 bg-paper border border-ink text-ink text-[10px] font-black uppercase tracking-widest hover:bg-page transition-all">
                      Cancel Run
@@ -1443,14 +1074,7 @@ function AdminPayrollDashboard() {
                  ) : (
                    <div className="flex items-center gap-3 bg-page border border-ink px-5 py-3">
                      <span className="text-[9px] font-black text-ink uppercase tracking-widest">This will void all published payslips. Confirm?</span>
-                     <button onClick={async () => {
-                       const id = reviewRunData.id; const period = reviewRunData.period;
-                       setConfirmCancelRun(false); setReviewRunData(null);
-                       try {
-                         await apiFetch(`/payroll/runs/${id}/cancel`, { method: 'POST' });
-                         handleActionToast(`Payroll run for ${period} voided.`); loadRuns();
-                       } catch (e: any) { handleActionToast(e.message || 'Failed to void run'); }
-                     }} className="px-5 py-2 bg-ink text-paper text-[9px] font-black uppercase tracking-widest hover:bg-ink transition-all">Void</button>
+                     <button onClick={() => voidRun(reviewRunData.id, reviewRunData.period)} className="px-5 py-2 bg-ink text-paper text-[9px] font-black uppercase tracking-widest hover:bg-ink transition-all">Void</button>
                      <button onClick={() => setConfirmCancelRun(false)} className="px-5 py-2 bg-paper border border-rule text-muted text-[9px] font-black uppercase tracking-widest hover:bg-page transition-all">Back</button>
                    </div>
                  )}
@@ -1472,62 +1096,12 @@ function AdminPayrollDashboard() {
                    </div>
                  )}
                  {reviewRunData?.status === 'PENDING_APPROVAL' && paycodesDirty && (
-                   <button onClick={async () => {
-                     const id = reviewRunData.id;
-                     try {
-                       const result = await apiFetch(`/payroll/runs/${id}/compute`, { method: 'POST', body: JSON.stringify({}) });
-                       const { payslips } = await fetchPayslipsForRun(id);
-                       setReviewPayslips(payslips);
-                       setPaycodesDirty(false);
-                       const zeroIds: string[] = result?.warnings?.zeroOrdinaryWages ?? [];
-                       const removedIds: string[] = result?.autoRemovedIds ?? [];
-                       const attWarnR = result?.warnings?.attendanceNotApproved;
-                       const notes: string[] = [];
-                       if (removedIds.length > 0) notes.push(`${removedIds.length} employee(s) unchanged — skipped`);
-                       if (zeroIds.length > 0) notes.push(`${zeroIds.length} have $0 ordinary wages — check salary`);
-                       if (attWarnR) {
-                         const who = attWarnR.lockedBy ? `locked by ${attWarnR.lockedBy} but not yet approved` : 'not yet locked or approved';
-                         notes.push(`Attendance period ${attWarnR.period} was ${who} (${attWarnR.periodStatus}) — attendance auto-feed skipped`);
-                       }
-                       handleActionToast(notes.length > 0
-                         ? `Recomputed. NOTE: ${notes.join('; ')}.`
-                         : 'Recomputed with updated paycodes.');
-                     } catch (e: any) { handleActionToast(e.message || 'Recompute failed'); }
-                   }} className="px-10 py-5 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight active:scale-95 transition-all">
+                   <button onClick={() => recomputeRun(reviewRunData.id)} className="px-10 py-5 bg-highlight text-paper text-[10px] font-black uppercase tracking-widest hover:bg-highlight active:scale-95 transition-all">
                      Recompute
                    </button>
                  )}
                  {reviewRunData?.status !== 'FINALISED' && !(reviewRunData?.status === 'PENDING_APPROVAL' && paycodesDirty) && (
-                   <button onClick={async () => {
-                     const id = reviewRunData.id;
-                     const status = reviewRunData.status;
-                     setReviewRunData(null);
-                     try {
-                       if (status === 'APPROVED') {
-                         await apiFetch(`/payroll/runs/${id}/finalise`, { method: 'POST' });
-                         handleActionToast('Payroll finalised. Payslips published.');
-                       } else if (status === 'PENDING_APPROVAL') {
-                         await apiFetch(`/payroll/runs/${id}/approve`, { method: 'POST' });
-                         handleActionToast('Payroll approved. Ready to finalise.');
-                       } else if (status === 'DRAFT') {
-                         const result = await apiFetch(`/payroll/runs/${id}/compute`, { method: 'POST', body: JSON.stringify({}) });
-                         const zeroIds: string[] = result?.warnings?.zeroOrdinaryWages ?? [];
-                         const removedIds: string[] = result?.autoRemovedIds ?? [];
-                         const attWarn = result?.warnings?.attendanceNotApproved;
-                         const notes: string[] = [];
-                         if (removedIds.length > 0) notes.push(`${removedIds.length} employee(s) unchanged from prior payslip — skipped from this run`);
-                         if (zeroIds.length > 0) notes.push(`${zeroIds.length} have $0 ordinary wages — check salary before authorising`);
-                         if (attWarn) {
-                           const who = attWarn.lockedBy ? `locked by ${attWarn.lockedBy} but not yet approved` : 'not yet locked or approved';
-                           notes.push(`Attendance period ${attWarn.period} was ${who} (status: ${attWarn.periodStatus}) — attendance auto-feed skipped, verify OT/absences manually`);
-                         }
-                         handleActionToast(notes.length > 0
-                           ? `Computed. NOTE: ${notes.join('; ')}.`
-                           : 'Payroll computed. Pending authorisation.');
-                       }
-                       loadRuns();
-                     } catch (e: any) { handleActionToast(e.message || 'Action failed'); }
-                   }} className="px-12 py-5 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent active:scale-95 transition-all">
+                   <button onClick={() => advanceRun(reviewRunData.id, reviewRunData.status)} className="px-12 py-5 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent active:scale-95 transition-all">
                      {reviewRunData?.status === 'APPROVED' ? 'Finalise & Publish' : reviewRunData?.status === 'PENDING_APPROVAL' ? 'Authorize Disbursement' : 'Compute Payroll'}
                    </button>
                  )}
@@ -1604,13 +1178,7 @@ function AdminPayrollDashboard() {
               <div className="p-8 bg-page border-t border-rule flex justify-between items-center shrink-0">
                  <p className="label-form">{payslipRows.filter(p => p.isPublished).length} published · {payslipRows.filter(p => !p.isPublished).length} pending</p>
                  <button
-                   onClick={async () => {
-                     const published = payslipRows.filter(p => p.isPublished);
-                     for (const ps of published) {
-                       const name = empNameMap.get(ps.employeeId) ?? ps.employeeId;
-                       await downloadPayslipPdf(ps.employeeId, ps.period, name);
-                     }
-                   }}
+                   onClick={bulkDownloadPayslips}
                    disabled={payslipRows.filter(p => p.isPublished).length === 0}
                    className="px-6 py-3 bg-shadow text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent transition-all disabled:opacity-40 disabled:pointer-events-none"
                  >
