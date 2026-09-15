@@ -5,8 +5,9 @@ import { Icon } from './Icon';
 
 /**
  * Dialog on a paper card (full-width sheet below 640px). Esc and backdrop
- * close it; focus moves into the dialog on open and returns to the opener on
- * close. `footer` is where the actions go (secondary left, primary right).
+ * close it; focus moves into the dialog on open, Tab / Shift+Tab stay inside
+ * it, and focus returns to the opener on close. `footer` is where the actions
+ * go (secondary left, primary right).
  *
  * - `onClose` is read through a ref, so an inline arrow is fine: the open
  *   effect depends on `open` only and never re-runs on a keystroke.
@@ -34,7 +35,21 @@ export function Modal({ open, onClose, title, caption, footer, size = 'md', chil
   useEffect(() => {
     if (!open) return;
     if (!panelRef.current?.contains(document.activeElement)) closeRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseRef.current(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { onCloseRef.current(); return; }
+      // Focus trap: Tab and Shift+Tab cycle within the dialog.
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      const focusables = Array.from(panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter((el) => !el.closest('[hidden], [aria-hidden="true"]'));
+      if (focusables.length === 0) { e.preventDefault(); return; }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      const inside = !!active && panelRef.current.contains(active);
+      if (e.shiftKey && (active === first || !inside)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (active === last || !inside)) { e.preventDefault(); first.focus(); }
+    };
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
