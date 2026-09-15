@@ -3,75 +3,60 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Icon } from './Icon';
 
-const FOCUSABLE = '[role="button"][tabindex="0"], button:not([disabled]), a[href], input, select, textarea, [tabindex="0"]';
-
-/** Below the ≥1280px breakpoint only one pane shows at a time. */
-function isNarrow() {
-  return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && !window.matchMedia('(min-width: 1280px)').matches;
-}
+const WIDE = '(min-width: 1280px)';
+const isWide = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(WIDE).matches;
 
 /**
  * Approvals / inbox layout: list on the left, detail on the right at ≥1280px.
  * Below that, the list shows until something is selected, then the detail
  * takes over with a back control (`onBack`).
  *
- * Focus follows the pane swap (QA, redesign/time): hiding the focused row
- * with `display:none` drops focus to <body>, so a keyboard or screen-reader
- * user restarted from the top of the document on every open and every back.
- *  - Opening below xl moves focus to the back control and scrolls the detail
- *    into view (it would otherwise sit under the page's stat cards).
- *  - Closing — back, a decision that removes the item, or a close button in
- *    the detail — returns focus to the list element last focused, or to the
- *    first row if that one is gone. At xl this only happens when focus was
- *    actually lost; it never steals focus the user put somewhere else.
- * The list stays mounted while hidden, so the row's own DOM node is restored.
+ * Focus is managed so keyboard users never land on <body>:
+ *  - below 1280px, opening the detail moves focus to it and scrolls it into view;
+ *  - closing the detail (Back, or the item disappearing after Approve) returns
+ *    focus to the row that opened it, or to the list if that row is gone.
+ * At ≥1280px both panes are visible, so opening leaves focus on the row.
  */
 export function SplitPane({ list, detail, hasDetail, onBack, backLabel = 'Back to list', className = '' }: {
   list: ReactNode; detail: ReactNode; hasDetail: boolean; onBack: () => void; backLabel?: string; className?: string;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
-  const backRef = useRef<HTMLButtonElement>(null);
-  const lastListFocus = useRef<HTMLElement | null>(null);
+  const opener = useRef<HTMLElement | null>(null);
   const was = useRef(hasDetail);
 
-  useEffect(() => {
-    if (was.current === hasDetail) return;
-    was.current = hasDetail;
-    const narrow = isNarrow();
+  // Render-time capture: the row that opened the detail still has focus here,
+  // before the list is hidden on narrow screens.
+  if (hasDetail && !was.current && typeof document !== 'undefined') {
+    opener.current = document.activeElement as HTMLElement | null;
+  }
 
-    if (hasDetail) {
-      if (!narrow) return;
-      backRef.current?.focus({ preventScroll: true });
-      detailRef.current?.scrollIntoView?.({ block: 'start' });
-      return;
+  useEffect(() => {
+    const opened = hasDetail && !was.current;
+    const closed = !hasDetail && was.current;
+    was.current = hasDetail;
+
+    if (opened && !isWide() && detailRef.current) {
+      detailRef.current.focus({ preventScroll: true });
+      detailRef.current.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
     }
 
-    const active = document.activeElement;
-    const lost = !active || active === document.body || !(active as HTMLElement).isConnected;
-    if (!narrow && !lost) return;
-    const listEl = listRef.current;
-    if (!listEl) return;
-    const prev = lastListFocus.current;
-    const target = prev && prev.isConnected && listEl.contains(prev)
-      ? prev
-      : listEl.querySelector<HTMLElement>(FOCUSABLE) ?? listEl;
-    target.focus();
+    if (closed) {
+      const active = document.activeElement;
+      const lost = !active || active === document.body || (detailRef.current?.contains(active) ?? false);
+      if (!lost) return;
+      const back = opener.current;
+      if (back && back.isConnected && listRef.current?.contains(back)) back.focus();
+      else listRef.current?.focus();
+    }
   }, [hasDetail]);
 
   return (
     <div className={`grid gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] ${className}`}>
-      <div
-        ref={listRef}
-        tabIndex={-1}
-        onFocusCapture={(e) => { if (e.target !== e.currentTarget) lastListFocus.current = e.target as HTMLElement; }}
-        className={`${hasDetail ? 'hidden xl:block' : ''} min-w-0`}
-      >
-        {list}
-      </div>
-      <div ref={detailRef} className={`${hasDetail ? '' : 'hidden xl:block'} min-w-0 scroll-mt-4`}>
+      <div ref={listRef} tabIndex={-1} className={`${hasDetail ? 'hidden xl:block' : ''} min-w-0 rounded-card`}>{list}</div>
+      <div ref={detailRef} tabIndex={-1} aria-label="Details" role="region" className={`${hasDetail ? '' : 'hidden xl:block'} min-w-0 scroll-mt-20 rounded-card`}>
         {hasDetail && (
-          <button ref={backRef} type="button" onClick={onBack} className="xl:hidden mb-3 inline-flex items-center gap-1 text-[13.5px] font-semibold text-accent hover:underline">
+          <button type="button" onClick={onBack} className="xl:hidden mb-3 inline-flex items-center gap-1 text-[13.5px] font-semibold text-accent hover:underline">
             <Icon name="chevronRight" size={14} className="rotate-180" />{backLabel}
           </button>
         )}
