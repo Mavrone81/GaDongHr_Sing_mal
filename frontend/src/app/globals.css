@@ -40,7 +40,7 @@
   --on-accent: #FFFFFF;   /* text on an accent fill (dark theme: near-black) */
   --danger-bg: #FEEDEA;   /* chip / alert grounds for the three states       */
   --warn-bg:   #FFF4E5;
-  --ok-bg:     #E7EFEA;
+  --ok-bg:     #DCFAE6;   /* mint, distinct from --tint so ok and accent chips differ */
   --brass-bg:  #F7EEDD;   /* trial / plan chips                              */
   --brass-fg:  #8A6425;
 
@@ -58,9 +58,9 @@
    opt-in by a `data-theme="dark"` attribute on ANY ancestor — the /platform
    layout sets it on its wrapper — so light and dark can share one tree. There
    is deliberately no prefers-color-scheme rule. */
-[data-theme="dark"]  { --page:#0F1512; --paper:#171F1B; --ink:#E8ECE9; --rule:#27322C; --muted:#8E9A93; --tint:#1A2620; --pill:#1F2924; --faint:#7C8882; --accent:#3FA07C; --danger:#E5735F; --warn:#E2A94A; --ok:#3FA07C; --on-accent:#0F1512; --danger-bg:#2E1B18; --warn-bg:#2C2416; --ok-bg:#1A2620; --brass-bg:#2C2416; --brass-fg:#D4A254; --highlight:#D4A254;
-  --page-rgb: 15 21 18; --paper-rgb: 23 31 27; --ink-rgb: 232 236 233; --rule-rgb: 39 50 44; --muted-rgb: 142 154 147; --accent-rgb: 63 160 124; --tint-rgb: 26 38 32; --pill-rgb: 31 41 36; --faint-rgb: 124 136 130; --danger-rgb: 229 115 95; --warn-rgb: 226 169 74; --ok-rgb: 63 160 124; --on-accent-rgb: 15 21 18; --highlight-rgb: 212 162 84; }
-[data-theme="light"] { --page:#F6F6F3; --paper:#FFFFFF; --ink:#1A1A18; --rule:#E5E3DD; --muted:#6B6960; --tint:#E7EFEA; --pill:#F3F2EE; --faint:#85837A; --accent:#1B4A3C; --danger:#B42318; --warn:#B54708; --ok:#067647; --on-accent:#FFFFFF; --danger-bg:#FEEDEA; --warn-bg:#FFF4E5; --ok-bg:#E7EFEA; --brass-bg:#F7EEDD; --brass-fg:#8A6425; --highlight:#C08A3E;
+[data-theme="dark"]  { --page:#0F1512; --paper:#171F1B; --ink:#E8ECE9; --rule:#27322C; --muted:#8E9A93; --tint:#1A2620; --pill:#1F2924; --faint:#7C8882; --accent:#3FA07C; --danger:#E5735F; --warn:#E2A94A; --ok:#5FD08A; --on-accent:#0F1512; --danger-bg:#2E1B18; --warn-bg:#2C2416; --ok-bg:#12301F; --brass-bg:#2C2416; --brass-fg:#D4A254; --highlight:#D4A254;
+  --page-rgb: 15 21 18; --paper-rgb: 23 31 27; --ink-rgb: 232 236 233; --rule-rgb: 39 50 44; --muted-rgb: 142 154 147; --accent-rgb: 63 160 124; --tint-rgb: 26 38 32; --pill-rgb: 31 41 36; --faint-rgb: 124 136 130; --danger-rgb: 229 115 95; --warn-rgb: 226 169 74; --ok-rgb: 95 208 138; --on-accent-rgb: 15 21 18; --highlight-rgb: 212 162 84; }
+[data-theme="light"] { --page:#F6F6F3; --paper:#FFFFFF; --ink:#1A1A18; --rule:#E5E3DD; --muted:#6B6960; --tint:#E7EFEA; --pill:#F3F2EE; --faint:#85837A; --accent:#1B4A3C; --danger:#B42318; --warn:#B54708; --ok:#067647; --on-accent:#FFFFFF; --danger-bg:#FEEDEA; --warn-bg:#FFF4E5; --ok-bg:#DCFAE6; --brass-bg:#F7EEDD; --brass-fg:#8A6425; --highlight:#C08A3E;
   --page-rgb: 246 246 243; --paper-rgb: 255 255 255; --ink-rgb: 26 26 24; --rule-rgb: 229 227 221; --muted-rgb: 107 105 96; --accent-rgb: 27 74 60; --tint-rgb: 231 239 234; --pill-rgb: 243 242 238; --faint-rgb: 133 131 122; --danger-rgb: 180 35 24; --warn-rgb: 181 71 8; --ok-rgb: 6 118 71; --on-accent-rgb: 255 255 255; --highlight-rgb: 192 138 62; }
 
 /* Thai marks sit above and below the baseline. At Latin leading they clip —
