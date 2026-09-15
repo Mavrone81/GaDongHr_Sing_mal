@@ -268,7 +268,7 @@ export default function OnboardPage() {
             </p>
           )}
           <Stepper
-            className="mt-2"
+            className="mt-2 relative"
             steps={STEP_LABELS.map((label, i) => ({ label, state: step > i + 1 ? 'done' : step === i + 1 ? 'now' : 'todo' }))}
           />
         </div>

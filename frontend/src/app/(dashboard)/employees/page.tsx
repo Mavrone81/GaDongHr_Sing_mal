@@ -371,7 +371,7 @@ export default function EmployeeDirectoryPage() {
       label: <SortHeader label="Employee" active={sortKey === 'fullName'} dir={sortDir} onClick={() => handleSort('fullName')} />,
       render: emp => (
         <div className="flex items-center gap-3 min-w-0">
-          <PersonAvatar name={emp.fullName} photoUrl={emp.profilePhotoUrl} size={30} />
+          <PersonAvatar name={emp.fullName} photoUrl={emp.profilePhotoUrl} size={32} />
           <div className="flex flex-col min-w-0">
             <span className="font-semibold text-ink truncate">{emp.fullName}</span>
             <span className="text-xs text-muted tabular-nums">{emp.employeeCode}</span>

@@ -161,7 +161,7 @@ export default function MovementDetailPage() {
 
         {/* Actions — a sticky bar on phones */}
         {(canApprove || canApply || applyLater || canCancel || hasLetter) && (
-          <div className="fixed inset-x-0 bottom-16 z-20 flex flex-wrap items-center gap-2 border-t border-rule bg-paper px-4 py-3 sm:static sm:border-0 sm:bg-transparent sm:p-0">
+          <div className="fixed inset-x-0 bottom-16 z-20 flex flex-wrap items-center justify-end gap-2 border-t border-rule bg-paper px-4 py-3 sm:static sm:border-0 sm:bg-transparent sm:p-0">
             {canCancel && <Button variant="danger" onClick={cancelMov}>Cancel movement</Button>}
             {hasLetter && (
               <Button variant="secondary" icon="file" onClick={() => { if (!letter) loadLetter(); }} disabled={!!letter || loadingLetter}>
