@@ -19,4 +19,5 @@ export const MIGRATED: string[] = [
   'app/(dashboard)/surveys/',
   'app/(dashboard)/hr-cases/',
   'app/(dashboard)/documents/',
+  'app/(dashboard)/reports/',
 ];

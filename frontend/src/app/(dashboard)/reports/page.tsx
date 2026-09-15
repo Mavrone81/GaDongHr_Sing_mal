@@ -1,7 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import { apiFetch, apiFetchRaw } from '@/lib/api';
+import {
+  PageHeader, Card, CardHeader, Badge, Button, Stat, Tabs, Modal, Field, Input, Select, Stepper,
+  DataTable, EmptyState, Icon, useToast,
+} from '@/components/ui';
+import type { BadgeTone, Column, IconName } from '@/components/ui';
 
 // ── CSV utility ───────────────────────────────────────────────────────────────
 function downloadCsv(filename: string, headers: string[], rows: (string | number | null | undefined)[][]) {
@@ -17,20 +22,44 @@ function downloadCsv(filename: string, headers: string[], rows: (string | number
   URL.revokeObjectURL(url);
 }
 
-function Toast({ msg, type, onClose }: { msg: string; type: 'ok' | 'err'; onClose: () => void }) {
-  useEffect(() => { const t = setTimeout(onClose, 4000); return () => clearTimeout(t); }, [onClose]);
+/** Money as the old modals showed it: "$1,234.00", or an em dash for no value. */
+const money = (v: number | null | undefined) => v == null ? '—' : `$${Number(v).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/** WORKFORCE → "Workforce"; FULL_TIME → "Full time". */
+const sentence = (raw: string) => {
+  const s = String(raw || '').replace(/_/g, ' ').toLowerCase();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
+
+// Shared table styling for the report previews inside dialogs (wide, numeric).
+const TH = 'px-3 py-2.5 text-xs font-bold text-muted whitespace-nowrap bg-pill';
+const TD = 'px-3 py-2.5 text-[13px] text-ink whitespace-nowrap';
+const TD_NUM = `${TD} text-right tabular-nums`;
+
+function Spinner({ label }: { label: string }) {
   return (
-    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-6 duration-300">
-      <div className={`px-8 py-4   flex items-center gap-3 ${type === 'ok' ? 'bg-shadow border border-shadow' : 'bg-ink border border-ink'}`}>
-        <div className={`w-2 h-2  ${type === 'ok' ? 'bg-accent' : 'bg-ink'}`} />
-        <span className="text-[11px] font-black text-paper uppercase tracking-widest">{msg}</span>
-        <button onClick={onClose} className="ml-4 text-paper/50 hover:text-paper text-xs">✕</button>
-      </div>
+    <div className="flex items-center justify-center h-40">
+      <div className="w-7 h-7 border-2 border-rule border-t-accent animate-spin rounded-full" role="status" aria-label={label} />
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="px-3.5 py-2.5 rounded-control bg-page border border-rule min-w-[120px]">
+      <p className="text-xs text-muted">{label}</p>
+      <p className="text-sm font-bold text-ink tabular-nums mt-0.5">{value}</p>
     </div>
   );
 }
 
 // ── Run selector modal (for payroll-linked reports) ───────────────────────────
+/** Payroll run states the selector shows: finalised is settled, approved is on its way, anything else is still open. */
+const RUN_STATUS_TONE: Record<string, BadgeTone> = {
+  FINALISED: 'ok',
+  APPROVED:  'accent',
+};
+
 function RunSelectorModal({ title, onSelect, onClose }: { title: string; onSelect: (runId: string, period: string) => void; onClose: () => void }) {
   const [runs, setRuns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,37 +70,24 @@ function RunSelectorModal({ title, onSelect, onClose }: { title: string; onSelec
       .finally(() => setLoading(false));
   }, []);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-      <div className="w-full max-w-md bg-paper flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-8 py-6 border-b border-rule">
-          <div>
-            <h2 className="text-base font-black text-ink tracking-tighter">{title}</h2>
-            <p className="eyebrow-tight mt-0.5">Select a payroll run</p>
-          </div>
-          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page transition-all">✕</button>
-        </div>
-        <div className="p-6 flex flex-col gap-2 max-h-80 overflow-y-auto">
-          {loading ? (
-            [1,2,3].map(i => <div key={i} className="h-12 bg-page animate-pulse" />)
-          ) : runs.length === 0 ? (
-            <p className="text-sm text-muted font-bold text-center py-8">No payroll runs found</p>
-          ) : runs.map(r => (
-            <button key={r.id} onClick={() => onSelect(r.id, r.period)}
-              className="flex items-center justify-between px-5 py-3.5 bg-page border border-rule hover:border-accent hover:bg-page transition-all text-left">
-              <div>
-                <span className="text-sm font-black text-ink">{r.period}</span>
-                <span className="ml-3 label-form">{r.runType}</span>
-              </div>
-              <span className={`text-[9px] font-black px-2.5 py-1  uppercase tracking-widest border ${
-                r.status === 'FINALISED' ? 'bg-page text-accent border-accent' :
-                r.status === 'APPROVED' ? 'bg-page text-accent border-accent' :
-                'bg-page text-ink border-highlight'
-              }`}>{r.status}</span>
-            </button>
-          ))}
-        </div>
+    <Modal open onClose={onClose} title={title} caption="Choose the payroll run to report on.">
+      <div className="flex flex-col gap-2">
+        {loading ? (
+          [1,2,3].map(i => <div key={i} className="h-14 rounded-control bg-pill animate-pulse" />)
+        ) : runs.length === 0 ? (
+          <EmptyState icon="wallet" title="No payroll runs yet" description="Run payroll first; its runs will appear here." className="py-8" />
+        ) : runs.map(r => (
+          <button key={r.id} type="button" onClick={() => onSelect(r.id, r.period)}
+            className="flex items-center justify-between gap-3 px-4 py-3 rounded-control border border-rule bg-paper hover:border-accent hover:bg-page transition-colors text-left">
+            <span className="min-w-0">
+              <span className="text-sm font-semibold text-ink tabular-nums">{r.period}</span>
+              <span className="ml-2.5 text-[13px] text-muted">{sentence(r.runType || '')}</span>
+            </span>
+            <Badge tone={RUN_STATUS_TONE[r.status] ?? 'warn'}>{sentence(r.status || '')}</Badge>
+          </button>
+        ))}
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -222,7 +238,7 @@ function LeaveLiabilityModal({ onClose, onToast }: { onClose: () => void; onToas
     onToast('Leave liability CSV downloaded', 'ok');
   };
 
-  const fmt = (v: number | null | undefined) => v == null ? '—' : `$${Number(v).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmt = money;
   const byDept: Record<string, any[]> = data?.rows?.reduce((acc: Record<string, any[]>, r: any) => {
     if (!acc[r.department]) acc[r.department] = [];
     acc[r.department].push(r);
@@ -230,83 +246,81 @@ function LeaveLiabilityModal({ onClose, onToast }: { onClose: () => void; onToas
   }, {}) ?? {};
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-      <div className="w-full max-w-5xl bg-paper flex flex-col overflow-hidden max-h-[90vh]">
-        <div className="flex items-center justify-between px-8 py-5 border-b border-rule flex-shrink-0">
-          <div>
-            <h2 className="text-base font-black text-ink tracking-tighter">Leave Liability Report</h2>
-            <p className="eyebrow-tight mt-0.5">Accrued leave liability for finance accrual reporting</p>
-          </div>
-          <div className="flex items-center gap-3">
-            {data && <button onClick={handleCsv} className="px-5 py-2 bg-accent text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent transition-all">Download CSV</button>}
-            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page transition-all">✕</button>
-          </div>
+    <Modal
+      open
+      size="lg"
+      onClose={onClose}
+      title="Leave liability"
+      caption="Accrued, unused leave valued at each person’s daily rate, for finance accruals."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Close</Button>
+          <Button icon="download" onClick={handleCsv} disabled={!data} reason={!data ? 'Generate the report first' : undefined}>Download CSV</Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <Field label="Year" className="w-32">
+            <Input type="number" value={year} onChange={e => setYear(Number(e.target.value))} min={2020} max={2030} />
+          </Field>
+          <Button variant="secondary" onClick={generate} disabled={loading}>{loading ? 'Generating…' : 'Generate'}</Button>
         </div>
-        <div className="flex items-center gap-4 px-8 py-4 border-b border-rule bg-page flex-shrink-0">
-          <label className="text-[10px] font-black text-muted uppercase tracking-widest">Year</label>
-          <input type="number" value={year} onChange={e => setYear(Number(e.target.value))} min={2020} max={2030}
-            className="w-28 px-3 py-2 bg-paper border border-rule text-sm font-bold text-ink outline-none focus:border-accent" />
-          <button onClick={generate} disabled={loading}
-            className="px-6 py-2 bg-accent text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50 transition-all flex items-center gap-2">
-            {loading ? <><span className="w-3 h-3 border-2 border-paper/30 border-t-paper animate-spin rounded-full" />Generating…</> : 'Generate'}
-          </button>
-        </div>
+
         {data && (
-          <div className="flex flex-wrap gap-3 px-8 py-4 border-b border-rule flex-shrink-0">
-            {[
-              { label: 'Total Liability', value: fmt(data.totalLiability), color: 'text-accent' },
-              { label: 'Headcount', value: String(data.headcount), color: 'text-ink' },
-              { label: 'Year', value: String(data.year), color: 'text-accent' },
-              { label: 'Generated', value: new Date(data.generatedAt).toLocaleDateString('en-SG'), color: 'text-muted' },
-            ].map(s => (
-              <div key={s.label} className="px-4 py-2 bg-paper border border-rule text-center">
-                <p className="text-[8px] font-black text-muted uppercase tracking-widest">{s.label}</p>
-                <p className={`text-xs font-black ${s.color}`}>{s.value}</p>
-              </div>
-            ))}
+          <div className="flex flex-wrap gap-2.5">
+            <MiniStat label="Total liability" value={fmt(data.totalLiability)} />
+            <MiniStat label="Headcount" value={String(data.headcount)} />
+            <MiniStat label="Year" value={String(data.year)} />
+            <MiniStat label="Generated" value={new Date(data.generatedAt).toLocaleDateString('en-SG')} />
           </div>
         )}
-        <div className="overflow-auto flex-1">
-          {!data ? (
-            <div className="flex items-center justify-center h-40 text-muted text-sm font-bold">{loading ? 'Loading…' : 'Select year and click Generate'}</div>
-          ) : data.rows.length === 0 ? (
-            <div className="flex items-center justify-center h-40 text-muted text-sm font-bold">No data for {year}</div>
-          ) : (
-            <table className="w-full text-left border-collapse text-[11px]">
-              <thead className="sticky top-0 bg-page border-b border-rule label-form">
-                <tr>{['Employee', 'Leave Type', 'Entitled', 'C/F', 'Used', 'Pending', 'Unused', 'Daily Rate', 'Liability'].map(h => <th key={h} className="px-4 py-3 whitespace-nowrap">{h}</th>)}</tr>
+
+        {!data ? (
+          loading ? <Spinner label="Generating leave liability" /> : (
+            <p className="py-10 text-center text-sm text-muted">Choose a year and select Generate.</p>
+          )
+        ) : data.rows.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted">No leave data for {year}.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-control border border-rule">
+            <table className="w-full text-left border-collapse">
+              <thead className="sticky top-0">
+                <tr>{['Employee', 'Leave type', 'Entitled', 'Carried forward', 'Used', 'Pending', 'Unused', 'Daily rate', 'Liability'].map((h, i) => (
+                  <th key={h} className={`${TH} ${i >= 2 ? 'text-right' : ''}`}>{h}</th>
+                ))}</tr>
               </thead>
-              <tbody className="divide-y divide-rule">
+              <tbody>
                 {Object.entries(byDept).map(([dept, rows]: [string, any[]]) => (
-                  <>
-                    <tr key={`hdr-${dept}`} className="bg-page">
-                      <td colSpan={9} className="px-4 py-2 font-black text-ink text-[10px] uppercase tracking-widest">{dept}</td>
+                  <Fragment key={dept}>
+                    <tr className="bg-page border-t border-rule">
+                      <td colSpan={9} className="px-3 py-2 text-[13px] font-bold text-ink">{dept}</td>
                     </tr>
                     {rows.map((r: any, i: number) => (
-                      <tr key={`${r.employeeId}-${r.leaveCode}-${i}`} className="hover:bg-page transition-colors">
-                        <td className="px-4 py-3"><p className="font-black text-ink whitespace-nowrap">{r.fullName}</p><p className="text-[9px] text-muted font-bold">{r.employeeCode}</p></td>
-                        <td className="px-4 py-3 font-bold text-ink whitespace-nowrap">{r.leaveType}</td>
-                        <td className="px-4 py-3 text-right font-mono text-ink">{r.entitledDays}</td>
-                        <td className="px-4 py-3 text-right font-mono text-muted">{r.carryForward ?? 0}</td>
-                        <td className="px-4 py-3 text-right font-mono text-ink">{r.usedDays}</td>
-                        <td className="px-4 py-3 text-right font-mono text-ink">{r.pendingDays ?? 0}</td>
-                        <td className="px-4 py-3 text-right font-mono font-bold text-ink">{r.unusedDays}</td>
-                        <td className="px-4 py-3 text-right font-mono text-muted">{fmt(r.dailyRate)}</td>
-                        <td className="px-4 py-3 text-right font-mono font-black text-accent">{fmt(r.liability)}</td>
+                      <tr key={`${r.employeeId}-${r.leaveCode}-${i}`} className="border-t border-rule hover:bg-page">
+                        <td className={TD}><p className="font-semibold">{r.fullName}</p><p className="text-xs text-muted">{r.employeeCode}</p></td>
+                        <td className={TD}>{r.leaveType}</td>
+                        <td className={TD_NUM}>{r.entitledDays}</td>
+                        <td className={`${TD_NUM} text-muted`}>{r.carryForward ?? 0}</td>
+                        <td className={TD_NUM}>{r.usedDays}</td>
+                        <td className={TD_NUM}>{r.pendingDays ?? 0}</td>
+                        <td className={`${TD_NUM} font-semibold`}>{r.unusedDays}</td>
+                        <td className={`${TD_NUM} text-muted`}>{fmt(r.dailyRate)}</td>
+                        <td className={`${TD_NUM} font-bold`}>{fmt(r.liability)}</td>
                       </tr>
                     ))}
-                    <tr key={`sub-${dept}`} className="bg-page">
-                      <td colSpan={8} className="px-4 py-2 text-right text-[9px] font-black text-muted uppercase tracking-widest">Dept Total</td>
-                      <td className="px-4 py-2 text-right font-mono font-black text-accent">{fmt(data.byDepartment[dept])}</td>
+                    <tr className="border-t border-rule bg-page">
+                      <td colSpan={8} className="px-3 py-2 text-right text-xs font-semibold text-muted">Department total</td>
+                      <td className={`${TD_NUM} font-bold`}>{fmt(data.byDepartment[dept])}</td>
                     </tr>
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
-          )}
-        </div>
+          </div>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -336,66 +350,64 @@ function Ir8aModal({ onClose, onToast }: { onClose: () => void; onToast: (m: str
     onToast('IR8A flat file downloaded', 'ok');
   };
 
-  const fmt = (v: number | null | undefined) => v == null ? '—' : `$${Number(v).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmt = money;
+  const hasRows = !!data && data.length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-      <div className="w-full max-w-5xl bg-paper flex flex-col overflow-hidden max-h-[90vh]">
-        <div className="flex items-center justify-between px-8 py-5 border-b border-rule flex-shrink-0">
-          <div>
-            <h2 className="text-base font-black text-ink tracking-tighter">IR8A Annual Filing — {year}</h2>
-            <p className="eyebrow-tight mt-0.5">IRAS AIS submission data · deadline 1 March {year + 1}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            {data && data.length > 0 && (
-              <button onClick={downloadFlatFile}
-                className="px-5 py-2 bg-shadow text-paper text-[9px] font-black uppercase tracking-widest hover:bg-shadow transition-all">
-                Download Flat File
-              </button>
-            )}
-            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page transition-all">✕</button>
-          </div>
+    <Modal
+      open
+      size="lg"
+      onClose={onClose}
+      title={`IR8A annual filing — ${year}`}
+      caption={`IRAS AIS submission data. The deadline is 1 March ${year + 1}.`}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Close</Button>
+          <Button icon="download" onClick={downloadFlatFile} disabled={!hasRows} reason={!hasRows ? 'Generate a year with data first' : undefined}>Download flat file</Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <Field label="Year of assessment" className="w-40">
+            <Input type="number" value={year} onChange={e => setYear(Number(e.target.value))} min={2020} max={2030} />
+          </Field>
+          <Button variant="secondary" onClick={generate} disabled={loading}>{loading ? 'Generating…' : 'Generate'}</Button>
+          <Badge tone="warn" className="mb-2.5 sm:ml-auto">IRAS deadline 1 Mar {year + 1}</Badge>
         </div>
-        <div className="flex items-center gap-4 px-8 py-4 border-b border-rule bg-page flex-shrink-0">
-          <label className="text-[10px] font-black text-muted uppercase tracking-widest">Year of Assessment</label>
-          <input type="number" value={year} onChange={e => setYear(Number(e.target.value))} min={2020} max={2030}
-            className="w-28 px-3 py-2 bg-paper border border-rule text-sm font-bold text-ink outline-none focus:border-accent" />
-          <button onClick={generate} disabled={loading}
-            className="px-6 py-2 bg-accent text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50 transition-all flex items-center gap-2">
-            {loading ? <><span className="w-3 h-3 border-2 border-paper/30 border-t-paper animate-spin rounded-full" />Generating…</> : 'Generate'}
-          </button>
-          <span className="ml-auto text-[9px] font-black text-ink uppercase tracking-widest bg-page border border-highlight px-3 py-1.5 ">
-            IRAS Deadline: 1 Mar {year + 1}
-          </span>
-        </div>
-        <div className="overflow-auto flex-1">
-          {!data ? (
-            <div className="flex items-center justify-center h-40 text-muted text-sm font-bold">{loading ? 'Loading…' : 'Select year and click Generate'}</div>
-          ) : data.length === 0 ? (
-            <div className="flex items-center justify-center h-40 text-muted text-sm font-bold">No finalised payslips for {year}</div>
-          ) : (
-            <table className="w-full text-left border-collapse text-[11px]">
-              <thead className="sticky top-0 bg-page border-b border-rule label-form">
-                <tr>{['Employee', 'NRIC', 'Employment Income', 'Emp CPF', 'Emplr CPF', 'AW Income', 'Other Taxable'].map(h => <th key={h} className="px-4 py-3 whitespace-nowrap">{h}</th>)}</tr>
+
+        {!data ? (
+          loading ? <Spinner label="Generating IR8A data" /> : (
+            <p className="py-10 text-center text-sm text-muted">Choose a year and select Generate.</p>
+          )
+        ) : data.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted">No finalised payslips for {year}.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-control border border-rule">
+            <table className="w-full text-left border-collapse">
+              <thead className="sticky top-0">
+                <tr>{['Employee', 'NRIC', 'Employment income', 'Employee CPF', 'Employer CPF', 'AW income', 'Other taxable'].map((h, i) => (
+                  <th key={h} className={`${TH} ${i >= 2 ? 'text-right' : ''}`}>{h}</th>
+                ))}</tr>
               </thead>
-              <tbody className="divide-y divide-rule">
+              <tbody>
                 {data.map((emp: any, i: number) => (
-                  <tr key={emp.employeeId ?? i} className="hover:bg-page transition-colors">
-                    <td className="px-4 py-3"><p className="font-black text-ink whitespace-nowrap">{emp.fullName}</p><p className="text-[9px] text-muted font-bold">{emp.employeeId}</p></td>
-                    <td className="px-4 py-3 font-mono text-ink tracking-wider">{emp.nric ?? '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-ink">{fmt(emp.employmentIncome)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-accent">{fmt(emp.employeeCpf)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-accent">{fmt(emp.employerCpf)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-accent">{emp.awIncome > 0 ? fmt(emp.awIncome) : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-muted">{emp.otherTaxableIncome > 0 ? fmt(emp.otherTaxableIncome) : '—'}</td>
+                  <tr key={emp.employeeId ?? i} className="border-t border-rule hover:bg-page">
+                    <td className={TD}><p className="font-semibold">{emp.fullName}</p><p className="text-xs text-muted">{emp.employeeId}</p></td>
+                    <td className={`${TD} font-mono text-[13px]`}>{emp.nric ?? '—'}</td>
+                    <td className={`${TD_NUM} font-semibold`}>{fmt(emp.employmentIncome)}</td>
+                    <td className={TD_NUM}>{fmt(emp.employeeCpf)}</td>
+                    <td className={TD_NUM}>{fmt(emp.employerCpf)}</td>
+                    <td className={TD_NUM}>{emp.awIncome > 0 ? fmt(emp.awIncome) : '—'}</td>
+                    <td className={`${TD_NUM} text-muted`}>{emp.otherTaxableIncome > 0 ? fmt(emp.otherTaxableIncome) : '—'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          )}
-        </div>
+          </div>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -421,25 +433,23 @@ function PayrollBreakdownModal({ runId, period, onClose, onToast }: { runId: str
     onToast('Payroll breakdown CSV downloaded', 'ok');
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-      <div className="w-full max-w-6xl bg-paper flex flex-col overflow-hidden max-h-[90vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between px-8 py-5 border-b border-rule flex-shrink-0">
-          <div>
-            <h2 className="text-base font-black text-ink tracking-tighter">Payroll Breakdown — {period}</h2>
-            <p className="eyebrow-tight mt-0.5">All payroll calculations per employee (Singapore MOM/CPF/EA)</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button onClick={handleCsv} disabled={loading || rows.length === 0}
-              className="px-5 py-2 bg-accent text-paper text-[9px] font-black uppercase tracking-widest hover:bg-accent disabled:opacity-50 transition-all">
-              Download CSV
-            </button>
-            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page transition-all">✕</button>
-          </div>
-        </div>
+  const noRows = loading || rows.length === 0;
 
-        {/* Summary pills */}
+  return (
+    <Modal
+      open
+      size="lg"
+      onClose={onClose}
+      title={`Payroll breakdown — ${period}`}
+      caption="Every payroll calculation for each employee in this run (MOM, CPF and EA rules)."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Close</Button>
+          <Button icon="download" onClick={handleCsv} disabled={noRows} reason={!loading && rows.length === 0 ? 'No payslips in this run' : undefined}>Download CSV</Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
         {!loading && rows.length > 0 && (() => {
           const tot = rows.reduce((a, r) => ({
             gross: a.gross + r.grossPay,
@@ -449,65 +459,57 @@ function PayrollBreakdownModal({ runId, period, onClose, onToast }: { runId: str
             sdl: a.sdl + r.sdl,
           }), { gross: 0, net: 0, empCpf: 0, emplrCpf: 0, sdl: 0 });
           return (
-            <div className="flex flex-wrap gap-3 px-8 py-4 border-b border-rule bg-page flex-shrink-0">
-              {[
-                { label: 'Total Gross', value: fmt(tot.gross), color: 'text-ink' },
-                { label: 'Total Net', value: fmt(tot.net), color: 'text-accent' },
-                { label: 'Employee CPF', value: fmt(tot.empCpf), color: 'text-accent' },
-                { label: 'Employer CPF', value: fmt(tot.emplrCpf), color: 'text-accent' },
-                { label: 'SDL', value: fmt(tot.sdl), color: 'text-ink' },
-                { label: 'Employees', value: String(rows.length), color: 'text-ink' },
-              ].map(s => (
-                <div key={s.label} className="px-4 py-2 bg-paper border border-rule text-center">
-                  <p className="text-[8px] font-black text-muted uppercase tracking-widest">{s.label}</p>
-                  <p className={`text-xs font-black ${s.color}`}>{s.value}</p>
-                </div>
-              ))}
+            <div className="flex flex-wrap gap-2.5">
+              <MiniStat label="Total gross" value={fmt(tot.gross)} />
+              <MiniStat label="Total net" value={fmt(tot.net)} />
+              <MiniStat label="Employee CPF" value={fmt(tot.empCpf)} />
+              <MiniStat label="Employer CPF" value={fmt(tot.emplrCpf)} />
+              <MiniStat label="SDL" value={fmt(tot.sdl)} />
+              <MiniStat label="Employees" value={String(rows.length)} />
             </div>
           );
         })()}
 
-        {/* Table */}
-        <div className="overflow-auto flex-1">
-          {loading ? (
-            <div className="flex items-center justify-center h-40 text-muted text-sm font-bold">Loading…</div>
-          ) : rows.length === 0 ? (
-            <div className="flex items-center justify-center h-40 text-muted text-sm font-bold">No payslips found for this run</div>
-          ) : (
-            <table className="w-full text-left border-collapse text-[11px]">
-              <thead className="sticky top-0 bg-page border-b border-rule label-form">
+        {loading ? (
+          <Spinner label="Loading payroll breakdown" />
+        ) : rows.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted">No payslips found for this run.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-control border border-rule">
+            <table className="w-full text-left border-collapse">
+              <thead className="sticky top-0">
                 <tr>
-                  {['Code', 'Employee', 'Basic Salary (OW)', 'Gross Pay', 'Emp CPF', 'Emplr CPF', 'SDL', 'FWL', 'NPL Days', 'NPL Deduct', 'Govt Days', 'Govt Amt', 'Net Pay', 'YTD Gross', 'YTD Emp CPF'].map(h => (
-                    <th key={h} className="px-4 py-3 whitespace-nowrap">{h}</th>
+                  {['Code', 'Employee', 'Basic salary (OW)', 'Gross pay', 'Employee CPF', 'Employer CPF', 'SDL', 'FWL', 'NPL days', 'NPL deduction', 'Govt-paid days', 'Govt-paid amount', 'Net pay', 'YTD gross', 'YTD employee CPF'].map((h, i) => (
+                    <th key={h} className={`${TH} ${i >= 2 ? 'text-right' : ''}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-rule">
+              <tbody>
                 {rows.map(r => (
-                  <tr key={r.id} className="hover:bg-page transition-colors">
-                    <td className="px-4 py-3 font-black text-muted whitespace-nowrap">{r.employeeCode}</td>
-                    <td className="px-4 py-3 font-bold text-ink whitespace-nowrap">{r.employeeName}</td>
-                    <td className="px-4 py-3 text-right font-mono text-ink">{fmt(r.basicSalary)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-ink font-bold">{fmt(r.grossPay)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-accent">{fmt(r.employeeCpf)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-accent">{fmt(r.employerCpf)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-ink">{fmt(r.sdl)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-muted">{r.fwl > 0 ? fmt(r.fwl) : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-ink">{r.nplDays > 0 ? r.nplDays : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-ink">{r.nplDeduction > 0 ? fmt(r.nplDeduction) : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-accent">{r.govtPaidDays > 0 ? r.govtPaidDays : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono text-accent">{r.govtPaidAmount > 0 ? fmt(r.govtPaidAmount) : '—'}</td>
-                    <td className="px-4 py-3 text-right font-mono font-black text-accent">{fmt(r.netPay)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-muted">{fmt(r.ytdGross)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-muted">{fmt(r.ytdEmployeeCpf)}</td>
+                  <tr key={r.id} className="border-t border-rule hover:bg-page">
+                    <td className={`${TD} text-muted`}>{r.employeeCode}</td>
+                    <td className={`${TD} font-semibold`}>{r.employeeName}</td>
+                    <td className={TD_NUM}>{fmt(r.basicSalary)}</td>
+                    <td className={`${TD_NUM} font-semibold`}>{fmt(r.grossPay)}</td>
+                    <td className={TD_NUM}>{fmt(r.employeeCpf)}</td>
+                    <td className={TD_NUM}>{fmt(r.employerCpf)}</td>
+                    <td className={TD_NUM}>{fmt(r.sdl)}</td>
+                    <td className={`${TD_NUM} text-muted`}>{r.fwl > 0 ? fmt(r.fwl) : '—'}</td>
+                    <td className={TD_NUM}>{r.nplDays > 0 ? r.nplDays : '—'}</td>
+                    <td className={TD_NUM}>{r.nplDeduction > 0 ? fmt(r.nplDeduction) : '—'}</td>
+                    <td className={TD_NUM}>{r.govtPaidDays > 0 ? r.govtPaidDays : '—'}</td>
+                    <td className={TD_NUM}>{r.govtPaidAmount > 0 ? fmt(r.govtPaidAmount) : '—'}</td>
+                    <td className={`${TD_NUM} font-bold`}>{fmt(r.netPay)}</td>
+                    <td className={`${TD_NUM} text-muted`}>{fmt(r.ytdGross)}</td>
+                    <td className={`${TD_NUM} text-muted`}>{fmt(r.ytdEmployeeCpf)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          )}
-        </div>
+          </div>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -518,7 +520,7 @@ interface ReportDef {
   key: ReportKey;
   name: string;
   category: string;
-  icon: string;
+  icon: IconName;
   freq: string;
   badge: string;
   needsRunSelector?: boolean;
@@ -526,25 +528,32 @@ interface ReportDef {
 }
 
 const REPORTS: ReportDef[] = [
-  { key: 'cpf',               name: 'CPF / SDL / FWL Statutory Report',          category: 'Statutory',  icon: '◆', freq: 'Monthly',    badge: 'MOM Required',  needsRunSelector: true, runSelectorTitle: 'Select Payroll Run — CPF e-Submit' },
-  { key: 'iras',              name: 'IRAS AIS / IR8A Annual Filing',              category: 'Statutory',  icon: '◆', freq: 'Annual',     badge: 'IRAS Required' },
-  { key: 'giro',              name: 'Bank GIRO Reconciliation',                   category: 'Financial',  icon: '◫', freq: 'Monthly',    badge: '',              needsRunSelector: true, runSelectorTitle: 'Select Payroll Run — Bank GIRO' },
-  { key: 'payroll-breakdown', name: 'Payroll Calculation Breakdown',              category: 'Financial',  icon: '◫', freq: 'Per Run',    badge: 'Full Detail',   needsRunSelector: true, runSelectorTitle: 'Select Payroll Run — Breakdown Report' },
-  { key: 'leave',             name: 'Leave Liability Report',                     category: 'Workforce',  icon: '◌', freq: 'Monthly',    badge: '' },
-  { key: 'workforce',         name: 'Executive Workforce Dashboard',              category: 'Analytics',  icon: '▣', freq: 'Real-time',  badge: 'SA Only' },
-  { key: 'attrition',         name: 'Attrition & Workforce Analytics',            category: 'Analytics',  icon: '▣', freq: 'Quarterly',  badge: '' },
-  { key: 'mom',               name: 'MOM Headcount Report',                       category: 'Statutory',  icon: '◆', freq: 'Annual',     badge: 'MOM Required' },
-  { key: 'sdl',               name: 'Training & SDL Analytics',                   category: 'Training',   icon: '◑', freq: 'Monthly',    badge: '' },
-  { key: 'variance',          name: 'Payroll Variance Report',                    category: 'Financial',  icon: '◫', freq: 'Per Run',    badge: '' },
-  { key: 'custom',            name: 'Custom Report Builder',                      category: 'Analytics',  icon: '▤', freq: 'On-demand',  badge: 'Premium' },
+  { key: 'cpf',               name: 'CPF / SDL / FWL statutory report',          category: 'Statutory',  icon: 'shield', freq: 'Monthly',    badge: 'MOM required',  needsRunSelector: true, runSelectorTitle: 'Select payroll run — CPF e-Submit' },
+  { key: 'iras',              name: 'IRAS AIS / IR8A annual filing',              category: 'Statutory',  icon: 'shield', freq: 'Annual',     badge: 'IRAS required' },
+  { key: 'giro',              name: 'Bank GIRO reconciliation',                   category: 'Financial',  icon: 'wallet', freq: 'Monthly',    badge: '',              needsRunSelector: true, runSelectorTitle: 'Select payroll run — Bank GIRO' },
+  { key: 'payroll-breakdown', name: 'Payroll calculation breakdown',              category: 'Financial',  icon: 'wallet', freq: 'Per run',    badge: 'Full detail',   needsRunSelector: true, runSelectorTitle: 'Select payroll run — breakdown report' },
+  { key: 'leave',             name: 'Leave liability report',                     category: 'Workforce',  icon: 'calendar', freq: 'Monthly',  badge: '' },
+  { key: 'workforce',         name: 'Executive workforce dashboard',              category: 'Analytics',  icon: 'chart',  freq: 'Real-time',  badge: 'SA only' },
+  { key: 'attrition',         name: 'Attrition and workforce analytics',          category: 'Analytics',  icon: 'chart',  freq: 'Quarterly',  badge: '' },
+  { key: 'mom',               name: 'MOM headcount report',                       category: 'Statutory',  icon: 'shield', freq: 'Annual',     badge: 'MOM required' },
+  { key: 'sdl',               name: 'Training and SDL analytics',                 category: 'Training',   icon: 'book',   freq: 'Monthly',    badge: '' },
+  { key: 'variance',          name: 'Payroll variance report',                    category: 'Financial',  icon: 'wallet', freq: 'Per run',    badge: '' },
+  { key: 'custom',            name: 'Custom report builder',                      category: 'Analytics',  icon: 'grid',   freq: 'On demand',  badge: 'Premium' },
 ];
 
-const CATEGORY_COLORS: Record<string, string> = {
-  Statutory: 'bg-page text-ink border-ink',
-  Financial:  'bg-page text-accent border-accent',
-  Workforce:  'bg-page text-accent border-accent',
-  Analytics:  'bg-page text-accent border-accent',
-  Training:   'bg-page text-ink border-highlight',
+const CATEGORIES = ['Statutory', 'Financial', 'Workforce', 'Analytics', 'Training'];
+
+/**
+ * The small tag on a report card. Regulatory requirements get the warn tone
+ * (they carry a deadline), the plan-gated one gets brass (the plan/trial
+ * colour), and the rest are plain labels.
+ */
+const REPORT_BADGE_TONE: Record<string, BadgeTone> = {
+  'MOM required':  'warn',
+  'IRAS required': 'warn',
+  'Full detail':   'neutral',
+  'SA only':       'neutral',
+  'Premium':       'brass',
 };
 
 // ── RPT-001 Executive Workforce Dashboard Modal ───────────────────────────────
@@ -572,6 +581,28 @@ interface TrainingData {
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
+function BarRow({ label, value, pct, color }: { label: string; value: string; pct: number; color?: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex justify-between gap-3 text-[13px]">
+        <span className="font-semibold text-ink truncate">{label}</span>
+        <span className="text-muted tabular-nums shrink-0">{value}</span>
+      </div>
+      <div className="h-2 rounded-full bg-pill overflow-hidden" aria-hidden="true">
+        <div className={`h-full rounded-full ${color ? '' : 'bg-accent'}`} style={{ width: `${pct}%`, ...(color ? { backgroundColor: color } : {}) }} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Not the kit Modal on purpose: this dialog has a Print / PDF action, and the
+ * old overlay carried print: rules that turn it into a normal page when
+ * printed (no dim backdrop, no 92vh cap, no scroll clipping). The kit Modal
+ * has no print mode, so printing from it would clip the dashboard to one
+ * screen. Visually it matches the kit Modal; it is role="dialog", aria-modal,
+ * and Escape closes it.
+ */
 function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; onToast: (m: string, t: 'ok'|'err') => void }) {
   const [data, setData]         = useState<WFDashData | null>(null);
   const [otData, setOtData]     = useState<OTData | null>(null);
@@ -613,12 +644,18 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
     return () => clearInterval(tick);
   }, [lastRefreshed]);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   if (loading || !data) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-shadow backdrop-">
-        <div className="bg-paper p-12 flex flex-col items-center gap-4 ">
-          <div className="w-8 h-8 border-4 border-accent border-t-accent animate-spin rounded-full" />
-          <p className="text-sm font-black text-muted uppercase tracking-widest">Loading dashboard…</p>
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-ink/40">
+        <div className="flex flex-col items-center gap-3 px-10 py-8 bg-paper border border-rule rounded-card shadow-card">
+          <div className="w-8 h-8 border-2 border-rule border-t-accent animate-spin rounded-full" role="status" aria-label="Loading dashboard" />
+          <p className="text-sm text-muted">Loading the dashboard…</p>
         </div>
       </div>
     );
@@ -638,10 +675,8 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
   const etEntries    = Object.entries(byEmploymentType).sort((a, b) => b[1] - a[1]);
   const csEntries    = Object.entries(byCitizenship).filter(e => e[1] > 0);
   const totalCiti    = csEntries.reduce((s, e) => s + e[1], 0) || 1;
-  // Six chart series from the token set. A bar chart cannot use the fill/outline
-  // trick the status chips use, so the ramp mixes each token toward the paper
-  // ground to get distinguishable steps. SVG `fill` takes CSS variables, so
-  // these follow the theme (including dark mode) rather than freezing a hex.
+  // Six chart series from the token set. SVG/inline `background` takes CSS
+  // variables, so these follow the theme rather than freezing a hex.
   const csColors: Record<string, string> = {
     SC:      'var(--accent)',
     PR:      'var(--highlight)',
@@ -650,6 +685,11 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
     WP:      'color-mix(in srgb, var(--ink) 45%, var(--paper))',
     OTHER:   'var(--muted)',
   };
+  // Hires vs terminations: accent vs a mid ink. The legend below uses the same
+  // two values; the bars previously used raw emerald/red hexes that matched
+  // neither the legend nor the token set.
+  const HIRES = 'var(--accent)';
+  const TERMS = 'color-mix(in srgb, var(--ink) 55%, var(--paper))';
 
   // ── OT helpers ─────────────────────────────────────────────────────────────
   const otEntries = otData ? Object.entries(otData.totals).sort((a, b) => b[1] - a[1]).slice(0, 6) : [];
@@ -666,54 +706,50 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
   const maxCat = Math.max(...catEntries.map(c => c._count.id), 1);
 
   const kpiCards = [
-    { label: 'Total Headcount',     value: kpis.totalHeadcount,        sub: `${kpis.activeHeadcount} active`,           color: 'text-ink' },
-    { label: 'Hires MTD',           value: kpis.hiresMtd,              sub: 'this month',                               color: 'text-accent' },
-    { label: 'Terminations MTD',    value: kpis.termsMtd,              sub: 'this month',                               color: 'text-ink' },
-    { label: '12m Attrition Rate',  value: `${kpis.attritionRate12m}%`, sub: `${kpis.terminations12m} exits in 12m`,   color: 'text-accent' },
+    { label: 'Total headcount',      value: kpis.totalHeadcount,         sub: `${kpis.activeHeadcount} active` },
+    { label: 'Hires this month',     value: kpis.hiresMtd,               sub: 'month to date' },
+    { label: 'Leavers this month',   value: kpis.termsMtd,               sub: 'month to date' },
+    { label: 'Attrition, 12 months', value: `${kpis.attritionRate12m}%`, sub: `${kpis.terminations12m} exits in 12 months` },
   ];
 
   const refreshLabel = secAgo < 60 ? 'just now' : secAgo < 3600 ? `${Math.floor(secAgo / 60)}m ago` : `${Math.floor(secAgo / 3600)}h ago`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop- print:p-0 print:bg-transparent print:inset-auto print:relative">
-      <div className="w-full max-w-5xl bg-paper flex flex-col overflow-hidden max-h-[92vh] print: print:rounded-none print:max-h-none">
-        {/* Header */}
-        <div className="flex items-center justify-between px-8 py-5 border-b border-rule flex-shrink-0 print:border-rule">
-          <div>
-            <h2 className="text-base font-black text-ink tracking-tighter">Executive Workforce Dashboard</h2>
-            <p className="text-[9px] font-black text-muted uppercase tracking-[0.3em] mt-0.5">
-              Auto-refresh every 5 min · {lastRefreshed ? `Updated ${refreshLabel}` : 'Loading…'}
-              {refreshing && <span className="ml-2 inline-block w-2.5 h-2.5 border-2 border-rule border-t-rule animate-spin align-middle rounded-full" />}
+    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-ink/40 sm:p-4 print:p-0 print:bg-transparent print:inset-auto print:relative" onMouseDown={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="wf-dash-title"
+        onMouseDown={e => e.stopPropagation()}
+        className="w-full sm:max-w-5xl max-h-[92vh] flex flex-col bg-paper border border-rule rounded-t-card sm:rounded-card shadow-card overflow-hidden print:max-h-none print:border-0 print:shadow-none print:rounded-none"
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between px-5 pt-5 pb-4 border-b border-rule">
+          <div className="min-w-0">
+            <h2 id="wf-dash-title" className="text-[17px] font-bold text-ink leading-tight">Executive workforce dashboard</h2>
+            <p className="mt-1 text-[13px] text-muted flex items-center gap-2">
+              Refreshes every 5 minutes · {lastRefreshed ? `updated ${refreshLabel}` : 'loading…'}
+              {refreshing && <span className="inline-block w-3 h-3 border-2 border-rule border-t-accent animate-spin rounded-full" aria-label="Refreshing" />}
             </p>
           </div>
           <div className="flex items-center gap-2 print:hidden">
-            <button onClick={() => loadAll(true)} disabled={refreshing}
-              className="px-4 py-2 bg-page text-ink text-[9px] font-black uppercase tracking-widest hover:bg-rule disabled:opacity-50 transition-all">
-              ↺ Refresh
+            <Button size="sm" variant="secondary" onClick={() => loadAll(true)} disabled={refreshing}>Refresh</Button>
+            <Button size="sm" variant="secondary" icon="download" onClick={() => window.print()}>Print or save as PDF</Button>
+            <button type="button" onClick={onClose} aria-label="Close" className="w-9 h-9 flex items-center justify-center rounded-control text-muted hover:bg-page hover:text-ink">
+              <Icon name="x" size={18} />
             </button>
-            <button onClick={() => window.print()} className="px-5 py-2 bg-shadow text-paper text-[9px] font-black uppercase tracking-widest hover:bg-shadow transition-all">Print / PDF</button>
-            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page transition-all">✕</button>
           </div>
         </div>
 
-        <div className="overflow-y-auto flex-1 p-8 flex flex-col gap-8">
-          {/* KPI Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {kpiCards.map(k => (
-              <div key={k.label} className="bg-page p-5 border border-rule flex flex-col gap-1">
-                <span className="text-[9px] font-black text-muted uppercase tracking-widest">{k.label}</span>
-                <span className={`text-3xl font-black tracking-tighter ${k.color}`}>{k.value}</span>
-                <span className="text-[10px] text-muted font-bold">{k.sub}</span>
-              </div>
-            ))}
+        <div className="overflow-y-auto flex-1 p-5 flex flex-col gap-5 print:overflow-visible">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {kpiCards.map(k => <Stat key={k.label} label={k.label} value={k.value} note={k.sub} />)}
           </div>
 
-          {/* 12-month Hires vs Terminations trend */}
-          <div className="bg-paper border border-rule p-6">
-            <h3 className="text-[10px] font-black text-muted uppercase tracking-widest mb-4">12-Month Hires vs Terminations</h3>
-            <svg viewBox={`0 0 ${chartW} ${chartH + 30}`} width="100%" className="overflow-visible">
+          <Card>
+            <CardHeader title="Hires and leavers, last 12 months" />
+            <svg viewBox={`0 0 ${chartW} ${chartH + 30}`} width="100%" className="overflow-visible" role="img" aria-label="Monthly hires and leavers over the last 12 months">
               {[0, 0.25, 0.5, 0.75, 1].map(f => (
-                <line key={f} x1={30} y1={chartH * (1 - f)} x2={chartW} y2={chartH * (1 - f)} stroke="#f1f5f9" strokeWidth="1" />
+                <line key={f} x1={30} y1={chartH * (1 - f)} x2={chartW} y2={chartH * (1 - f)} stroke="var(--rule)" strokeWidth="1" />
               ))}
               {trend.map((m, i) => {
                 const x = 30 + i * barGroupW + barPad;
@@ -721,166 +757,118 @@ function WorkforceDashboardModal({ onClose, onToast }: { onClose: () => void; on
                 const tH = Math.round((m.terminations / maxTrend) * chartH);
                 return (
                   <g key={m.label}>
-                    <rect x={x}           y={chartH - hH} width={barW} height={hH} rx="2" fill="#10b981" opacity={0.85} />
-                    <rect x={x + barW + 1} y={chartH - tH} width={barW} height={tH} rx="2" fill="#ef4444" opacity={0.85} />
-                    <text x={x + barW} y={chartH + 16} textAnchor="middle" fontSize="8" fill="var(--muted)" fontWeight="700">{m.label}</text>
+                    <rect x={x}            y={chartH - hH} width={barW} height={hH} rx="2" fill={HIRES}><title>{`${m.label}: ${m.hires} hires`}</title></rect>
+                    <rect x={x + barW + 1} y={chartH - tH} width={barW} height={tH} rx="2" fill={TERMS}><title>{`${m.label}: ${m.terminations} leavers`}</title></rect>
+                    <text x={x + barW} y={chartH + 18} textAnchor="middle" fontSize="11" fill="var(--muted)" fontWeight="600">{m.label}</text>
                   </g>
                 );
               })}
             </svg>
-            <div className="flex gap-5 mt-1">
-              <div className="flex items-center gap-1.5"><span className="w-3 h-3 bg-accent block" /><span className="text-[9px] font-black text-muted uppercase tracking-widest">Hires</span></div>
-              <div className="flex items-center gap-1.5"><span className="w-3 h-3 bg-ink block" /><span className="text-[9px] font-black text-muted uppercase tracking-widest">Terminations</span></div>
+            <div className="flex gap-5 mt-2 text-[13px] text-muted">
+              <span className="inline-flex items-center gap-2"><span className="w-3 h-3" style={{ backgroundColor: HIRES }} aria-hidden="true" />Hires</span>
+              <span className="inline-flex items-center gap-2"><span className="w-3 h-3" style={{ backgroundColor: TERMS }} aria-hidden="true" />Leavers</span>
             </div>
-          </div>
+          </Card>
 
-          {/* Headcount breakdowns */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="bg-paper border border-rule p-6 flex flex-col gap-3">
-              <h3 className="text-[10px] font-black text-muted uppercase tracking-widest">By Department</h3>
-              {deptEntries.map(([dept, count]) => (
-                <div key={dept} className="flex flex-col gap-1">
-                  <div className="flex justify-between">
-                    <span className="text-[10px] font-black text-ink truncate max-w-[80%]">{dept}</span>
-                    <span className="text-[10px] font-black text-ink">{count}</span>
-                  </div>
-                  <div className="h-1.5 bg-page overflow-hidden">
-                    <div className="h-full bg-accent transition-all" style={{ width: `${(count / maxDept) * 100}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="bg-paper border border-rule p-6 flex flex-col gap-3">
-              <h3 className="text-[10px] font-black text-muted uppercase tracking-widest">Employment Type</h3>
-              {etEntries.map(([type, count]) => {
-                const total = etEntries.reduce((s, e) => s + e[1], 0) || 1;
-                const pct   = Math.round((count / total) * 100);
-                return (
-                  <div key={type} className="flex flex-col gap-1">
-                    <div className="flex justify-between">
-                      <span className="text-[10px] font-black text-ink">{type.replace(/_/g, ' ')}</span>
-                      <span className="text-[10px] font-black text-muted">{count} ({pct}%)</span>
-                    </div>
-                    <div className="h-1.5 bg-page overflow-hidden">
-                      <div className="h-full bg-accent " style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="bg-paper border border-rule p-6 flex flex-col gap-3">
-              <h3 className="text-[10px] font-black text-muted uppercase tracking-widest">Citizenship / Pass</h3>
-              {csEntries.map(([key, count]) => {
-                const pct   = Math.round((count / totalCiti) * 100);
-                const color = csColors[key] || 'var(--muted)';
-                return (
-                  <div key={key} className="flex flex-col gap-1">
-                    <div className="flex justify-between">
-                      <span className="text-[10px] font-black text-ink">{key.replace(/_/g, ' ')}</span>
-                      <span className="text-[10px] font-black text-muted">{count} ({pct}%)</span>
-                    </div>
-                    <div className="h-1.5 bg-page overflow-hidden">
-                      <div className="h-full " style={{ width: `${pct}%`, backgroundColor: color }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* OT by department + Training completion */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* OT by department */}
-            <div className="bg-paper border border-rule p-6 flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-[10px] font-black text-muted uppercase tracking-widest">OT Hours by Department</h3>
-                {otData && <span className="text-[8px] font-black text-muted uppercase tracking-widest">6-month total · this month highlighted</span>}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader title="By department" />
+              <div className="flex flex-col gap-3">
+                {deptEntries.map(([dept, count]) => (
+                  <BarRow key={dept} label={dept} value={String(count)} pct={(count / maxDept) * 100} />
+                ))}
               </div>
-              {!otData ? (
-                <p className="text-[10px] text-muted font-bold py-4 text-center">No OT data available</p>
-              ) : otEntries.length === 0 ? (
-                <p className="text-[10px] text-muted font-bold py-4 text-center">No OT recorded in this period</p>
-              ) : otEntries.map(([dept, total]) => {
-                const thisMo = otCurrentMonth[dept] ?? 0;
-                const pct    = Math.round((total / maxOt) * 100);
-                const moPct  = total > 0 ? Math.round((thisMo / total) * 100) : 0;
-                return (
-                  <div key={dept} className="flex flex-col gap-1">
-                    <div className="flex justify-between items-baseline">
-                      <span className="text-[10px] font-black text-ink truncate max-w-[60%]">{dept}</span>
-                      <span className="text-[10px] font-black text-muted">
-                        <span className="text-ink">{thisMo}h</span>
-                        <span className="text-muted mx-1">/</span>
-                        {total}h total
-                      </span>
-                    </div>
-                    <div className="h-2 bg-page overflow-hidden">
-                      <div className="h-full bg-page relative" style={{ width: `${pct}%` }}>
-                        <div className="h-full bg-highlight absolute left-0 top-0" style={{ width: `${moPct}%` }} />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            </Card>
+            <Card>
+              <CardHeader title="Employment type" />
+              <div className="flex flex-col gap-3">
+                {etEntries.map(([type, count]) => {
+                  const total = etEntries.reduce((s, e) => s + e[1], 0) || 1;
+                  const pct   = Math.round((count / total) * 100);
+                  return <BarRow key={type} label={sentence(type)} value={`${count} (${pct}%)`} pct={pct} />;
+                })}
+              </div>
+            </Card>
+            <Card>
+              <CardHeader title="Citizenship and pass" />
+              <div className="flex flex-col gap-3">
+                {csEntries.map(([key, count]) => {
+                  const pct = Math.round((count / totalCiti) * 100);
+                  return <BarRow key={key} label={key.replace(/_/g, ' ')} value={`${count} (${pct}%)`} pct={pct} color={csColors[key] || 'var(--muted)'} />;
+                })}
+              </div>
+            </Card>
+          </div>
 
-            {/* Training completion */}
-            <div className="bg-paper border border-rule p-6 flex flex-col gap-4">
-              <h3 className="text-[10px] font-black text-muted uppercase tracking-widest">Training Completion</h3>
-              {!trainData ? (
-                <p className="text-[10px] text-muted font-bold py-4 text-center">No training data available</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader title="Overtime hours by department" caption={otData ? 'This month, out of the 6-month total' : undefined} />
+              {!otData ? (
+                <p className="text-[13px] text-muted py-4">No overtime data available.</p>
+              ) : otEntries.length === 0 ? (
+                <p className="text-[13px] text-muted py-4">No overtime recorded in this period.</p>
               ) : (
-                <>
+                <div className="flex flex-col gap-3">
+                  {otEntries.map(([dept, total]) => {
+                    const thisMo = otCurrentMonth[dept] ?? 0;
+                    const pct    = Math.round((total / maxOt) * 100);
+                    const moPct  = total > 0 ? Math.round((thisMo / total) * 100) : 0;
+                    return (
+                      <div key={dept} className="flex flex-col gap-1">
+                        <div className="flex justify-between gap-3 text-[13px]">
+                          <span className="font-semibold text-ink truncate">{dept}</span>
+                          <span className="text-muted tabular-nums shrink-0"><span className="font-semibold text-ink">{thisMo}h</span> of {total}h</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-pill overflow-hidden" aria-hidden="true">
+                          <div className="h-full rounded-full relative" style={{ width: `${pct}%`, backgroundColor: 'color-mix(in srgb, var(--accent) 30%, var(--paper))' }}>
+                            <div className="h-full rounded-full bg-accent absolute left-0 top-0" style={{ width: `${moPct}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+
+            <Card>
+              <CardHeader title="Training completion" />
+              {!trainData ? (
+                <p className="text-[13px] text-muted py-4">No training data available.</p>
+              ) : (
+                <div className="flex flex-col gap-4">
                   <div className="flex items-center gap-6">
-                    <div className="flex flex-col items-center">
-                      <span className={`text-4xl font-black tracking-tighter ${trainData.completionRate >= 80 ? 'text-accent' : trainData.completionRate >= 50 ? 'text-ink' : 'text-ink'}`}>
-                        {trainData.completionRate}%
-                      </span>
-                      <span className="text-[9px] font-black text-muted uppercase tracking-widest mt-0.5">Completion Rate</span>
+                    <div>
+                      <p className="text-[36px] font-extrabold leading-none text-ink tabular-nums">{trainData.completionRate}%</p>
+                      <p className="text-[13px] text-muted mt-1">completed</p>
                     </div>
-                    <div className="flex flex-col gap-1 flex-1">
+                    <dl className="flex flex-col gap-1.5 flex-1 text-[13px]">
                       {[
-                        { label: 'Completed',   value: trainData.completed,        color: 'bg-accent' },
-                        { label: 'In Progress', value: trainData.inProgress,       color: 'bg-highlight' },
-                        { label: 'Total',       value: trainData.totalEnrollments, color: 'bg-rule' },
+                        { label: 'Completed',   value: trainData.completed },
+                        { label: 'In progress', value: trainData.inProgress },
+                        { label: 'Enrolments',  value: trainData.totalEnrollments },
                       ].map(s => (
                         <div key={s.label} className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className={`w-2 h-2  ${s.color}`} />
-                            <span className="text-[9px] font-black text-muted uppercase tracking-widest">{s.label}</span>
-                          </div>
-                          <span className="text-[10px] font-black text-ink">{s.value}</span>
+                          <dt className="text-muted">{s.label}</dt>
+                          <dd className="font-semibold text-ink tabular-nums">{s.value}</dd>
                         </div>
                       ))}
                       {trainData.mandatory > 0 && (
-                        <div className="mt-1 px-2 py-1 bg-page border border-ink ">
-                          <span className="text-[8px] font-black text-ink uppercase tracking-widest">{trainData.mandatory} mandatory programme{trainData.mandatory !== 1 ? 's' : ''}</span>
-                        </div>
+                        <div className="mt-1"><Badge tone="warn">{trainData.mandatory} mandatory programme{trainData.mandatory !== 1 ? 's' : ''}</Badge></div>
                       )}
-                    </div>
+                    </dl>
                   </div>
                   {catEntries.length > 0 && (
-                    <div className="flex flex-col gap-2 pt-2 border-t border-rule">
-                      <span className="text-[9px] font-black text-muted uppercase tracking-widest">Programmes by Category</span>
-                      {catEntries.map(c => {
-                        const pct = Math.round((c._count.id / maxCat) * 100);
-                        return (
-                          <div key={c.category} className="flex flex-col gap-0.5">
-                            <div className="flex justify-between">
-                              <span className="text-[9px] font-black text-ink">{c.category}</span>
-                              <span className="text-[9px] font-black text-muted">{c._count.id}</span>
-                            </div>
-                            <div className="h-1 bg-page overflow-hidden">
-                              <div className="h-full bg-accent " style={{ width: `${pct}%` }} />
-                            </div>
-                          </div>
-                        );
-                      })}
+                    <div className="flex flex-col gap-3 pt-3 border-t border-rule">
+                      <p className="text-[12.5px] font-semibold text-muted">Programmes by category</p>
+                      {catEntries.map(c => (
+                        <BarRow key={c.category} label={c.category} value={String(c._count.id)} pct={Math.round((c._count.id / maxCat) * 100)} />
+                      ))}
                     </div>
                   )}
-                </>
+                </div>
               )}
-            </div>
+            </Card>
           </div>
         </div>
       </div>
@@ -927,45 +915,43 @@ function CustomReportModal({ onClose, onToast }: { onClose: () => void; onToast:
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-      <div className="w-full max-w-lg bg-paper flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-8 py-6 border-b border-rule">
-          <div>
-            <h2 className="text-base font-black text-ink tracking-tighter">Custom Report Builder</h2>
-            <p className="eyebrow-tight mt-0.5">Pick dataset and fields → download CSV</p>
-          </div>
-          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page transition-all">✕</button>
-        </div>
-        <div className="p-8 flex flex-col gap-6">
-          <div className="flex flex-col gap-2">
-            <label className="text-[10px] font-black text-muted uppercase tracking-widest">Dataset</label>
-            <select value={dataset} onChange={e => { setDataset(e.target.value); setFields([]); }}
-              className="w-full px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent">
-              <option value="employees">Employees</option>
-              <option value="leave">Leave Applications</option>
-            </select>
-          </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-[10px] font-black text-muted uppercase tracking-widest">Fields to Include</label>
-            <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto">
-              {DATASETS[dataset].map(f => (
-                <label key={f} className={`flex items-center gap-2 px-3 py-2.5  cursor-pointer border transition-all ${fields.includes(f) ? 'bg-page border-accent text-accent' : 'bg-page border-rule text-ink hover:border-rule'}`}>
-                  <input type="checkbox" checked={fields.includes(f)} onChange={() => toggle(f)} className="w-3.5 h-3.5 accent-accent" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">{f}</span>
+    <Modal
+      open
+      onClose={onClose}
+      title="Quick custom report"
+      caption="Pick a dataset and the fields you want, then download a CSV."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button icon="download" onClick={handleRun} disabled={running || fields.length === 0} reason={!running && fields.length === 0 ? 'Pick at least one field' : undefined}>
+            {running ? 'Generating…' : `Download CSV (${fields.length} field${fields.length === 1 ? '' : 's'})`}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <Field label="Dataset">
+          <Select value={dataset} onChange={e => { setDataset(e.target.value); setFields([]); }}>
+            <option value="employees">Employees</option>
+            <option value="leave">Leave applications</option>
+          </Select>
+        </Field>
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-[12.5px] font-semibold text-muted mb-1.5">Fields to include</legend>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+            {DATASETS[dataset].map(f => {
+              const on = fields.includes(f);
+              return (
+                <label key={f} className={`flex items-center gap-2.5 px-3 py-2.5 rounded-control border cursor-pointer transition-colors ${on ? 'border-accent bg-tint' : 'border-rule bg-paper hover:border-accent'}`}>
+                  <input type="checkbox" checked={on} onChange={() => toggle(f)} className="w-4 h-4 accent-accent" />
+                  <span className="text-[13px] font-medium text-ink font-mono">{f}</span>
                 </label>
-              ))}
-            </div>
+              );
+            })}
           </div>
-        </div>
-        <div className="flex gap-3 px-8 py-5 border-t border-rule bg-page">
-          <button onClick={onClose} className="flex-1 py-3 text-[10px] font-black text-muted border border-rule hover:bg-page uppercase tracking-widest">Cancel</button>
-          <button onClick={handleRun} disabled={running || fields.length === 0}
-            className="flex-1 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent disabled:opacity-50 uppercase tracking-widest transition-all">
-            {running ? 'Generating…' : `Download CSV (${fields.length} fields)`}
-          </button>
-        </div>
+        </fieldset>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -978,8 +964,8 @@ interface CatalogField { key: string; label: string; type: string }
 interface Catalog { [ds: string]: CatalogField[] }
 
 const DS_LABELS: Record<string, string> = {
-  employees: 'Employees', payrollRuns: 'Payroll Runs',
-  leaveApplications: 'Leave Applications', attendance: 'Attendance', claims: 'Claims',
+  employees: 'Employees', payrollRuns: 'Payroll runs',
+  leaveApplications: 'Leave applications', attendance: 'Attendance', claims: 'Claims',
 };
 const FILTER_OPS_META = [
   { op: 'eq', label: '=' }, { op: 'ne', label: '≠' },
@@ -989,9 +975,17 @@ const FILTER_OPS_META = [
 ];
 const AGG_OPS_META = [
   { op: 'count', label: 'Count' }, { op: 'sum', label: 'Sum' },
-  { op: 'avg', label: 'Avg' }, { op: 'min', label: 'Min' }, { op: 'max', label: 'Max' },
+  { op: 'avg', label: 'Average' }, { op: 'min', label: 'Minimum' }, { op: 'max', label: 'Maximum' },
 ];
 function nanoid6() { return Math.random().toString(36).slice(2, 8); }
+
+function RemoveRowButton({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button type="button" onClick={onClick} aria-label={label} className="w-9 h-9 shrink-0 flex items-center justify-center rounded-control text-muted hover:bg-pill hover:text-danger">
+      <Icon name="x" size={16} />
+    </button>
+  );
+}
 
 function ReportBuilderWizard({ onClose, onSaved, onToast }: {
   onClose: () => void; onSaved: () => void; onToast: (msg: string, type: 'ok' | 'err') => void;
@@ -1072,212 +1066,205 @@ function ReportBuilderWizard({ onClose, onSaved, onToast }: {
   const canNext2 = mode === 'fields' ? selectedFields.length > 0
     : groupBy !== '' && aggregations.some(a => a.as.trim());
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-      <div className="w-full max-w-3xl bg-paper flex flex-col overflow-hidden max-h-[92vh]">
-        <div className="flex items-center justify-between px-8 py-5 border-b border-rule">
-          <div>
-            <h2 className="text-base font-black text-ink tracking-tighter">New Saved Report</h2>
-            <div className="flex items-center gap-2 mt-1.5">
-              {([1, 2, 3] as const).map(s => (
-                <div key={s} className={`h-1.5 w-12  transition-all ${s <= step ? 'bg-accent' : 'bg-rule'}`} />
-              ))}
-              <span className="text-[9px] font-black text-muted uppercase tracking-widest ml-1">Step {step} of 3</span>
-            </div>
-          </div>
-          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page">✕</button>
-        </div>
+  const nextReason = step === 1
+    ? (!canNext1 ? 'Name the report first' : undefined)
+    : (!canNext2 ? (mode === 'fields' ? 'Pick at least one field' : 'Pick a group-by field and name an aggregation') : undefined);
 
-        <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-6">
-          {step === 1 && (
-            <>
-              <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-muted uppercase tracking-widest">Report Name *</label>
-                <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Active Headcount by Department"
-                  className="px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                  <label className="text-[10px] font-black text-muted uppercase tracking-widest">Category</label>
-                  <select value={category} onChange={e => setCategory(e.target.value)}
-                    className="px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent">
-                    {['WORKFORCE', 'FINANCIAL', 'LEAVE', 'TRAINING', 'COMPLIANCE', 'CUSTOM'].map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <label className="text-[10px] font-black text-muted uppercase tracking-widest">Description</label>
-                  <input value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional"
-                    className="px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent" />
-                </div>
-              </div>
-              <div className="flex flex-col gap-3">
-                <label className="text-[10px] font-black text-muted uppercase tracking-widest">Data Source</label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {Object.entries(DS_LABELS).map(([ds, lbl]) => (
-                    <button key={ds} onClick={() => { setDataSource(ds); setSelectedFields([]); setGroupBy(''); }}
-                      className={`px-4 py-3  border-2 text-left transition-all ${dataSource === ds ? 'border-accent bg-page' : 'border-rule bg-page hover:border-rule'}`}>
-                      <p className={`text-[10px] font-black uppercase tracking-wide ${dataSource === ds ? 'text-accent' : 'text-ink'}`}>{lbl}</p>
-                      <p className="text-[8px] text-muted mt-0.5 font-bold uppercase">{(catalog[ds] || []).length || '—'} fields</p>
+  const stepState = (s: 1 | 2 | 3) => (s < step ? 'done' : s === step ? 'now' : 'todo') as 'done' | 'now' | 'todo';
+
+  return (
+    <Modal
+      open
+      size="lg"
+      onClose={onClose}
+      title="New saved report"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          {step > 1 && (
+            <Button variant="secondary" onClick={() => setStep(s => (s - 1) as 1 | 2 | 3)}>Back</Button>
+          )}
+          {step < 3 ? (
+            <Button onClick={() => setStep(s => (s + 1) as 1 | 2 | 3)} disabled={step === 1 ? !canNext1 : !canNext2} reason={nextReason}>
+              Next
+            </Button>
+          ) : (
+            <Button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save report'}</Button>
+          )}
+        </>
+      }
+    >
+      <div className="flex flex-col gap-5">
+        <Stepper steps={[
+          { label: 'Basics', state: stepState(1) },
+          { label: 'Columns', state: stepState(2) },
+          { label: 'Filters and order', state: stepState(3) },
+        ]} />
+
+        {step === 1 && (
+          <>
+            <Field label="Report name" required>
+              <Input value={name} onChange={e => setName(e.target.value)} placeholder="Active headcount by department" />
+            </Field>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Category">
+                <Select value={category} onChange={e => setCategory(e.target.value)}>
+                  {['WORKFORCE', 'FINANCIAL', 'LEAVE', 'TRAINING', 'COMPLIANCE', 'CUSTOM'].map(c => (
+                    <option key={c} value={c}>{sentence(c)}</option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Description" help="Optional.">
+                <Input value={description} onChange={e => setDescription(e.target.value)} />
+              </Field>
+            </div>
+            <fieldset>
+              <legend className="text-[12.5px] font-semibold text-muted mb-2">Data source</legend>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {Object.entries(DS_LABELS).map(([ds, lbl]) => {
+                  const on = dataSource === ds;
+                  return (
+                    <button key={ds} type="button" aria-pressed={on} onClick={() => { setDataSource(ds); setSelectedFields([]); setGroupBy(''); }}
+                      className={`px-3.5 py-3 rounded-control border text-left transition-colors ${on ? 'border-accent bg-tint' : 'border-rule bg-paper hover:border-accent'}`}>
+                      <p className={`text-sm font-semibold ${on ? 'text-accent' : 'text-ink'}`}>{lbl}</p>
+                      <p className="text-xs text-muted mt-0.5 tabular-nums">{(catalog[ds] || []).length || '—'} fields</p>
                     </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+          </>
+        )}
+
+        {step === 2 && (
+          <>
+            <div role="radiogroup" aria-label="Report shape" className="grid grid-cols-2 gap-2.5">
+              {(['fields', 'grouped'] as ReportMode[]).map(m => {
+                const on = mode === m;
+                return (
+                  <button key={m} type="button" role="radio" aria-checked={on} onClick={() => setMode(m)}
+                    className={`px-3.5 py-3 rounded-control border text-left transition-colors ${on ? 'border-accent bg-tint' : 'border-rule bg-paper hover:border-accent'}`}>
+                    <p className={`text-sm font-semibold ${on ? 'text-accent' : 'text-ink'}`}>{m === 'fields' ? 'List of rows' : 'Grouped summary'}</p>
+                    <p className="text-xs text-muted mt-0.5">{m === 'fields' ? 'One row per record, the columns you pick.' : 'One row per group, with counts or totals.'}</p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {mode === 'fields' && (
+              <fieldset>
+                <legend className="text-[12.5px] font-semibold text-muted mb-2">Columns to include</legend>
+                {fields.length === 0 ? (
+                  <p className="text-[13px] text-muted">No fields available for this data source.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto">
+                    {fields.map(f => {
+                      const on = selectedFields.includes(f.key);
+                      return (
+                        <label key={f.key} className={`flex items-center gap-2.5 px-3 py-2.5 rounded-control border cursor-pointer transition-colors ${on ? 'border-accent bg-tint' : 'border-rule bg-paper hover:border-accent'}`}>
+                          <input type="checkbox" checked={on} onChange={() => toggleField(f.key)} className="w-4 h-4 accent-accent" />
+                          <span className="min-w-0">
+                            <span className="text-[13px] font-semibold text-ink block truncate">{f.label}</span>
+                            <span className="text-xs text-muted">{f.type}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </fieldset>
+            )}
+
+            {mode === 'grouped' && (
+              <>
+                <Field label="Group by">
+                  <Select value={groupBy} onChange={e => setGroupBy(e.target.value)}>
+                    <option value="">Pick a field</option>
+                    {fields.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                  </Select>
+                </Field>
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[12.5px] font-semibold text-muted">Aggregations</p>
+                    <Button size="sm" variant="ghost" icon="plus" onClick={() => setAggregations(p => [...p, { id: nanoid6(), field: '', op: 'count', as: '' }])}>Add</Button>
+                  </div>
+                  {aggregations.map((agg, i) => (
+                    <div key={agg.id} className="grid grid-cols-[110px_minmax(0,1fr)_auto] sm:grid-cols-[120px_minmax(0,1fr)_auto_120px_auto] gap-2 items-center">
+                      <Select aria-label="Aggregation" value={agg.op} onChange={e => setAggregations(p => p.map((a, j) => j === i ? { ...a, op: e.target.value } : a))}>
+                        {AGG_OPS_META.map(o => <option key={o.op} value={o.op}>{o.label}</option>)}
+                      </Select>
+                      <Select aria-label="Field" value={agg.field} onChange={e => setAggregations(p => p.map((a, j) => j === i ? { ...a, field: e.target.value } : a))}
+                        disabled={agg.op === 'count'}>
+                        <option value="">{agg.op === 'count' ? 'All rows' : 'A number field'}</option>
+                        {fields.filter(f => f.type === 'number').map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                      </Select>
+                      <span className="hidden sm:inline text-[13px] text-muted">as</span>
+                      <Input aria-label="Column name" value={agg.as} onChange={e => setAggregations(p => p.map((a, j) => j === i ? { ...a, as: e.target.value } : a))}
+                        placeholder="Column name" className="col-span-2 sm:col-span-1" />
+                      {aggregations.length > 1 ? (
+                        <RemoveRowButton label="Remove aggregation" onClick={() => setAggregations(p => p.filter((_, j) => j !== i))} />
+                      ) : <span className="w-9" />}
+                    </div>
                   ))}
                 </div>
+              </>
+            )}
+          </>
+        )}
+
+        {step === 3 && (
+          <>
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <p className="text-[12.5px] font-semibold text-muted">Filters <span className="font-normal">(optional)</span></p>
+                <Button size="sm" variant="ghost" icon="plus" onClick={() => setFilters(p => [...p, { id: nanoid6(), field: fields[0]?.key || '', op: 'eq', value: '' }])}>Add filter</Button>
               </div>
-            </>
-          )}
-
-          {step === 2 && (
-            <>
-              <div className="flex gap-3">
-                {(['fields', 'grouped'] as ReportMode[]).map(m => (
-                  <button key={m} onClick={() => setMode(m)}
-                    className={`flex-1 py-3  border-2 font-black text-[10px] uppercase tracking-widest transition-all ${mode === m ? 'border-accent bg-page text-accent' : 'border-rule text-muted hover:border-rule'}`}>
-                    {m === 'fields' ? 'Field List (rows)' : 'Grouped Summary'}
-                  </button>
-                ))}
-              </div>
-
-              {mode === 'fields' && (
-                <>
-                  <p className="text-[10px] font-bold text-muted -mt-2">Select the columns to include. No aggregation applied.</p>
-                  <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
-                    {fields.map(f => (
-                      <label key={f.key} className={`flex items-center gap-2.5 px-3 py-2.5  cursor-pointer border transition-all ${selectedFields.includes(f.key) ? 'bg-page border-accent text-accent' : 'bg-page border-rule text-ink hover:border-rule'}`}>
-                        <input type="checkbox" checked={selectedFields.includes(f.key)} onChange={() => toggleField(f.key)} className="w-3.5 h-3.5 accent-accent" />
-                        <div className="min-w-0">
-                          <span className="text-[10px] font-black uppercase tracking-widest block truncate">{f.label}</span>
-                          <span className="text-[8px] font-bold text-muted uppercase">{f.type}</span>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </>
-              )}
-
-              {mode === 'grouped' && (
-                <>
-                  <p className="text-[10px] font-bold text-muted -mt-2">Group by a single field and compute aggregations per group.</p>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-[10px] font-black text-muted uppercase tracking-widest">Group By</label>
-                    <select value={groupBy} onChange={e => setGroupBy(e.target.value)}
-                      className="px-4 py-3 bg-page border border-rule text-sm font-bold text-ink outline-none focus:border-accent">
-                      <option value="">— pick a field —</option>
-                      {fields.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-black text-muted uppercase tracking-widest">Aggregations</label>
-                      <button onClick={() => setAggregations(p => [...p, { id: nanoid6(), field: '', op: 'count', as: '' }])}
-                        className="text-[9px] font-black text-accent hover:text-accent uppercase tracking-widest">+ Add</button>
-                    </div>
-                    {aggregations.map((agg, i) => (
-                      <div key={agg.id} className="flex gap-2 items-center">
-                        <select value={agg.op} onChange={e => setAggregations(p => p.map((a, j) => j === i ? { ...a, op: e.target.value } : a))}
-                          className="w-20 px-2 py-2 bg-page border border-rule text-[10px] font-black text-ink outline-none focus:border-accent">
-                          {AGG_OPS_META.map(o => <option key={o.op} value={o.op}>{o.label}</option>)}
-                        </select>
-                        <select value={agg.field} onChange={e => setAggregations(p => p.map((a, j) => j === i ? { ...a, field: e.target.value } : a))}
-                          disabled={agg.op === 'count'}
-                          className="flex-1 px-2 py-2 bg-page border border-rule text-[10px] font-black text-ink outline-none focus:border-accent disabled:opacity-50">
-                          <option value="">{agg.op === 'count' ? '(all rows)' : '— numeric field —'}</option>
-                          {fields.filter(f => f.type === 'number').map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
-                        </select>
-                        <span className="text-[9px] font-black text-muted">AS</span>
-                        <input value={agg.as} onChange={e => setAggregations(p => p.map((a, j) => j === i ? { ...a, as: e.target.value } : a))}
-                          placeholder="alias"
-                          className="w-20 px-2 py-2 bg-page border border-rule text-[10px] font-bold text-ink outline-none focus:border-accent" />
-                        {aggregations.length > 1 && (
-                          <button onClick={() => setAggregations(p => p.filter((_, j) => j !== i))} className="text-ink hover:text-ink text-xs font-black">✕</button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </>
-          )}
-
-          {step === 3 && (
-            <>
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-black text-muted uppercase tracking-widest">Filters (optional)</label>
-                  <button onClick={() => setFilters(p => [...p, { id: nanoid6(), field: fields[0]?.key || '', op: 'eq', value: '' }])}
-                    className="text-[9px] font-black text-accent hover:text-accent uppercase tracking-widest">+ Add Filter</button>
+              {filters.length === 0 && <p className="text-[13px] text-muted">No filters, so every row is included.</p>}
+              {filters.map((f, i) => (
+                <div key={f.id} className="grid grid-cols-[minmax(0,1fr)_110px_auto] sm:grid-cols-[minmax(0,1fr)_120px_minmax(0,1fr)_auto] gap-2 items-center">
+                  <Select aria-label="Filter field" value={f.field} onChange={e => setFilters(p => p.map((r, j) => j === i ? { ...r, field: e.target.value } : r))}>
+                    {fields.map(fd => <option key={fd.key} value={fd.key}>{fd.label}</option>)}
+                  </Select>
+                  <Select aria-label="Operator" value={f.op} onChange={e => setFilters(p => p.map((r, j) => j === i ? { ...r, op: e.target.value } : r))}>
+                    {FILTER_OPS_META.map(o => <option key={o.op} value={o.op}>{o.label}</option>)}
+                  </Select>
+                  <Input aria-label="Value" value={f.value} onChange={e => setFilters(p => p.map((r, j) => j === i ? { ...r, value: e.target.value } : r))}
+                    placeholder={f.op === 'in' ? 'value1, value2' : 'Value'} className="col-span-2 sm:col-span-1 order-last sm:order-none" />
+                  <RemoveRowButton label="Remove filter" onClick={() => setFilters(p => p.filter((_, j) => j !== i))} />
                 </div>
-                {filters.length === 0 && <p className="text-[10px] text-muted font-bold">No filters — returns all rows.</p>}
-                {filters.map((f, i) => (
-                  <div key={f.id} className="flex gap-2 items-center">
-                    <select value={f.field} onChange={e => setFilters(p => p.map((r, j) => j === i ? { ...r, field: e.target.value } : r))}
-                      className="flex-1 px-2 py-2 bg-page border border-rule text-[10px] font-black text-ink outline-none focus:border-accent">
-                      {fields.map(fd => <option key={fd.key} value={fd.key}>{fd.label}</option>)}
-                    </select>
-                    <select value={f.op} onChange={e => setFilters(p => p.map((r, j) => j === i ? { ...r, op: e.target.value } : r))}
-                      className="w-24 px-2 py-2 bg-page border border-rule text-[10px] font-black text-ink outline-none focus:border-accent">
-                      {FILTER_OPS_META.map(o => <option key={o.op} value={o.op}>{o.label}</option>)}
-                    </select>
-                    <input value={f.value} onChange={e => setFilters(p => p.map((r, j) => j === i ? { ...r, value: e.target.value } : r))}
-                      placeholder={f.op === 'in' ? 'val1,val2' : 'value'}
-                      className="flex-1 px-2 py-2 bg-page border border-rule text-[10px] font-bold text-ink outline-none focus:border-accent" />
-                    <button onClick={() => setFilters(p => p.filter((_, j) => j !== i))} className="text-ink hover:text-ink text-xs font-black">✕</button>
-                  </div>
-                ))}
-              </div>
+              ))}
+            </div>
 
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-black text-muted uppercase tracking-widest">Sort Order (optional)</label>
-                  <button onClick={() => setSortBy(p => [...p, { id: nanoid6(), field: fields[0]?.key || '', dir: 'asc' }])}
-                    className="text-[9px] font-black text-accent hover:text-accent uppercase tracking-widest">+ Add Sort</button>
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <p className="text-[12.5px] font-semibold text-muted">Sort order <span className="font-normal">(optional)</span></p>
+                <Button size="sm" variant="ghost" icon="plus" onClick={() => setSortBy(p => [...p, { id: nanoid6(), field: fields[0]?.key || '', dir: 'asc' }])}>Add sort</Button>
+              </div>
+              {sortBy.map((s, i) => (
+                <div key={s.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2 items-center">
+                  <Select aria-label="Sort field" value={s.field} onChange={e => setSortBy(p => p.map((r, j) => j === i ? { ...r, field: e.target.value } : r))}>
+                    {fields.map(fd => <option key={fd.key} value={fd.key}>{fd.label}</option>)}
+                  </Select>
+                  <Button variant="secondary" onClick={() => setSortBy(p => p.map((r, j) => j === i ? { ...r, dir: r.dir === 'asc' ? 'desc' : 'asc' } : r))}
+                    aria-label={`Sort ${s.dir === 'asc' ? 'ascending' : 'descending'} — select to switch`}>
+                    <Icon name="chevronDown" size={15} className={s.dir === 'asc' ? 'rotate-180' : ''} />
+                    {s.dir === 'asc' ? 'Ascending' : 'Descending'}
+                  </Button>
+                  <RemoveRowButton label="Remove sort" onClick={() => setSortBy(p => p.filter((_, j) => j !== i))} />
                 </div>
-                {sortBy.map((s, i) => (
-                  <div key={s.id} className="flex gap-2 items-center">
-                    <select value={s.field} onChange={e => setSortBy(p => p.map((r, j) => j === i ? { ...r, field: e.target.value } : r))}
-                      className="flex-1 px-2 py-2 bg-page border border-rule text-[10px] font-black text-ink outline-none focus:border-accent">
-                      {fields.map(fd => <option key={fd.key} value={fd.key}>{fd.label}</option>)}
-                    </select>
-                    <button onClick={() => setSortBy(p => p.map((r, j) => j === i ? { ...r, dir: r.dir === 'asc' ? 'desc' : 'asc' } : r))}
-                      className={`px-3 py-2  border text-[9px] font-black uppercase tracking-widest transition-all ${s.dir === 'asc' ? 'bg-page border-accent text-accent' : 'bg-page border-accent text-accent'}`}>
-                      {s.dir === 'asc' ? '↑ ASC' : '↓ DESC'}
-                    </button>
-                    <button onClick={() => setSortBy(p => p.filter((_, j) => j !== i))} className="text-ink hover:text-ink text-xs font-black">✕</button>
-                  </div>
-                ))}
-              </div>
+              ))}
+            </div>
 
-              <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-muted uppercase tracking-widest">Definition Preview</label>
-                <pre className="p-4 bg-shadow text-accent text-[9px] font-mono overflow-auto max-h-40 leading-relaxed">
-                  {JSON.stringify(buildDefinition(), null, 2)}
-                </pre>
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="flex gap-3 px-8 py-5 border-t border-rule bg-page flex-shrink-0">
-          <button onClick={onClose} className="px-6 py-3 text-[10px] font-black text-muted border border-rule hover:bg-page uppercase tracking-widest">Cancel</button>
-          {step > 1 && (
-            <button onClick={() => setStep(s => (s - 1) as 1 | 2 | 3)}
-              className="px-6 py-3 text-[10px] font-black text-ink border border-rule hover:bg-page uppercase tracking-widest">← Back</button>
-          )}
-          <div className="flex-1" />
-          {step < 3 ? (
-            <button onClick={() => setStep(s => (s + 1) as 1 | 2 | 3)} disabled={step === 1 ? !canNext1 : !canNext2}
-              className="px-8 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent disabled:opacity-40 uppercase tracking-widest transition-all">
-              Next →
-            </button>
-          ) : (
-            <button onClick={save} disabled={saving}
-              className="px-8 py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent disabled:opacity-50 uppercase tracking-widest transition-all">
-              {saving ? 'Saving…' : 'Save Report'}
-            </button>
-          )}
-        </div>
+            <div className="flex flex-col gap-2">
+              <p className="text-[12.5px] font-semibold text-muted">Definition preview</p>
+              <pre className="px-4 py-3 rounded-control bg-page border border-rule text-ink text-xs font-mono overflow-auto max-h-44 leading-relaxed">
+                {JSON.stringify(buildDefinition(), null, 2)}
+              </pre>
+            </div>
+          </>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -1332,69 +1319,53 @@ function ScheduleModal({ templateId, templateName, onClose, onToast }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-shadow backdrop-">
-      <div className="w-full max-w-lg bg-paper flex flex-col overflow-hidden max-h-[85vh]">
-        <div className="flex items-center justify-between px-8 py-5 border-b border-rule">
-          <div>
-            <h2 className="text-base font-black text-ink tracking-tighter">Scheduled Delivery</h2>
-            <p className="eyebrow-tight mt-0.5">{templateName}</p>
-          </div>
-          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-muted hover:text-ink hover:bg-page">✕</button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-5">
-          <div className="flex flex-col gap-2">
-            <label className="text-[10px] font-black text-muted uppercase tracking-widest">Active Schedules</label>
-            {loading ? <div className="h-10 bg-page animate-pulse" />
-              : schedules.length === 0 ? <p className="text-[10px] font-bold text-muted">No schedules yet.</p>
-              : schedules.map(s => (
-                <div key={s.id} className="flex items-center justify-between px-4 py-3 bg-page border border-rule ">
-                  <div className="flex flex-col gap-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[8px] font-black px-2 py-0.5  border uppercase tracking-widest ${s.isActive ? 'bg-page text-accent border-accent' : 'bg-page text-muted border-rule'}`}>{s.isActive ? 'Active' : 'Paused'}</span>
-                      <span className="text-[10px] font-black text-ink">{s.frequency}</span>
-                      <span className="text-[9px] font-black px-2 py-0.5 bg-page text-accent border border-accent uppercase">{s.format}</span>
-                    </div>
-                    <span className="text-[9px] text-muted font-bold truncate max-w-xs">{s.recipients}</span>
+    <Modal open onClose={onClose} title="Scheduled delivery" caption={templateName}>
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-2">
+          <p className="text-[12.5px] font-semibold text-muted">Schedules</p>
+          {loading ? <div className="h-14 rounded-control bg-pill animate-pulse" />
+            : schedules.length === 0 ? <p className="text-[13px] text-muted">No schedules yet. Add one below.</p>
+            : schedules.map(s => (
+              <div key={s.id} className="flex items-center justify-between gap-3 px-3.5 py-3 rounded-control border border-rule bg-page">
+                <div className="flex flex-col gap-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={s.isActive ? 'ok' : 'neutral'}>{s.isActive ? 'Active' : 'Paused'}</Badge>
+                    <span className="text-[13px] font-semibold text-ink">{sentence(s.frequency || '')}</span>
+                    <Badge tone="neutral">{s.format}</Badge>
                   </div>
-                  <button onClick={() => remove(s.id)} disabled={deleting === s.id}
-                    className="text-[9px] font-black text-ink hover:text-ink disabled:opacity-50 uppercase tracking-widest ml-4">
-                    {deleting === s.id ? '…' : 'Delete'}
-                  </button>
+                  <span className="text-xs text-muted truncate max-w-xs">{s.recipients}</span>
                 </div>
-              ))}
+                <Button size="sm" variant="danger" onClick={() => remove(s.id)} disabled={deleting === s.id}>
+                  {deleting === s.id ? 'Deleting…' : 'Delete'}
+                </Button>
+              </div>
+            ))}
+        </div>
+        <div className="flex flex-col gap-3 pt-4 border-t border-rule">
+          <p className="text-[15px] font-bold text-ink">Add a schedule</p>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Frequency">
+              <Select value={freq} onChange={e => setFreq(e.target.value)}>
+                {['DAILY', 'WEEKLY', 'MONTHLY'].map(f => <option key={f} value={f}>{sentence(f)}</option>)}
+              </Select>
+            </Field>
+            <Field label="Format">
+              <Select value={format} onChange={e => setFormat(e.target.value)}>
+                {['CSV', 'XLSX', 'PDF'].map(f => <option key={f} value={f}>{f}</option>)}
+              </Select>
+            </Field>
           </div>
-          <div className="border-t border-rule pt-4 flex flex-col gap-3">
-            <label className="text-[10px] font-black text-muted uppercase tracking-widest">Create New Schedule</label>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Frequency</label>
-                <select value={freq} onChange={e => setFreq(e.target.value)}
-                  className="px-3 py-2.5 bg-page border border-rule text-[10px] font-black text-ink outline-none focus:border-accent">
-                  {['DAILY', 'WEEKLY', 'MONTHLY'].map(f => <option key={f} value={f}>{f}</option>)}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-black text-muted uppercase tracking-widest">Format</label>
-                <select value={format} onChange={e => setFormat(e.target.value)}
-                  className="px-3 py-2.5 bg-page border border-rule text-[10px] font-black text-ink outline-none focus:border-accent">
-                  {['CSV', 'XLSX', 'PDF'].map(f => <option key={f} value={f}>{f}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[9px] font-black text-muted uppercase tracking-widest">Recipients (comma-separated)</label>
-              <input value={recipients} onChange={e => setRecipients(e.target.value)}
-                placeholder="hr@company.com, finance@company.com"
-                className="px-3 py-2.5 bg-page border border-rule text-[10px] font-bold text-ink outline-none focus:border-accent" />
-            </div>
-            <button onClick={create} disabled={creating || !recipients.trim()}
-              className="py-3 text-[10px] font-black text-paper bg-accent hover:bg-accent disabled:opacity-50 uppercase tracking-widest transition-all">
-              {creating ? 'Creating…' : 'Create Schedule'}
-            </button>
+          <Field label="Recipients" help="Email addresses, separated by commas.">
+            <Input value={recipients} onChange={e => setRecipients(e.target.value)} placeholder="hr@company.com, finance@company.com" />
+          </Field>
+          <div className="flex justify-end">
+            <Button icon="mail" onClick={create} disabled={creating || !recipients.trim()} reason={!creating && !recipients.trim() ? 'Add a recipient email' : undefined}>
+              {creating ? 'Creating…' : 'Create schedule'}
+            </Button>
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -1461,91 +1432,75 @@ function SavedReportsSection({ onToast }: { onToast: (msg: string, type: 'ok' | 
     } finally { setBusy(null); }
   }
 
-  return (
-    <section className="bg-paper border border-rule overflow-hidden">
-      <div className="p-8 border-b border-rule flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-2 h-8 bg-accent " />
-          <div>
-            <h3 className="text-lg font-black text-ink uppercase tracking-widest">Saved Reports</h3>
-            <p className="eyebrow-tight mt-1">User-defined templates · run, export, schedule</p>
-          </div>
+  const actions = (t: SavedTemplate) => (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Button size="sm" variant="secondary" onClick={() => run(t)} disabled={busy === `run-${t.id}`}>{busy === `run-${t.id}` ? 'Running…' : 'Run'}</Button>
+      {(['csv', 'xlsx', 'pdf'] as const).map(fmt => (
+        <Button key={fmt} size="sm" variant="ghost" onClick={() => exportFormat(t, fmt)} disabled={busy === `${fmt}-${t.id}`} aria-label={`Download ${t.name} as ${fmt.toUpperCase()}`}>
+          {busy === `${fmt}-${t.id}` ? '…' : fmt.toUpperCase()}
+        </Button>
+      ))}
+      <Button size="sm" variant="ghost" onClick={() => setScheduleModal({ id: t.id, name: t.name })}>Schedule</Button>
+      <Button size="sm" variant="danger" onClick={() => remove(t)} disabled={busy === `del-${t.id}`}>{busy === `del-${t.id}` ? 'Deleting…' : 'Delete'}</Button>
+    </div>
+  );
+
+  const columns: Column<SavedTemplate>[] = [
+    {
+      key: 'name', label: 'Report', width: 'minmax(0, 1.6fr)',
+      render: t => (
+        <div className="flex flex-col min-w-0">
+          <span className="font-semibold text-ink truncate">{t.name}</span>
+          {t.description && <span className="text-xs text-muted truncate">{t.description}</span>}
         </div>
-        <button onClick={() => setEditorOpen(true)}
-          className="px-6 py-2.5 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95">
-          + New Report
-        </button>
+      ),
+    },
+    { key: 'source', label: 'Data source', width: '140px', render: t => <span className="text-muted">{DS_LABELS[t.definition?.dataSource] ?? t.definition?.dataSource ?? '—'}</span> },
+    { key: 'category', label: 'Category', width: '120px', render: t => <Badge tone="neutral">{t.category ? sentence(t.category) : 'Custom'}</Badge> },
+    { key: 'updated', label: 'Updated', width: '100px', numeric: true, render: t => new Date(t.updatedAt).toLocaleDateString('en-SG') },
+    { key: 'actions', label: <span className="sr-only">Actions</span>, width: '400px', render: actions },
+  ];
+
+  return (
+    <section className="flex flex-col gap-3" aria-labelledby="saved-reports-h">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 id="saved-reports-h" className="text-[18px] font-bold text-ink">Saved reports</h2>
+          <p className="text-[13px] text-muted mt-0.5">Reports you have built. Run them, export them, or have them emailed on a schedule.</p>
+        </div>
+        <Button variant="secondary" icon="plus" onClick={() => setEditorOpen(true)}>New saved report</Button>
       </div>
-      <div className="overflow-x-auto">
-        {loading ? (
-          <div className="p-8 text-center text-[10px] font-black text-muted uppercase tracking-widest">Loading…</div>
-        ) : templates.length === 0 ? (
-          <div className="p-12 text-center">
-            <p className="text-sm font-bold text-muted">No saved reports yet. Click <span className="text-accent">+ New Report</span> to create one.</p>
-          </div>
-        ) : (
-          <table className="w-full text-left border-collapse">
-            <thead className="text-[10px] font-black text-muted uppercase tracking-[0.2em] border-b border-rule">
-              <tr>
-                <th className="px-8 py-5">Name</th>
-                <th className="px-8 py-5">Data Source</th>
-                <th className="px-8 py-5">Category</th>
-                <th className="px-8 py-5">Updated</th>
-                <th className="px-8 py-5 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-rule">
-              {templates.map(t => (
-                <tr key={t.id} className="hover:bg-page transition-all">
-                  <td className="px-8 py-5">
-                    <div className="flex flex-col">
-                      <span className="text-xs font-black text-ink uppercase tracking-tight">{t.name}</span>
-                      {t.description && <span className="text-[10px] text-muted mt-0.5">{t.description}</span>}
-                    </div>
-                  </td>
-                  <td className="px-8 py-5">
-                    <span className="text-[10px] font-black text-muted uppercase tracking-widest">{t.definition?.dataSource || '—'}</span>
-                  </td>
-                  <td className="px-8 py-5">
-                    <span className="text-[9px] font-black px-3 py-1.5 border bg-page text-accent border-accent uppercase tracking-widest">{t.category || 'Custom'}</span>
-                  </td>
-                  <td className="px-8 py-5">
-                    <span className="eyebrow-tight">{new Date(t.updatedAt).toLocaleDateString('en-SG')}</span>
-                  </td>
-                  <td className="px-8 py-5">
-                    <div className="flex gap-1.5 justify-center flex-wrap">
-                      <button onClick={() => run(t)} disabled={busy === `run-${t.id}`}
-                        className="px-3 py-1.5 bg-paper border border-rule text-[9px] font-black text-ink hover:border-accent hover:text-accent uppercase tracking-widest disabled:opacity-50">
-                        {busy === `run-${t.id}` ? '…' : 'Run'}
-                      </button>
-                      <button onClick={() => exportFormat(t, 'csv')} disabled={busy === `csv-${t.id}`}
-                        className="px-3 py-1.5 bg-paper border border-rule text-[9px] font-black text-ink hover:border-accent hover:text-accent uppercase tracking-widest disabled:opacity-50">
-                        {busy === `csv-${t.id}` ? '…' : 'CSV'}
-                      </button>
-                      <button onClick={() => exportFormat(t, 'xlsx')} disabled={busy === `xlsx-${t.id}`}
-                        className="px-3 py-1.5 bg-paper border border-rule text-[9px] font-black text-ink hover:border-accent hover:text-accent uppercase tracking-widest disabled:opacity-50">
-                        {busy === `xlsx-${t.id}` ? '…' : 'XLSX'}
-                      </button>
-                      <button onClick={() => exportFormat(t, 'pdf')} disabled={busy === `pdf-${t.id}`}
-                        className="px-3 py-1.5 bg-paper border border-rule text-[9px] font-black text-ink hover:border-ink hover:text-ink uppercase tracking-widest disabled:opacity-50">
-                        {busy === `pdf-${t.id}` ? '…' : 'PDF'}
-                      </button>
-                      <button onClick={() => setScheduleModal({ id: t.id, name: t.name })}
-                        className="px-3 py-1.5 bg-paper border border-rule text-[9px] font-black text-ink hover:border-highlight hover:text-ink uppercase tracking-widest">
-                        Sched
-                      </button>
-                      <button onClick={() => remove(t)} disabled={busy === `del-${t.id}`}
-                        className="px-3 py-1.5 bg-paper border border-rule text-[9px] font-black text-ink hover:border-ink hover:bg-page uppercase tracking-widest disabled:opacity-50">
-                        {busy === `del-${t.id}` ? '…' : 'Del'}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+
+      {loading ? (
+        <Card padding="p-0"><Spinner label="Loading saved reports" /></Card>
+      ) : (
+        <DataTable
+          aria-label="Saved reports"
+          columns={columns}
+          rows={templates}
+          rowKey={t => t.id}
+          rowHeight={60}
+          mobileCard={t => (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-start justify-between gap-3">
+                <span className="font-semibold text-ink">{t.name}</span>
+                <Badge tone="neutral">{t.category ? sentence(t.category) : 'Custom'}</Badge>
+              </div>
+              <p className="text-[13px] text-muted">{DS_LABELS[t.definition?.dataSource] ?? t.definition?.dataSource ?? '—'} · updated {new Date(t.updatedAt).toLocaleDateString('en-SG')}</p>
+              {actions(t)}
+            </div>
+          )}
+          empty={
+            <EmptyState
+              icon="file"
+              title="No saved reports yet"
+              description="Build a report once and run it whenever you need it, or schedule it."
+              action={<Button variant="secondary" icon="plus" onClick={() => setEditorOpen(true)}>New saved report</Button>}
+            />
+          }
+        />
+      )}
+
       {editorOpen && (
         <ReportBuilderWizard
           onClose={() => setEditorOpen(false)}
@@ -1568,10 +1523,11 @@ function SavedReportsSection({ onToast }: { onToast: (msg: string, type: 'ok' | 
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function ReportsPage() {
+  const { toast } = useToast();
   const [running, setRunning] = useState<ReportKey | null>(null);
   const [lastRun, setLastRun] = useState<Record<string, string>>({});
   const [rptSort, setRptSort] = useState<{ col: 'name' | 'category' | 'freq'; dir: 'asc' | 'desc' }>({ col: 'category', dir: 'asc' });
-  const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  const [catFilter, setCatFilter] = useState<string>('all');
   const [runSelector, setRunSelector] = useState<{ key: ReportKey; title: string } | null>(null);
   const [customOpen, setCustomOpen] = useState(false);
   const [leaveLiabilityOpen, setLeaveLiabilityOpen] = useState(false);
@@ -1579,7 +1535,8 @@ export default function ReportsPage() {
   const [breakdownModal, setBreakdownModal] = useState<{ runId: string; period: string } | null>(null);
   const [workforceDashOpen, setWorkforceDashOpen] = useState(false);
 
-  const showToast = (msg: string, type: 'ok' | 'err') => setToast({ msg, type });
+  // Same messages as before; they now go through the shared toast (root layout).
+  const showToast = (msg: string, type: 'ok' | 'err') => toast(msg, type === 'ok' ? 'ok' : 'danger');
 
   const execute = async (key: ReportKey, runId?: string, period?: string) => {
     if (key === 'payroll-breakdown') {
@@ -1628,117 +1585,78 @@ export default function ReportsPage() {
   function toggleRptSort(col: typeof rptSort.col) {
     setRptSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
   }
-  function RptSortIcon({ col }: { col: typeof rptSort.col }) {
-    return <span className="text-[8px] ml-1">{rptSort.col === col ? (rptSort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>;
-  }
+
+  const visibleReports = catFilter === 'all' ? sortedReports : sortedReports.filter(r => r.category === catFilter);
 
   return (
-    <div className="flex flex-col gap-10 max-w-[1400px] mx-auto pb-20 animate-in fade-in duration-700">
+    <div className="flex flex-col gap-6 pb-10">
+      <PageHeader
+        title="Reports"
+        subtitle="Statutory filings for MOM, IRAS and the CPF Board, workforce analytics, and reports you build yourself."
+        actions={<Button icon="plus" onClick={() => setCustomOpen(true)}>Quick custom report</Button>}
+      />
 
-      {/* Header */}
-      <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6 bg-paper p-10 border border-rule relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-40 h-40 bg-accent " />
-        <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-2 h-2 bg-accent " />
-            <span className="text-[10px] font-black text-accent uppercase tracking-[0.4em]">Compliance Intelligence Layer</span>
-          </div>
-          <h1 className="text-4xl font-black text-ink tracking-tighter">Reports <span className="text-accent">&amp; Analytics</span></h1>
-          <p className="text-sm font-bold text-muted mt-2 uppercase tracking-widest max-w-xl">
-            Statutory filings, workforce analytics, and custom report generation for MOM, IRAS, and CPF Board compliance.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-4 relative z-10">
-          <button onClick={() => setCustomOpen(true)}
-            className="px-8 py-4 bg-accent text-paper text-[10px] font-black uppercase tracking-widest hover:bg-accent transition-all active:scale-95">
-            + Custom Report
-          </button>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Stat label="Reports available" value={REPORTS.length} />
+        <Stat label="Statutory" value={REPORTS.filter(r => r.category === 'Statutory').length} note="MOM, IRAS and CPF filings" />
+        <Stat label="Financial" value={REPORTS.filter(r => r.category === 'Financial').length} />
+        <Stat label="Run this session" value={Object.keys(lastRun).length} />
       </div>
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
-          { label: 'Reports Available', value: String(REPORTS.length), status: 'text-ink', bg: 'bg-paper border-rule' },
-          { label: 'Statutory Reports', value: String(REPORTS.filter(r => r.category === 'Statutory').length), status: 'text-ink', bg: 'bg-page border-ink' },
-          { label: 'Financial Reports', value: String(REPORTS.filter(r => r.category === 'Financial').length), status: 'text-accent', bg: 'bg-page border-accent' },
-          { label: 'Runs This Session', value: String(Object.keys(lastRun).length), status: 'text-accent', bg: 'bg-page border-accent' },
-        ].map(s => (
-          <div key={s.label} className={`p-8  border   ${s.bg}`}>
-            <p className="label-form mb-4">{s.label}</p>
-            <h3 className={`text-3xl font-black tracking-tighter ${s.status}`}>{s.value}</h3>
+      {/* Report catalogue */}
+      <section className="flex flex-col gap-3" aria-labelledby="catalogue-h">
+        <h2 id="catalogue-h" className="text-[18px] font-bold text-ink">Report catalogue</h2>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <Tabs
+            items={[
+              { id: 'all', label: 'All', count: REPORTS.length },
+              ...CATEGORIES.map(c => ({ id: c, label: c, count: REPORTS.filter(r => r.category === c).length })),
+            ]}
+            active={catFilter}
+            onChange={setCatFilter}
+            className="lg:flex-1"
+          />
+          <div className="flex items-center gap-2">
+            <Select aria-label="Sort reports by" value={rptSort.col} onChange={e => toggleRptSort(e.target.value as typeof rptSort.col)} className="w-44">
+              <option value="category">Sort by category</option>
+              <option value="name">Sort by name</option>
+              <option value="freq">Sort by frequency</option>
+            </Select>
+            <Button variant="secondary" onClick={() => toggleRptSort(rptSort.col)} aria-label={`Order: ${rptSort.dir === 'asc' ? 'A to Z' : 'Z to A'} — select to reverse`}>
+              <Icon name="chevronDown" size={15} className={rptSort.dir === 'asc' ? 'rotate-180' : ''} />
+              {rptSort.dir === 'asc' ? 'A–Z' : 'Z–A'}
+            </Button>
           </div>
-        ))}
-      </div>
-
-      {/* Reports Matrix */}
-      <section className="bg-paper border border-rule overflow-hidden">
-        <div className="p-8 border-b border-rule flex items-center gap-4">
-          <div className="w-2 h-8 bg-accent " />
-          <h3 className="text-lg font-black text-ink uppercase tracking-widest">Report Registry</h3>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead className="text-[10px] font-black text-muted uppercase tracking-[0.2em] border-b border-rule">
-              <tr>
-                {([
-                  { col: 'name',     label: 'Report Name' },
-                  { col: 'category', label: 'Category' },
-                  { col: 'freq',     label: 'Frequency' },
-                ] as const).map(h => (
-                  <th key={h.col} className="px-8 py-7">
-                    <button onClick={() => toggleRptSort(h.col)} className="flex items-center hover:text-ink transition-colors">
-                      {h.label}<RptSortIcon col={h.col} />
-                    </button>
-                  </th>
-                ))}
-                <th className="px-8 py-7">Last Generated</th>
-                <th className="px-8 py-7 text-center">Generate</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-rule">
-              {sortedReports.map(r => (
-                <tr key={r.key} className="group hover:bg-page transition-all duration-300">
-                  <td className="px-8 py-5">
-                    <div className="flex items-center gap-4">
-                      <span className="text-lg text-muted group-hover:text-accent transition-colors">{r.icon}</span>
-                      <div className="flex flex-col">
-                        <span className="text-xs font-black text-ink uppercase tracking-tight group-hover:text-accent transition-colors">{r.name}</span>
-                        {r.badge && (
-                          <span className="mt-1 inline-block text-[8px] font-black px-2 py-0.5 bg-page text-accent border border-accent uppercase tracking-widest w-fit">{r.badge}</span>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-8 py-5">
-                    <span className={`text-[9px] font-black px-3 py-1.5  border uppercase tracking-widest ${CATEGORY_COLORS[r.category]}`}>{r.category}</span>
-                  </td>
-                  <td className="px-8 py-5">
-                    <span className="text-[10px] font-black text-muted uppercase tracking-widest">{r.freq}</span>
-                  </td>
-                  <td className="px-8 py-5">
-                    <span className="eyebrow-tight">
-                      {lastRun[r.key] ?? '—'}
-                    </span>
-                  </td>
-                  <td className="px-8 py-5 text-center">
-                    <button
-                      onClick={() => handleRun(r)}
-                      disabled={running === r.key}
-                      className="px-6 py-2 bg-paper border border-rule text-[9px] font-black text-muted uppercase tracking-widest hover:border-accent hover:text-accent hover:bg-page transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
-                    >
-                      {running === r.key ? (
-                        <>
-                          <span className="w-3 h-3 border-2 border-rule border-t-rule animate-spin rounded-full" />
-                          Generating…
-                        </>
-                      ) : 'Run Now'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {visibleReports.map(r => (
+            <Card key={r.key} padding="p-5" className="gap-4">
+              <div className="flex items-start gap-3.5">
+                <span className="flex items-center justify-center w-10 h-10 rounded-control bg-tint text-accent shrink-0" aria-hidden="true">
+                  <Icon name={r.icon} size={19} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-[15px] font-bold text-ink leading-snug">{r.name}</h3>
+                  <p className="text-[13px] text-muted mt-0.5">{r.category} · {r.freq}</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-3 mt-auto pt-3 border-t border-rule">
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
+                  {r.badge && <Badge tone={REPORT_BADGE_TONE[r.badge] ?? 'neutral'}>{r.badge}</Badge>}
+                  <span className="text-xs text-muted tabular-nums">{lastRun[r.key] ? `Last run ${lastRun[r.key]}` : 'Not run this session'}</span>
+                </div>
+                <Button size="sm" variant="secondary" onClick={() => handleRun(r)} disabled={running === r.key}>
+                  {running === r.key ? (
+                    <>
+                      <span className="w-3 h-3 border-2 border-rule border-t-accent animate-spin rounded-full" aria-hidden="true" />
+                      Generating…
+                    </>
+                  ) : 'Run'}
+                </Button>
+              </div>
+            </Card>
+          ))}
         </div>
       </section>
 
@@ -1795,8 +1713,6 @@ export default function ReportsPage() {
           onToast={showToast}
         />
       )}
-
-      {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }
