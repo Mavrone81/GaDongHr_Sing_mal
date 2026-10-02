@@ -113,17 +113,49 @@ describe('computeCpf — Additional Wages (AW)', () => {
   describe('B2) Annual AW ceiling carryover', () => {
     test('ytdAw reduces AW ceiling available', () => {
       // ytdAw = 95000 already used, AW = 10000, ytdOw = 0, this month OW = 5000
-      // Combined ceiling remaining = 102000 - 0 (ytdOw) - 5000 (this OW) = 97000
-      // Pure AW ceiling available = 102000 - 95000 (ytdAw) = 7000
-      // awSubjectToCpf = min(10000, min(97000, 7000)) = 7000
+      // CPF Board rule: Annual AW Ceiling = $102,000 - OW subject to CPF for
+      // the year - AW already subject to CPF for the year.
+      // Remaining = 102000 - 0 (ytdOw) - 5000 (this OW) - 95000 (ytdAw) = 2000
       const result = computeCpf({ ow: 5000, aw: 10000, ytdOw: 0, ytdAw: 95000, citizenStatus: 'SC', age: 35, rates: STD_RATES });
-      expect(result.awSubjectToCpf).toBe(7000);
+      expect(result.awSubjectToCpf).toBe(2000);
     });
 
     test('ytdAw = 102000: no more AW CPF possible', () => {
       const result = computeCpf({ ow: 5000, aw: 5000, ytdOw: 0, ytdAw: 102000, citizenStatus: 'SC', age: 35, rates: STD_RATES });
       expect(result.awSubjectToCpf).toBe(0);
       expect(result.employeeAw).toBe(0);
+    });
+
+    // B2-combined — regression test for the defect found 02 Oct 2026
+    // (STOCKTAKE): the engine used to take Math.min() of two INDEPENDENT
+    // subtractions — one netting only ytdOw+this month's OW, the other
+    // netting only ytdAw — which is correct ONLY when one of the two is
+    // zero (exactly the case every B1/B2 test above happens to exercise).
+    // Neither independent term ever subtracted BOTH, so whenever an
+    // employee had meaningful YTD OW *and* meaningful YTD AW in the same
+    // year (steady salary all year plus two bonuses), the ceiling was
+    // overstated by however much the smaller subtraction omitted.
+    //
+    // CPF Board rule, applied with pen and paper (not run through the code
+    // under test): Annual AW Ceiling = $102,000 − total OW subject to CPF
+    // for the year − total AW already subject to CPF for the year.
+    //   ytdOw = 50,000 (prior months, already CPF-subject)
+    //   this month's OW = 6,000 (under the $6,800 ceiling, so fully subject)
+    //   ytdAw = 20,000 (a mid-year bonus, already CPF-subject)
+    //   Remaining ceiling = 102,000 − 50,000 − 6,000 − 20,000 = 26,000
+    //   AW this run = 30,000 → capped to the 26,000 remaining
+    //   Employee's share = floor(26,000 × 20%) = 5,200
+    //   Total AW CPF = round(26,000 × 37%) = 9,620 → Employer's share = 9,620 − 5,200 = 4,420
+    //
+    // The pre-fix formula computed remaining = max(102000-50000-6000,0) = 46,000
+    // via one term and 102000-20000 = 82,000 via the other, took min(46000,
+    // 82000) = 46,000 — never combining both — so the full $30,000 AW would
+    // have passed through UNCAPPED (30,000 < 46,000).
+    test('B2-combined — ytdOw AND ytdAw both non-trivial: ceiling nets BOTH, not whichever subtraction is smaller', () => {
+      const result = computeCpf({ ow: 6000, aw: 30000, ytdOw: 50000, ytdAw: 20000, citizenStatus: 'SC', age: 35, rates: STD_RATES });
+      expect(result.awSubjectToCpf).toBe(26000);
+      expect(result.employeeAw).toBe(5200);
+      expect(result.employerAw).toBe(4420);
     });
   });
 });
