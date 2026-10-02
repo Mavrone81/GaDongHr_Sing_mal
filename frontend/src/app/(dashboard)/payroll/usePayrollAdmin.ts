@@ -446,10 +446,15 @@ export function usePayrollAdmin() {
 
   const actuallyCreateRun = async () => {
     // Fail closed: never let an unselected/unresolved entity reach the API as
-    // an empty string. Names the actual cause (lookup failure vs. "you haven't
-    // chosen yet") rather than surfacing the route's generic 400.
+    // an empty string. Names the actual cause — lookup failure, no entity
+    // configured at all, or just "you haven't chosen yet" — rather than
+    // surfacing the route's generic 400.
     if (!selectedLegalEntityId) {
-      handleActionToast(legalEntitiesError || 'Choose a legal entity before creating a payroll run.');
+      const cause = legalEntitiesError
+        || (legalEntities.length === 0
+          ? 'No legal entity is configured for this tenant — ask an admin to add one.'
+          : 'Choose a legal entity before creating a payroll run.');
+      handleActionToast(cause);
       return;
     }
     setIsProcessing(true);
