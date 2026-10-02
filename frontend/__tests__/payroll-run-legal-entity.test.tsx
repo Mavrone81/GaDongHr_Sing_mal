@@ -15,6 +15,7 @@
  * surfaces as the real 400, not an assertion about the request shape.
  */
 import { renderHook, act } from '@testing-library/react';
+import { apiFetch } from '@/lib/api';
 import { usePayrollAdmin } from '@/app/(dashboard)/payroll/usePayrollAdmin';
 
 const ENTITY_REQUIRED_ERROR = 'legalEntityId is required to create a payroll run';
@@ -59,5 +60,49 @@ describe('A1) payroll run creation sends legalEntityId', () => {
     expect(result.current.actionToast).not.toBe(ENTITY_REQUIRED_ERROR);
     expect(result.current.reviewRunData).not.toBeNull();
     expect(result.current.reviewRunData?.id).toBe('run-new');
+  });
+});
+
+/**
+ * DevLead review (2026-10-02): the first version of the fix pre-selected an
+ * entity whenever none was marked primary (`?? list[0]`), which on a
+ * multi-entity tenant would silently book a run against an arbitrary entity —
+ * worse than the 400 it replaced, since a wrong-entity run is a cross-country
+ * statutory error (Architect confirmed `/payroll-data` is not entity-filtered)
+ * that nobody sees, instead of a visible failure.
+ *
+ * This locks in the fail-closed replacement: with more than one entity and no
+ * explicit choice, the run must not be created and the request must never even
+ * be sent. Only added once the fix exists — it is a new fail-closed guard this
+ * test backs, not a restatement of the original pre-fix/post-fix case above.
+ */
+describe('A1) payroll run creation — multi-entity fails closed', () => {
+  test('with two legal entities and no explicit choice, the run is NOT created and no request is sent', async () => {
+    const SG = { id: 'ent-sg', name: 'GadongHR Pte Ltd', code: 'SG-01', country: 'SG', currency: 'SGD', isPrimary: true, isActive: true };
+    const MY = { id: 'ent-my', name: 'GadongHR Sdn Bhd', code: 'MY-01', country: 'MY', currency: 'MYR', isPrimary: false, isActive: true };
+
+    (apiFetch as jest.Mock).mockImplementation((path: string, opts?: any) => {
+      if (path === '/payroll/runs' && opts?.method === 'POST') {
+        const body = JSON.parse(opts.body);
+        if (!body.legalEntityId) return Promise.reject(new Error(ENTITY_REQUIRED_ERROR));
+        return Promise.resolve({ id: 'run-new', ...body, status: 'DRAFT' });
+      }
+      if (path.startsWith('/payroll/runs?')) return Promise.resolve({ runs: [] });
+      if (path.startsWith('/payroll/iras-submissions')) return Promise.resolve({ submissions: [] });
+      if (path === '/payroll/drc-status') return Promise.resolve({ results: [] });
+      if (path === '/tenants/me/entities') return Promise.resolve([SG, MY]);
+      return Promise.resolve({});
+    });
+
+    const { result } = renderHook(() => usePayrollAdmin());
+
+    await act(async () => {
+      await result.current.actuallyCreateRun();
+    });
+
+    const postCalls = (apiFetch as jest.Mock).mock.calls.filter(([p, o]: any[]) => p === '/payroll/runs' && o?.method === 'POST');
+    expect(postCalls).toHaveLength(0);
+    expect(result.current.reviewRunData).toBeNull();
+    expect(result.current.actionToast).toBe('Choose a legal entity before creating a payroll run.');
   });
 });

@@ -87,7 +87,7 @@ function AdminPayrollDashboard() {
     selectedPeriod, setSelectedPeriod,
     processingGroup, setProcessingGroup,
     selectedRunType, setSelectedRunType,
-    legalEntities, selectedLegalEntityId, setSelectedLegalEntityId,
+    legalEntities, selectedLegalEntityId, setSelectedLegalEntityId, legalEntitiesError,
     confirmCancelRun, setConfirmCancelRun,
     payComponents,
     runPaycodes,
@@ -347,10 +347,15 @@ function AdminPayrollDashboard() {
                 never guessed, so a group tenant's second entity can't silently
                 compute under the wrong country's rules. */}
             <Field label="Legal entity">
-              {legalEntities.length === 0 ? (
+              {legalEntitiesError ? (
+                <Notice heading="Could not load legal entities">{legalEntitiesError}</Notice>
+              ) : legalEntities.length === 0 ? (
                 <Notice heading="No legal entity">This tenant has no legal entity yet. Add one in Settings before creating a payroll run.</Notice>
               ) : (
                 <Select value={selectedLegalEntityId} onChange={e => setSelectedLegalEntityId(e.target.value)}>
+                  {/* Multi-entity tenants get no pre-selected option — the choice
+                      must be made consciously, not land on whichever is first. */}
+                  {legalEntities.length > 1 && <option value="" disabled>Choose a legal entity…</option>}
                   {legalEntities.map(ent => (
                     <option key={ent.id} value={ent.id}>{ent.name} ({ent.code})</option>
                   ))}
