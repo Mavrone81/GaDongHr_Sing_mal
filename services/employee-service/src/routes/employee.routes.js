@@ -1148,8 +1148,12 @@ router.post('/apply', async (req, res, next) => {
     let application;
     if (existing) {
       // Merge: employee-submitted values override prefill, but keep HR-set fields if employee left them blank
+      // NOTE: this route has no `authenticate` middleware (public, invite-token
+      // gated — see header comment above), so there is no request-scoped tenantId
+      // to build the model's real `tenantId_userId` unique key from. `existing` was
+      // just fetched above, so its own `id` is a safe, always-correct selector.
       application = await prisma.employeeApplication.update({
-        where: { userId },
+        where: { id: existing.id },
         data: {
           fullName: appData.fullName,
           preferredName: appData.preferredName ?? existing.preferredName,

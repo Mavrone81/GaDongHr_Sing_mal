@@ -24,6 +24,7 @@ const router = require('express').Router();
 const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
+const { getTenantId } = require('/app/shared/tenant-context');
 const {
   AP_DEFAULT_RATE,
   SFEC_DEFAULT_TOTAL,
@@ -331,7 +332,7 @@ router.post('/sfc/declarations', authenticate, async (req, res, next) => {
 
     const [updatedBal, updatedEnrollment, claim] = await prisma.$transaction([
       prisma.employeeSfcBalance.upsert({
-        where: { employeeId },
+        where: { tenantId_employeeId: { tenantId: getTenantId(), employeeId } },
         update: {
           balanceAmount: remaining,
           lifetimeUsed: (bal?.lifetimeUsed || 0) + requested,
