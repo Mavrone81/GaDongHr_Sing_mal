@@ -1792,7 +1792,7 @@ router.put('/period-config/:period', authenticate, authorize(ROLES.SUPER_ADMIN, 
     }
 
     const config = await prisma.payrollPeriodConfig.upsert({
-      where:  { period },
+      where:  { tenantId_period: { tenantId: getTenantId(), period } },
       create: { id: uuidv4(), period, workDayType, workingDays: workingDays ?? null, notes: notes ?? null },
       update: { workDayType, workingDays: workingDays ?? null, notes: notes ?? null },
     });
