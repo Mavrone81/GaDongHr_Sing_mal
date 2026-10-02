@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, authorizeSelfOrRole, ROLES } = require('/app/shared/auth-middleware');
+const { getTenantId } = require('/app/shared/tenant-context');
 const { encryptFields, decrypt } = require('/app/shared/crypto');
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:4000';
@@ -377,7 +378,7 @@ router.post('/applications/prefill', authenticate, authorize('employee:manage', 
       if (bankAccount)     patch.bankAccount = bankAccount;
       if (notes || basicSalary) patch.notes = notes || (basicSalary ? `Suggested salary: ${basicSalary}` : existing.notes);
       patch.status = 'PENDING';
-      const updated = await prisma.employeeApplication.update({ where: { userId }, data: patch });
+      const updated = await prisma.employeeApplication.update({ where: { tenantId_userId: { tenantId: getTenantId(), userId } }, data: patch });
       return res.json(updated);
     }
 
