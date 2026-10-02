@@ -120,8 +120,8 @@ test('P3 — returns correct YTD aggregation including BIK and ESOP', async () =
     ytdEmployerCpfEnc: '11200',
   }]);
   mockLineItemFindMany.mockResolvedValue([
-    { employeeId: 'emp-001', wageType: 'AW', isIrasTaxable: true, amountEnc: '5000' },
-    { employeeId: 'emp-001', wageType: 'AW', isIrasTaxable: true, amountEnc: '3000' },
+    { employeeId: 'emp-001', wageType: 'AW', isIrasTaxable: true, amountEncrypted: '5000' },
+    { employeeId: 'emp-001', wageType: 'AW', isIrasTaxable: true, amountEncrypted: '3000' },
   ]);
   mockBikFindMany.mockResolvedValue([
     { employeeId: 'emp-001', year: 2026, annualValueEnc: '2400' },

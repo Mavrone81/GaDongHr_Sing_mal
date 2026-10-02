@@ -1906,7 +1906,7 @@ router.get('/ir8a-data/:year', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.
     });
     const awByEmp = {};
     for (const item of awItems) {
-      const amt = decSafe(item.amountEnc);
+      const amt = decSafe(item.amountEncrypted);
       awByEmp[item.employeeId] = (awByEmp[item.employeeId] || 0) + amt;
     }
 
@@ -1993,7 +1993,7 @@ router.get('/ir8a-file/:year', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.
       where: { wageType: 'AW', isIrasTaxable: true, run: { period: { startsWith: year } } },
     });
     const awByEmp = {};
-    for (const item of awItems) awByEmp[item.employeeId] = (awByEmp[item.employeeId] || 0) + decSafe(item.amountEnc);
+    for (const item of awItems) awByEmp[item.employeeId] = (awByEmp[item.employeeId] || 0) + decSafe(item.amountEncrypted);
 
     // Appendix 8A — BIK totals per employee
     const bikItems = await prisma.bikItem.findMany({ where: { year: parseInt(year, 10) } });
@@ -2141,7 +2141,7 @@ router.get('/internal/ir21-ytd/:employeeId/:year', async (req, res, next) => {
     const awItems = await prisma.payrollLineItem.findMany({
       where: { employeeId, wageType: 'AW', isIrasTaxable: true, run: { period: { startsWith: year } } },
     });
-    const awIncome = round2(awItems.reduce((s, i) => s + decSafe(i.amountEnc), 0));
+    const awIncome = round2(awItems.reduce((s, i) => s + decSafe(i.amountEncrypted), 0));
 
     // BIK (Appendix 8A)
     const bikItems = await prisma.bikItem.findMany({ where: { employeeId, year: yearInt } });
