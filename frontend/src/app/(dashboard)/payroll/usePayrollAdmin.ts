@@ -80,6 +80,12 @@ export function usePayrollAdmin() {
   const [selectedPeriod, setSelectedPeriod] = useState('2026-04');
   const [processingGroup, setProcessingGroup] = useState('all');
   const [selectedRunType, setSelectedRunType] = useState('MONTHLY');
+  // ENT-001: a run belongs to exactly one legal entity (payroll.routes.js:173
+  // rejects a run without one). Loaded from the tenant's own entity list —
+  // never guessed — and defaulted to the primary entity only as a starting
+  // point the operator can change, not a silent fallback.
+  const [legalEntities, setLegalEntities] = useState<{ id: string; name: string; code: string; isPrimary: boolean }[]>([]);
+  const [selectedLegalEntityId, setSelectedLegalEntityId] = useState('');
   const [confirmCancelRun, setConfirmCancelRun] = useState(false);
   const [payComponents, setPayComponents] = useState<any[]>([]);
   const [runPaycodes, setRunPaycodes] = useState<{ [empId: string]: any[] }>({});
@@ -176,9 +182,21 @@ export function usePayrollAdmin() {
     }
   }
 
+  async function loadLegalEntities() {
+    try {
+      const data = await apiFetch('/tenants/me/entities');
+      const list = Array.isArray(data) ? data : (data.entities ?? []);
+      setLegalEntities(list);
+      setSelectedLegalEntityId(prev => prev || (list.find((e: any) => e.isPrimary) ?? list[0])?.id || '');
+    } catch (e: any) {
+      console.error('[Payroll] loadLegalEntities failed:', (e as Error).message);
+    }
+  }
+
   useEffect(() => {
     loadRuns();
     loadCpfSubmissions();
+    loadLegalEntities();
     apiFetch('/payroll/drc-status').then((d: any) => {
       setDrcResults(d.results ?? []);
       setDrcLoaded(true);
@@ -421,7 +439,7 @@ export function usePayrollAdmin() {
     setConflictPayslips([]);
     setConflictSalaryMap({});
     try {
-      const newRun = await apiFetch('/payroll/runs', { method: 'POST', body: JSON.stringify({ period: selectedPeriod, runType: selectedRunType }) });
+      const newRun = await apiFetch('/payroll/runs', { method: 'POST', body: JSON.stringify({ period: selectedPeriod, runType: selectedRunType, legalEntityId: selectedLegalEntityId }) });
       setIsRunModalOpen(false);
       await loadRuns();
       // Immediately open Review Protocol so the user can compute → approve → finalise
@@ -618,6 +636,7 @@ export function usePayrollAdmin() {
     selectedPeriod, setSelectedPeriod,
     processingGroup, setProcessingGroup,
     selectedRunType, setSelectedRunType,
+    legalEntities, selectedLegalEntityId, setSelectedLegalEntityId,
     confirmCancelRun, setConfirmCancelRun,
     payComponents,
     runPaycodes,

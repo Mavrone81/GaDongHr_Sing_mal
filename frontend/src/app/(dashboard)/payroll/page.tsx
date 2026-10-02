@@ -87,6 +87,7 @@ function AdminPayrollDashboard() {
     selectedPeriod, setSelectedPeriod,
     processingGroup, setProcessingGroup,
     selectedRunType, setSelectedRunType,
+    legalEntities, selectedLegalEntityId, setSelectedLegalEntityId,
     confirmCancelRun, setConfirmCancelRun,
     payComponents,
     runPaycodes,
@@ -334,13 +335,28 @@ function AdminPayrollDashboard() {
           footer={
             <>
               <Button variant="secondary" onClick={() => setIsRunModalOpen(false)}>Cancel</Button>
-              <Button icon="check" disabled={isProcessing} onClick={handleExecute}>
+              <Button icon="check" disabled={isProcessing || !selectedLegalEntityId} onClick={handleExecute}>
                 {isProcessing ? 'Checking…' : 'Compute payroll'}
               </Button>
             </>
           }
         >
           <div className="flex flex-col gap-4">
+            {/* ENT-001: the run's legal entity fixes its country, currency and
+                statutory rule set for the whole compute — chosen explicitly,
+                never guessed, so a group tenant's second entity can't silently
+                compute under the wrong country's rules. */}
+            <Field label="Legal entity">
+              {legalEntities.length === 0 ? (
+                <Notice heading="No legal entity">This tenant has no legal entity yet. Add one in Settings before creating a payroll run.</Notice>
+              ) : (
+                <Select value={selectedLegalEntityId} onChange={e => setSelectedLegalEntityId(e.target.value)}>
+                  {legalEntities.map(ent => (
+                    <option key={ent.id} value={ent.id}>{ent.name} ({ent.code})</option>
+                  ))}
+                </Select>
+              )}
+            </Field>
             <Field label="Accounting period (YYYY-MM)">
               <Input type="month" value={selectedPeriod} onChange={e => setSelectedPeriod(e.target.value)} />
             </Field>
