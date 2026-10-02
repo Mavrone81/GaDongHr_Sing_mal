@@ -14,7 +14,7 @@
  * guard and error text at payroll.routes.js:173 — so an omission in the UI
  * surfaces as the real 400, not an assertion about the request shape.
  */
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { apiFetch } from '@/lib/api';
 import { usePayrollAdmin } from '@/app/(dashboard)/payroll/usePayrollAdmin';
 
@@ -93,8 +93,17 @@ describe('A1) payroll run creation — multi-entity fails closed', () => {
       if (path === '/tenants/me/entities') return Promise.resolve([SG, MY]);
       return Promise.resolve({});
     });
+    // The mock fn is shared module state across tests in this file (the
+    // jest.mock factory runs once); clear the previous test's call history so
+    // this assertion is about THIS render only.
+    (apiFetch as jest.Mock).mockClear();
 
     const { result } = renderHook(() => usePayrollAdmin());
+
+    // Let the entity list actually finish loading (two entities, successfully
+    // fetched) before trying to create a run with no explicit choice — the
+    // case this guards against is "loaded but not picked", not "still loading".
+    await waitFor(() => expect(result.current.legalEntities).toHaveLength(2));
 
     await act(async () => {
       await result.current.actuallyCreateRun();
