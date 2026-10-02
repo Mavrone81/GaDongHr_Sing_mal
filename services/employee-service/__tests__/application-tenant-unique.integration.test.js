@@ -126,7 +126,7 @@ describe('EmployeeApplication tenant-scoped update on an authenticated route (A5
     const res = await request(app).post('/employees/applications/prefill').send({
       userId: USER_ID_PREFILL, email: 'prefill-test@example.local', fullName: 'Prefilled Applicant',
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201); // create path responds 201; the update/re-prefill path below responds 200
     expect(res.body.userId).toBe(USER_ID_PREFILL);
 
     const row = await raw.employeeApplication.findUnique({ where: { tenantId_userId: { tenantId: TENANT_A, userId: USER_ID_PREFILL } } });

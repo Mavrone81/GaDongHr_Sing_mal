@@ -61,7 +61,7 @@ afterEach(() => { jest.clearAllMocks(); setUser({ sub: 'admin-001', role: 'HR_AD
 beforeAll(async () => {
   await raw.employeeSfcBalance.deleteMany({ where: { employeeId: EMP_ID } });
   const program = await raw.trainingProgram.create({
-    data: { tenantId: TENANT_A, title: 'A5b SFC test program', status: 'PUBLISHED' },
+    data: { tenantId: TENANT_A, title: 'A5b SFC test program', status: 'PUBLISHED', createdBy: 'seed' },
   });
   programId = program.id;
   const enrollment = await raw.trainingEnrollment.create({
