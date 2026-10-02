@@ -80,6 +80,16 @@ export function usePayrollAdmin() {
   const [selectedPeriod, setSelectedPeriod] = useState('2026-04');
   const [processingGroup, setProcessingGroup] = useState('all');
   const [selectedRunType, setSelectedRunType] = useState('MONTHLY');
+  // ENT-001: a run belongs to exactly one legal entity (payroll.routes.js:173
+  // rejects a run without one). Loaded from the tenant's own entity list.
+  // Pre-selected ONLY when the tenant has exactly one entity, where there is
+  // nothing to choose between; a tenant with several (the product's premise —
+  // e.g. SG + MY) gets no default, because guessing one could silently book a
+  // run under the wrong country's statutory rules, which is worse than the 400
+  // this replaces.
+  const [legalEntities, setLegalEntities] = useState<{ id: string; name: string; code: string; isPrimary: boolean }[]>([]);
+  const [selectedLegalEntityId, setSelectedLegalEntityId] = useState('');
+  const [legalEntitiesError, setLegalEntitiesError] = useState<string | null>(null);
   const [confirmCancelRun, setConfirmCancelRun] = useState(false);
   const [payComponents, setPayComponents] = useState<any[]>([]);
   const [runPaycodes, setRunPaycodes] = useState<{ [empId: string]: any[] }>({});
@@ -176,9 +186,28 @@ export function usePayrollAdmin() {
     }
   }
 
+  async function loadLegalEntities() {
+    try {
+      const data = await apiFetch('/tenants/me/entities');
+      const list = Array.isArray(data) ? data : (data.entities ?? []);
+      setLegalEntities(list);
+      setLegalEntitiesError(null);
+      // Only ever pre-select when there's nothing to choose between. With more
+      // than one entity, leave it unset — actuallyCreateRun fails closed on
+      // that, and the operator must pick explicitly.
+      if (list.length === 1) setSelectedLegalEntityId(list[0].id);
+    } catch (e: any) {
+      const msg = (e as Error).message || 'Could not load legal entities';
+      console.error('[Payroll] loadLegalEntities failed:', msg);
+      setLegalEntities([]);
+      setLegalEntitiesError(msg);
+    }
+  }
+
   useEffect(() => {
     loadRuns();
     loadCpfSubmissions();
+    loadLegalEntities();
     apiFetch('/payroll/drc-status').then((d: any) => {
       setDrcResults(d.results ?? []);
       setDrcLoaded(true);
@@ -416,12 +445,24 @@ export function usePayrollAdmin() {
   };
 
   const actuallyCreateRun = async () => {
+    // Fail closed: never let an unselected/unresolved entity reach the API as
+    // an empty string. Names the actual cause — lookup failure, no entity
+    // configured at all, or just "you haven't chosen yet" — rather than
+    // surfacing the route's generic 400.
+    if (!selectedLegalEntityId) {
+      const cause = legalEntitiesError
+        || (legalEntities.length === 0
+          ? 'No legal entity is configured for this tenant — ask an admin to add one.'
+          : 'Choose a legal entity before creating a payroll run.');
+      handleActionToast(cause);
+      return;
+    }
     setIsProcessing(true);
     setPeriodConflictRuns([]);
     setConflictPayslips([]);
     setConflictSalaryMap({});
     try {
-      const newRun = await apiFetch('/payroll/runs', { method: 'POST', body: JSON.stringify({ period: selectedPeriod, runType: selectedRunType }) });
+      const newRun = await apiFetch('/payroll/runs', { method: 'POST', body: JSON.stringify({ period: selectedPeriod, runType: selectedRunType, legalEntityId: selectedLegalEntityId }) });
       setIsRunModalOpen(false);
       await loadRuns();
       // Immediately open Review Protocol so the user can compute → approve → finalise
@@ -618,6 +659,7 @@ export function usePayrollAdmin() {
     selectedPeriod, setSelectedPeriod,
     processingGroup, setProcessingGroup,
     selectedRunType, setSelectedRunType,
+    legalEntities, selectedLegalEntityId, setSelectedLegalEntityId, legalEntitiesError,
     confirmCancelRun, setConfirmCancelRun,
     payComponents,
     runPaycodes,
