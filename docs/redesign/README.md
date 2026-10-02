@@ -103,7 +103,7 @@ Response-style ones; drop the `/api/` prefix) in a **separate commit** titled
 - Push your branch to `gadong` when a page batch is done and message
   "Assistant Manager (L)" with the branch name and the routes covered.
 - Never push to `main`, never deploy. Integration → `redesign/integration` →
-  main → `docker compose up -d --build frontend` on 157.230.38.96 is the
+  main → `docker compose up -d --build frontend` on the production host is the
   manager's job and Samuel's call.
 
 ## Assignments
