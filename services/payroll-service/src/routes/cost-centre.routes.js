@@ -21,6 +21,7 @@
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
+const { getTenantId } = require('/app/shared/tenant-context');
 const { encrypt, decrypt } = require('/app/shared/crypto');
 const {
   buildEntriesForEmployee, summariseEntries, toCsv, toXero, toQuickBooks, toSap,
@@ -211,7 +212,7 @@ router.post('/payroll/runs/:id/journal', authenticate, authorize(...WRITE_ROLES)
 
     // Idempotent upsert: remove any prior journal for this run, then re-create
     await prisma.$transaction(async (tx) => {
-      const existing = await tx.payrollJournal.findUnique({ where: { runId: run.id } });
+      const existing = await tx.payrollJournal.findUnique({ where: { tenantId_runId: { tenantId: getTenantId(), runId: run.id } } });
       if (existing) await tx.payrollJournal.delete({ where: { id: existing.id } });
       const journal = await tx.payrollJournal.create({
         data: {

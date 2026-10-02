@@ -7,6 +7,7 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
+const { getTenantId } = require('/app/shared/tenant-context');
 const { encrypt, decrypt, encryptNumber, decryptNumber } = require('/app/shared/crypto');
 const { computeNetPay, countWorkingDays, countPeriodLeaveWorkingDays } = require('../engines/cpf.engine');
 // Statutory computation now lives behind an HTTP contract, one service per
@@ -891,7 +892,7 @@ router.post('/runs/:id/finalise', authenticate, authorize(ROLES.SUPER_ADMIN, ROL
       const totals = summariseEntries(allEntries);
 
       await prisma.$transaction(async (tx) => {
-        const existing = await tx.payrollJournal.findUnique({ where: { runId: run.id } });
+        const existing = await tx.payrollJournal.findUnique({ where: { tenantId_runId: { tenantId: getTenantId(), runId: run.id } } });
         if (existing) await tx.payrollJournal.delete({ where: { id: existing.id } });
         const journal = await tx.payrollJournal.create({
           data: { runId: run.id, period: run.period, totalDebit: totals.debit, totalCredit: totals.credit, status: 'DRAFT' },
@@ -1791,7 +1792,7 @@ router.put('/period-config/:period', authenticate, authorize(ROLES.SUPER_ADMIN, 
     }
 
     const config = await prisma.payrollPeriodConfig.upsert({
-      where:  { period },
+      where:  { tenantId_period: { tenantId: getTenantId(), period } },
       create: { id: uuidv4(), period, workDayType, workingDays: workingDays ?? null, notes: notes ?? null },
       update: { workDayType, workingDays: workingDays ?? null, notes: notes ?? null },
     });

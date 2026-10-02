@@ -45,8 +45,23 @@ fi
 
 SERVICES=("${@:-}")
 if [ -z "${SERVICES[0]:-}" ]; then
-  SERVICES=(auth employee payroll leave attendance)
+  # Enumerate every service that actually carries a DB-backed suite, rather than
+  # naming five. The hardcoded list silently stranded five services' worth of
+  # tenant-isolation suites: excluded from test:backend because they need a
+  # database, and never reached here because they were not in the list. A list
+  # cannot notice the next service to grow one.
+  mapfile -t SERVICES < <(
+    git ls-files -- 'services/*/__tests__/*' \
+      | grep -E '(tenant-isolation|db-contract|tenant-unique)' \
+      | sed -E 's#^services/([a-z0-9-]+)-service/.*#\1#' \
+      | sort -u
+  )
 fi
+if [ ${#SERVICES[@]} -eq 0 ]; then
+  echo "error: no services with DB-backed suites found — refusing to report success" >&2
+  exit 1
+fi
+echo "DB-backed suites found in ${#SERVICES[@]} service(s): ${SERVICES[*]}"
 
 failed=()
 for svc in "${SERVICES[@]}"; do
@@ -54,9 +69,11 @@ for svc in "${SERVICES[@]}"; do
   # Runs BOTH DB-backed suites: tenant isolation, and the db-contract tests
   # (real Prisma client + real queries through the route stack — the suites
   # that catch invalid queries the mock-only job answers happily).
-  test_file="$dir/__tests__/tenant-isolation.test.js"
-  contract_file="$dir/__tests__/db-contract.test.js"
-  if [ ! -f "$test_file" ] && [ ! -f "$contract_file" ]; then
+  # Any DB-backed suite counts, including the *-tenant-unique.integration
+  # convention introduced by the compound-unique work.
+  db_suites=$(ls -1 "$dir"/__tests__/ 2>/dev/null \
+    | grep -E '(tenant-isolation|db-contract|tenant-unique)' | wc -l)
+  if [ "$db_suites" -eq 0 ]; then
     echo "skip ${svc}: no DB-backed suites"; continue
   fi
 
@@ -66,6 +83,15 @@ for svc in "${SERVICES[@]}"; do
 
   url="postgresql://${PGUSER_VAL}:${PGPASS_VAL}@${PGHOST_VAL}:${PGPORT_VAL}/${db}"
 
+  # Create this service's scratch DB if it does not exist. Previously the five
+  # databases were pre-created by the CI workflow, which meant adding a service
+  # here also required editing the workflow — and forgetting that is how a
+  # service ends up enumerated but unrunnable.
+  PGPASSWORD="$PGPASS_VAL" psql -h "$PGHOST_VAL" -p "$PGPORT_VAL" -U "$PGUSER_VAL" -d postgres \
+    -tAc "SELECT 1 FROM pg_database WHERE datname='${db}'" 2>/dev/null | grep -q 1 \
+    || PGPASSWORD="$PGPASS_VAL" psql -h "$PGHOST_VAL" -p "$PGPORT_VAL" -U "$PGUSER_VAL" -d postgres \
+         -q -c "CREATE DATABASE ${db};" >/dev/null 2>&1 || true
+
   # Regenerate for THIS service before running it — the previous iteration left
   # the shared client pointing at a different schema.
   ( cd "$dir" && DATABASE_URL="$url" npx prisma generate --schema prisma/schema.prisma >/dev/null 2>&1 ) \
@@ -74,7 +100,7 @@ for svc in "${SERVICES[@]}"; do
   ( cd "$dir" && DATABASE_URL="$url" npx prisma db push --skip-generate --accept-data-loss >/dev/null 2>&1 ) \
     || { echo "  db push FAILED"; failed+=("$svc(push)"); continue; }
 
-  if ( cd "$dir" && DATABASE_URL="$url" npx jest --runInBand "tenant-isolation|db-contract" 2>&1 | tail -20 ); then
+  if ( cd "$dir" && DATABASE_URL="$url" npx jest --runInBand "tenant-isolation|db-contract|tenant-unique" 2>&1 | tail -20 ); then
     :
   else
     failed+=("$svc")

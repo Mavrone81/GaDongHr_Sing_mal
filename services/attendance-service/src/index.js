@@ -62,7 +62,7 @@ const app = express();
 const PORT = process.env.PORT || 4007;
 
 app.use(helmet()); app.use(cors()); app.use(express.json({ limit: '10kb' })); app.use(morgan('combined'));
-const { tenantContextMiddleware } = require('/app/shared/tenant-context');
+const { tenantContextMiddleware, getTenantId } = require('/app/shared/tenant-context');
 app.use(tenantContextMiddleware);
 app.get('/health', (req, res) => res.json({ service: 'attendance-service', status: 'ok', ts: new Date() }));
 
@@ -896,7 +896,7 @@ app.post('/attendance/periods/:period/lock', authenticate, authorize(...ADMIN_LO
       return res.status(409).json({ error: `Cannot lock from status ${existing.status}` });
     }
     const row = await prisma.attendancePeriod.upsert({
-      where: { period },
+      where: { tenantId_period: { tenantId: getTenantId(), period } },
       create: {
         id: uuidv4(), period, status: 'LOCKED',
         lockedBy: req.user?.sub, lockedAt: new Date(),
@@ -922,7 +922,7 @@ app.post('/attendance/periods/:period/unlock', authenticate, authorize(ROLES.SUP
     if (!existing) return res.status(404).json({ error: 'Period not found' });
     if (existing.status === 'OPEN') return res.status(409).json({ error: 'Period is already OPEN' });
     const row = await prisma.attendancePeriod.update({
-      where: { period },
+      where: { tenantId_period: { tenantId: getTenantId(), period } },
       data: { status: 'OPEN', lockedBy: null, lockedAt: null, approvedBy: null, approvedAt: null },
     });
     await writeAudit({ entityType: 'AttendancePeriod', entityId: row.id, entityName: period, action: 'UNLOCK', actor: req.user, req });
@@ -941,7 +941,7 @@ app.post('/attendance/periods/:period/approve-for-payroll', authenticate, author
       return res.status(409).json({ error: `Cannot approve from status ${existing.status} — period must be LOCKED first` });
     }
     const row = await prisma.attendancePeriod.update({
-      where: { period },
+      where: { tenantId_period: { tenantId: getTenantId(), period } },
       data: { status: 'APPROVED_FOR_PAYROLL', approvedBy: req.user?.sub, approvedAt: new Date() },
     });
     await writeAudit({ entityType: 'AttendancePeriod', entityId: row.id, entityName: period, action: 'APPROVE_FOR_PAYROLL', actor: req.user, req });

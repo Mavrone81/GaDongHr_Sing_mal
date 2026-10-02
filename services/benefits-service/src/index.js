@@ -30,7 +30,7 @@ app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan('combined'));
 
-const { tenantContextMiddleware } = require('/app/shared/tenant-context');
+const { tenantContextMiddleware, getTenantId } = require('/app/shared/tenant-context');
 app.use(tenantContextMiddleware);
 
 app.get('/health', (req, res) => res.json({ service: 'benefits-service', status: 'ok', ts: new Date() }));
@@ -809,7 +809,7 @@ app.put('/benefits/flexi-config', authenticate, authorize(...HR_ROLES), async (r
       updatedBy:            req.user.sub,
     };
     const config = await prisma.flexiWalletConfig.upsert({
-      where:  { grade: data.grade },
+      where:  { tenantId_grade: { tenantId: getTenantId(), grade: data.grade } },
       update: { ...data },
       create: { id: uuidv4(), ...data, createdBy: req.user.sub },
     });

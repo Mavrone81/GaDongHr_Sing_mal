@@ -7,6 +7,7 @@ const fs = require('fs');
 const { PrismaClient } = require('@prisma/client');
 const multer = require('multer');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
+const { getTenantId } = require('/app/shared/tenant-context');
 
 const prisma = require('../utils/prisma');
 
@@ -780,7 +781,7 @@ router.post('/onboarding/:employeeId/buddy', authenticate, authorize(ROLES.SUPER
     let assignment;
     if (existing) {
       assignment = await prisma.buddyAssignment.update({
-        where: { employeeId },
+        where: { tenantId_employeeId: { tenantId: getTenantId(), employeeId } },
         data: { buddyId, buddyName, newHireName, startDate, assignedBy: req.user.sub, assignedAt: new Date(), note: note || null },
       });
     } else {
@@ -845,7 +846,7 @@ router.delete('/onboarding/:employeeId/buddy', authenticate, authorize(ROLES.SUP
   try {
     const existing = await prisma.buddyAssignment.findFirst({ where: { employeeId: req.params.employeeId } });
     if (!existing) return res.status(404).json({ error: 'No buddy assignment found' });
-    await prisma.buddyAssignment.delete({ where: { employeeId: req.params.employeeId } });
+    await prisma.buddyAssignment.delete({ where: { tenantId_employeeId: { tenantId: getTenantId(), employeeId: req.params.employeeId } } });
     res.status(204).send();
   } catch (err) { next(err); }
 });
@@ -1336,7 +1337,7 @@ router.post('/candidates/:id/offer-letter',
       let letter;
       if (existing) {
         letter = await prisma.offerLetter.update({
-          where: { candidateId: candidate.id },
+          where: { tenantId_candidateId: { tenantId: getTenantId(), candidateId: candidate.id } },
           data: {
             jobTitle:          data.jobTitle,
             department:        data.department,
@@ -1394,7 +1395,7 @@ router.post('/candidates/:id/offer-letter',
             const esignData = await esignRes.json();
             esignRequestId = esignData.requestId || esignData.id || null;
             await prisma.offerLetter.update({
-              where: { candidateId: candidate.id },
+              where: { tenantId_candidateId: { tenantId: getTenantId(), candidateId: candidate.id } },
               data: { esignRequestId, status: 'SENT' },
             });
             letter = { ...letter, esignRequestId, status: 'SENT' };
@@ -1534,7 +1535,7 @@ router.put('/candidates/:id/offer-letter',
       if (!existing) return res.status(404).json({ error: 'No offer letter found for this candidate' });
 
       const updated = await prisma.offerLetter.update({
-        where: { candidateId: req.params.id },
+        where: { tenantId_candidateId: { tenantId: getTenantId(), candidateId: req.params.id } },
         data: {
           status,
           ...(status === 'SIGNED'   ? { signedAt: new Date() }   : {}),

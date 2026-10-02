@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, authorizeSelfOrRole, ROLES } = require('/app/shared/auth-middleware');
+const { getTenantId } = require('/app/shared/tenant-context');
 const { encryptFields, decrypt } = require('/app/shared/crypto');
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:4000';
@@ -377,7 +378,7 @@ router.post('/applications/prefill', authenticate, authorize('employee:manage', 
       if (bankAccount)     patch.bankAccount = bankAccount;
       if (notes || basicSalary) patch.notes = notes || (basicSalary ? `Suggested salary: ${basicSalary}` : existing.notes);
       patch.status = 'PENDING';
-      const updated = await prisma.employeeApplication.update({ where: { userId }, data: patch });
+      const updated = await prisma.employeeApplication.update({ where: { tenantId_userId: { tenantId: getTenantId(), userId } }, data: patch });
       return res.json(updated);
     }
 
@@ -1148,8 +1149,31 @@ router.post('/apply', async (req, res, next) => {
     let application;
     if (existing) {
       // Merge: employee-submitted values override prefill, but keep HR-set fields if employee left them blank
+      // NOTE: this route has no `authenticate` middleware (public, invite-token
+      // gated — see header comment above), so there is no request-scoped tenantId
+      // to build the model's real `tenantId_userId` unique key from, and the
+      // tenant-scoping wrapper is a no-op here for every operation. Keying on
+      // the already-fetched row's primary key is therefore the correct fix for
+      // THIS defect.
+      //
+      // 🔴 But it is not unconditionally safe, and the previous wording of this
+      // comment ("always-correct") claimed more than the code earns. The
+      // `findFirst({ where: { userId } })` above is unscoped, while the model's
+      // unique is @@unique([tenantId, userId]) — so the schema PERMITS two rows
+      // with the same userId in different tenants. If that ever occurs,
+      // findFirst picks one arbitrarily and this public route writes the
+      // submitter's nricFin, bankAccount, dateOfBirth and homeAddress into
+      // possibly the wrong tenant's row.
+      //
+      // Not exploitable today: userId is server-derived from auth-service's
+      // signature-verifying invite lookup, never from the request, so a caller
+      // cannot nominate it (verified by DevSecOps, 2026-10-02). The real fix is
+      // for GET /users/invite/:token to return tenantId so this handler can
+      // establish a tenant context and let the wrapper do the work — that
+      // touches auth-service and is tracked as a follow-up, deliberately not
+      // bundled here. A cheaper interim is findMany + refuse on >1.
       application = await prisma.employeeApplication.update({
-        where: { userId },
+        where: { id: existing.id },
         data: {
           fullName: appData.fullName,
           preferredName: appData.preferredName ?? existing.preferredName,
