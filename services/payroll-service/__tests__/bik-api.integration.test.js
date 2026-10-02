@@ -390,7 +390,7 @@ describe('Regression — GET /payroll/ir8a-data/:year includes BIK + stock optio
         ytdGrossEnc: '120000', ytdEmployeeCpfEnc: '24000', ytdEmployerCpfEnc: '20400' },
     ]);
     mockLineItemFindMany.mockResolvedValueOnce([
-      { employeeId: 'emp-1', wageType: 'AW', isIrasTaxable: true, amountEnc: '12000' },
+      { employeeId: 'emp-1', wageType: 'AW', isIrasTaxable: true, amountEncrypted: '12000' },
     ]);
     mockBikFindMany.mockResolvedValueOnce([
       { employeeId: 'emp-1', year: 2026, bikType: 'COMPANY_CAR', annualValueEnc: '30000' },
