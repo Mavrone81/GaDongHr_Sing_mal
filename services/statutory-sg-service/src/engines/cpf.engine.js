@@ -37,8 +37,16 @@ function computeCpf({ ow, aw = 0, ytdOw = 0, ytdAw = 0, citizenStatus, age, rate
   const totalRate    = employeeRate + employerRate;
 
   const owSubjectToCpf = Math.min(ow, OW_CEILING);
-  const awCeilingRemaining = Math.max(AW_CEILING_ANNUAL - ytdOw - owSubjectToCpf, 0);
-  const awSubjectToCpf = Math.min(aw, Math.min(awCeilingRemaining, AW_CEILING_ANNUAL - ytdAw));
+  // A3: the annual AW ceiling is $102,000 minus OW ALREADY subject to CPF
+  // this year (prior months plus this one) MINUS AW already subject to CPF
+  // this year — both combined in one subtraction. The previous version took
+  // the min() of two independent terms (one subtracting only ytdOw+this
+  // month's OW, the other subtracting only ytdAw), which is correct ONLY
+  // when one of ytdOw/ytdAw is zero — it overstates the remaining ceiling
+  // whenever BOTH are non-trivial (e.g. steady OW all year plus two
+  // bonuses), since neither term ever subtracts both.
+  const awCeilingRemaining = Math.max(AW_CEILING_ANNUAL - ytdOw - owSubjectToCpf - ytdAw, 0);
+  const awSubjectToCpf = Math.min(aw, awCeilingRemaining);
 
   // CPF Board 3-step rounding (OW): total = round nearest; employee = floor; employer = total − employee
   const owTotal    = Math.round(owSubjectToCpf * totalRate);

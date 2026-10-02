@@ -516,6 +516,55 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
       if (lt.isGovtPaid) leaveSummary[app.employeeId].govtPaidDays += daysInPeriod;
     }
 
+    // A3: real YTD OW/AW for the CPF annual AW ceiling. employee-service's
+    // /payroll-data never carried these (it has no access to this service's
+    // own payslip history), and nothing downstream ever queried it, so the
+    // AW ceiling silently reset to 0 every run regardless of history.
+    // Sourced here, directly, from this service's own prior PUBLISHED
+    // payslips/line items for the same calendar year, excluding this run.
+    //
+    // ytdAw: AW already subject to CPF this year — same source and filter
+    // IR8A/IR21 use for PayrollLineItem, except isCpfApplicable (CPF-ness),
+    // not isIrasTaxable (IRAS treats some components differently from CPF).
+    //
+    // ytdOw: sum of each prior period's basic salary (Payslip.basicSalaryEnc).
+    // KNOWN LIMITATION, stated rather than silently assumed exact: the OW
+    // actually subject to CPF each month is capped at that month's OW
+    // ceiling, and that capped per-period figure isn't persisted anywhere
+    // today — only the raw basic salary and the final CPF deducted. This is
+    // exact for the overwhelming majority of employees (monthly basic well
+    // under the $8,000 ceiling); it only overstates ytdOw for a prior month
+    // where basic salary itself exceeded the OW ceiling.
+    const ytdYear = run.period.slice(0, 4);
+    const employeeIdsForYtd = employees.map(e => e.employeeId);
+    const [priorPayslipsThisYear, priorAwItemsThisYear] = await Promise.all([
+      prisma.payslip.findMany({
+        where: { employeeId: { in: employeeIdsForYtd }, period: { startsWith: ytdYear }, isPublished: true, runId: { not: run.id } },
+        select: { employeeId: true, basicSalaryEnc: true },
+      }),
+      prisma.payrollLineItem.findMany({
+        where: { employeeId: { in: employeeIdsForYtd }, wageType: 'AW', isCpfApplicable: true, runId: { not: run.id }, run: { period: { startsWith: ytdYear } } },
+        select: { employeeId: true, amountEncrypted: true },
+      }),
+    ]);
+    const ytdOwByEmp = {};
+    for (const ps of priorPayslipsThisYear) {
+      ytdOwByEmp[ps.employeeId] = (ytdOwByEmp[ps.employeeId] || 0) + decSafe(ps.basicSalaryEnc);
+    }
+    const ytdAwByEmp = {};
+    for (const item of priorAwItemsThisYear) {
+      ytdAwByEmp[item.employeeId] = (ytdAwByEmp[item.employeeId] || 0) + decSafe(item.amountEncrypted);
+    }
+    // Only fill in when the caller didn't already supply a value: employee-
+    // service's real /payroll-data response never has these fields at all
+    // (undefined), so production always lands here; an explicit caller-
+    // supplied employees array (tests, tooling) keeps whatever it set,
+    // including an explicit 0.
+    for (const emp of employees) {
+      if (emp.ytdOw == null) emp.ytdOw = ytdOwByEmp[emp.employeeId] || 0;
+      if (emp.ytdAw == null) emp.ytdAw = ytdAwByEmp[emp.employeeId] || 0;
+    }
+
     let totalGross = 0, totalNet = 0, totalEmployee = 0, totalEmployer = 0, totalSdl = 0;
     const zeroSalaryWarnings = [];
     const computedResults = [];

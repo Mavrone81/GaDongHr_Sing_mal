@@ -453,6 +453,47 @@ describe('D) POST /payroll/runs/:id/compute — CPF + SDL integration', () => {
 
     expect(res.status).toBe(200);
   });
+
+  // ── A3: real YTD OW/AW sourced from this service's own data, flowing ──────
+  // through to the CPF AW ceiling. Previously always 0 — employee-service's
+  // /payroll-data never carried these fields, and no caller supplied them,
+  // so the AW ceiling silently reset to 0 every run (STOCKTAKE finding).
+  // The employee object below deliberately has NO ytdOw/ytdAw field at all
+  // (matching employee-service's real response shape) so the route's own
+  // computed value — from the mocked prior payslip + prior AW line item —
+  // is what reaches the engine, not a test-supplied shortcut.
+  test('200 — ytdOw/ytdAw are sourced from prior payslips/line items, not left at 0', async () => {
+    const employeeNoYtd = {
+      employeeId: 'emp-001', employeeCode: 'EMP-001', fullName: 'Alice Tan',
+      ow: 6000, aw: 30000, grossPay: 36000,
+      citizenStatus: 'SC', age: 35,
+      weeklyHours: 44, bankName: 'DBS', bankAccount: '123456789', bankCode: '7171',
+    };
+    // Prior published payslip this year: basic salary 50,000 -> ytdOw.
+    mockPayslipFindMany.mockResolvedValueOnce([
+      { employeeId: 'emp-001', basicSalaryEnc: '50000' },
+    ]);
+    // Saved line items for THIS run (none), then prior AW line items this
+    // year (one bonus of 20,000, CPF-applicable) -> ytdAw. Same mock fn,
+    // two calls in that order (savedLineItems is queried earlier in the route).
+    mockLineItemFindMany.mockResolvedValueOnce([]);
+    mockLineItemFindMany.mockResolvedValueOnce([
+      { employeeId: 'emp-001', amountEncrypted: '20000' },
+    ]);
+
+    const res = await request(app)
+      .post('/payroll/runs/run-001/compute')
+      .send({ employees: [employeeNoYtd] });
+
+    expect(res.status).toBe(200);
+    const upsertData = mockPayslipUpsert.mock.calls[0][0].create;
+    // CPF Board rule: remaining AW ceiling = 102,000 - ytdOw - this month's
+    // OW (capped at 6,800) - ytdAw = 102000 - 50000 - 6000 - 20000 = 26,000.
+    // AW this run (30,000) is capped to that 26,000.
+    // Employee's share of AW: floor(26000*0.20) = 5200. OW: floor(6000*0.20) = 1200.
+    // Total employee CPF = 1200 + 5200 = 6400.
+    expect(parseFloat(upsertData.employeeCpfEnc)).toBe(6400);
+  });
 });
 
 // ── F) Consolidation and variance ─────────────────────────────────────────────
@@ -1406,10 +1447,14 @@ describe('PAY-001) Supplemental run auto-trim on compute', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.autoTrimmedIds).toBeUndefined();
-    // MONTHLY runs don't query prior payslips — payslipFindMany should not be
-    // called with the supplemental's "exclude this run" filter.
+    // MONTHLY runs don't trigger the supplemental auto-trim — payslipFindMany
+    // should not be called with ITS specific filter shape (exact period match,
+    // for the trim's "did this employee already get paid this period"
+    // check). A3's YTD lookup also calls payslipFindMany with a
+    // runId.not-this-run filter but a DIFFERENT shape (period: startsWith
+    // the year, not an exact match), so match on both to tell them apart.
     const calls = mockPayslipFindMany.mock.calls.filter(c =>
-      c[0]?.where?.runId?.not === 'run-m'
+      c[0]?.where?.runId?.not === 'run-m' && c[0]?.where?.period === '2026-05'
     );
     expect(calls.length).toBe(0);
   });
