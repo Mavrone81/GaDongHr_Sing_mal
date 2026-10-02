@@ -286,7 +286,7 @@ router.put('/sfc/balance/:employeeId', authenticate, authorize(...ADMIN_ROLES), 
     if (lr !== undefined && (!isFinite(lr) || lr < 0)) return res.status(400).json({ error: 'lifetimeReceived must be a non-negative number' });
 
     const upserted = await prisma.employeeSfcBalance.upsert({
-      where: { employeeId: req.params.employeeId },
+      where: { tenantId_employeeId: { tenantId: getTenantId(), employeeId: req.params.employeeId } },
       update: { balanceAmount: bal, ...(lr !== undefined ? { lifetimeReceived: lr } : {}), updatedBy: req.user.sub },
       create: {
         id: uuidv4(),

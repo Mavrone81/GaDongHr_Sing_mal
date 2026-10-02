@@ -3,21 +3,29 @@
 /**
  * A5b — regression test for the compound-unique bug family on EmployeeSfcBalance.
  *
- * Schema: `@@unique([tenantId, employeeId])` (prisma/schema.prisma:280). POST
- * /training/sfc/declarations (../src/routes/grant.routes.js ~:333) built its
- * `where` from `employeeId` alone, inside a `$transaction([...])` — not a valid
- * Prisma unique selector once the index is `[tenantId, employeeId]` — so it threw
- * `PrismaClientValidationError` on every declaration, rolling back the whole
- * transaction (the enrollment update and the grant-claim record too, not just the
- * balance write).
+ * Schema: `@@unique([tenantId, employeeId])` (prisma/schema.prisma:280). Covers
+ * TWO independent call sites on this model, found in two separate passes:
+ *
+ *   #11 — POST /training/sfc/declarations (../src/routes/grant.routes.js ~:333)
+ *   built its `where` from `employeeId` alone, inside a `$transaction([...])` —
+ *   not a valid Prisma unique selector once the index is `[tenantId, employeeId]`
+ *   — so it threw `PrismaClientValidationError` on every declaration, rolling back
+ *   the whole transaction (the enrollment update and the grant-claim record too,
+ *   not just the balance write).
+ *
+ *   #17 — PUT /training/sfc/balance/:employeeId (~:287-288), found by DevLead's
+ *   full-class sweep after #11 landed — same model, same bare-`{employeeId}`
+ *   mistake, one route over. NOTE: this is a DIFFERENT file/route than the
+ *   "training 288/334" pair REFUTED in STOCKTAKE §4 — those line numbers were in
+ *   training.routes.js, not grant.routes.js; the overlap is coincidental.
  *
  * Needs a reachable DATABASE_URL (real @prisma/client, not mocked).
  *
- * Mutation proof (run once a DB is available): revert the `where` edit in
- * grant.routes.js, run this file (expect 500 / Prisma validation message, and
- * confirm via raw queries that NEITHER the enrollment nor the grant claim were
- * written — the transaction rollback), restore the fix, run again (expect the
- * statuses/rows asserted below) — paste both runs.
+ * Mutation proof (run once a DB is available): revert the relevant `where` edit in
+ * grant.routes.js, run this file (expect the affected describe block to fail — for
+ * #11, a 500 / Prisma validation message that also rolls back the enrollment and
+ * grant-claim writes; for #17, a 500 on the second call), restore the fix, run
+ * again (expect the statuses/rows asserted below) — paste both runs.
  */
 
 let mockUser = { sub: 'admin-001', role: 'HR_ADMIN', employeeId: null, tenantId: null };
@@ -103,5 +111,34 @@ describe('EmployeeSfcBalance tenant-scoped upsert inside a $transaction (A5b #11
     const rows = await raw.employeeSfcBalance.findMany({ where: { employeeId: EMP_ID } });
     expect(rows.length).toBe(1);
     expect(rows[0].balanceAmount).toBe(350);
+  });
+});
+
+describe('EmployeeSfcBalance tenant-scoped upsert on the admin balance-set route (A5b #17, was: where:{employeeId})', () => {
+  const EMP_ID_2 = 'aaaaaaaa-9999-0000-0000-0000000000aa';
+
+  afterAll(async () => {
+    await raw.employeeSfcBalance.deleteMany({ where: { employeeId: EMP_ID_2 } });
+  });
+
+  test('first PUT creates the balance (create path, unaffected by this bug)', async () => {
+    setUser({ tenantId: TENANT_A, role: 'HR_ADMIN' });
+    const res = await request(app)
+      .put(`/training/sfc/balance/${EMP_ID_2}`)
+      .send({ balanceAmount: 1000, lifetimeReceived: 1000 });
+    expect(res.status).toBe(200);
+    expect(res.body.balanceAmount).toBe(1000);
+  });
+
+  test('a second PUT UPDATES the tenant-scoped row (was: where:{employeeId})', async () => {
+    setUser({ tenantId: TENANT_A, role: 'HR_ADMIN' });
+    const res = await request(app)
+      .put(`/training/sfc/balance/${EMP_ID_2}`)
+      .send({ balanceAmount: 750 });
+    expect(res.status).toBe(200);
+    expect(res.body.balanceAmount).toBe(750);
+
+    const rows = await raw.employeeSfcBalance.findMany({ where: { employeeId: EMP_ID_2 } });
+    expect(rows.length).toBe(1); // updated in place, not duplicated
   });
 });

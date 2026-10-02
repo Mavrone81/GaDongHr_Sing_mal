@@ -1337,7 +1337,7 @@ router.post('/candidates/:id/offer-letter',
       let letter;
       if (existing) {
         letter = await prisma.offerLetter.update({
-          where: { candidateId: candidate.id },
+          where: { tenantId_candidateId: { tenantId: getTenantId(), candidateId: candidate.id } },
           data: {
             jobTitle:          data.jobTitle,
             department:        data.department,
@@ -1395,7 +1395,7 @@ router.post('/candidates/:id/offer-letter',
             const esignData = await esignRes.json();
             esignRequestId = esignData.requestId || esignData.id || null;
             await prisma.offerLetter.update({
-              where: { candidateId: candidate.id },
+              where: { tenantId_candidateId: { tenantId: getTenantId(), candidateId: candidate.id } },
               data: { esignRequestId, status: 'SENT' },
             });
             letter = { ...letter, esignRequestId, status: 'SENT' };
@@ -1535,7 +1535,7 @@ router.put('/candidates/:id/offer-letter',
       if (!existing) return res.status(404).json({ error: 'No offer letter found for this candidate' });
 
       const updated = await prisma.offerLetter.update({
-        where: { candidateId: req.params.id },
+        where: { tenantId_candidateId: { tenantId: getTenantId(), candidateId: req.params.id } },
         data: {
           status,
           ...(status === 'SIGNED'   ? { signedAt: new Date() }   : {}),
