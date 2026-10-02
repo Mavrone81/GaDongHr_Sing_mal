@@ -52,7 +52,27 @@ const ROOT = path.join(__dirname, '..', '..');
 const OPS = 'findUnique|findUniqueOrThrow|update|updateOrThrow|upsert|delete|deleteOrThrow';
 
 /** `<anything>.<model>.<op>({ where: { <inner> }` — binding-agnostic. */
-const CALL_RE = new RegExp(String.raw`\w+\.(\w+)\.(${OPS})\(\s*\{\s*where:\s*\{([^}]*)\}`, 'g');
+const CALL_RE = new RegExp(String.raw`\w+\.(\w+)\.(${OPS})\(\s*\{\s*where:\s*\{`, 'g');
+
+/**
+ * Read a balanced `{ … }` starting at `open` (the index OF the brace).
+ *
+ * Why not a regex: `\{([^}]*)\}` stops at the first inner brace, so a nested
+ * or multi-line `where` — `where: { tenantId_period: { … } }`, or one wrapped
+ * across lines — reads as EMPTY and the site is then skipped SILENTLY. A
+ * detector that quietly declines to look at the hardest-shaped call sites is
+ * the failure this whole file exists to stop. Found by T2(L)-DevSecOps's
+ * independent brace-matching detector, which agreed on the 17 sites that exist
+ * today but would not have agreed on a nested one added tomorrow.
+ */
+function balanced(src, open) {
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') { depth--; if (depth === 0) return src.slice(open + 1, i); }
+  }
+  return null; // unbalanced: caller treats as unreadable rather than as empty
+}
 /** The composite-name form: `where: { someName: {` */
 const NAMED_RE = new RegExp(String.raw`\w+\.(\w+)\.(${OPS})\(\s*\{\s*where:\s*\{\s*(\w+)\s*:\s*\{`, 'g');
 
@@ -88,10 +108,25 @@ function findOffences(src, models, label = 'src') {
   const lineOf = (i) => src.slice(0, i).split('\n').length;
 
   for (const m of src.matchAll(CALL_RE)) {
-    const [, model, op, where] = m;
+    const [, model, op] = m;
     const comp = models[model];
     if (!comp) continue;
-    const keys = where.split(',').map((k) => k.trim().split(':')[0].trim()).filter(Boolean);
+    // m[0] ends ON the opening brace of the where-object.
+    const open = m.index + m[0].length - 1;
+    const where = balanced(src, open);
+    if (where === null) {
+      out.push(`${label}:${lineOf(m.index)} — ${model}.${op} has an UNREADABLE where clause (unbalanced braces); refusing to pass it silently`);
+      continue;
+    }
+    // Only consider top-level keys: split on commas that are not inside braces.
+    let depth = 0, cur = '', parts = [];
+    for (const ch of where) {
+      if (ch === '{') depth++;
+      else if (ch === '}') depth--;
+      if (ch === ',' && depth === 0) { parts.push(cur); cur = ''; } else cur += ch;
+    }
+    parts.push(cur);
+    const keys = parts.map((k) => k.trim().split(':')[0].trim()).filter(Boolean);
     if (keys.length === 1 && keys[0] !== 'id' && comp.includes(keys[0])) {
       out.push(`${label}:${lineOf(m.index)} — ${model}.${op} by '${keys[0]}', key is [${comp}]`);
     }
@@ -120,6 +155,9 @@ const OK_COMPOUND = `await prisma.attendancePeriod.upsert({ where: { tenantId_pe
 const OK_BY_ID = `await prisma.attendancePeriod.update({ where: { id: row.id }, data: {} });`;
 const OK_FINDFIRST = `await prisma.attendancePeriod.findFirst({ where: { period } });`;
 const OK_UNKNOWN_MODEL = `await prisma.somethingElse.update({ where: { period }, data: {} });`;
+// Shapes the previous regex-truncating extraction read as EMPTY and skipped:
+const BAD_MULTILINE = `await prisma.attendancePeriod.update({\n  where: {\n    period,\n  },\n  data: {},\n});`;
+const OK_NESTED_CORRECT = `await prisma.attendancePeriod.upsert({\n  where: {\n    tenantId_period: { tenantId, period },\n  },\n});`;
 
 describe('the partial-unique-key detector itself works', () => {
   it('CONTROL: fires on a bare composite member via prisma.', () => {
@@ -137,6 +175,12 @@ describe('the partial-unique-key detector itself works', () => {
     const hits = findOffences(BAD_STALE_NAME, MODELS);
     expect(hits).toHaveLength(1);
     expect(hits[0]).toMatch(/expected 'tenantId_sector_passType'/);
+  });
+  it('CONTROL: fires on a MULTI-LINE bare key — the shape the old regex skipped silently', () => {
+    expect(findOffences(BAD_MULTILINE, MODELS)).toHaveLength(1);
+  });
+  it('CONTROL: silent on a correct NESTED compound selector across lines', () => {
+    expect(findOffences(OK_NESTED_CORRECT, MODELS)).toEqual([]);
   });
   it('CONTROL: silent on a correct compound selector', () => {
     expect(findOffences(OK_COMPOUND, MODELS)).toEqual([]);
