@@ -394,6 +394,65 @@ describe('D) POST /payroll/runs/:id/compute — CPF + SDL integration', () => {
     // payslip.upsert should have been called once (only the eligible employee)
     expect(mockPayslipUpsert).toHaveBeenCalledTimes(1);
   });
+
+  // ── A2: fail closed on missing citizenship status / date of birth ─────────
+  // employee-service's /payroll-data used to default a missing
+  // citizenshipStatus to 'SC' and a missing dateOfBirth to age 35 — both
+  // ordinary values that match a real CPF band every time, so the CPF
+  // band-not-found fail-closed check (statutory.routes.js:72-78) never fired.
+  // Now employee-service reports either as null, and compute must stop the
+  // run here, before any statutory call or write, and name the employee.
+  test('503 — fails closed and names the employee when citizenStatus is missing', async () => {
+    const missingCitizen = [{ ...employees[0], citizenStatus: null }];
+
+    const res = await request(app)
+      .post('/payroll/runs/run-001/compute')
+      .send({ employees: missingCitizen });
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/EMP-001/);
+    expect(res.body.error).toMatch(/citizenship status/i);
+    expect(global.fetch).not.toHaveBeenCalledWith(expect.stringContaining('/statutory/compute-batch'), expect.anything());
+    expect(mockPayslipUpsert).not.toHaveBeenCalled();
+    expect(mockRunUpdate).not.toHaveBeenCalled();
+  });
+
+  test('503 — fails closed and names the employee when age/date of birth is missing', async () => {
+    const missingAge = [{ ...employees[0], age: null }];
+
+    const res = await request(app)
+      .post('/payroll/runs/run-001/compute')
+      .send({ employees: missingAge });
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/EMP-001/);
+    expect(res.body.error).toMatch(/date of birth/i);
+    expect(global.fetch).not.toHaveBeenCalledWith(expect.stringContaining('/statutory/compute-batch'), expect.anything());
+    expect(mockPayslipUpsert).not.toHaveBeenCalled();
+  });
+
+  test('503 — names every affected employee, not just the first, and what is missing from each', async () => {
+    const mixed = [
+      { ...employees[0], employeeId: 'emp-a', employeeCode: 'EMP-A', citizenStatus: null },
+      { ...employees[0], employeeId: 'emp-b', employeeCode: 'EMP-B', age: null },
+    ];
+
+    const res = await request(app)
+      .post('/payroll/runs/run-001/compute')
+      .send({ employees: mixed });
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/EMP-A/);
+    expect(res.body.error).toMatch(/EMP-B/);
+  });
+
+  test('200 — a fully-eligible mix is unaffected (control for the above)', async () => {
+    const res = await request(app)
+      .post('/payroll/runs/run-001/compute')
+      .send({ employees });
+
+    expect(res.status).toBe(200);
+  });
 });
 
 // ── F) Consolidation and variance ─────────────────────────────────────────────

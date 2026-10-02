@@ -321,10 +321,16 @@ router.get('/payroll-data', authenticate, authorize(ROLES.SUPER_ADMIN, ROLES.HR_
       try { if (emp.basicSalaryEncrypted) basicSalary = parseFloat(decrypt(emp.basicSalaryEncrypted)) || 0; } catch {}
       let bankAccount = '';
       try { if (emp.bankAccountEncrypted) bankAccount = decrypt(emp.bankAccountEncrypted) || ''; } catch {}
-      const age = emp.dateOfBirth ? Math.floor((Date.now() - new Date(emp.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25)) : 35;
+      // A2: a missing citizenshipStatus/dateOfBirth must come back missing,
+      // never a plausible stand-in. 'SC' and age 35 are both ordinary values
+      // that match a real CPF band every time, which is exactly what let a
+      // missing value slip past the fail-closed band lookup in
+      // statutory-sg-service undetected. The caller (payroll-service) is
+      // responsible for stopping the run and naming the employee.
+      const age = emp.dateOfBirth ? Math.floor((Date.now() - new Date(emp.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25)) : null;
       return {
         employeeId: emp.id, employeeCode: emp.employeeCode, fullName: emp.fullName, department: emp.department,
-        citizenStatus: emp.citizenshipStatus || 'SC', age, ow: basicSalary, grossPay: basicSalary,
+        citizenStatus: emp.citizenshipStatus || null, age, ow: basicSalary, grossPay: basicSalary,
         startDate: emp.startDate ? emp.startDate.toISOString().slice(0, 10) : null,
         endDate: emp.endDate ? emp.endDate.toISOString().slice(0, 10) : null,
         bankName: emp.bankName || '', bankCode: emp.bankCode || '', bankBranchCode: emp.bankBranchCode || '', bankAccount,

@@ -289,6 +289,28 @@ router.post('/runs/:id/compute', authenticate, authorize(ROLES.SUPER_ADMIN, ROLE
 
     if (employees.length === 0) return res.status(400).json({ error: 'No active employees found for payroll computation' });
 
+    // A2: fail closed on missing citizenship status / date of birth. These
+    // used to arrive from employee-service pre-defaulted to a plausible 'SC'
+    // / age 35, which let an incomplete profile sail through the CPF band
+    // lookup in statutory-sg-service undetected — 'SC' at a normal age
+    // matches a real band every time. employee-service now reports either as
+    // null when missing, so stop here, before any statutory call or write,
+    // and name every affected employee and what's missing from each — a
+    // silent guess here is a wrong CPF deduction, not a visible failure.
+    const missingProfile = employees.filter(emp => !emp.citizenStatus || emp.age == null);
+    if (missingProfile.length > 0) {
+      const details = missingProfile.map(emp => {
+        const who = emp.employeeCode || emp.employeeId;
+        const missing = [];
+        if (!emp.citizenStatus) missing.push('citizenship status');
+        if (emp.age == null) missing.push('date of birth');
+        return `${who} (missing ${missing.join(' and ')})`;
+      }).join(', ');
+      return res.status(503).json({
+        error: `Cannot compute payroll — ${details}. Update their employee record before computing.`,
+      });
+    }
+
     // ── PAY-001 Supplemental auto-trim: for ADHOC/BONUS/COMMISSION runs, fetch ──
     // ── prior published payslips so we can (a) trim OW for employees who were ──
     // ── already paid in the primary run (prevents double-counting when         ──
