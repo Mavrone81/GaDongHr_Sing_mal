@@ -4,6 +4,7 @@ const router = require('express').Router();
 const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, authorize, ROLES } = require('/app/shared/auth-middleware');
+const { getTenantId } = require('/app/shared/tenant-context');
 
 const prisma = require('../utils/prisma');
 
@@ -238,7 +239,7 @@ router.post('/drc-quotas/seed', authenticate, authorize(ROLES.SUPER_ADMIN), asyn
     let seeded = 0;
     for (const d of MOM_DEFAULTS) {
       await prisma.drcQuota.upsert({
-        where: { sector_passType: { sector: d.sector, passType: d.passType } },
+        where: { tenantId_sector_passType: { tenantId: getTenantId(), sector: d.sector, passType: d.passType } },
         create: { id: require('crypto').randomUUID(), sector: d.sector, passType: d.passType, maxRatioPct: d.maxRatioPct, alertThreshPct: d.alertThreshPct, isActive: true },
         update: force ? { maxRatioPct: d.maxRatioPct, alertThreshPct: d.alertThreshPct, isActive: true } : {},
       });

@@ -82,9 +82,18 @@ beforeAll(async () => {
   await raw.drcQuota.deleteMany({ where: { tenantId: TENANT_C } });
 });
 
+// Authoring bug found while verifying this file (same class Architect hit in
+// A5b): the module-level `mockUser` starts with tenantId: null, and only
+// afterEach reset it to TENANT_C — so the FIRST test in the file ran under
+// tc.DEFAULT_TENANT_ID instead, seeding 10 rows under the wrong tenant and
+// then short-circuiting ("already seeded") on every subsequent run. beforeEach
+// (not just afterEach) is required so every test starts correctly scoped.
+beforeEach(() => {
+  setUser({ sub: 'admin-001', role: 'SUPER_ADMIN', tenantId: TENANT_C });
+});
+
 afterEach(async () => {
   jest.clearAllMocks();
-  setUser({ sub: 'admin-001', role: 'SUPER_ADMIN', tenantId: TENANT_C });
   await raw.drcQuota.deleteMany({ where: { tenantId: TENANT_C } });
 });
 
